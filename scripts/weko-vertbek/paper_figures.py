@@ -136,7 +136,7 @@ def main() -> int:
 
     # --- measurement 1
     # v5: chains from the verified links between versions (PAPER-239, links_v4.json)
-    m1_all = json.loads((DATA / "measure1_final_v8.json").read_text())
+    m1_all = json.loads((DATA / "measure1_final_v9.json").read_text())
     links = json.loads((DATA / "links_v4.json").read_text())["links"]
     # only a norm can be codified or announced (typology_v3.json)
     m1 = [f for f in m1_all if f["type"] == "norm"]

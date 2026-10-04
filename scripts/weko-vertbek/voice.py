@@ -73,7 +73,7 @@ def one(item: dict, args, protocol: str) -> dict:
 def cmd_packet(args) -> int:
     full = {(p["version"], p["pid"]): p for p in json.loads((DIR / "packet_full_v3.json").read_text())}
     items = []
-    for t in json.loads((DATA / "measure1_final_v8.json").read_text()):
+    for t in json.loads((DATA / "measure1_final_v9.json").read_text()):
         if t["type"] != "norm":
             continue
         v = t["first_version"]; p = full[(v, t["versions"][v]["pid"])]
@@ -119,7 +119,7 @@ def cmd_merge(args) -> int:
     hf = DATA / "human_labels_voice.json"
     human = {(r["version"], r["pid"]): r for r in json.loads(hf.read_text())["labels"]} if hf.exists() else {}
     m1 = {(t["first_version"], t["versions"][t["first_version"]]["pid"]): t
-          for t in json.loads((DATA / "measure1_final_v8.json").read_text()) if t["type"] == "norm"}
+          for t in json.loads((DATA / "measure1_final_v9.json").read_text()) if t["type"] == "norm"}
     rows, need = [], []
     for k, t in m1.items():
         a, b = c.get(k), g.get(k)

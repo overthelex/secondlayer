@@ -6,8 +6,8 @@
   "old_class": "announcement",
   "old_lag": 22.2,
   "class": "announcement",
-  "lag_years": 9.4,
-  "earliest": "2011-07-11",
+  "lag_years": 1.6,
+  "earliest": "2003-09-16",
   "found_in_round": 1,
   "batches_read": 1
  },
@@ -402,8 +402,8 @@
   "old_class": "announcement",
   "old_lag": 4.0,
   "class": "announcement",
-  "lag_years": 4.0,
-  "earliest": "2011-07-11",
+  "lag_years": 2.3,
+  "earliest": "2009-11-02",
   "found_in_round": 2,
   "batches_read": 2
  },

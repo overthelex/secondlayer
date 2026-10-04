@@ -36,7 +36,7 @@ def main() -> int:
     conn = psycopg.connect(args.dsn, row_factory=dict_row)
     rows = conn.execute("SELECT ecli, spider, date_upper_bound d FROM ch_weko_audit_corpus "
                         "WHERE coalesce(rpw_chapter, '') <> 'D1' AND date_upper_bound IS NOT NULL").fetchall()
-    m1 = [t for t in json.loads((DATA / "measure1_final_v8.json").read_text()) if t["type"] == "norm"]
+    m1 = [t for t in json.loads((DATA / "measure1_final_v9.json").read_text()) if t["type"] == "norm"]
     cls = collections.Counter((t["first_version"], t["final_class"]) for t in m1)
     out = {}
     for v, d in FIRST.items():
