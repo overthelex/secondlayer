@@ -249,9 +249,10 @@ def cmd_result(args) -> int:
                     # the passages the reader marked as applying it
                     on = f"{e['ecli']}|{e['ord']}" in hit["marks"] or e["ecli"] in hit["marks"]
                 else:
-                    # agreed support: a passage either judge read as applying it
-                    on = any((votes.get(j) or {}).get("label") in ("applies", "partial")
-                             for j in ("claude-opus", "gemini-3.1-pro"))
+                    # agreed support: Claude's label stands where Gemini agrees on
+                    # support-or-not, so the passages are the ones Claude read as
+                    # applying it -- a passage only Gemini marked must not date it
+                    on = (votes.get("claude-opus") or {}).get("label") in ("applies", "partial")
                 if on:
                     sup_dates.append(date.fromisoformat(e["date"] or e["date_upper_bound"]))
             if sup_dates:

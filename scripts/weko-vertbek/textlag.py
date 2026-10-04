@@ -72,7 +72,7 @@ def cmd_base(args) -> int:
                     marks = h.get("evidence") or []
                     on = e["ecli"] in marks or f"{e['ecli']}|{e['ord']}" in marks
                 else:
-                    on = any((v.get(j) or {}).get("label") in ("applies", "partial") for j in v)
+                    on = (v.get("claude-opus") or {}).get("label") in ("applies", "partial")
                 if on:
                     found[k].append(e["date"] or e["date_upper_bound"])
     rows = []
@@ -209,7 +209,7 @@ def cmd_result(args) -> int:
             ds = []
             for e, v in zip(hit["item"]["evidence"], hit["item"].get("judge_passages") or []):
                 on = (f"{e['ecli']}|{e['ord']}" in hit["marks"] or e["ecli"] in hit["marks"]) if hit["by"] == "reader" \
-                    else any((v.get(j) or {}).get("label") in ("applies", "partial") for j in v)
+                    else (v.get("claude-opus") or {}).get("label") in ("applies", "partial")
                 if on:
                     ds.append(e["date"] or e["date_upper_bound"])
             if ds and min(ds) < earliest:
