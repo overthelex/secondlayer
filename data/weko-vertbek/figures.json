@@ -4,8 +4,8 @@
   "by_tier": {
    "cantonal": 159,
    "federal_courts": 780,
-   "agency": 1654,
-   "other": 235
+   "other": 235,
+   "agency": 1654
   },
   "by_spider_top": {
    "CH_WEKO_RPW": 1537,
@@ -21,10 +21,11 @@
   "entscheidsuche_weko": 117,
   "date_sources": {
    "record": 973,
-   "text": 1381,
-   "issue": 440,
-   "same_as": 8,
-   "none": 26
+   "text": 1368,
+   "issue": 450,
+   "none": 26,
+   "checked": 3,
+   "same_as": 8
   },
   "years": [
    1936,
@@ -34,8 +35,9 @@
   "before_kg1995_docs": 246,
   "notices_excluded": 55,
   "rpw_date_source": {
-   "text": 1089,
-   "issue": 440,
+   "text": 1076,
+   "issue": 450,
+   "checked": 3,
    "same_as": 8
   },
   "passages_v1": 274112,
@@ -286,12 +288,12 @@
   "by_type": {
    "definition|codification": 5,
    "definition|announcement": 6,
-   "norm|announcement": 29,
-   "norm|codification": 33,
+   "norm|announcement": 30,
    "norm|ungrounded": 17,
    "housekeeping|ungrounded": 7,
    "rationale|ungrounded": 3,
    "housekeeping|announcement": 4,
+   "norm|codification": 32,
    "definition|ungrounded": 3,
    "scope|announcement": 5,
    "scope|ungrounded": 6,
@@ -302,22 +304,21 @@
  "measure1": {
   "tracks": 79,
   "classes": {
-   "announcement": 29,
-   "codification": 33,
-   "ungrounded": 17
+   "announcement": 30,
+   "ungrounded": 17,
+   "codification": 32
   },
   "decided_by": {
    "announcement|human": 4,
-   "announcement|judges": 25,
-   "codification|step1": 25,
+   "announcement|judges": 26,
    "ungrounded|step1": 17,
    "codification|judges": 5,
-   "codification|human": 3
+   "codification|human": 3,
+   "codification|step1": 24
   },
   "by_version": {
    "2002-02-18": {
-    "announcement": 11,
-    "codification": 1,
+    "announcement": 12,
     "ungrounded": 1,
     "lag_median": 9.8
    },
@@ -352,21 +353,31 @@
     "lag_median": null
    }
   },
-  "lag_median": 7.7,
+  "lag_median": 7.1,
   "lag_quartiles": [
-   4.2,
-   7.7,
+   4.0,
+   7.1,
    9.8
   ]
  },
+ "uptake": {
+  "total": 189,
+  "first_year": 2003,
+  "to_2010": 18,
+  "since_2011": 171,
+  "max_to_2010": 5,
+  "courts": 73,
+  "first_court_year": 2004,
+  "federal_peak": 2022
+ },
  "fates": {
   "codification": {
-   "modified": 12,
+   "modified": 11,
    "dropped": 2,
    "kept": 19
   },
   "announcement": {
-   "modified": 20,
+   "modified": 21,
    "dropped": 4,
    "kept": 5
   },
@@ -426,11 +437,11 @@
   }
  },
  "cross": {
-  "mixed|announcement": 5,
+  "mixed|announcement": 6,
   "own|announcement": 24,
-  "mixed|codification": 17,
   "own|ungrounded": 10,
   "own|codification": 12,
+  "mixed|codification": 16,
   "mixed|ungrounded": 2,
   "imported|codification": 3,
   "imported|ungrounded": 3

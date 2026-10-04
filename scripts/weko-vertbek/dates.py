@@ -46,7 +46,7 @@ COLUMNS = [
 ]
 
 ROWS = """
-SELECT a.ecli, a.spider, a.decision_date, a.full_text,
+SELECT a.ecli, a.spider, a.docket_number, a.decision_date, a.full_text,
        c.metadata_json->'rpw'->>'issue_key' AS issue_key,
        c.metadata_json->'rpw'->>'same_as'   AS same_as,
        s.decision_date                      AS same_as_date
@@ -77,6 +77,32 @@ def bge_date(text: str):
     return parse_date(head[m.end(): m.end() + 40]) if m else None
 
 
+# Journal rows whose text date lies two years or more before their issue,
+# read one by one (2026-10-04, PAPER-241). The reader took a date the
+# decision quotes when its own head was split across the two columns:
+# Feldschlösschen (RPW 2005/1) was dated by the distribution contract of
+# 17 July 2000 it examines, while the head reads "Verfügung der
+# Wettbewerbskommission vom 6. De-[...]zember 2004" -- and that date made the
+# decision the earliest support of 2002 Ziff. 3(f), a codification it is not.
+# A date confirmed by the decision's own head is kept; a wrong one is replaced
+# by the head's; where the head cannot be read, only the issue bound is kept.
+CHECKED = {
+    "RPW 2005/1, S. 114": "2004-12-06",   # Verfügung der WEKO vom 6. Dezember 2004 (Feldschlösschen)
+    "RPW 2009/4, S. 461": "2008-11-03",   # Sanktionsverfügung vom 3. November 2008 (7x2 AG), not the questionnaire of 2007
+    "RPW 2021/4, S. 938": "2020-01-10",   # the item is the appeal of 10 January 2020, not the decision appealed
+    "RPW 2009/3, S. 331": None,           # a judgment on a Verfügung of 4.11.2008, dated 2007
+    "RPW 2023/3, S. 617": None,           # Schlussbericht "vom 6. De-..."; dated by an earlier decision it cites (2013)
+    "RPW 2000/2, S. 281": None,           # on the AIMP revision of 1 February 2000, dated by a 1998 recommendation it cites
+    "RPW 2023/1, S. 110": None,           # Beratung citing judgments of 2021 and 2022, dated 2020
+    "RPW 2025/4a, S. 890": None,          # head not readable
+    "RPW 2017/1, S. 73": None,            # Schlussbericht "vom 12. De-..."; year not readable
+    "RPW 2020/4a, S. 1575": None,         # Schlussbericht date not readable
+    "RPW 2019/4, S. 1300": None,          # appeal to the Federal Supreme Court; head names other dates
+    "RPW 2006/1, S. 195": None,           # opinion on a draft ordinance; head not readable
+    "RPW 2009/4, S. 339": None,           # head names only the Verfügung of 2001 under review
+}
+
+
 def date_of(row: dict) -> tuple:
     """(date_exact, date_upper_bound, date_source) for one row."""
     if row["spider"] == "CH_BGE":
@@ -87,6 +113,13 @@ def date_of(row: dict) -> tuple:
         d = row["decision_date"]
         return (d, d, "record") if d else (None, None, "none")
     issue = issue_of_key(row["issue_key"])
+    if row.get("docket_number") in CHECKED:
+        fixed = CHECKED[row["docket_number"]]
+        if fixed:
+            from datetime import date as _date
+            d = _date.fromisoformat(fixed)
+            return d, d, "checked"
+        return None, (rpw.date_upper_bound(issue) if issue else None), "issue"
     d = rpw.decision_date(row["full_text"] or "", issue=issue)
     if d:
         return d, d, "text"
