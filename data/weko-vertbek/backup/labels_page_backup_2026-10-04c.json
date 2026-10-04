@@ -1,7 +1,7 @@
 {
  "artifact": "https://claude.ai/artifact/FspwNTMQx7CnSvSujs4ujM",
  "collection": "labels",
- "exported": "2026-10-04T18:30",
+ "exported": "2026-10-04",
  "documents": {
   "2002-02-18__1__vor": {
    "before": "2002-02-18",
@@ -822,6 +822,17 @@
    "part": "note",
    "pid": "17-t2",
    "updatedAt": "2026-10-04T17:09:01.846Z",
+   "version": "2019-04-09"
+  },
+  "2019-04-09__17-t3__vor": {
+   "before": "2009-11-02",
+   "evidence": [],
+   "heading": "FRÜHERE PRAXIS, Runde 3 von 3: nur Entscheide vor 2009-11-02 (der bisher frühesten Anwendung), nach Datum geordnet. Wendet einer davon die Regel an, ganz oder teilweise? ",
+   "label": "absent",
+   "note": "Gleiche Position wie in Runde 2 (Safe Harbour 30 % für Selektivvertrieb, unabhängig von Produktart und Auswahlkriterien, darüber Einzelfallprüfung der Effizienz). Kein Fenster vor dem 02.11.2009 wendet die 30-%-Schwelle an.\n\nScott Bikes (RPW 2008/3) prüft, ob ein rein qualitativer Selektivvertrieb vorliegt (Ziff. 8 Abs. 4 VertBek 2007): Technisch komplexe Bikes erfordern Fachhandel, die Notwendigkeit bleibt offen, da keine Anhaltspunkte für einen Verstoss bestehen. Das ist die Nachbarregel Rz 16 (drei Voraussetzungen, abhängig von der Produktbeschaffenheit), also gerade die Prüfung, die der Safe Harbour entbehrlich macht → andere Regel, nicht gewertet.\n\nRPW 2005/2 (S. 337 und S. 347), RPW 2007/3, RPW 2009/1, RPW 2008/4 und RPW 2009/3 betreffen Fusionskontrolle (Schwellen 20/30 % nach Art. 11 VKU). RPW 2009/2: Zahlkarten, Abredebegriff.",
+   "part": "note",
+   "pid": "17-t3",
+   "updatedAt": "2026-10-04T17:25:50.238Z",
    "version": "2019-04-09"
   },
   "2019-04-09__19-t1__vor": {

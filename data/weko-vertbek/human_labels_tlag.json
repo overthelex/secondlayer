@@ -1,5 +1,5 @@
 {
- "source": "labels page, version 19, reader decisions on text-lag search disputes",
+ "source": "labels page, versions 19-20, reader decisions on text-lag search disputes",
  "labels": [
   {
    "version": "2019-04-09",
@@ -16,6 +16,14 @@
    "label": "recites",
    "evidence_marked": [],
    "updatedAt": "2026-10-04T17:09:01.846Z"
+  },
+  {
+   "version": "2019-04-09",
+   "pid": "17",
+   "round": 3,
+   "label": "absent",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T17:25:50.238Z"
   },
   {
    "version": "2019-04-09",
