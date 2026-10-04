@@ -1,0 +1,360 @@
+{
+ "source": "labels page, collection labels, part=anchor (2026-10-04)",
+ "packets": {
+  "v1-disputes": "packet_anchors_v1.json (pids of the first build)",
+  "v2-disputes": "packet_anchors_v2.json",
+  "states": "packet_anchors_v2.json; -S = states/quotes question"
+ },
+ "labels": [
+  {
+   "round": "states",
+   "version": "2019-04-09",
+   "pid": "Rz19.42-S",
+   "label": "recites",
+   "note": "Rz 61 enthält den Satz fast wörtlich, aber in indirekter Rede als Wiedergabe der Verfügung «Behinderung des Online-Handels» (Electrolux): «Die WEKO hielt fest … könne … vorliegen, wenn … Massnahmen wie Drohungen … ausgesprochen bzw. umgesetzt würden». Keine eigene Formulierung oder Folgerung im Fenster → nur zitiert. Ursprung der Regel ist RPW 2011/3 (Electrolux); Jura referiert nur. Als Übernahme der eigenen Praxis gelesen wäre die Metke 1.",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T15:10:38.871Z"
+  },
+  {
+   "round": "states",
+   "version": "2019-04-09",
+   "pid": "Rz22.48-S",
+   "label": "recites",
+   "note": "Die zitierte Rz 106 gibt die Bekanntmachung wieder: Nach Ziff. 12 Abs. 2 Bst. c gelten Beschränkungen des aktiven oder passiven Verkaufs an Endverbraucher durch Mitglieder eines Selektivsystems als qualitativ schwerwiegend, und Internetverkäufe «gelten dabei nach Ziffer 3 VertBek grundsätzlich als passive Verkäufe». Rz 107 referiert die EU-Leitlinien (eigene Website als passiver Verkauf) und Erw. VII. Die eigene Folgerung beginnt in Rz 108 («Vor diesem Hintergrund ist das generelle und für sämtliche Wiederverkäufer …»), ist aber vor dem Prädikat abgeschnitten → nicht gewertet. Querlieferungen (lit. d) kommen nicht vor.\n\nFenster 3: Begriff und Voraussetzungen des Selektivvertriebs, zulässige Beschränkung auf zugelassene Händler. Fenster 4: Gesamtbeurteilung, Prüfung des Online-Verbots nur angekündigt (Rz 83).\n\nIm sichtbaren Text gibt die WEKO nur Bekanntmachung und EU-Praxis wieder. Die Subsumtion des Online-Verbots als qualitativ schwerwiegend steht ausserhalb der Fenster.",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T15:17:27.929Z"
+  },
+  {
+   "round": "states",
+   "version": "2019-04-09",
+   "pid": "Rz9.23-S",
+   "label": "recites",
+   "note": "Die zitierte Rz 169 (Booking/HRS, Preisparitätsklauseln) referiert nur die Lehre. Nach BORER greift Art. 5 Abs. 4 «nur bei Preis- und Gebietsschutzabreden zu Lasten der Händler», AMSTUTZ/REINERT schliessen Meistbegünstigungsklauseln aus, und der Commentaire Romand hält fest: «Les limitations de la liberté du producteur ne sont pas concernées par l'art. 5 IV LCart.» Die WEKO stellt nur fest, die herrschende Lehre «scheint» mit dem EU-Verständnis übereinzustimmen. In Rz 170 betont sie dann, Art. 5 Abs. 4 sei nicht auf die klassischen Fälle beschränkt. Eine eigene Rechtsauffassung zur Wirkungsrichtung fehlt im Fenster.\n\nDer konkrete Satz (Verweispflicht ausländischer Anbieter an den Schweizer Generalimporteur) kommt nicht vor. Nur das dahinterliegende Prinzip (Beschränkungen des Lieferanten nicht erfasst) ist als Lehrmeinung wiedergegeben.\n\nFenster 2: weite Paritätsklauseln sind keine Preisbindung zweiter Hand. Fenster 3 und 4: Geltungsbereich bzw. Verfügungsadressaten im Konzern.\n\nAls eigene Begründung dieser Regel trägt 2C_44/2020 (BGer), nicht RPW 2016/1.",
+   "evidence_marked": [],
+   "updatedAt": "2026-10-04T15:20:40.491Z"
+  },
+  {
+   "round": "states",
+   "version": "2022-12-12-erl",
+   "pid": "Rz11.81-S",
+   "label": "fragment",
+   "note": "Rimowa enthält beide Bausteine des Beispiels in eigener Rede. Im Sachverhalt (Rz 30/31) stellt die WEKO fest: Die Schweiz war bis Oktober 2013 in Anlage C aufgeführt, zuständig war die Generalimporteurin. Den deutschen Vertragshändlern (EWR) war es nicht gestattet, RIMOWA-Produkte an Abnehmer in der Schweiz zu liefern, ein Verstoss berechtigte zur ausserordentlichen Kündigung. Damit wirkten sie bewusst und gewollt mit RIMOWA zusammen (Abrede nach Art. 4 Abs. 1).\n\nDie Rechtsregel formuliert die WEKO in Rz 38/39 selbst: Ein absoluter Gebietsschutz liegt vor, wenn passive Verkäufe gebietsfremder Vertriebspartner in zugewiesene Gebiete direkt oder indirekt untersagt sind. Gebiete können auch Länder oder supranationale Gebiete sein.\n\nDie Verbindung beider, also die Qualifikation genau dieser Konstellation als absolute Gebietsschutzabrede, ist nur angekündigt («Vorliegend kommt … in Frage, weshalb nachfolgend … geprüft werden»). Sie steht ausserhalb der Fenster → Bruchstück. Liest man Rz 38/39 als blosse Wiedergabe von Gesetz und VertBek, wäre die Metke 4.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.5|15",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.5|19"
+   ],
+   "updatedAt": "2026-10-04T15:26:18.633Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz10.29",
+   "label": "supported",
+   "note": "Satz 1 wird von E. 5.2 (Fenster 4) wörtlich getragen: Abreden nach Art. 5 Abs. 3 und 4 erreichen «in der Regel die Erheblichkeitsschwelle», «grundsätzlich bereits aufgrund ihres Gegenstandes erheblich». Satz 2 (unabhängig von quantitativen Kriterien) stützen Fenster 2 und 3: Vorrang qualitativer Kriterien und Erheblichkeit aufgrund des Gegenstands. «Ohne Bezug auf einen Markt» und Marktanteil stehen nicht ausdrücklich im Fenster, die quantitative Schwelle lässt das Gericht offen. Das ist eine Zuspitzung durch die Erläuterungen, kein Widerspruch. Fenster 1 betrifft nur den allgemeinen Gehalt der Erheblichkeit als Bagatellklausel.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|43",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|49",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|50"
+   ],
+   "updatedAt": "2026-10-03T23:15:06.961Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz16.36",
+   "label": "fragment",
+   "note": "Zitierte Stelle Rz 157 (Fenster 1): Die Beschaffenheit von Elmex rot erfordert keinen selektiven Vertrieb, also darf Gaba die Belieferung über ausländische Vertriebspartner nicht behindern. Rz 158 ergänzt, dass auch eine diskriminierungsfreie Anwendung Denner hätte zulassen müssen. Die drei Voraussetzungen werden also als Prüfmassstab angewandt, aber nur in der Kehrseite (nicht erfüllt, daher kein Schutz). Die Aussage des Satzes, dass Systeme, die alle drei Voraussetzungen erfüllen, «unabhängig von der Höhe der Marktanteile» zulässig sind, belegt Rz 157 nicht → Bruchstück.\n\nRz 138 (Fenster 3) gibt die Regel fast wörtlich wieder: kein Tatbestand von Art. 5 Abs. 1 mangels erheblicher Beeinträchtigung, sofern die drei Voraussetzungen nach Ziff. 8 Abs. 4 VertBek kumulativ erfüllt sind. Das ist aber nur eine Wiedergabe der Bekanntmachung → nur zitiert. Fenster 4: Definition des Selektivvertriebs. Fenster 2: TT-GVO, ein anderer Gegenstand.\n\nDer Zusatz «unabhängig von der Höhe der Marktanteile» steht in keinem Fenster. Für die Regel selbst wäre Rz 138 der passendere Beleg als Rz 157.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2010-1_B2.2.1|110"
+   ],
+   "updatedAt": "2026-10-03T23:16:15.911Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz18.37",
+   "label": "fragment",
+   "note": "Die zitierte Rz 69 enthält den Satz fast wörtlich, als eigene Formulierung der WEKO, und begründet ihn: Entscheidend ist die Wirkung, nicht das eingesetzte Mittel. Nach Rz 67/68 stellt sich die Frage «vorliegend nicht konkret», weil keine Hinweise vorliegen. Die Ausführungen sind ausdrücklich «im vorausschauenden Sinne» gemeint, also ein obiter dictum ohne Subsumtion → Bruchstück (Fenster 1).\n\nRz 70/71 (Fenster 2) arbeitet mit der Regel weiter: Ob ein Internetverbot isoliert als Preisbindung zweiter Hand gilt, sei «fraglich», es könne aber als Korrektiv des Preissetzungsverhaltens eingestuft werden. Das ist ein Prüfschritt nach dem Wirkungskriterium, aber abstrakt und ohne Folge für den Fall → Bruchstück.\n\nRz 77 (Fenster 3 und 4): «keine Indizien oder Beweismittel» für Abreden nach Art. 5 Abs. 4, deshalb Analyse unter Abs. 1. Das ist eine Beweisfeststellung, keine Beurteilung qualifizierender Umstände → grenzwertig, nicht gewertet. Fenster 3 enthält sonst nur Art. 5 Abs. 1 und die Erheblichkeit.\n\nDer Satz ist durch die Quelle inhaltlich voll gedeckt, aber nur als vorausschauende Leitlinie, nicht als tragende Erwägung.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|58",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|59"
+   ],
+   "updatedAt": "2026-10-03T23:17:02.125Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz24.48",
+   "label": "fragment",
+   "note": "Die zitierte Rz 189 (Fenster 1) erklärt die EVR-Bestimmung für zulässig, wonach von zugelassenen Wiederverkäufern ein physischer Verkaufspunkt verlangt werden darf. Die WEKO relativiert dies aber selbst. Erstens ist die Genehmigung «keine wettbewerbsrechtliche Beurteilung» der Selektivsysteme. Zweitens ist die Bestimmung «vor dem Hintergrund zu betrachten», dass in diesem Bereich ohnehin die meisten Händler stationär verkaufen. Die zitierte Stelle schränkt damit die Verallgemeinerung ein, die der Satz vornimmt → Bruchstück.\n\nRz 162/163 (Fenster 4): In der EVR kann der Hersteller ein stationäres Fachgeschäft verlangen. Begründung: Damit entfällt Freeriding zwischen Online- und stationären Händlern. Das ist eine fallbezogene Rechtfertigung im Rahmen der EVR → Bruchstück, grenzwertig. Liest man es als volle Anwendung, wäre die Metke 1.\n\nRz 135/136 (Fenster 2): Die Formulierung «einen oder mehrere physische Verkaufspunkte» stammt aus den EU-Leitlinien, dort aber als Warnung: Bei kumulativem Selektivvertrieb der grössten Anbieter können solche Kriterien Probleme bereiten. Nur zitiert, und es ist eine Einschränkung, kein Beleg.\n\nRz 178/179 (Fenster 3): Der Ausschluss seriöser Online-Shops bei gleichzeitiger Zulassung stationärer Tiefpreishändler «erscheint problematisch». Das steht in Spannung zum Satz, betrifft aber die diskriminierungsfreie Anwendung, nicht das Erfordernis selbst. Deshalb nicht als Widerspruch gewertet.\n\nDie Entscheidung spricht von «einem» physischen Verkaufspunkt, das «oder mehrere» kommt aus den EU-Leitlinien.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|163",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|137"
+   ],
+   "updatedAt": "2026-10-03T23:17:49.628Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz5.7",
+   "label": "supported",
+   "note": "Die zitierte Rz 102 trägt das zweite Beispiel des Satzes mit Folge im Fenster. Musik Olar und die Händler vereinbarten, auf die veröffentlichte Preisliste höchstens 15 % Rabatt zu gewähren, bei einer Marke gar keinen. Damit «wurde ein Mindestpreis im Sinne von Ziff. 10 Abs. 1 Bst. a VertBek festgesetzt», die Vermutung nach Art. 5 Abs. 4 greift. Das ist eine Höchstrabattabrede bei vorgegebenem Preisniveau, also die Regel angewandt.\n\nDas erste Beispiel (Rabatte bzw. Werbevergütungen, die an die Einhaltung eines Preisniveaus geknüpft sind) belegt Rz 102 nicht. Rz 213 (Fenster 3) zeigt etwas Ähnliches: Rückstufung der Sonderkonditionen bei Händlern, die mehr als 15 % gewähren. Das steht aber unter Vergeltungsmassnahmen als erschwerender Umstand bei der Sanktion, also einer anderen Rechtsfrage → nicht gewertet. Bei strenger Lesart (nur ein Teil des Satzes belegt) wäre die Metke 2.\n\nFenster 2: dieselbe Abrede, nur im Rahmen der Marktabgrenzung wiedergegeben. Fenster 4: Rechtfertigung (Trittbrettfahrer), Fussnoten.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2|100"
+   ],
+   "updatedAt": "2026-10-03T22:57:23.456Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz6.10",
+   "label": "supported",
+   "note": "Die zitierte E. 6.3.1 (Fenster 2) formuliert den Satz fast wörtlich als eigene Auslegung des Gerichts, mit Lehrnachweisen: Der Begriff des Vertriebsvertrags umfasst auch einzelne Klauseln in anderen Verträgen, «oftmals in Franchise- oder Lizenzverträgen». Ohne Subsumtion im Fenster → Bruchstück.\n\nAnwendung mit Folge in den Nachbarstellen (nach Sinn):\n\nFenster 3: Ständerat Büttiker hielt fest, dass Technologietransfer- und Lizenzverträge mit absolutem Gebietsschutz von Art. 5 Abs. 4 erfasst sind. «Dies entspricht dem oben (E. 6.3.1) hervorgehobenen Verständnis», also «unterliegen solche Klauseln Art. 5 Abs. 4». Das gilt «entgegen der Auffassung der Beschwerdeführerin» auch für Immaterialgüterrechte (Art. 3 Abs. 2).\nFenster 4: Aus dem weiten Begriff folgt, dass die Norm genügend bestimmt ist. Die Rüge nach Art. 7 EMRK wird verworfen.\n\nIn beiden Fenstern wird ein Argument wegen der Regel abgewiesen → Anwendung.\n\nFenster 1 beschreibt nur die Arten von Vertriebsverträgen (Lehre), noch ohne den weiten Begriff. «Bezug, Verkauf oder Weiterverkauf» steht nicht ausdrücklich in den Fenstern, das ist unerheblich.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|75",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|82",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|113"
+   ],
+   "updatedAt": "2026-10-03T22:58:31.876Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz6.15",
+   "label": "fragment",
+   "note": "In der zitierten Rz 4 (Fenster 1) qualifiziert das Sekretariat die Einreichung einer Offerte in einer Ausschreibung im offenen Verfahren als Passivverkauf. Die Intervention von S&S gilt «deshalb» als Versuch, einen passiven Verkauf zu verhindern, und es wird eine Vorabklärung eröffnet. Die Fakten werden also nach der Regel qualifiziert, die Folge ist aber nur verfahrensrechtlich (Anhaltspunkte, Eröffnung). Zudem steht das im Sachverhalt als Würdigung des Sekretariats. S&S verlangt in Rz 5 den Hinweis, dass dies «lediglich der Ansicht des Sekretariats entspreche» → Bruchstück.\n\nDie zitierte Stelle belegt nur das offene Verfahren. Das selektive Verfahren und die Internetverkäufe aus dem Satz kommen in den Fenstern nicht vor.\n\nIn Fenster 3 und 4 wird die allgemeine Definition des Passivverkaufs (Ziff. 3 VertBek 2010) mehrfach wiedergegeben. Die EVR-Klauseln betreffen die horizontale Abstimmung von Offerten durch Krompholz. Fenster 2 enthält nur Inhaltsverzeichnis und Sachverhalt.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1|6"
+   ],
+   "updatedAt": "2026-10-03T23:00:15.242Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz10.67",
+   "label": "supported",
+   "note": "Gleicher Satz und gleiche Fenster wie bei Position 6 (Erl. 2019 Rz 6), daher gleiche Wertung. Die zitierte E. 6.3.1 formuliert den weiten Begriff des Vertriebsvertrags als eigene Auslegung, ohne Subsumtion → Bruchstück. Anwendung mit Folge in den Nachbarstellen: Lizenz- und Technologietransferklauseln mit absolutem Gebietsschutz «unterliegen … Art. 5 Abs. 4», auch bei Immaterialgüterrechten, entgegen der Beschwerdeführerin (Fenster 3). Aus dem weiten Begriff folgt die genügende Bestimmtheit der Norm, die Rüge nach Art. 7 EMRK wird verworfen (Fenster 4). Fenster 1 enthält nur die Arten von Vertriebsverträgen (Lehre).",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|75",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|82",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|113"
+   ],
+   "updatedAt": "2026-10-03T23:01:37.792Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz10.69",
+   "label": "supported",
+   "note": "Das BVGer leitet den Satz fast wörtlich selbst aus dem Gesetzeswortlaut ab: Im Gesetz ist weder von exklusiver noch von selektiver Zuweisung die Rede. «Gefordert wird ein 'Vertriebsvertrag', kein Alleinvertriebs- oder Selektivvertriebsvertrag», Ausschliesslichkeit oder Geschlossenheit seien deshalb nicht erforderlich (Fenster 1). Unmittelbar danach wird der Einwand der Beschwerdeführerin (Votum Schiesser, ausschliessliche Zuweisung) als nicht überzeugend verworfen (Fenster 2). Ein Argument wird also wegen der Regel abgewiesen → Anwendung.\n\nEinschränkungen, deshalb grenzwertig: Das Gericht formuliert vorsichtig («legt den Schluss nahe»). Ausserdem verfängt die Rüge schon deshalb nicht, weil die Beschwerdeführerin aktiv gegen Parallelimporte hingewirkt hat. Die Regel ist also eine zusätzliche Begründung.\n\nFenster 3 referiert nur Lehrmeinungen sowie die VertBek 2007/2010 («ausschliessliche Zuweisung an einen einzelnen Händler»). Fenster 4 betrifft andere Tatbestandselemente (Gebiete statt Geschäftspartner, direkte/indirekte Zuweisung). Es gibt keine Pinpoint-Stelle, alle Fenster sind «nach Sinn».",
+   "evidence_marked": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|183",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|186"
+   ],
+   "updatedAt": "2026-10-03T23:02:47.293Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz10.73",
+   "label": "supported",
+   "note": "Das BVGer wendet die Unterscheidung mit Folge auf die Verträge an. Die Klauseln in den Selektivvertriebsverträgen und den Verträgen «Nikon Professional Dealer» sind «indirekte Gebietszuweisungen im Sinne von Art. 5 Abs. 4 KG» (Fenster 3). Die US-Klausel «In no event shall customer … export any product outside the territory» ist eine direkte Form, die «ohne Weiteres erfasst» wird (Fenster 4).\n\nFenster 2 leitet die Regel selbst her. Die Mindermeinung, nur direkte Formen seien erfasst (Analogie zu Art. 5 Abs. 3 lit. a), wird verworfen: Der Wortlaut enthält keine Einschränkung, und indirekte Formen wie die Verknüpfung von Garantieleistungen mit dem Erwerbsort werden nach herrschender Lehre erfasst.\n\nFenster 1 enthält nur den einleitenden Satz «unterscheidet nicht zwischen direkter und indirekter Zuweisung». Davor geht es um Gebiete statt Geschäftspartner. Die Begründung folgt erst in Fenster 2.\n\nEine Nebenbeobachtung: Die «Swiss Garantie» hatte die Vorinstanz als unbedenklich eingestuft, obwohl die Lehre die Garantieverknüpfung als indirekte Form nennt. Das betrifft die Würdigung im Einzelfall, kein Widerspruch zur Regel.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|174",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|178",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|179"
+   ],
+   "updatedAt": "2026-10-03T23:03:55.025Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz13.89",
+   "label": "supported",
+   "note": "Die zitierte Rz 55 (Fenster 1) betrifft genau den ersten Bulletpunkt. gym80 leitete Anfragen von Schweizer Kunden kommentarlos an ratio weiter. Eine Koordination liess sich nicht nachweisen. «Der Vollständigkeit halber» hält die WEKO fest, dass die Verpflichtung, unaufgeforderte Bestellungen an den Schweizer Generalimporteur zu verweisen, keine absolute Gebietsschutzabrede darstellt, ausdrücklich mit Verweis auf die Erläuterungen. Zudem waren Parallel- und Direktimporte jederzeit möglich. Die Regel trägt die Würdigung der Weiterleitungen, aber nur als Eventualbegründung → grenzwertig zwischen Anwendung und Bruchstück.\n\nKlare Anwendung mit Folge in Rz 39 (Fenster 3, letzter Bulletpunkt). Ratio wurde der aktive Verkauf ausserhalb des Gebiets untersagt, Lieferungen auf passive Anfrage aber nicht. Daher sind keine Importe in die Schweiz verhindert, «mithin kein absoluter Gebietsschutz bzw. kein Passivverkaufsverbot». Es liegt nur ein relativer Gebietsschutz vor.\n\nFenster 4 stellt nur die Frage nach dem Exklusivvertrieb. Fenster 2 betrifft den Safe Harbour (Ziff. 16 Abs. 2, 30 %), also eine andere Regel.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.1|41",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.1|29"
+   ],
+   "updatedAt": "2026-10-03T23:05:20.842Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz13.90",
+   "label": "fragment",
+   "note": "Das BGer begründet den ersten Bulletpunkt selbst (Fenster 3). Verzichtet ein reiner Hersteller nach Auslagerung des Vertriebs auf Direktverkäufe in die Schweiz, fällt das «pas en tant que tel» unter Art. 5 Abs. 4 und ist nicht nach Art. 49a sanktionierbar. «Il en va de même» für die Pflicht eines ausländischen Herstellers, Bestellungen aus der Schweiz an den Schweizer Importeur weiterzuleiten. Begründung: Solche Beschränkungen betreffen nur den Hersteller, nicht dessen Vertriebspartner (mit Verweis auf AB 2003 S 329 und Erläuterungen Ziff. 9, 1. Punkt). Das antwortet auf das Vorbringen der Beschwerdeführerin, Beschränkungen von «fournisseurs» seien nicht erfasst (Fenster 1). Die Subsumtion für den konkreten Fall (Diffuseur/Flammarion) liegt ausserhalb des Fensters, und der Satz endet mit «Il est possible que ces accords soient malgré tout illicites» → Bruchstück.\n\nFenster 4 (E. 8.1): Zurechnung von Verhalten innerhalb einer wirtschaftlichen Einheit an die Konzerngesellschaft. Die Grundlage ist dieselbe wie beim Konzern-Bulletpunkt, aber es geht um eine andere Rechtsfrage (Zurechnung für die Sanktion, nicht das Fehlen einer Abrede) → grenzwertig, nicht gewertet.\n\nFenster 2 und der Rest von Fenster 1 referieren nur Gaba (absoluter Gebietsschutz, aktiver/passiver Verkauf). Pinpoint-Stelle gibt es keine, alle Fenster sind «nach Sinn».",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-44-2020_2022-03-03|56"
+   ],
+   "updatedAt": "2026-10-03T23:06:33.924Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz14.97",
+   "label": "supported",
+   "note": "Gleicher Satz und gleiche Fenster wie bei Position 1 (Erl. 2019 Rz 10), daher gleiche Wertung. Fenster 4: Abreden nach Art. 5 Abs. 3 und 4 erreichen «in der Regel die Erheblichkeitsschwelle». Die quantitative Schwelle braucht «im vorliegenden Fall nicht beantwortet zu werden», die Rügen werden «aufgrund der Auslegung» verworfen. Das ist ein wegen der Regel abgewiesenes Argument. Fenster 2 und 3 leiten die Regel selbst her: Vorrang qualitativer Kriterien, historische Auslegung, «aufgrund ihres Gegenstandes erheblich» → je Bruchstück. Fenster 1 bestimmt nur den allgemeinen Gehalt der Erheblichkeit als Bagatellklausel. «Ohne Bezug auf einen Markt» und Marktanteil stehen nicht ausdrücklich im Fenster. Das ist eine Zuspitzung durch die Erläuterungen, kein Widerspruch.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|43",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|49",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28|50"
+   ],
+   "updatedAt": "2026-10-03T23:07:39.310Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz27.114",
+   "label": "supported",
+   "note": "Die zitierte Rz 66 (Fenster 1) wendet den ersten Teil des Satzes mit Folge an. Jura und ihre Vertriebspartner vereinbarten einen vollständigen Verzicht auf Online-Handel. Internetverkäufe gelten als passive Verkäufe, also werden passive Verkäufe an die Kundengruppe der Online-Kunden beschränkt (Ziff. 12 Abs. 2 lit. b VertBek 2010). «Folglich» ist die Abrede «als qualitativ schwerwiegend zu qualifizieren». Das ist ein faktisches Verbot, das Internet für den Verkauf zu nutzen.\n\nDen zweiten Teil des Satzes (Beschränkung ganzer Online-Werbekanäle wie Suchmaschinen oder Preisvergleichsdienste, Verhinderung eines eigenen Online-Shops) belegt die Stelle nicht. Bei strenger Lesart (nur ein Teil des Satzes belegt) wäre die Metke 2.\n\nFenster 2 enthält nur den Schluss der Qualifikation ohne Subjekt, danach die quantitative Erheblichkeit, also eine andere Regel. Fenster 3 referiert die qualifizierenden Umstände aus «Online-Handel» (Geoblocking, Umleitung). Fenster 4 referiert die Praxis zum Internetverbot als Preisbindung zweiter Hand.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4|45"
+   ],
+   "updatedAt": "2026-10-03T23:09:12.808Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz4.51",
+   "label": "supported",
+   "note": "Die zitierte E. 3.2 (Fenster 1 und 2) formuliert den Satz als eigene Rechtsauffassung, mit Botschaft und Lehre: Abreden sind «sowohl Vereinbarungen als auch aufeinander abgestimmte Verhaltensweisen», massgebend ist das «bewusste und gewollte Zusammenwirken». Begründet wird das mit dem Selbständigkeitspostulat. Ohne Subsumtion → je Bruchstück (gleich gewertet wie BGE 143 II 297 E. 6.3.1).\n\nAnwendung mit Folge in Fenster 3. Die Beschwerdeführerin verweist auf Art. 1 ff. OR und macht geltend, es fehle an einer Willensübereinstimmung. Das Gericht hält dagegen, dass sie Vereinbarung und abgestimmte Verhaltensweise verwechselt. Letztere erfüllt «schon ihrem Wesen nach nicht alle Tatbestandsmerkmale einer Vereinbarung». Ein Argument wird also wegen der Regel abgewiesen.\n\nFenster 4 (E. 3.4.2) konkretisiert das untere Ende der Spannweite: minimale Kommunikation bzw. gegenseitige Fühlungnahme genügt, auch einseitiges Informationsverhalten, ein gemeinsamer Plan ist nicht nötig. Das ist eine eigene Begründung ohne Fall → Bruchstück, grenzwertig.\n\n«Mündlich oder schriftlich» steht nicht ausdrücklich in den Fenstern, das ist unerheblich.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|8",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|9",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|67",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|18"
+   ],
+   "updatedAt": "2026-10-03T23:10:29.392Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz6.55",
+   "label": "supported",
+   "note": "Die zitierte Rz 48 (Fenster 1 und 2) wendet das zweite Beispiel der Liste mit Folge an. Husqvarna CH und ihre Händler kamen überein, auf die unverbindlichen Preisempfehlungen maximal [...] % Rabatt zu gewähren. Damit «haben sie einen Mindestpreis im Sinne von Art. 5 Abs. 4 KG festgesetzt». Das ist die Festlegung eines Höchstrabatts auf ein vorgegebenes Preisniveau als indirektes Mittel. Rz 46 zeigt zudem, dass Husqvarna intervenierte, wenn Händler abwichen (Druck bei Nichteinhaltung), dort aber nur zur Abrededauer.\n\nDie übrigen Beispiele der Liste (Margen, Werbevergütungen, MAP, Bindung an Konkurrenzpreise, Lieferstopp) belegt die Stelle nicht. Da es eine nicht abschliessende Beispielliste ist, genügt ein angewandtes Beispiel. Gleich gewertet wie Musik Olar (RPW 2016/3 Rz 102).\n\nFenster 3 fasst nur das Ergebnis zusammen (Mindestpreis, Verweis auf Rz 48), ohne das indirekte Mittel zu nennen. Fenster 4 enthält den Abredebegriff nach Art. 4 Abs. 1.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2|27",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2|28"
+   ],
+   "updatedAt": "2026-10-03T23:11:50.891Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz6.56",
+   "label": "supported",
+   "note": "Die zitierte Rz 141 (Fenster 1) wendet zwei Beispiele der Liste mit Folge an. Roger Guenat setzt Mindestpreise indirekt durch, und zwar über die offizielle Preisliste mit einem maximalen Rabatt. Bei Nichteinhaltung droht er mit Lieferstopp («menace de cesser de livrer»). «Il s'agit donc d'un accord ayant pour objet la fixation du prix de revente minimum au sens de l'art. 5 al. 4 LCart.» Das sind der Höchstrabatt auf ein vorgegebenes Preisniveau und die Drohung mit Liefereinstellung als indirekte Mittel.\n\nFenster 2 gibt nur die Vorbringen von Altimum wieder: keine Abrede, unterschiedliche Rabatte, abgestimmte Verhaltensweisen. Fenster 3 referiert Ziff. 10 Abs. 2 VertBek 2010 und das EU-Beispiel (Höchstrabatt ab vorgegebenem Preisniveau), ohne Subsumtion. Fenster 4 enthält nur Art. 5 Abs. 4 und die Botschaft.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.1|92"
+   ],
+   "updatedAt": "2026-10-03T23:12:41.824Z"
+  },
+  {
+   "round": "v1-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz8.63",
+   "label": "supported",
+   "note": "Fenster 2 trägt den ersten Satz der Position mit Folge im Fenster. Die Bezeichnung als «unverbindlich» oder «für das Publikum bestimmt» ist «nicht massgebend», entscheidend sind Abstimmung und Marktverhalten nach Art. 4 Abs. 1. Die Beschwerdegegnerin hat in Kauf genommen, dass die beim Einscannen automatisch erscheinenden Preise zu einem abgestimmten Verhalten führen. Die Einwendung wird also wegen der Regel verworfen.\n\nFenster 3 und 4 arbeiten am zweiten Punkt (abgestimmte Verhaltensweise, die über den Befolgungsgrad wie ein Mindest- oder Festpreis wirkt):\n\nFenster 3: Eine Qualifikation als Höchstpreisempfehlung käme erst in Betracht, wenn ein Unterschreiten möglich wäre. Die Vorinstanz hat «in willkürlicher Weise» nur wenige Ärzte berücksichtigt.\nFenster 4: Der Befolgungsgrad wird berechnet, 72 % bzw. 70 % der Verkäufe folgten der Empfehlung.\n\nBeide Male werden die Fakten nach der Regel qualifiziert, die Folge «wirkt wie Fest- bzw. Mindestpreis» steht aber ausserhalb → je Bruchstück.\n\nFenster 1 betrifft das Bezwecken und Bewirken einer Wettbewerbsbeschränkung nach Art. 4 Abs. 1 allgemein, nicht die Preisempfehlung. Der Druck/Anreiz-Punkt und die getarnte Preisabrede (Art. 12 Abs. 3) kommen in den Fenstern nicht ausdrücklich vor.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|65",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|73",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021|74"
+   ],
+   "updatedAt": "2026-10-03T23:13:46.544Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz21.46",
+   "label": "supported",
+   "note": "Dermalogica formuliert die Regel als eigene Rechtsauffassung in direkter Rede. Rz 225: Internetverkäufe gelten als passive Verkäufe (Ziff. 3). «Eine Behinderung oder Verhinderung von Internetverkäufen wird deshalb von Ziff. 12 Abs. 2 Bst. b VertBek erfasst und gilt somit als qualitativ schwerwiegende Abrede», mit Hinweis auf die bisherige Praxis von WEKO und EU-Kommission.\n\nRz 236 wendet das auf den Fall an: Die Online-Verbote im Vertriebsvertrag Dermalogica–Care on Skin und in der Kooperationsvereinbarung «sind ebenfalls qualitativ schwerwiegende Abreden». Wegen geringfügiger quantitativer Auswirkungen sind sie aber nicht erheblich nach Art. 5 Abs. 1.\n\nDie zitierte Rz 143 ist nicht im Fenster, Rz 225 und 236 tragen den Satz.\n\nRz 222 (Fenster 3 und 5): Passivverkaufsverbote bei Exporten werden nach Ziff. 12 Abs. 2 lit. b als qualitativ schwerwiegend qualifiziert. Das ist dieselbe Buchstabe, aber ohne Internetbezug → nicht gewertet.\n\nRz 139–142 (Fenster 1 und 2): Internetbeschränkungen unter Art. 5 Abs. 4 (qualifizierende Umstände, absoluter Gebietsschutz), andere Regel. Rz 113 (Fenster 8): Bezwecken nach Art. 4 Abs. 1.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1|191",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1|166",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1|164"
+   ],
+   "updatedAt": "2026-10-04T15:15:07.739Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2019-04-09",
+   "pid": "Rz24.49",
+   "label": "supported",
+   "note": "Eigene Rechtsauffassung der WEKO: Rz 162/163 hält fest, dass der Hersteller im Selektivsystem ein stationäres Fachgeschäft verlangen kann, und begründet das selbst (Freeriding entfällt). Rz 165 folgert, die Online-Kriterien der Parteien seien «als kartellrechtlich zulässig zu betrachten».\n\nEinschränkungen: Die WEKO gibt ausdrücklich keine Beurteilung der integralen Systeme ab (Rz 165, Rz 189). Die zitierte Rz 189 relativiert die Bestimmung zudem auf den konkreten Bereich, in dem die meisten Händler ohnehin stationär verkaufen → Fenster 1 nur als Bruchstück.\n\nSpannung, aber kein Widerspruch: Rz 153 nennt das Freeriding-Argument «eindimensional», und nach Rz 178/179 ist der Ausschluss seriöser Online-Shops problematisch. Beides betrifft die diskriminierungsfreie Anwendung, nicht das Erfordernis selbst.\n\n«Oder mehrere» Verkaufspunkte stammt aus den EU-Leitlinien (Rz 135, dort als Warnung bei kumulativem Selektivvertrieb).",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|163",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|137",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2|139"
+   ],
+   "updatedAt": "2026-10-04T15:19:39.067Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz10.70",
+   "label": "supported",
+   "note": "Gleicher Satz wie bei Position 9 von 18. Neu ist Fenster 7, das die eigene Rechtsauffassung zusätzlich stützt. Das BVGer leitet den Satz selbst aus dem Wortlaut ab: Im Gesetz ist weder von exklusiver noch von selektiver Zuweisung die Rede, «gefordert wird ein 'Vertriebsvertrag', kein Alleinvertriebs- oder Selektivvertriebsvertrag». Ausschliesslichkeit oder Geschlossenheit sind also nicht erforderlich (Fenster 1). Das gegenteilige Vorbringen der Beschwerdeführerin (Fenster 6, indirekte Rede) wird verworfen (Fenster 2). Aus dem Votum eines Abgeordneten lässt sich kaum ein «Wille des Gesetzgebers» konstruieren, die Aussage erläutert die Vorlage nur idealtypisch am Beispiel des Alleinvertriebs (Fenster 7).\n\nFenster 3 referiert Lehre und VertBek 2007/2010. Fenster 4, 5 und 8 betreffen andere Fragen: Gebiete vs. Geschäftspartner, Abredebegriff, Sanktionsbemessung.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|183",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|186",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|184"
+   ],
+   "updatedAt": "2026-10-04T15:21:39.153Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz10.74",
+   "label": "supported",
+   "note": "Gleicher Satz wie bei Position 10 von 18, ergänzt um weitere Fenster. Das BVGer stellt die Regel in eigener Rede auf: Art. 5 Abs. 4 «unterscheidet nicht zwischen direkter und indirekter Zuweisung von Gebieten» (Fenster 1). Es begründet sie selbst (Fenster 2). Die Mindermeinung, nur direkte Formen seien erfasst (Analogie zu Art. 5 Abs. 3 lit. a), wird verworfen: Der Wortlaut enthält keine Einschränkung, und nach herrschender Lehre sind indirekte Formen wie die Verknüpfung von Garantieleistungen mit dem Erwerbsort erfasst.\n\nAngewandt wird die Regel mit Folge: Die Klauseln «Swiss Garantie» und «Nikon Professional Dealer» sind indirekte Gebietszuweisungen (Fenster 3), die US-Exportklausel ist eine direkte Form, die «ohne Weiteres erfasst» wird (Fenster 4).\n\nIn Fenster 8 steht dieselbe Regel nur als Auffassung der Vorinstanz → für sich nur zitiert. Fenster 7 betrifft die Ausschliesslichkeit, also den anderen Satz von Rz 10. Fenster 5 und 6 behandeln andere Fragen.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|176",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|174",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|178",
+    "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16|179"
+   ],
+   "updatedAt": "2026-10-04T15:23:30.500Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz11.79",
+   "label": "supported",
+   "note": "Das BGer qualifiziert genau den Beispielsfall des Satzes in eigener Rede und zieht die Folge. Die BMW AG verbietet ihren EWR-Händlern, Neufahrzeuge an Abnehmer ausserhalb des EWR, u.a. in der Schweiz, zu liefern. «Damit findet eine Abschottung des schweizerischen Marktes statt», es handelt sich um eine besonders schädliche Abrede (Fenster 1). Fenster 6 bezeichnet sie als «Abrede nach Art. 5 Abs. 4 KG (Gebietsabschottung)». In Fenster 4 heisst sie «absolute gebietsabschottende Wettbewerbsabrede nach Art. 5 Abs. 4», sie beeinträchtigt den Wettbewerb erheblich und ist mangels Effizienzgründen unzulässig. Fenster 8 kommt zum gleichen Schluss.\n\nDie Zuweisung des EWR an die Händler ist nicht ausdrücklich subsumiert, sie ergibt sich aus der Vertragsstruktur (EWR-Händlerverträge).\n\nFenster 3 und 5 greifen dieselbe Qualifikation in der Sanktionsbemessung auf (Schwere des Verstosses), das ist eine andere Rechtsfrage. Fenster 2 gibt Parteivorbringen wieder, Fenster 7 den Sachverhalt.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24|25",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24|14",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24|11",
+    "ECLI:CH:CH_BGE:CH_BGE_004_BGE-144-II-194_2017-10-24|10"
+   ],
+   "updatedAt": "2026-10-04T15:24:56.515Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz13.91",
+   "label": "supported",
+   "note": "Das BGer stellt drei der fünf Fallgruppen als eigene Rechtsauffassung auf.\n\nVerkaufsverbote zulasten des Herstellers (Fenster 1 und 3): Art. 5 Abs. 4 betrifft Unternehmen, die im Vertrieb tätig sind. Verzichtet ein reiner Hersteller auf Direktverkäufe in die Schweiz, fällt das «pas en tant que tel» unter Art. 5 Abs. 4. «Il en va de même», wenn sich ein ausländischer Hersteller verpflichtet, alle Anfragen an seinen Schweizer Importeur weiterzuleiten (mit Verweis auf AB 2003 S 329 und Erl. Ziff. 9, 1. Punkt).\nKundengruppen (Fenster 5): Die Vermutung ist nicht für Abreden vorgesehen, die den Markt nach «clientèle» segmentieren. Eine Kundenexklusivität fällt grundsätzlich nicht unter Art. 5 Abs. 4, ausser die Kundschaft ist rein geografisch definiert.\nAktive Verkaufsbeschränkungen (Fenster 2): Nur der absolute Gebietsschutz ist erfasst, und er setzt den Ausschluss auch passiver Verkäufe voraus. Aktive und passive Verkäufe werden definiert.\n\nKonzerninterne Sachverhalte: Fenster 4 (E. 8.1) behandelt die Zurechnung innerhalb einer wirtschaftlichen Einheit für die Sanktion, nicht das Fehlen einer Abrede → nicht gewertet. Internationale Preisunterschiede kommen in keinem Fenster vor.\n\nFenster 6 bis 8 geben Parteivorbringen und das Gaba-Schema wieder.",
+   "evidence_marked": [
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-44-2020_2022-03-03|55",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-44-2020_2022-03-03|44",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-44-2020_2022-03-03|56",
+    "ECLI:CH:CH_BGer:CH_BGer_002_2C-44-2020_2022-03-03|43"
+   ],
+   "updatedAt": "2026-10-04T15:27:44.117Z"
+  },
+  {
+   "round": "v2-disputes",
+   "version": "2022-12-12-erl",
+   "pid": "Rz5.54",
+   "label": "supported",
+   "note": "Stöckli wendet das direkte Mittel «Verbot, unter einem bestimmten Preisniveau zu verkaufen» in eigener Rede mit Folge an. Die Händler verpflichteten sich vertraglich (unter Konventionalstrafe), die schweizerischen Verkaufspreise von Stöckli nicht zu unterbieten. «Somit bestand … eine Vereinbarung über die Festlegung ihrer Wiederverkaufspreise» (Rz 37). Die zitierte Rz 45 knüpft unter der Überschrift «Vorliegen einer vertikalen Abrede über Mindestpreise» daran an («Indem sich die Stöckli Händler … verpflichteten …», der Satz ist abgeschnitten). Im Ergebnis lagen «vertikale Abreden über die Festsetzung von Mindestpreisen im Sinne von Art. 5 Abs. 4 KG vor» (Fenster 8). Ergänzend zeigt die Marktbefragung, dass auch Händler ohne schriftlichen Vertrag die UVP als verbindlich betrachteten. Das betrifft die abgestimmte Verhaltensweise.\n\nDie Varianten «Rechnungsstellung durch den Anbieter» und «Preiserhöhungsverlangen befolgt» kommen nicht vor. Da die Liste nicht abschliessend ist, genügt eine angewandte Variante.\n\nFenster 3 betrifft die Sanktion und verweist nur zurück. Fenster 4 gibt den Sachverhalt wieder, die übrigen Fenster behandeln andere Fragen.",
+   "evidence_marked": [
+    "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.1|52",
+    "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.1|22"
+   ],
+   "updatedAt": "2026-10-04T15:29:14.582Z"
+  }
+ ]
+}
