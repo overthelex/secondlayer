@@ -211,6 +211,9 @@ def main() -> int:
         "courts": sum(u["citing_by_tier"].get("federal_court", 0) + u["citing_by_tier"].get("cantonal", 0) for u in up),
         "first_court_year": min(u["year"] for u in up if u["citing_by_tier"].get("federal_court") or u["citing_by_tier"].get("cantonal")),
         "federal_peak": max(up, key=lambda u: u["citing_by_tier"].get("federal_court", 0))["year"],
+        # the record ends mid-year: the figure leaves the last, partial year out
+        "partial_year": max(u["year"] for u in up),
+        "partial_year_n": next(u["citing"] for u in up if u["year"] == max(x["year"] for x in up)),
     }
 
     # --- what happens to a norm in the later versions (PAPER-239)
@@ -503,7 +506,8 @@ def macros(F: dict) -> str:
     u = F["uptake"]
     out.update({"UpTotal": num(u["total"]), "UpFirstYear": str(u["first_year"]), "UpToTen": num(u["to_2010"]),
                 "UpSinceEleven": num(u["since_2011"]), "UpMaxToTen": num(u["max_to_2010"]), "UpCourts": num(u["courts"]),
-                "UpFirstCourtYear": str(u["first_court_year"]), "UpFederalPeak": str(u["federal_peak"])})
+                "UpFirstCourtYear": str(u["first_court_year"]), "UpFederalPeak": str(u["federal_peak"]),
+                "UpPartialYear": str(u["partial_year"]), "UpPartialN": num(u["partial_year_n"])})
     out["EuLaterAnn"] = num(F["eu_later"].get("announcement", 0))
     out["EuLaterAll"] = num(sum(F["eu_later"].values()))
     out["ImportedFirstAll"] = num(sum(F["imported_first_versions"].values()))
