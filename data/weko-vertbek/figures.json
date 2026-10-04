@@ -555,5 +555,113 @@
    "n": 37,
    "median": 5.6
   }
+ },
+ "strict": {
+  "announcement|fragment-only": 19,
+  "announcement|announcement": 15,
+  "codification|fragment-first": 25,
+  "ungrounded|ungrounded": 7,
+  "codification|codification": 13
+ },
+ "strict_lag_ann": 4.0,
+ "strict_erl": {
+  "codification": 12,
+  "fragment-first": 14,
+  "ungrounded": 4,
+  "fragment-only": 1
+ },
+ "voice": {
+  "n": 79,
+  "voice_prescribes": 79,
+  "statute_adds": 77,
+  "statute_restates": 2,
+  "by_reader": 2
+ },
+ "baserate": {
+  "2002-02-18": {
+   "first_published": "2002-02-18",
+   "decisions_before": 636,
+   "under_kg2003": 0,
+   "by_tier": {
+    "federal": 151,
+    "agency": 315,
+    "other": 170
+   },
+   "norms": 13,
+   "codifications": 0
+  },
+  "2007-07-02": {
+   "first_published": "2007-07-02",
+   "decisions_before": 1010,
+   "under_kg2003": 212,
+   "by_tier": {
+    "federal": 236,
+    "other": 192,
+    "agency": 582
+   },
+   "norms": 29,
+   "codifications": 8
+  },
+  "2010-06-28": {
+   "first_published": "2010-06-28",
+   "decisions_before": 1242,
+   "under_kg2003": 444,
+   "by_tier": {
+    "federal": 291,
+    "other": 224,
+    "agency": 727
+   },
+   "norms": 2,
+   "codifications": 1
+  },
+  "2017-05-22": {
+   "first_published": "2017-05-22",
+   "decisions_before": 1792,
+   "under_kg2003": 994,
+   "by_tier": {
+    "federal": 448,
+    "other": 278,
+    "agency": 1066
+   },
+   "norms": 1,
+   "codifications": 1
+  },
+  "2019-04-09": {
+   "first_published": "2017-06-12",
+   "decisions_before": 1801,
+   "under_kg2003": 1003,
+   "by_tier": {
+    "federal": 452,
+    "other": 278,
+    "agency": 1071
+   },
+   "norms": 23,
+   "codifications": 20
+  },
+  "2022-12-12": {
+   "first_published": "2022-12-12",
+   "decisions_before": 2442,
+   "under_kg2003": 1644,
+   "by_tier": {
+    "other": 339,
+    "federal": 674,
+    "agency": 1429
+   },
+   "norms": 3,
+   "codifications": 2
+  },
+  "2022-12-12-erl": {
+   "first_published": "2022-12-12",
+   "decisions_before": 2442,
+   "under_kg2003": 1644,
+   "by_tier": {
+    "other": 339,
+    "federal": 674,
+    "agency": 1429
+   },
+   "norms": 8,
+   "codifications": 6
+  },
+  "_all": 2802
  }
 }
