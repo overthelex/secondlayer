@@ -317,6 +317,15 @@ def main() -> int:
                   "by_reader": sum(r["voice_by"] == "reader" or r["statute_by"] == "reader" for r in vo)}
     F["baserate"] = json.loads((DATA / "baserate.json").read_text())
 
+    # --- how much of each wording the record applies, over all propositions
+    # (supported or fragment in the full run), and the depth of the text-lag search
+    lab3 = {(r["version"], r["pid"]): r["label"] for r in json.loads((DATA / "labels_full_v3.json").read_text())["labels"]}
+    applied = collections.Counter((pc[k], lab3[k] in ("supported", "fragment")) for k in lab3 if k in pc)
+    F["prov_applied"] = {c: {"n": applied[(c, True)] + applied[(c, False)], "not_applied": applied[(c, False)]}
+                         for c in ("imported", "mixed", "own")}
+    import textlag
+    F["textlag_top"] = textlag.TOP
+
     # --- review 5 (PAPER-236): robustness
     rb = json.loads((DATA / "robustness.json").read_text())
     F["rules"] = rb["rules"]; F["bootstrap"] = rb["bootstrap"]
@@ -544,6 +553,12 @@ def macros(F: dict) -> str:
                 "BaseErlSeventeen": num(B["2019-04-09"]["decisions_before"]),
                 "BaseErlSeventeenSanct": num(B["2019-04-09"]["under_kg2003"]),
                 "BaseTwentyTwo": num(B["2022-12-12"]["decisions_before"])})
+    for c, short in (("imported", "Imp"), ("mixed", "Mix"), ("own", "Own")):
+        x = F["prov_applied"][c]
+        out[f"ProvApp{short}N"] = num(x["n"])
+        out[f"ProvApp{short}Not"] = num(x["not_applied"])
+        out[f"ProvApp{short}NotPct"] = f"{100 * x['not_applied'] / x['n']:.0f}"
+    out["TlTop"] = num(F["textlag_top"])
     R = F["rules"]
     for r, short in (("both", "Both"), ("either", "Either"), ("claude", "ClaudeOnly"), ("gemini", "GeminiOnly")):
         out[f"Rule{short}Cod"] = num(R[r]["codification"])
