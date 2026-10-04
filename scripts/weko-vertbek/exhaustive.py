@@ -227,17 +227,57 @@ def cmd_next(args) -> int:
     return 0
 
 
+STEP2 = ["review_before.json", "review_before_erl.json", "review_before_v3redo.json",
+         "review_before_v5.json", "review_before_v6.json"]
+HUMAN2 = ["human_labels_before_2026-10-03.json", "human_labels_before_erl_2026-10-03.json"]
+
+
+def step2_found() -> dict:
+    """(version, pid) -> dates of the applications the step-2 readings found.
+
+    Step 2 read the record before a version's date for every provisional
+    announcement of its time. Once the chains were rebuilt (links_v4) many of
+    those versions are no longer the first of their chain, and measure1_merge
+    applies a step-2 result only to a chain's first version, so an
+    application step 2 found for a later version was dropped from the support
+    (PAPER-236). The dates are the passages Claude read as applying the rule
+    where the judges agreed, the reader's marks where the reader decided."""
+    human = {}
+    for f in HUMAN2:
+        for r in json.loads((DATA / f).read_text())["labels"]:
+            human[(r["version"], r["pid"])] = r
+    found = collections.defaultdict(list)
+    for f in STEP2:
+        for x in json.loads((DATA / f).read_text()):
+            k = (x["version"], x["pid"])
+            h = human.get(k) if x["status"] == "disputed" else None
+            if (h.get("label") if h else x["prelabel"]) not in SUP:
+                continue
+            for e, v in zip(x["evidence"], x.get("judge_passages") or []):
+                if h:
+                    marks = h.get("evidence") or []
+                    on = e["ecli"] in marks or f"{e['ecli']}|{e['ord']}" in marks
+                else:
+                    on = (v.get("claude-opus") or {}).get("label") in ("applies", "partial")
+                if on:
+                    found[k].append(e["date"] or e["date_upper_bound"])
+    return found
+
+
 def cmd_result(args) -> int:
     plan = {p["track"]: p for p in json.loads((DIR / "exhaustive_plan.json").read_text())}
     rounds = max((int(f.stem.split("_r")[-1]) for f in DIR.glob("review_exh_r*.json")), default=0)
     done = settled(rounds)
+    s2 = step2_found()
     m1 = json.loads((DATA / "measure1_final_v7.json").read_text())
     rows, cls = [], collections.Counter()
     for t in m1:
         if t["track"] not in plan:
             continue
         first = date.fromisoformat(t["first_date"])
-        old_first = min((date.fromisoformat(s["date"] or s["bound"]) for s in t["support"]), default=None)
+        keys = {(v, d["pid"]) for v, d in t["versions"].items()}
+        known = [s["date"] or s["bound"] for s in t["support"]] + [d for k in keys for d in s2.get(k, [])]
+        old_first = min((date.fromisoformat(d) for d in known), default=None)
         hit = done.get(t["track"])
         new_first = None
         if hit:
@@ -272,7 +312,8 @@ def cmd_result(args) -> int:
                      "batches_read": hit["round"] if hit else rounds})
     (DATA / "exhaustive_result.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1))
     print("old -> new:", dict(cls))
-    # measurement 1 with the exhaustive search applied (v8)
+    # measurement 1 with the exhaustive search applied (v8; v9 counts the
+    # step-2 applications of every version of a chain, see step2_found)
     by = {r["track"]: r for r in rows}
     out = []
     for t in m1:
@@ -280,7 +321,7 @@ def cmd_result(args) -> int:
         if r:
             t = dict(t, final_class=r["class"], lag_years=r["lag_years"], exhaustive=r)
         out.append(t)
-    (DATA / "measure1_final_v8.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=str))
+    (DATA / "measure1_final_v9.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=str))
     return 0
 
 

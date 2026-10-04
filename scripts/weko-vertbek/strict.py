@@ -106,7 +106,7 @@ def main() -> int:
             rnd = int(f.stem.split("_r")[-1])
             reviews([(x, (x["version"], x["pid"], rnd)) for x in json.loads(f.read_text())], hh)
 
-    m1 = [t for t in json.loads((DATA / "measure1_final_v8.json").read_text()) if t["type"] == "norm"]
+    m1 = [t for t in json.loads((DATA / "measure1_final_v9.json").read_text()) if t["type"] == "norm"]
     rows, moves = [], collections.Counter()
     for t in m1:
         keys = {(v, d["pid"]) for v, d in t["versions"].items()}

@@ -53,7 +53,7 @@ HUMAN2 = ["human_labels_before_2026-10-03.json", "human_labels_before_erl_2026-1
 
 
 def codifications() -> list[dict]:
-    return [t for t in json.loads((DATA / "measure1_final_v8.json").read_text())
+    return [t for t in json.loads((DATA / "measure1_final_v9.json").read_text())
             if t["type"] == "norm" and t["final_class"] == "codification"]
 
 
