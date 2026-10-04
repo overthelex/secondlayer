@@ -663,5 +663,104 @@
    "codifications": 6
   },
   "_all": 2802
+ },
+ "rules": {
+  "published": {
+   "codification": 38,
+   "announcement": 34,
+   "ungrounded": 7,
+   "lag_median": 4.5,
+   "differs_from_published": 0,
+   "erl_codification": 26,
+   "early_announcement": 32
+  },
+  "claude": {
+   "codification": 36,
+   "announcement": 35,
+   "ungrounded": 8,
+   "lag_median": 4.5,
+   "differs_from_published": 8,
+   "erl_codification": 25,
+   "early_announcement": 33
+  },
+  "gemini": {
+   "codification": 38,
+   "announcement": 32,
+   "ungrounded": 9,
+   "lag_median": 2.8499999999999996,
+   "differs_from_published": 10,
+   "erl_codification": 23,
+   "early_announcement": 28
+  },
+  "both": {
+   "codification": 30,
+   "announcement": 36,
+   "ungrounded": 13,
+   "lag_median": 4.4,
+   "differs_from_published": 10,
+   "erl_codification": 20,
+   "early_announcement": 32
+  },
+  "either": {
+   "codification": 42,
+   "announcement": 31,
+   "ungrounded": 6,
+   "lag_median": 2.9,
+   "differs_from_published": 9,
+   "erl_codification": 26,
+   "early_announcement": 28
+  }
+ },
+ "bootstrap": {
+  "codification": [
+   0.367,
+   0.595
+  ],
+  "announcement": [
+   0.329,
+   0.544
+  ],
+  "ungrounded": [
+   0.038,
+   0.152
+  ],
+  "lag_median": [
+   2.4,
+   7.7
+  ]
+ },
+ "poolcheck": {
+  "packets_checked": {
+   "same": 259,
+   "differs": 6
+  },
+  "passages_200": 2120,
+  "not_shown_at_100": 0
+ },
+ "frit": {
+  "found": 602,
+  "fr": 564,
+  "it": 38,
+  "vertical": 12,
+  "hand_found": 13,
+  "hand": 14,
+  "new": 10,
+  "would_enter": 5
+ },
+ "order": {
+  "claude-opus": {
+   "n": 60,
+   "retest_same_label": 50,
+   "retest_same_binary": 55,
+   "shuffled_same_label": 47,
+   "shuffled_same_binary": 54
+  },
+  "gemini-3.1-pro": {
+   "n": 60,
+   "retest_same_label": 51,
+   "retest_same_binary": 54,
+   "shuffled_same_label": 51,
+   "shuffled_same_binary": 54
+  }
  }
 }
