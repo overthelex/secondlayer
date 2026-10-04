@@ -1,0 +1,115 @@
+{
+ "found": 602,
+ "by_lang": {
+  "fr": 564,
+  "it": 38
+ },
+ "by_tier": {
+  "agency": 283,
+  "federal": 139,
+  "cantonal": 180
+ },
+ "agreement": 70,
+ "vertical": 53,
+ "agreement_and_vertical": 12,
+ "hand_picked_ext": 14,
+ "hand_picked_found": 13,
+ "candidates": [
+  {
+   "ecli": "ECLI:CH:GE_Gerichte:GE_CJ_013_A-3060-2019_2019-12-17",
+   "spider": "GE_Gerichte",
+   "date": "2019-12-17",
+   "docket": "A/3060/2019",
+   "lang": "fr",
+   "tier": "cantonal"
+  },
+  {
+   "ecli": "ECLI:CH:VD_FindInfo:VD_TC_007_CM10-022542_nodate",
+   "spider": "VD_FindInfo",
+   "date": "2021-01-01",
+   "docket": "CM10.022542",
+   "lang": "fr",
+   "tier": "cantonal"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_99-055_1999-09-14",
+   "spider": "CH_VB",
+   "date": "1999-09-14",
+   "docket": "99.055",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2006-0098-861-_2006-01-24",
+   "spider": "CH_VB",
+   "date": "2006-01-24",
+   "docket": "2006-0098 861 ",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:VD_FindInfo:VD_TC_007_CM10-022542_2010-09-21",
+   "spider": "VD_FindInfo",
+   "date": "2010-09-21",
+   "docket": "CM10.022542",
+   "lang": "fr",
+   "tier": "cantonal"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2001-2038-1911_2002-03-12",
+   "spider": "CH_VB",
+   "date": "2002-03-12",
+   "docket": "2001-2038 1911",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2004-2391-1493-_2005-03-01",
+   "spider": "CH_VB",
+   "date": "2005-03-01",
+   "docket": "2004-2391 1493 ",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_4-2005-0120-_2005-02-01",
+   "spider": "CH_VB",
+   "date": "2005-02-01",
+   "docket": "4 2005-0120 ",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:VD_FindInfo:VD_TC_007_702a442ae956affcac28_2010-09-21",
+   "spider": "VD_FindInfo",
+   "date": "2010-09-21",
+   "docket": null,
+   "lang": "fr",
+   "tier": "cantonal"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_674-2005-0120-_2005-02-01",
+   "spider": "CH_VB",
+   "date": "2005-02-01",
+   "docket": "674 2005-0120 ",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "spider": "CH_VB",
+   "date": "2007-10-30",
+   "docket": "2007-2525 7149 ",
+   "lang": "fr",
+   "tier": "agency"
+  },
+  {
+   "ecli": "ECLI:CH:CH_BGer:CH_BGer_004_4A-229-2021_2022-01-18",
+   "spider": "CH_BGer",
+   "date": "2022-01-18",
+   "docket": "4A_229/2021",
+   "lang": "fr",
+   "tier": "federal"
+  }
+ ]
+}

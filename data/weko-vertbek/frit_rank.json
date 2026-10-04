@@ -1,0 +1,356 @@
+{
+ "decisions": 10,
+ "passages": 1154,
+ "would_enter": [
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:3",
+   "pid": "3(b)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.761,
+   "floor": 0.711
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:4",
+   "pid": "3(c)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.772,
+   "floor": 0.67
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:5",
+   "pid": "3(d)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.772,
+   "floor": 0.665
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:6",
+   "pid": "3(e)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.72,
+   "floor": 0.676
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:7",
+   "pid": "3(f)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.731,
+   "floor": 0.682
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:8",
+   "pid": "4",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.742,
+   "floor": 0.713
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:9",
+   "pid": "5(a)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.761,
+   "floor": 0.711
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:10",
+   "pid": "5(b)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.761,
+   "floor": 0.71
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:11",
+   "pid": "5(c)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.761,
+   "floor": 0.711
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:12",
+   "pid": "5(d)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.686,
+   "floor": 0.638
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:12",
+   "pid": "5(d)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_4-2005-0120-_2005-02-01",
+   "date": "2005-02-01",
+   "score": 0.649,
+   "floor": 0.638
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:12",
+   "pid": "5(d)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_674-2005-0120-_2005-02-01",
+   "date": "2005-02-01",
+   "score": 0.649,
+   "floor": 0.638
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:13",
+   "pid": "5(e)",
+   "version": "2002-02-18",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.761,
+   "floor": 0.711
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:48",
+   "pid": "11(2a)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_4-2005-0120-_2005-02-01",
+   "date": "2005-02-01",
+   "score": 0.606,
+   "floor": 0.599
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:48",
+   "pid": "11(2a)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_674-2005-0120-_2005-02-01",
+   "date": "2005-02-01",
+   "score": 0.606,
+   "floor": 0.599
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:50",
+   "pid": "11(2c)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.686,
+   "floor": 0.62
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:53",
+   "pid": "12(g)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.735,
+   "floor": 0.721
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:54",
+   "pid": "12(h)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.672,
+   "floor": 0.645
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:55",
+   "pid": "13(2)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.734,
+   "floor": 0.698
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:56",
+   "pid": "14",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.723,
+   "floor": 0.685
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:60",
+   "pid": "15(4a)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.577,
+   "floor": 0.557
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:60",
+   "pid": "15(4a)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_99-055_1999-09-14",
+   "date": "1999-09-14",
+   "score": 0.558,
+   "floor": 0.557
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:66",
+   "pid": "15(4g)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_99-055_1999-09-14",
+   "date": "1999-09-14",
+   "score": 0.58,
+   "floor": 0.566
+  },
+  {
+   "search": "exhaustive",
+   "track": "Erläuterungen:25",
+   "pid": "16",
+   "version": "2019-04-09",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.652,
+   "floor": 0.643
+  },
+  {
+   "search": "exhaustive",
+   "track": "Bekanntmachung:116",
+   "pid": "15(b)",
+   "version": "2022-12-12",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.706,
+   "floor": 0.664
+  },
+  {
+   "search": "exhaustive",
+   "track": "Erläuterungen:95",
+   "pid": "35",
+   "version": "2022-12-12-erl",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.701,
+   "floor": 0.699
+  },
+  {
+   "search": "textlag",
+   "track": "Bekanntmachung:44",
+   "pid": "10(1b)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_99-055_1999-09-14",
+   "date": "1999-09-14",
+   "score": 0.591,
+   "floor": 0.58
+  },
+  {
+   "search": "textlag",
+   "track": "Bekanntmachung:64",
+   "pid": "15(4e)",
+   "version": "2007-07-02",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_99-055_1999-09-14",
+   "date": "1999-09-14",
+   "score": 0.639,
+   "floor": 0.633
+  },
+  {
+   "search": "textlag",
+   "track": "Erläuterungen:24",
+   "pid": "15",
+   "version": "2019-04-09",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.721,
+   "floor": 0.658
+  },
+  {
+   "search": "textlag",
+   "track": "Erläuterungen:34",
+   "pid": "24",
+   "version": "2019-04-09",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.657,
+   "floor": 0.629
+  },
+  {
+   "search": "textlag",
+   "track": "Erläuterungen:34",
+   "pid": "24",
+   "version": "2019-04-09",
+   "ecli": "ECLI:CH:VD_FindInfo:VD_TC_007_702a442ae956affcac28_2010-09-21",
+   "date": "2010-09-21",
+   "score": 0.629,
+   "floor": 0.629
+  },
+  {
+   "search": "textlag",
+   "track": "Bekanntmachung:116",
+   "pid": "15(b)",
+   "version": "2022-12-12",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.706,
+   "floor": 0.647
+  },
+  {
+   "search": "textlag",
+   "track": "Erläuterungen:95",
+   "pid": "35",
+   "version": "2022-12-12-erl",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.701,
+   "floor": 0.695
+  },
+  {
+   "search": "textlag",
+   "track": "Erläuterungen:96",
+   "pid": "36",
+   "version": "2022-12-12-erl",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.664,
+   "floor": 0.653
+  },
+  {
+   "search": "textlag",
+   "track": "Erläuterungen:100",
+   "pid": "9",
+   "version": "2022-12-12-erl",
+   "ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30",
+   "date": "2007-10-30",
+   "score": 0.724,
+   "floor": 0.654
+  }
+ ]
+}

@@ -1,0 +1,8 @@
+{"note": "Reading of the supplementary FR/IT decisions that frit_rank.py found would enter a search's 24 nearest (PAPER-236). None is a decision the audit had not read: no search needs re-running.",
+ "decisions": [
+  {"ecli": "ECLI:CH:CH_VB:CH_VB_001_2007-2525-7149-_2007-10-30", "is": "notice", "reading": "French text of the 2007 Vertikalbekanntmachung itself (Communication concernant l'appréciation des accords verticaux, decision of 2 July 2007); excluded like the German notices (RPW D1)"},
+  {"ecli": "ECLI:CH:CH_VB:CH_VB_001_4-2005-0120-_2005-02-01", "is": "form", "reading": "WEKO's reporting form for a potentially unlawful restriction (20 December 2004); not a decision"},
+  {"ecli": "ECLI:CH:CH_VB:CH_VB_001_674-2005-0120-_2005-02-01", "is": "form", "reading": "the same form, a second copy"},
+  {"ecli": "ECLI:CH:CH_VB:CH_VB_001_99-055_1999-09-14", "is": "message", "reading": "Federal Council message on the electricity market act (99.055, 7 June 1999); not a decision"},
+  {"ecli": "ECLI:CH:VD_FindInfo:VD_TC_007_702a442ae956affcac28_2010-09-21", "is": "duplicate", "reading": "Vaud cantonal court CM10.022542 of 21 September 2010, already among the 14 hand-picked decisions under another ECLI and read by the searches"}
+ ]}
