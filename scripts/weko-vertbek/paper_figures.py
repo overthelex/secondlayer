@@ -14,6 +14,7 @@ import pathlib
 import re
 import statistics
 import sys
+from datetime import date
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -253,6 +254,39 @@ def main() -> int:
     F["imported_first_versions"] = dict(collections.Counter(
         f["first_version"] for f in m1 if pc.get((f["first_version"], f["versions"][f["first_version"]]["pid"])) == "imported"))
 
+    # --- survival: time from first statement to first application (PAPER-238)
+    # Every norm not a codification at its first statement: an announcement is
+    # an event at its lag, an ungrounded norm is censored at the end of the
+    # record. Codifications have their event before t0 and are left out.
+    end = date(2026, 6, 30)
+    surv = []
+    for f in m1:
+        if f["final_class"] == "announcement" and f["lag_years"] is not None:
+            surv.append((f, float(f["lag_years"]), 1))
+        elif f["final_class"] == "ungrounded":
+            surv.append((f, round((end - date.fromisoformat(f["first_date"])).days / 365.25, 1), 0))
+    rows_all = [(t, e) for _, t, e in surv]
+    curve = kaplan_meier(rows_all)
+    med, med_lo, med_hi = km_median(curve)
+    at = lambda c, y: next((s for t, s, _, _ in reversed(c) if t <= y), 1.0)
+    prov_of = lambda f: pc.get((f["first_version"], f["versions"][f["first_version"]]["pid"]))
+    own = [(t, e) for f, t, e in surv if prov_of(f) == "own"]
+    other = [(t, e) for f, t, e in surv if prov_of(f) in ("mixed", "imported")]
+    F["survival"] = {"n": len(surv), "events": sum(e for _, e in rows_all), "censored": sum(1 - e for _, e in rows_all),
+                     "median": med, "median_ci": [med_lo, med_hi],
+                     "applied_by_5": round(1 - at(curve, 5), 3), "applied_by_10": round(1 - at(curve, 10), 3),
+                     "own_n": len(own), "other_n": len(other),
+                     "own_median": km_median(kaplan_meier(own))[0] if own else None,
+                     "other_median": km_median(kaplan_meier(other))[0] if other else None,
+                     "logrank_own_vs_other": round(logrank(own, other), 3) if own and other else None,
+                     "censored_short": sum(1 for _, t, e in surv if not e and t < 5)}
+    import csv as _csv
+    with open(args.out.with_name("survival.csv"), "w", newline="") as fh:
+        w = _csv.writer(fh)
+        w.writerow(["track", "first_version", "provenance", "years", "event"])
+        for f, t, e in surv:
+            w.writerow([f["track"], f["first_version"], prov_of(f) or "", t, e])
+
     args.out.write_text(json.dumps(F, ensure_ascii=False, indent=1, default=str))
     args.out.with_suffix(".tex").write_text(macros(F))
     import csv
@@ -272,6 +306,59 @@ def main() -> int:
     print(json.dumps(F, ensure_ascii=False, indent=1, default=str)[:6000])
     return 0
 
+
+
+def kaplan_meier(rows: list[tuple[float, int]]) -> list[tuple[float, float, float, float]]:
+    """(time, S(t), lower, upper) at each event time; Greenwood variance,
+    log-log confidence interval (95%)."""
+    import math
+    out, s, var = [], 1.0, 0.0
+    times = sorted({t for t, e in rows if e})
+    for t in times:
+        n = sum(1 for x, _ in rows if x >= t)
+        d = sum(1 for x, e in rows if x == t and e)
+        s *= 1 - d / n
+        var += d / (n * (n - d)) if n > d else 0.0
+        if 0 < s < 1:
+            se = math.sqrt(var) / abs(math.log(s))
+            lo, hi = s ** math.exp(1.96 * se), s ** math.exp(-1.96 * se)
+        else:
+            lo = hi = s
+        out.append((t, s, lo, hi))
+    return out
+
+
+def km_median(curve) -> tuple:
+    """The first time S(t) falls to 0.5 or below, with the times its 95% band does."""
+    # as R's survfit: where S(t) is exactly 0.5 the median is midway to the next event
+    med = None
+    for i, (t, sv, lo, hi) in enumerate(curve):
+        if abs(sv - 0.5) < 1e-12 and i + 1 < len(curve):
+            med = (t + curve[i + 1][0]) / 2
+            break
+        if sv < 0.5:
+            med = t
+            break
+    lo = next((t for t, s, l, h in curve if h <= 0.5), None)   # the upper band crosses last
+    hi_t = next((t for t, s, l, h in curve if l <= 0.5), None)  # the lower band crosses first
+    return med, hi_t, lo
+
+
+def logrank(a: list[tuple[float, int]], b: list[tuple[float, int]]) -> float:
+    """Two-group log-rank chi-square (1 df) -> p value."""
+    import math
+    times = sorted({t for t, e in a + b if e})
+    o_minus_e, var = 0.0, 0.0
+    for t in times:
+        na = sum(1 for x, _ in a if x >= t); nb = sum(1 for x, _ in b if x >= t)
+        da = sum(1 for x, e in a if x == t and e); db = sum(1 for x, e in b if x == t and e)
+        n, d = na + nb, da + db
+        if n < 2:
+            continue
+        o_minus_e += da - d * na / n
+        var += d * (na / n) * (nb / n) * (n - d) / (n - 1)
+    chi = o_minus_e ** 2 / var if var else 0.0
+    return math.erfc(math.sqrt(chi / 2))
 
 
 def macros(F: dict) -> str:
@@ -334,6 +421,15 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    sv = F["survival"]
+    out.update({"SurvN": num(sv["n"]), "SurvEvents": num(sv["events"]), "SurvCensored": num(sv["censored"]),
+                "SurvMedian": num(float(sv["median"])), "SurvMedianLo": num(float(sv["median_ci"][0] or 0)),
+                "SurvMedianHi": num(float(sv["median_ci"][1])) if sv["median_ci"][1] else "n.d.",
+                "SurvByFive": f"{100 * sv['applied_by_5']:.0f}", "SurvByTen": f"{100 * sv['applied_by_10']:.0f}",
+                "SurvOwnN": num(sv["own_n"]), "SurvOtherN": num(sv["other_n"]),
+                "SurvOwnMedian": num(float(sv["own_median"])) if sv["own_median"] else "n.d.",
+                "SurvOtherMedian": num(float(sv["other_median"])) if sv["other_median"] else "n.d.",
+                "SurvLogrankP": f"{sv['logrank_own_vs_other']:.2f}", "SurvCensoredShort": num(sv["censored_short"])})
     a = F["anchors"]; r = a["results"]
     out.update({"AnchPairs": num(a["pairs"]), "AnchHolds": num(r.get("holds", 0)), "AnchStates": num(r.get("states", 0)),
                 "AnchFrag": num(r.get("fragment", 0)), "AnchQuotes": num(r.get("quotes", 0)), "AnchAbsent": num(r.get("absent", 0)),
