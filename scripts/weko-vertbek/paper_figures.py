@@ -135,7 +135,7 @@ def main() -> int:
 
     # --- measurement 1
     # v5: chains from the verified links between versions (PAPER-239, links_v4.json)
-    m1_all = json.loads((DATA / "measure1_final_v7.json").read_text())
+    m1_all = json.loads((DATA / "measure1_final_v8.json").read_text())
     links = json.loads((DATA / "links_v4.json").read_text())["links"]
     # only a norm can be codified or announced (typology_v3.json)
     m1 = [f for f in m1_all if f["type"] == "norm"]
@@ -153,6 +153,32 @@ def main() -> int:
                      "decided_by": {f"{a}|{b}": n for (a, b), n in collections.Counter((f["final_class"], f["decided_by"]) for f in m1).items()},
                      "by_version": tab, "lag_median": statistics.median(lags),
                      "lag_quartiles": statistics.quantiles(lags, n=4)}
+
+    # --- the exhaustive search (exhaustive.py, PAPER-234)
+    ex = json.loads((DATA / "exhaustive_result.json").read_text())
+    plan = json.loads((DIR / "exhaustive_plan.json").read_text())
+    F["exhaustive"] = {
+        "rules": len(ex), "per_rule": max(len(p["candidates"]) for p in plan),
+        "ext_candidates": sum(c["ext"] for p in plan for c in p["candidates"]),
+        "moves": {f"{a}|{b}": n for (a, b), n in collections.Counter((x["old_class"], x["class"]) for x in ex).items()},
+        "ann_kept": sum(1 for x in ex if x["old_class"] == "announcement" and x["class"] == "announcement"),
+        "ann_in": sum(1 for x in ex if x["old_class"] == "announcement"),
+        "ungr_in": sum(1 for x in ex if x["old_class"] == "ungrounded"),
+        "ungr_to_cod": sum(1 for x in ex if x["old_class"] == "ungrounded" and x["class"] == "codification"),
+        "ungr_to_ann": sum(1 for x in ex if x["old_class"] == "ungrounded" and x["class"] == "announcement"),
+        "ungr_left": sum(1 for x in ex if x["old_class"] == "ungrounded" and x["class"] == "ungrounded"),
+        "lag_before": statistics.median([x["old_lag"] for x in ex if x["old_class"] == "announcement" and x["old_lag"] is not None]),
+        "ext_decisions": 14,
+    }
+    early = []
+    for f in m1:
+        if f["first_version"] in ("2002-02-18", "2007-07-02") and f["final_class"] == "announcement":
+            exh = f.get("exhaustive") or {}
+            e = exh.get("earliest") or min((sp["date"] or sp["bound"]) for sp in f["support"])
+            early.append(int(e[:4]))
+    F["early_applications"] = {"n": len(early), "2008_2012": sum(2008 <= y <= 2012 for y in early)}
+    erl = [f for f in m1 if f["first_version"] in ("2019-04-09", "2022-12-12-erl")]
+    F["erl"] = {"norms": len(erl), **collections.Counter(f["final_class"] for f in erl)}
 
     # --- uptake: decisions citing the notice per year (uptake.py, PAPER-241)
     up = json.loads((DATA / "uptake.json").read_text())["years"]
@@ -290,6 +316,16 @@ def macros(F: dict) -> str:
         key = c.capitalize()
         out[f"Cross{key}N"] = str(sum(row))
         out[f"Cross{key}Ann"], out[f"Cross{key}Ungr"], out[f"Cross{key}Cod"] = str(row[1]), str(row[2]), str(row[0])
+    e = F["exhaustive"]
+    out.update({"ExhRules": num(e["rules"]), "ExhTop": num(e["per_rule"]), "ExhExtCand": num(e["ext_candidates"]),
+                "ExhExtDecisions": num(e["ext_decisions"]), "ExhAnnKept": num(e["ann_kept"]), "ExhAnnIn": num(e["ann_in"]),
+                "ExhUngrIn": num(e["ungr_in"]), "ExhUngrToCod": num(e["ungr_to_cod"]), "ExhUngrToAnn": num(e["ungr_to_ann"]),
+                "ExhUngrLeft": num(e["ungr_left"]), "ExhLagBefore": num(float(e["lag_before"]))})
+    out["EarlyAppN"] = num(F["early_applications"]["n"])
+    out["EarlyAppCluster"] = num(F["early_applications"]["2008_2012"])
+    out["ErlNorms"] = num(F["erl"]["norms"])
+    out["ErlAnn"] = num(F["erl"]["announcement"])
+    out["ErlCod"] = num(F["erl"]["codification"])
     u = F["uptake"]
     out.update({"UpTotal": num(u["total"]), "UpFirstYear": str(u["first_year"]), "UpToTen": num(u["to_2010"]),
                 "UpSinceEleven": num(u["since_2011"]), "UpMaxToTen": num(u["max_to_2010"]), "UpCourts": num(u["courts"]),

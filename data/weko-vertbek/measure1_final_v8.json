@@ -1,0 +1,8475 @@
+[
+ {
+  "track": "Bekanntmachung:0",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "definition",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 1.0,
+  "versions": {
+   "2002-02-18": {
+    "pid": "1",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "1",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "1",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "1",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "1",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2003-02-03",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2003-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "2003-02-03",
+    "bound": "2003-02-03"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2003-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2003-02-03",
+    "bound": "2003-02-03"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "",
+    "bound": "2012-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2019-07-01",
+    "bound": "2019-07-01"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "human",
+  "step2_before": "2002-02-18"
+ },
+ {
+  "track": "Bekanntmachung:1",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 10.2,
+  "versions": {
+   "2002-02-18": {
+    "pid": "2",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "4(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "4(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "4(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-05-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:ZG_Obergericht:ZG_OG_001_Z2-2024-32_2024-08-08",
+    "spider": "ZG_Obergericht",
+    "via": "2002-02-18",
+    "date": "2024-08-08",
+    "bound": "2024-08-08"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
+ },
+ {
+  "track": "Bekanntmachung:2",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.4,
+  "versions": {
+   "2002-02-18": {
+    "pid": "3(a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "10(1a)",
+    "label": "recites",
+    "source": "human_disputed",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "10(1a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "12(1a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2024-05-06",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "human",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:2",
+   "version": "2002-02-18",
+   "pid": "3(a)",
+   "old_class": "announcement",
+   "old_lag": 22.2,
+   "class": "announcement",
+   "lag_years": 9.4,
+   "earliest": "2011-07-11",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:3",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "3(b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(d)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3962-2013_2019-10-30",
+    "spider": "CH_BVGer",
+    "via": "2002-02-18",
+    "date": "2019-10-30",
+    "bound": "2019-10-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-4012-2013_2019-10-30",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2019-10-30",
+    "bound": "2019-10-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "human",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:3",
+   "version": "2002-02-18",
+   "pid": "3(b)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": 4,
+   "batches_read": 4
+  }
+ },
+ {
+  "track": "Bekanntmachung:4",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "3(c)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(c)",
+    "label": "recites",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2c)",
+    "label": "recites",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2c)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(c)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:4",
+   "version": "2002-02-18",
+   "pid": "3(c)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:5",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "3(d)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(d)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2d)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2d)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(c)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-2_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "",
+    "bound": "2025-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:5",
+   "version": "2002-02-18",
+   "pid": "3(d)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:6",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 16.2,
+  "versions": {
+   "2002-02-18": {
+    "pid": "3(e)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(e)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2e)",
+    "label": "absent",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2e)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(f)",
+    "label": "absent",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2018-05-01",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-2_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2018-05-01",
+    "bound": "2018-05-01"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:6",
+   "version": "2002-02-18",
+   "pid": "3(e)",
+   "old_class": "announcement",
+   "old_lag": 16.2,
+   "class": "announcement",
+   "lag_years": 16.2,
+   "earliest": "2018-05-01",
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:7",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "3(f)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(f)",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2f)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2f)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(g)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2004-12-06",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2004-12-06",
+    "bound": "2004-12-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2004-12-06",
+    "bound": "2004-12-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2004-12-06",
+    "bound": "2004-12-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-1_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2004-12-06",
+    "bound": "2004-12-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "2008-08-18",
+    "bound": "2008-08-18"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "2022-05-10",
+    "bound": "2022-05-10"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:7",
+   "version": "2002-02-18",
+   "pid": "3(f)",
+   "old_class": "announcement",
+   "old_lag": 2.8,
+   "class": "announcement",
+   "lag_years": 2.8,
+   "earliest": "2004-12-06",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:8",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": 9.4,
+  "versions": {
+   "2002-02-18": {
+    "pid": "4",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "13(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "13(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "13(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "16(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "announcement",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:8",
+   "version": "2002-02-18",
+   "pid": "4",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "announcement",
+   "lag_years": 9.4,
+   "earliest": "2011-07-11",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:9",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "5(a)",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(d)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2002-02-18",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2002-02-18",
+    "date": "2019-07-01",
+    "bound": "2019-07-01"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-4012-2013_2019-10-30",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2019-10-30",
+    "bound": "2019-10-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:9",
+   "version": "2002-02-18",
+   "pid": "5(a)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": 4,
+   "batches_read": 4
+  }
+ },
+ {
+  "track": "Bekanntmachung:10",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "5(b)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(d)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-4012-2013_2019-10-30",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2019-10-30",
+    "bound": "2019-10-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:10",
+   "version": "2002-02-18",
+   "pid": "5(b)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": 4,
+   "batches_read": 4
+  }
+ },
+ {
+  "track": "Bekanntmachung:11",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "5(c)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(d)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-4012-2013_2019-10-30",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2019-10-30",
+    "bound": "2019-10-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:11",
+   "version": "2002-02-18",
+   "pid": "5(c)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:12",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "5(d)",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-05-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2002-02-18",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:12",
+   "version": "2002-02-18",
+   "pid": "5(d)",
+   "old_class": "announcement",
+   "old_lag": 10.2,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:13",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.8,
+  "versions": {
+   "2002-02-18": {
+    "pid": "5(e)",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "12(b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(d)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-4012-2013_2019-10-30",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2019-10-30",
+    "bound": "2019-10-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:13",
+   "version": "2002-02-18",
+   "pid": "5(e)",
+   "old_class": "announcement",
+   "old_lag": 9.8,
+   "class": "announcement",
+   "lag_years": 9.8,
+   "earliest": "2011-11-28",
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:14",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2002-02-18": {
+    "pid": "E1",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "E1",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "I",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "I",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "I",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:15",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "rationale",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2002-02-18": {
+    "pid": "E2",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "added",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:16",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 7.7,
+  "versions": {
+   "2002-02-18": {
+    "pid": "E3",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2007-07-02": {
+    "pid": "8(2)",
+    "label": "recites",
+    "source": "judges",
+    "status": "modified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "8(3)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "8(3)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "10(5)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {
+   "2007-07-02": [
+    {
+     "pid": "E8",
+     "label": "supported",
+     "source": "judges",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2010-06-28": [
+    {
+     "pid": "X",
+     "label": "supported",
+     "source": "judges",
+     "status": "same",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2017-05-22": [
+    {
+     "pid": "X",
+     "label": "supported",
+     "source": "human_disputed",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2022-12-12": [
+    {
+     "pid": "X",
+     "label": "fragment",
+     "source": "judges",
+     "status": "same",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ]
+  },
+  "earliest_support": "2009-11-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2011-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2011-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3618-2013_2016-11-24",
+    "spider": "CH_BVGer",
+    "via": "2010-06-28",
+    "date": "2016-11-24",
+    "bound": "2016-11-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2016-12-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18",
+  "exhaustive": {
+   "track": "Bekanntmachung:16",
+   "version": "2002-02-18",
+   "pid": "E3",
+   "old_class": "announcement",
+   "old_lag": 7.7,
+   "class": "announcement",
+   "lag_years": 7.7,
+   "earliest": "2009-11-02",
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:17",
+  "first_version": "2002-02-18",
+  "first_date": "2002-02-18",
+  "type": "housekeeping",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 19.6,
+  "versions": {
+   "2002-02-18": {
+    "pid": "E4",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2021-10-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2002-02-18",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2002-02-18"
+ },
+ {
+  "track": "Bekanntmachung:43",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 4.5,
+  "versions": {
+   "2007-07-02": {
+    "pid": "10(1a)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "10(3)",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "10(1a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "12(1a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {
+   "2010-06-28": [
+    {
+     "pid": "12(2a)",
+     "label": "recites",
+     "source": "judges",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2017-05-22": [
+    {
+     "pid": "10(3)",
+     "label": "supported",
+     "source": "judges",
+     "status": "same",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2022-12-12": [
+    {
+     "pid": "12(3)",
+     "label": "recites",
+     "source": "human_gold",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ]
+  },
+  "earliest_support": "2021-02-04",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:43",
+   "version": "2007-07-02",
+   "pid": "10(1a)",
+   "old_class": "announcement",
+   "old_lag": 13.6,
+   "class": "announcement",
+   "lag_years": 4.5,
+   "earliest": "2011-12-31",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:44",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 9.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "10(1b)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "10(1b)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "10(1b)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "12(1b)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2016-06-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "spider": "CH_BGE",
+    "via": "2007-07-02",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+    "spider": "CH_BGE",
+    "via": "2010-06-28",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "spider": "CH_BGE",
+    "via": "2022-12-12",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2016-09-16",
+    "bound": "2016-09-16"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+    "spider": "CH_BVGer",
+    "via": "2010-06-28",
+    "date": "2016-09-16",
+    "bound": "2016-09-16"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-581-2012_2016-09-16",
+    "spider": "CH_BVGer",
+    "via": "2017-05-22",
+    "date": "2016-09-16",
+    "bound": "2016-09-16"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Brandschutzprodukte_2024-10-22",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2024-10-22",
+    "bound": "2024-10-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-2_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2025-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-2_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2025-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-2_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2025-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:45",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "10(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "11",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "11",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "13",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2013-09-24",
+    "bound": "2013-09-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2016-05-23",
+    "bound": "2016-05-23"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2016-05-23",
+    "bound": "2016-05-23"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:45",
+   "version": "2007-07-02",
+   "pid": "10(2)",
+   "old_class": "announcement",
+   "old_lag": 4.4,
+   "class": "announcement",
+   "lag_years": 2.4,
+   "earliest": "2009-11-30",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:46",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 9.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "10(3)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2016-06-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "spider": "CH_BGer",
+    "via": "2007-07-02",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "human",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:47",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 4.7,
+  "versions": {
+   "2007-07-02": {
+    "pid": "11(1)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "15(1)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "15(1)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "12(3)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2021-02-04",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-147-II-72_2021",
+    "spider": "CH_BGE",
+    "via": "2007-07-02",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021-02-04",
+    "spider": "CH_BGE",
+    "via": "2010-06-28",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021-02-04",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2023-09-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2023-09-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2023-09-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:47",
+   "version": "2007-07-02",
+   "pid": "11(1)",
+   "old_class": "announcement",
+   "old_lag": 13.6,
+   "class": "announcement",
+   "lag_years": 4.7,
+   "earliest": "2012-03-31",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:48",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 1.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "11(2a)",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "15(3a)",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "15(3a)",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2008-07-04",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:48",
+   "version": "2007-07-02",
+   "pid": "11(2a)",
+   "old_class": "announcement",
+   "old_lag": 1.0,
+   "class": "announcement",
+   "lag_years": 1.0,
+   "earliest": "2008-07-04",
+   "found_in_round": 4,
+   "batches_read": 4
+  }
+ },
+ {
+  "track": "Bekanntmachung:49",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 4.5,
+  "versions": {
+   "2007-07-02": {
+    "pid": "11(2b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2a)",
+    "label": "recites",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "10(1a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "12(1a)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {
+   "2010-06-28": [
+    {
+     "pid": "15(2)",
+     "label": "recites",
+     "source": "judges",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2017-05-22": [
+    {
+     "pid": "15(2)",
+     "label": "recites",
+     "source": "judges",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ],
+   "2022-12-12": [
+    {
+     "pid": "12(3)",
+     "label": "recites",
+     "source": "human_gold",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ]
+  },
+  "earliest_support": "2012-03-31",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2012-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2024-05-06",
+    "bound": "2024-05-06"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:49",
+   "version": "2007-07-02",
+   "pid": "11(2b)",
+   "old_class": "announcement",
+   "old_lag": 4.7,
+   "class": "announcement",
+   "lag_years": 4.5,
+   "earliest": "2011-12-31",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:50",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 1.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "11(2c)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "15(3b)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "15(3b)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2008-07-04",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2013-10-21",
+    "bound": "2013-10-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2013-10-21",
+    "bound": "2013-10-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2013-10-21",
+    "bound": "2013-10-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2015-12-14",
+    "bound": "2015-12-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2015-12-14",
+    "bound": "2015-12-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2015-12-14",
+    "bound": "2015-12-14"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:50",
+   "version": "2007-07-02",
+   "pid": "11(2c)",
+   "old_class": "announcement",
+   "old_lag": 1.0,
+   "class": "announcement",
+   "lag_years": 1.0,
+   "earliest": "2008-07-04",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:51",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": 4.7,
+  "versions": {
+   "2007-07-02": {
+    "pid": "11(2d)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "15(3c)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "15(3c)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "announcement",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:51",
+   "version": "2007-07-02",
+   "pid": "11(2d)",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "announcement",
+   "lag_years": 4.7,
+   "earliest": "2012-03-31",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:52",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "11(2e)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "15(3d)",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "15(3d)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2009-11-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2007-07-02",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-147-II-72_2021",
+    "spider": "CH_BGE",
+    "via": "2010-06-28",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-147-II-72_2021",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2007-07-02",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Vertrieb-von-Yamaha-_2022-05-10",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2022-05-10",
+    "bound": "2022-05-10"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Vertrieb-von-Yamaha-_2022-05-10",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2022-05-10",
+    "bound": "2022-05-10"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:53",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 4.7,
+  "versions": {
+   "2007-07-02": {
+    "pid": "12(g)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2g)",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2g)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "15(h)",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-03-26",
+  "support": [
+   {
+    "ecli": "ECLI:CH:SG_Gerichte:SG_DEP_999_HG-2011-286_2012-03-26",
+    "spider": "SG_Gerichte",
+    "via": "2017-05-22",
+    "date": "2012-03-26",
+    "bound": "2012-03-26"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:53",
+   "version": "2007-07-02",
+   "pid": "12(g)",
+   "old_class": "announcement",
+   "old_lag": 4.7,
+   "class": "announcement",
+   "lag_years": 4.7,
+   "earliest": "2012-03-26",
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:54",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "12(h)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "12(2h)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(2h)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:54",
+   "version": "2007-07-02",
+   "pid": "12(h)",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:55",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "13(2)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "13(2)",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "13(2)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "16(2)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2011-12-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:55",
+   "version": "2007-07-02",
+   "pid": "13(2)",
+   "old_class": "announcement",
+   "old_lag": 4.0,
+   "class": "announcement",
+   "lag_years": 2.3,
+   "earliest": "2009-11-02",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:56",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 18.7,
+  "versions": {
+   "2007-07-02": {
+    "pid": "14",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2026-03-31",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:56",
+   "version": "2007-07-02",
+   "pid": "14",
+   "old_class": "announcement",
+   "old_lag": 18.7,
+   "class": "announcement",
+   "lag_years": 18.7,
+   "earliest": "2026-03-31",
+   "found_in_round": 5,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:57",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 4.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(1)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(1)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2015-06-29",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-3b_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2015-06-29",
+    "bound": "2015-06-29"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "human",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:57",
+   "version": "2007-07-02",
+   "pid": "15(1)",
+   "old_class": "announcement",
+   "old_lag": 8.0,
+   "class": "announcement",
+   "lag_years": 4.3,
+   "earliest": "2011-10-31",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:58",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(2)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(2)",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(2)",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(2)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2009-11-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2011-04-14",
+    "bound": "2011-04-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2020-4a_B1.1.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2018-05-08",
+    "bound": "2018-05-08"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2020-4a_B1.1.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2018-05-08",
+    "bound": "2018-05-08"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:58",
+   "version": "2007-07-02",
+   "pid": "15(2)",
+   "old_class": "announcement",
+   "old_lag": 2.3,
+   "class": "announcement",
+   "lag_years": 2.3,
+   "earliest": "2009-11-02",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:59",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 3.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(3)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(3)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(3)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(3)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2013-12-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2022-1_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2013-12-02",
+    "bound": "2013-12-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2022-1_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2013-12-02",
+    "bound": "2013-12-02"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "human",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:59",
+   "version": "2007-07-02",
+   "pid": "15(3)",
+   "old_class": "announcement",
+   "old_lag": 6.4,
+   "class": "announcement",
+   "lag_years": 3.3,
+   "earliest": "2010-10-18",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:60",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4a)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4a)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4a)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4a)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2017-05-22",
+    "bound": "2017-05-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2017-05-22",
+    "bound": "2017-05-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2017-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2017-05-22",
+    "bound": "2017-05-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-4003-2016_2022-05-10",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12",
+    "date": "2022-05-10",
+    "bound": "2022-05-10"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-5819-2020_2023-10-31",
+    "spider": "CH_BVGer",
+    "via": "2010-06-28",
+    "date": "2023-10-31",
+    "bound": "2023-10-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-5819-2020_2023-10-31",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12",
+    "date": "2023-10-31",
+    "bound": "2023-10-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:60",
+   "version": "2007-07-02",
+   "pid": "15(4a)",
+   "old_class": "announcement",
+   "old_lag": 4.4,
+   "class": "announcement",
+   "lag_years": 2.4,
+   "earliest": "2009-11-30",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:61",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": 5.1,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "announcement",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:61",
+   "version": "2007-07-02",
+   "pid": "15(4b)",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "announcement",
+   "lag_years": 5.1,
+   "earliest": "2012-08-20",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:62",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 4.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4c)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4c)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4c)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4c)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-06-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2011-06-30"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "human",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:63",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4d)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4d)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4d)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4d)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2002-08-14",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-129-II-18_2003",
+    "spider": "CH_BGE",
+    "via": "2010-06-28",
+    "date": "2002-08-14",
+    "bound": "2002-08-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-129-II-18_nodate",
+    "spider": "CH_BGE",
+    "via": "2022-12-12",
+    "date": "2002-08-14",
+    "bound": "2002-08-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2014-06-12",
+    "bound": "2014-06-12"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2015-06-29",
+    "bound": "2015-06-29"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2015-06-29",
+    "bound": "2015-06-29"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2015-06-29",
+    "bound": "2015-06-29"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2015-06-29",
+    "bound": "2015-06-29"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:64",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4e)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4e)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4e)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4e)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2005-03-21",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-846-2015_2017-12-19",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2017-12-19",
+    "bound": "2017-12-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-846-2015_2017-12-19",
+    "spider": "CH_BVGer",
+    "via": "2017-05-22",
+    "date": "2017-12-19",
+    "bound": "2017-12-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-846-2015_2017-12-19",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12",
+    "date": "2017-12-19",
+    "bound": "2017-12-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2007-07-02",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2022-12-12",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:65",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4f)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4f)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4f)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4g)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2005-03-21",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2005-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2005-03-21",
+    "bound": "2005-03-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_ASCOPA_2011-10-31",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2011-10-31",
+    "bound": "2011-10-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_ASCOPA_2011-10-31",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2011-10-31",
+    "bound": "2011-10-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:66",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "15(4g)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "16(4g)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "16(4g)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "18(4h)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:66",
+   "version": "2007-07-02",
+   "pid": "15(4g)",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:67",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "16",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "17",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "17",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "19",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:68",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "housekeeping",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 6.5,
+  "versions": {
+   "2007-07-02": {
+    "pid": "17",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "18",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "18",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "20",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2013-12-19",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-506-2010_2013-12-19",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2013-12-19",
+    "bound": "2013-12-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2007-07-02",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:69",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "18",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "20",
+    "label": "absent",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "20",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "22",
+    "label": "absent",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:70",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 4.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "2",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "2",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "2",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "2",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-148-II-25_2022",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2021-12-21",
+    "bound": "2021-12-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-148-II-25_2022",
+    "spider": "CH_BGE",
+    "via": "2022-12-12",
+    "date": "2021-12-21",
+    "bound": "2021-12-21"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:71",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 4.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "3",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "5",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "5",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "6",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:72",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 1.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "4(10)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "4(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "4(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "5(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2008-07-04",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2008-07-04",
+    "bound": "2008-07-04"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:72",
+   "version": "2007-07-02",
+   "pid": "4(10)",
+   "old_class": "announcement",
+   "old_lag": 1.0,
+   "class": "announcement",
+   "lag_years": 1.0,
+   "earliest": "2008-07-04",
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:73",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "4(11)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "VI",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "VI",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "VI",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:74",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "housekeeping",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 14.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "5(12)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "XIII",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "XIII",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2021-10-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2007-07-02",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:75",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "definition",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 1.1,
+  "versions": {
+   "2007-07-02": {
+    "pid": "6",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "6",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "6",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "7",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2008-08-18",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2008-08-18",
+    "bound": "2008-08-18"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2008-08-18",
+    "bound": "2008-08-18"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2008-08-18",
+    "bound": "2008-08-18"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:76",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "definition",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "7",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "7",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "7",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "8",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:77",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "scope",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 13.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "8(1)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "8(1)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "8(1)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "10(1)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2020-11-16",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Optische-Netzwerke_2020-11-16",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2020-11-16",
+    "bound": "2020-11-16"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:78",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "scope",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "8(3)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "8(4)",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "8(4)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "10(6)",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:79",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "scope",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "8(4)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "14",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "14",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "17",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:80",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "scope",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 4.8,
+  "versions": {
+   "2007-07-02": {
+    "pid": "9(1)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "9(1)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "9(1)",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "unverified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-05-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:81",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "scope",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "9(2)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:82",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "rationale",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E2",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "II",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "II",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "II",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:83",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "rationale",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E3",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "III",
+    "label": "recites",
+    "source": "judges",
+    "status": "unverified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "III",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "III",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:84",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E4",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "IV",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "IV",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "IV",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2011-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2011-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "spider": "CH_BVGer",
+    "via": "2007-07-02",
+    "date": "2015-11-13",
+    "bound": "2015-11-13"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "spider": "CH_BVGer",
+    "via": "2010-06-28",
+    "date": "2015-11-13",
+    "bound": "2015-11-13"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "spider": "CH_BVGer",
+    "via": "2017-05-22",
+    "date": "2015-11-13",
+    "bound": "2015-11-13"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12",
+    "date": "2015-11-13",
+    "bound": "2015-11-13"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Fl-gel-und-Klaviere_2015-12-14",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2015-12-14",
+    "bound": "2015-12-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2019-07-01",
+    "bound": "2019-07-01"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2019-07-01",
+    "bound": "2019-07-01"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:84",
+   "version": "2007-07-02",
+   "pid": "E4",
+   "old_class": "announcement",
+   "old_lag": 4.4,
+   "class": "announcement",
+   "lag_years": 2.4,
+   "earliest": "2009-11-30",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:85",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "scope",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 16.9,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E5",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2024-05-21",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-4b_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2024-05-21",
+    "bound": "2024-05-21"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:86",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 2.4,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E6",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "VIII",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "VIII",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "VIII",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2009-11-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Gaba_2009-11-30",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2009-11-30",
+    "bound": "2009-11-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Gaba_2009-11-30",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2009-11-30",
+    "bound": "2009-11-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Brandschutzprodukte_2024-10-22",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2024-10-22",
+    "bound": "2024-10-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Brandschutzprodukte_2024-10-22",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2024-10-22",
+    "bound": "2024-10-22"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:86",
+   "version": "2007-07-02",
+   "pid": "E6",
+   "old_class": "announcement",
+   "old_lag": 2.4,
+   "class": "announcement",
+   "lag_years": 2.4,
+   "earliest": "2009-11-30",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:87",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 4.0,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E7",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "IX",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "IX",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "IX",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2007-07-02",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-2_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2012-02-16",
+    "bound": "2012-02-16"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-1_B1.1.4",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2014-02-24",
+    "bound": "2014-02-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2017",
+    "spider": "CH_BGE",
+    "via": "2022-12-12",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Bauleistungen-See-Ga_2016-07-08",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2016-07-08",
+    "bound": "2016-07-08"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-144-II-194_2018",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2017-10-24",
+    "bound": "2017-10-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_AdBlue_2019-12-02",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2019-12-02",
+    "bound": "2019-12-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Baustoffe-und-Deponi_2024-05-21",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2024-05-21",
+    "bound": "2024-05-21"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02",
+  "exhaustive": {
+   "track": "Bekanntmachung:87",
+   "version": "2007-07-02",
+   "pid": "E7",
+   "old_class": "announcement",
+   "old_lag": 4.0,
+   "class": "announcement",
+   "lag_years": 4.0,
+   "earliest": "2011-07-11",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:88",
+  "first_version": "2007-07-02",
+  "first_date": "2007-07-02",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 2.3,
+  "versions": {
+   "2007-07-02": {
+    "pid": "E9",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2010-06-28": {
+    "pid": "XII",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "XII",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "X",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2009-11-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2011-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Vertrieb-von-Musik_2012-07-16",
+    "spider": "CH_WEKO",
+    "via": "2007-07-02",
+    "date": "2012-07-16",
+    "bound": "2012-07-16"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2007-07-02"
+ },
+ {
+  "track": "Bekanntmachung:101",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 1.4,
+  "versions": {
+   "2010-06-28": {
+    "pid": "10(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "10(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "12(2)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2016-12-31",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2016-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2016-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2016-12-31"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2010-06-28",
+  "exhaustive": {
+   "track": "Bekanntmachung:101",
+   "version": "2010-06-28",
+   "pid": "10(2)",
+   "old_class": "announcement",
+   "old_lag": 6.5,
+   "class": "announcement",
+   "lag_years": 1.4,
+   "earliest": "2011-11-28",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Bekanntmachung:102",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2010-06-28": {
+    "pid": "12(1)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "12(1b)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "14(b)",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2006-09-27",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2006-4_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2006-09-27",
+    "bound": "2006-09-27"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Wettbewerbsabreden-i_2013-04-22",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2013-04-22",
+    "bound": "2013-04-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Bauleistungen-See-Ga_2016-07-08",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2016-07-08",
+    "bound": "2016-07-08"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:103",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2010-06-28": {
+    "pid": "19",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "19",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "21",
+    "label": "absent",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:104",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "definition",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 1.4,
+  "versions": {
+   "2010-06-28": {
+    "pid": "3",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "3",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "3",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "unverified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2013-09-24",
+    "bound": "2013-09-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_AdBlue_2019-12-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2019-12-02",
+    "bound": "2019-12-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-43-2020_2021-12-21",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2021-12-21",
+    "bound": "2021-12-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-43-2020_2021-12-21",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-12-21",
+    "bound": "2021-12-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-33-2020_2022-12-08",
+    "spider": "CH_BGer",
+    "via": "2022-12-12",
+    "date": "2022-12-08",
+    "bound": "2022-12-08"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
+ },
+ {
+  "track": "Bekanntmachung:105",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "scope",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2010-06-28": {
+    "pid": "8(2a)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "8(2a)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:106",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "scope",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2010-06-28": {
+    "pid": "8(2b)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "8(2b)",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "10(2b)",
+    "label": "absent",
+    "source": "judges",
+    "status": "unverified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:107",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "scope",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2010-06-28": {
+    "pid": "9(2)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "9(2)",
+    "label": "supported",
+    "source": "judges",
+    "status": "unverified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "11",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2009-11-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2011-06-30"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:108",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "housekeeping",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 1.8,
+  "versions": {
+   "2010-06-28": {
+    "pid": "V",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "V",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "rationale",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "V",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-03-31",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2012-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "",
+    "bound": "2016-12-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2010-06-28"
+ },
+ {
+  "track": "Bekanntmachung:109",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "housekeeping",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 1.0,
+  "versions": {
+   "2010-06-28": {
+    "pid": "VII",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "VII",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "VII",
+    "label": "fragment",
+    "source": "judges",
+    "status": "unverified",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Behinderung-des-Onli_2011-07-11",
+    "spider": "CH_WEKO",
+    "via": "2010-06-28",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Behinderung-des-Onli_2011-07-11",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Behinderung-des-Onli_2011-07-11",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+    "spider": "CH_BGE",
+    "via": "2010-06-28",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "spider": "CH_BGer",
+    "via": "2010-06-28",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-143-II-297_2016-06-28",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-143-II-297_2017",
+    "spider": "CH_BGE",
+    "via": "2022-12-12",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "spider": "CH_BGer",
+    "via": "2022-12-12",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2020-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2019-12-02",
+    "bound": "2019-12-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2010-06-28",
+    "date": "2024-09-03",
+    "bound": "2024-09-03"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2024-09-03",
+    "bound": "2024-09-03"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2024-09-03",
+    "bound": "2024-09-03"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "human",
+  "step2_before": "2010-06-28"
+ },
+ {
+  "track": "Bekanntmachung:110",
+  "first_version": "2010-06-28",
+  "first_date": "2010-06-28",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2010-06-28": {
+    "pid": "XI",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2017-05-22": {
+    "pid": "XI",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:111",
+  "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 0.4,
+  "versions": {
+   "2017-05-22": {
+    "pid": "12(1a)",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12": {
+    "pid": "14(a)",
+    "label": "supported",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2017-10-24",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-144-II-194_2018",
+    "spider": "CH_BGE",
+    "via": "2017-05-22",
+    "date": "2017-10-24",
+    "bound": "2017-10-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021",
+    "spider": "CH_BGE",
+    "via": "2022-12-12",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2017-05-22",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-145-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2022-12-12",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-4b_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2017-05-22",
+    "date": "2024-05-21",
+    "bound": "2024-05-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-4b_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2024-05-21",
+    "bound": "2024-05-21"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Brandschutzprodukte_2024-10-22",
+    "spider": "CH_WEKO",
+    "via": "2017-05-22",
+    "date": "2024-10-22",
+    "bound": "2024-10-22"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-1_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2024-10-22",
+    "bound": "2024-10-22"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2017-05-22"
+ },
+ {
+  "track": "Bekanntmachung:112",
+  "first_version": "2017-05-22",
+  "first_date": "2017-05-22",
+  "type": "housekeeping",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2017-05-22": {
+    "pid": "XIV",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:18",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "housekeeping",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 3.6,
+  "versions": {
+   "2019-04-09": {
+    "pid": "1",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "1",
+    "label": "absent",
+    "source": "judges",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2021-02-04",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021-02-04",
+    "spider": "CH_BGE",
+    "via": "2019-04-09",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2019-04-09",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2017-06-12"
+ },
+ {
+  "track": "Erläuterungen:19",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 0.3,
+  "versions": {
+   "2019-04-09": {
+    "pid": "10",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "14",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2017-10-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hoch--und-Tiefbaulei_2017-10-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12-erl",
+    "date": "2017-10-02",
+    "bound": "2017-10-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hoch--und-Tiefbaulei_2018-03-26",
+    "spider": "CH_WEKO",
+    "via": "2019-04-09",
+    "date": "2018-03-26",
+    "bound": "2018-03-26"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hoch--und-Tiefbaulei_2018-03-26",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12-erl",
+    "date": "2018-03-26",
+    "bound": "2018-03-26"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hoch--und-Tiefbaulei_2019-05-27",
+    "spider": "CH_WEKO",
+    "via": "2019-04-09",
+    "date": "2019-05-27",
+    "bound": "2019-05-27"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hoch--und-Tiefbaulei_2019-05-27",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12-erl",
+    "date": "2019-05-27",
+    "bound": "2019-05-27"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2019-06-26",
+    "bound": "2019-06-26"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2019-06-26",
+    "bound": "2019-06-26"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2022-10-17",
+    "bound": "2022-10-17"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2022-10-17",
+    "bound": "2022-10-17"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2017-06-12"
+ },
+ {
+  "track": "Erläuterungen:20",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "11",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "16",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:20",
+   "version": "2019-04-09",
+   "pid": "11",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "codification",
+   "lag_years": null,
+   "earliest": "2010-04-27",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Erläuterungen:21",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "12",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "17",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-05-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:22",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "13",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "18",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-05-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:23",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "14",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "19",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:23",
+   "version": "2019-04-09",
+   "pid": "14",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Erläuterungen:24",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "15",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "20",
+    "label": "fragment",
+    "source": "judges",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-12-31",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2011-12-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2011-12-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:25",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "16",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "21",
+    "label": "recites",
+    "source": "judges",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:25",
+   "version": "2019-04-09",
+   "pid": "16",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Erläuterungen:26",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "17",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "22",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2009-11-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2019-04-09",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Hors-Liste-Medikamen_2009-11-02",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12-erl",
+    "date": "2009-11-02",
+    "bound": "2009-11-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-2_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2011-04-14",
+    "bound": "2011-04-14"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-463-2010_2013-12-19",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12-erl",
+    "date": "2013-12-19",
+    "bound": "2013-12-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-4a_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2026-06-30"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:27",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "18",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "25",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:27",
+   "version": "2019-04-09",
+   "pid": "18",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "codification",
+   "lag_years": null,
+   "earliest": "2011-07-11",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Erläuterungen:28",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "19",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:28",
+   "version": "2019-04-09",
+   "pid": "19",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "codification",
+   "lag_years": null,
+   "earliest": "2017-05-22",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Erläuterungen:29",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "housekeeping",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 2.5,
+  "versions": {
+   "2019-04-09": {
+    "pid": "2",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "2",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "same",
+    "type": "housekeeping",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2019-12-02",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2020-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2019-12-02",
+    "bound": "2019-12-02"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-39-2020_2022-08-03",
+    "spider": "CH_BGer",
+    "via": "2022-12-12-erl",
+    "date": "2022-08-03",
+    "bound": "2022-08-03"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-33-2020_2022-12-08",
+    "spider": "CH_BGer",
+    "via": "2022-12-12-erl",
+    "date": "2022-12-08",
+    "bound": "2022-12-08"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2024-09-03",
+    "bound": "2024-09-03"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "judges",
+  "step2_before": "2017-06-12"
+ },
+ {
+  "track": "Erläuterungen:30",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "20",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "26",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:30",
+   "version": "2019-04-09",
+   "pid": "20",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "codification",
+   "lag_years": null,
+   "earliest": "2011-07-11",
+   "found_in_round": 1,
+   "batches_read": 1
+  }
+ },
+ {
+  "track": "Erläuterungen:31",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "21",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "27",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-463-2010_2013-12-19",
+    "spider": "CH_BVGer",
+    "via": "2019-04-09",
+    "date": "2013-12-19",
+    "bound": "2013-12-19"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2014-2_B2.2.4",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2014-06-30",
+    "bound": "2014-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_AdBlue_2019-12-02",
+    "spider": "CH_WEKO",
+    "via": "2019-04-09",
+    "date": "2019-12-02",
+    "bound": "2019-12-02"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:32",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "22",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "27",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:33",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "23",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "31",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:34",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "24",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "28",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {
+   "2022-12-12-erl": [
+    {
+     "pid": "29",
+     "label": "supported",
+     "source": "human_gold",
+     "status": "modified",
+     "type": "norm",
+     "cosine": null,
+     "merged_into": null
+    }
+   ]
+  },
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2019-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2019-08-19",
+    "bound": "2019-08-19"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:35",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "25",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "32",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:35",
+   "version": "2019-04-09",
+   "pid": "25",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Erläuterungen:36",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "3",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "3",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2015-02-23",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2015-2_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2015-02-23",
+    "bound": "2015-02-23"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_999_BGE-143-II-297_2017",
+    "spider": "CH_BGE",
+    "via": "2019-04-09",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-63-2016_2017-10-24",
+    "spider": "CH_BGer",
+    "via": "2019-04-09",
+    "date": "2017-10-24",
+    "bound": "2017-10-24"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-63-2016_2017-10-24",
+    "spider": "CH_BGer",
+    "via": "2022-12-12-erl",
+    "date": "2017-10-24",
+    "bound": "2017-10-24"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:37",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "4",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "4",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-06-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.4",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2018-01-29",
+    "bound": "2018-01-29"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2023-09-30"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:38",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "5",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "6",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "same-or-modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-07-11",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2011-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2011-07-11",
+    "bound": "2011-07-11"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2013-09-24",
+    "bound": "2013-09-24"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:39",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "6",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "10",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2016-06-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "spider": "CH_BGer",
+    "via": "2019-04-09",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-180-2014_2016-06-28",
+    "spider": "CH_BGer",
+    "via": "2022-12-12-erl",
+    "date": "2016-06-28",
+    "bound": "2016-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2021-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2021-06-28",
+    "bound": "2021-06-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2021-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2021-06-28",
+    "bound": "2021-06-28"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:40",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "7",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "11",
+    "label": "supported",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2012-3_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "spider": "CH_BVGer",
+    "via": "2019-04-09",
+    "date": "2015-11-13",
+    "bound": "2015-11-13"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-3332-2012_2015-11-13",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12-erl",
+    "date": "2015-11-13",
+    "bound": "2015-11-13"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "",
+    "bound": "2026-03-31"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-3_B1.4.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2026-03-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:41",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2019-04-09": {
+    "pid": "8",
+    "label": "supported",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "12",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "same",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-11-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-2_B2.2.3",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2019-04-09",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Nikon_2011-11-28",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12-erl",
+    "date": "2011-11-28",
+    "bound": "2011-11-28"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:42",
+  "first_version": "2019-04-09",
+  "first_date": "2017-06-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 0.5,
+  "versions": {
+   "2019-04-09": {
+    "pid": "9",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   },
+   "2022-12-12-erl": {
+    "pid": "13",
+    "label": "fragment",
+    "source": "judges",
+    "status": "modified",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2017-11-27",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2019-04-09",
+    "date": "2017-11-27",
+    "bound": "2017-11-27"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2018-2_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2017-11-27",
+    "bound": "2017-11-27"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "human",
+  "step2_before": "2017-06-12"
+ },
+ {
+  "track": "Bekanntmachung:113",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "scope",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 1.0,
+  "versions": {
+   "2022-12-12": {
+    "pid": "10(2a)",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2023-12-19",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2024-1_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2023-12-19",
+    "bound": "2023-12-19"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
+ },
+ {
+  "track": "Bekanntmachung:114",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "scope",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "10(3)",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:115",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "scope",
+  "best_label": "supported",
+  "class": "announcement?",
+  "lag_years": 3.5,
+  "versions": {
+   "2022-12-12": {
+    "pid": "10(4)",
+    "label": "supported",
+    "source": "human_gold",
+    "status": "added",
+    "type": "scope",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2026-06-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-4a_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "",
+    "bound": "2026-06-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
+ },
+ {
+  "track": "Bekanntmachung:116",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "15(b)",
+    "label": "recites",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:116",
+   "version": "2022-12-12",
+   "pid": "15(b)",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "codification",
+   "lag_years": null,
+   "earliest": "2015-12-14",
+   "found_in_round": 2,
+   "batches_read": 2
+  }
+ },
+ {
+  "track": "Bekanntmachung:117",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "15(e)",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2013-09-24",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2013-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2013-09-24",
+    "bound": "2013-09-24"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:118",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "18(4f)",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Bekanntmachung:118",
+   "version": "2022-12-12",
+   "pid": "18(4f)",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Bekanntmachung:119",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "4",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2010-06-28",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-3_B2.2.2",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12",
+    "date": "2010-06-28",
+    "bound": "2010-06-28"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:120",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "5(1)",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2012-05-07",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_BMW-Verf-gung_2012-05-07",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12",
+    "date": "2012-05-07",
+    "bound": "2012-05-07"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Bekanntmachung:121",
+  "first_version": "2022-12-12",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12": {
+    "pid": "9",
+    "label": "absent",
+    "source": "human_gold",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:89",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "15",
+    "label": "fragment",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2010-05-31",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2010-05-31",
+    "bound": "2010-05-31"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:90",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "23",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:91",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "announcement?",
+  "lag_years": 3.5,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "24",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2026-06-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2025-4a_B1.4.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2026-06-30"
+   }
+  ],
+  "final_class": "announcement",
+  "decided_by": "judges",
+  "step2_before": "2022-12-12"
+ },
+ {
+  "track": "Erläuterungen:92",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "30",
+    "label": "absent",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "ungrounded",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:92",
+   "version": "2022-12-12-erl",
+   "pid": "30",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "ungrounded",
+   "lag_years": null,
+   "earliest": null,
+   "found_in_round": null,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Erläuterungen:93",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "definition",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "33",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "definition",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2015-10-19",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2016-1_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:94",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "34",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2015-10-19",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO:CH_WBK_001_Online-Buchungsplatt_2015-10-19",
+    "spider": "CH_WEKO",
+    "via": "2022-12-12-erl",
+    "date": "2015-10-19",
+    "bound": "2015-10-19"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:95",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "35",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:95",
+   "version": "2022-12-12-erl",
+   "pid": "35",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "codification",
+   "lag_years": null,
+   "earliest": "2015-10-19",
+   "found_in_round": 3,
+   "batches_read": 3
+  }
+ },
+ {
+  "track": "Erläuterungen:96",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "36",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2008-08-18",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2008-3_B2.3.6",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2008-08-18",
+    "bound": "2008-08-18"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-3_B1.1.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "2022-05-10",
+    "bound": "2022-05-10"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:97",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": null,
+  "class": "ungrounded",
+  "lag_years": 2.6,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "5",
+    "label": "recites",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": null,
+  "support": [],
+  "final_class": "announcement",
+  "decided_by": "step1",
+  "step2_before": null,
+  "exhaustive": {
+   "track": "Erläuterungen:97",
+   "version": "2022-12-12-erl",
+   "pid": "5",
+   "old_class": "ungrounded",
+   "old_lag": null,
+   "class": "announcement",
+   "lag_years": 2.6,
+   "earliest": "2025-07-18",
+   "found_in_round": 5,
+   "batches_read": 5
+  }
+ },
+ {
+  "track": "Erläuterungen:98",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "7",
+    "label": "fragment",
+    "source": "human_gold",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2017-12-19",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_BVGer:CH_BVGE_001_B-846-2015_2017-12-19",
+    "spider": "CH_BVGer",
+    "via": "2022-12-12-erl",
+    "date": "2017-12-19",
+    "bound": "2017-12-19"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:99",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": "supported",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "8",
+    "label": "supported",
+    "source": "human_disputed",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-06-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2011-06-30"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGE:CH_BGE_004_BGE-147-II-72_2021-02-04",
+    "spider": "CH_BGE",
+    "via": "2022-12-12-erl",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-149-2018_2021-02-04",
+    "spider": "CH_BGer",
+    "via": "2022-12-12-erl",
+    "date": "2021-02-04",
+    "bound": "2021-02-04"
+   },
+   {
+    "ecli": "ECLI:CH:CH_BGer:CH_BGer_002_2C-147-2018_2021-10-07",
+    "spider": "CH_BGer",
+    "via": "2022-12-12-erl",
+    "date": "2021-10-07",
+    "bound": "2021-10-07"
+   },
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2023-1_B1.4.5",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2023-09-30"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ },
+ {
+  "track": "Erläuterungen:100",
+  "first_version": "2022-12-12-erl",
+  "first_date": "2022-12-12",
+  "type": "norm",
+  "best_label": "fragment",
+  "class": "codification",
+  "lag_years": null,
+  "versions": {
+   "2022-12-12-erl": {
+    "pid": "9",
+    "label": "fragment",
+    "source": "judges",
+    "status": "added",
+    "type": "norm",
+    "cosine": null,
+    "merged_into": null
+   }
+  },
+  "split": {},
+  "earliest_support": "2011-06-30",
+  "support": [
+   {
+    "ecli": "ECLI:CH:CH_WEKO_RPW:RPW_2010-4_B2.2.1",
+    "spider": "CH_WEKO_RPW",
+    "via": "2022-12-12-erl",
+    "date": "",
+    "bound": "2011-06-30"
+   }
+  ],
+  "final_class": "codification",
+  "decided_by": "step1",
+  "step2_before": null
+ }
+]

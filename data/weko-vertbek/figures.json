@@ -288,12 +288,12 @@
   "by_type": {
    "definition|codification": 5,
    "definition|announcement": 6,
-   "norm|announcement": 30,
-   "norm|ungrounded": 17,
+   "norm|announcement": 34,
    "housekeeping|ungrounded": 7,
    "rationale|ungrounded": 3,
    "housekeeping|announcement": 4,
-   "norm|codification": 32,
+   "norm|codification": 38,
+   "norm|ungrounded": 7,
    "definition|ungrounded": 3,
    "scope|announcement": 5,
    "scope|ungrounded": 6,
@@ -304,61 +304,91 @@
  "measure1": {
   "tracks": 79,
   "classes": {
-   "announcement": 30,
-   "ungrounded": 17,
-   "codification": 32
+   "announcement": 34,
+   "codification": 38,
+   "ungrounded": 7
   },
   "decided_by": {
    "announcement|human": 4,
    "announcement|judges": 26,
-   "ungrounded|step1": 17,
+   "announcement|step1": 4,
    "codification|judges": 5,
    "codification|human": 3,
-   "codification|step1": 24
+   "ungrounded|step1": 7,
+   "codification|step1": 30
   },
   "by_version": {
    "2002-02-18": {
-    "announcement": 12,
-    "ungrounded": 1,
+    "announcement": 13,
     "lag_median": 9.8
    },
    "2007-07-02": {
-    "announcement": 17,
+    "announcement": 19,
     "codification": 8,
-    "ungrounded": 4,
-    "lag_median": 4.4
+    "ungrounded": 2,
+    "lag_median": 3.3
    },
    "2010-06-28": {
     "announcement": 1,
     "codification": 1,
-    "lag_median": 6.5
+    "lag_median": 1.4
    },
    "2017-05-22": {
     "codification": 1,
     "lag_median": null
    },
    "2022-12-12": {
-    "ungrounded": 2,
-    "codification": 1,
+    "codification": 2,
+    "ungrounded": 1,
     "lag_median": null
    },
    "2019-04-09": {
-    "codification": 16,
-    "ungrounded": 7,
+    "codification": 20,
+    "ungrounded": 3,
     "lag_median": null
    },
    "2022-12-12-erl": {
-    "ungrounded": 3,
-    "codification": 5,
-    "lag_median": null
+    "ungrounded": 1,
+    "codification": 6,
+    "announcement": 1,
+    "lag_median": 2.6
    }
   },
-  "lag_median": 7.1,
+  "lag_median": 4.6,
   "lag_quartiles": [
-   4.0,
-   7.1,
+   2.4,
+   4.6,
    9.8
   ]
+ },
+ "exhaustive": {
+  "rules": 47,
+  "per_rule": 40,
+  "ext_candidates": 2,
+  "moves": {
+   "announcement|announcement": 30,
+   "ungrounded|announcement": 4,
+   "ungrounded|ungrounded": 7,
+   "ungrounded|codification": 6
+  },
+  "ann_kept": 30,
+  "ann_in": 30,
+  "ungr_in": 17,
+  "ungr_to_cod": 6,
+  "ungr_to_ann": 4,
+  "ungr_left": 7,
+  "lag_before": 7.1,
+  "ext_decisions": 14
+ },
+ "early_applications": {
+  "n": 32,
+  "2008_2012": 29
+ },
+ "erl": {
+  "norms": 31,
+  "codification": 26,
+  "ungrounded": 4,
+  "announcement": 1
  },
  "uptake": {
   "total": 189,
@@ -372,19 +402,19 @@
  },
  "fates": {
   "codification": {
-   "modified": 11,
-   "dropped": 2,
-   "kept": 19
+   "modified": 13,
+   "dropped": 3,
+   "kept": 22
   },
   "announcement": {
-   "modified": 21,
-   "dropped": 4,
-   "kept": 5
+   "modified": 22,
+   "dropped": 5,
+   "kept": 7
   },
   "ungrounded": {
-   "modified": 5,
-   "dropped": 3,
-   "kept": 9
+   "dropped": 1,
+   "kept": 4,
+   "modified": 2
   }
  },
  "links": {
@@ -438,13 +468,13 @@
  },
  "cross": {
   "mixed|announcement": 6,
-  "own|announcement": 24,
-  "own|ungrounded": 10,
-  "own|codification": 12,
-  "mixed|codification": 16,
-  "mixed|ungrounded": 2,
-  "imported|codification": 3,
-  "imported|ungrounded": 3
+  "own|announcement": 26,
+  "own|codification": 15,
+  "own|ungrounded": 5,
+  "mixed|codification": 18,
+  "imported|codification": 4,
+  "imported|ungrounded": 1,
+  "imported|announcement": 1
  },
  "eu_later": {
   "announcement": 11,

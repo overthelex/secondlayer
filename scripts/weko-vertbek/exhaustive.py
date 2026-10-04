@@ -174,20 +174,25 @@ def settled(rnd: int) -> dict[str, dict]:
         f = DIR / f"review_exh_r{r}.json"
         if not f.exists():
             continue
-        human = {}
-        hf = DATA / f"human_labels_exh_r{r}.json"
+        human, marks = {}, {}
+        hf = DATA / "human_labels_exh.json"
         if hf.exists():
-            human = {(x["version"], x["pid"]): x["label"] for x in json.loads(hf.read_text())["labels"]}
+            for x in json.loads(hf.read_text())["labels"]:
+                if x["round"] == r:
+                    human[(x["version"], x["pid"])] = x["label"]
+                    marks[(x["version"], x["pid"])] = x.get("evidence_marked") or []
         for x in json.loads(f.read_text()):
             k = (x["version"], x["pid"])
+            track = x["track"]
+            if track in out:
+                continue                  # settled in an earlier batch: later ones do not count
             lab = human.get(k) if x["status"] == "disputed" else x["prelabel"]
             if lab is None:
                 raise SystemExit(f"{k} disputed in round {r} and not labelled by the reader")
-            track = x["track"]
-            if track in out:
-                continue
             if lab in SUP:
-                out[track] = {"round": r, "label": lab, "item": x}
+                out[track] = {"round": r, "label": lab, "item": x,
+                              "by": "reader" if x["status"] == "disputed" else "judges",
+                              "marks": marks.get(k, [])}
     return out
 
 
@@ -240,8 +245,14 @@ def cmd_result(args) -> int:
             jp = it.get("judge_passages") or []
             sup_dates = []
             for e, votes in zip(it["evidence"], jp):
-                c = (votes.get("claude-opus") or {}).get("label")
-                if c in ("applies", "partial"):
+                if hit["by"] == "reader":
+                    # the passages the reader marked as applying it
+                    on = f"{e['ecli']}|{e['ord']}" in hit["marks"] or e["ecli"] in hit["marks"]
+                else:
+                    # agreed support: a passage either judge read as applying it
+                    on = any((votes.get(j) or {}).get("label") in ("applies", "partial")
+                             for j in ("claude-opus", "gemini-3.1-pro"))
+                if on:
                     sup_dates.append(date.fromisoformat(e["date"] or e["date_upper_bound"]))
             if sup_dates:
                 new_first = min(sup_dates)
@@ -260,6 +271,15 @@ def cmd_result(args) -> int:
                      "batches_read": hit["round"] if hit else rounds})
     (DATA / "exhaustive_result.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1))
     print("old -> new:", dict(cls))
+    # measurement 1 with the exhaustive search applied (v8)
+    by = {r["track"]: r for r in rows}
+    out = []
+    for t in m1:
+        r = by.get(t["track"])
+        if r:
+            t = dict(t, final_class=r["class"], lag_years=r["lag_years"], exhaustive=r)
+        out.append(t)
+    (DATA / "measure1_final_v8.json").write_text(json.dumps(out, ensure_ascii=False, indent=1, default=str))
     return 0
 
 
