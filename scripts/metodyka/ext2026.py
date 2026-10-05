@@ -15,12 +15,15 @@ import argparse
 import json
 import pathlib
 
+from zoneinfo import ZoneInfo
+
 import numpy as np
 import psycopg2
 
 import fullsearch2026
 import retrieve
 
+KYIV = ZoneInfo("Europe/Kyiv")
 DATA = pathlib.Path(__file__).resolve().parents[2] / "data" / "metodyka"
 
 
@@ -59,7 +62,7 @@ def main() -> int:
             vec /= np.linalg.norm(vec, axis=1, keepdims=True)
             best = pool[int(np.argmax(vec @ q))]
             item["passages"].append({"doc_id": f"court:{doc}", "ord": best, "corpus": "court", "doc_ref": ref,
-                                     "date": str(date or ""), "term_in_passage": bool(hit), "body": chunks[best]})
+                                     "date": date.astimezone(KYIV).date().isoformat() if date else "", "term_in_passage": bool(hit), "body": chunks[best]})
         out.append(item)
         print(f"  {norm:<8} {len(item['passages'])} judgments, "
               f"{sum(p['term_in_passage'] for p in item['passages'])} with the term in the passage read", flush=True)
