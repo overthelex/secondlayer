@@ -1,0 +1,285 @@
+<title>Методика и уведомления ЕС</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading desk — the 2002 provision and its 2026 candidate side by side, the verdict bar under them, the queue in a rail. */
+:root {
+  --bg: #f5f4f0; --surface: #ffffff; --surface-2: #eceae4; --ink: #1d1f21; --ink-2: #4a4e53;
+  --muted: #7b8086; --line: #d9d6ce; --accent: #2b5d8a; --same: #2f7d4f; --mod: #b07a1c; --diff: #9a3b33;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #16181a; --surface: #1f2225; --surface-2: #2a2e32; --ink: #e8e6e1; --ink-2: #b9bcc0;
+  --muted: #8a9096; --line: #34393e; --accent: #79a9d6; --same: #6cc28f; --mod: #e0b45a; --diff: #e08a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #16181a; --surface: #1f2225; --surface-2: #2a2e32; --ink: #e8e6e1; --ink-2: #b9bcc0;
+  --muted: #8a9096; --line: #34393e; --accent: #79a9d6; --same: #6cc28f; --mod: #e0b45a; --diff: #e08a80; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); margin: 0; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 20px 48px; padding-inline: 16px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } .rail { order: 2; } }
+header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+h1 { font: 600 20px/1.2 var(--sans); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; }
+.progress { margin-left: auto; font: 500 13px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.guide-back { position: fixed; inset: 0; background: rgba(10, 12, 15, .45); z-index: 40; display: none; }
+.guide-back.open { display: block; }
+.guide { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100%); z-index: 41; background: var(--surface);
+  border-left: 1px solid var(--line); overflow-y: auto; padding: calc(16px + env(safe-area-inset-top, 0px)) 22px 48px;
+  transform: translateX(100%); transition: transform .2s ease; font-size: 14px; color: var(--ink-2); }
+.guide.open { transform: none; }
+.guide-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; background: var(--surface); padding-bottom: 8px; }
+.guide h2 { font: 600 18px var(--sans); margin: 0; color: var(--ink); }
+.guide p { margin: 8px 0 0; max-width: 72ch; }
+.noauto { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); margin: 4px 0 8px; cursor: pointer; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.g h3 { font: 600 14px var(--sans); color: var(--ink); margin: 16px 0 4px; }
+.g ol, .g ul { margin: 6px 0; padding-left: 20px; max-width: 76ch; }
+.g li { margin: 3px 0; }
+.g table { border-collapse: collapse; width: 100%; max-width: 860px; margin: 6px 0; font-size: 14px; }
+.g td, .g th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.g th { color: var(--ink); font-weight: 600; }
+.g kbd { font: 12px var(--mono); background: var(--surface-2); border-radius: 3px; padding: 0 4px; color: var(--ink); }
+details.verbatim { margin-top: 12px; }
+details.verbatim pre { white-space: pre-wrap; font: 12.5px/1.5 var(--mono); background: var(--surface-2); padding: 10px 12px; border-radius: 5px; color: var(--ink); max-width: 100%; overflow-x: auto; }
+.rail { display: flex; flex-direction: column; gap: 4px; }
+.item { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; font: 13px var(--mono); color: var(--ink-2); }
+.item[aria-current="true"] { background: var(--surface-2); color: var(--ink); }
+.item:focus-visible { outline: 2px solid var(--accent); }
+.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.dot.same { background: var(--same); border-color: var(--same); }
+.dot.modified { background: var(--mod); border-color: var(--mod); }
+.dot.different { background: var(--diff); border-color: var(--diff); }
+.desk { display: grid; gap: 16px; min-width: 0; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 700px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.card .head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 8px; }
+.tag { font: 500 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.pid { font: 600 15px var(--mono); }
+.type { font: 12px var(--mono); color: var(--accent); }
+.text { font: 15.5px/1.6 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
+.verdict { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { all: unset; cursor: pointer; border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 5px; font: 500 14px var(--sans); color: var(--ink); }
+.btn:focus-visible { outline: 2px solid var(--accent); }
+.btn kbd { font: 12px var(--mono); color: var(--muted); margin-left: 6px; }
+.btn[data-v="same"][aria-pressed="true"] { background: var(--same); border-color: var(--same); color: var(--surface); }
+.btn[data-v="modified"][aria-pressed="true"] { background: var(--mod); border-color: var(--mod); color: var(--surface); }
+.btn[data-v="different"][aria-pressed="true"] { background: var(--diff); border-color: var(--diff); color: var(--surface); }
+.btn[aria-pressed="true"] kbd { color: var(--surface); }
+textarea { width: 100%; min-height: 64px; font: 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; }
+.saved { font: 12px var(--mono); color: var(--muted); }
+.judges { background: var(--surface-2); border-radius: 6px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); display: grid; gap: 6px; }
+.judges b { color: var(--ink); }
+.nav { display: flex; gap: 8px; }
+.status { grid-column: 1 / -1; font: 12px var(--mono); color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Методика и уведомления ЕС</h1>
+    <span class="sub">Взято ли это положение методики из уведомления Еврокомиссии? Судьи разошлись; ваша метка решает.</span>
+    <button class="btn small" id="help">Правила</button>
+    <span class="progress" id="count">0 / 0</span>
+  </header>
+  <div class="guide-back" id="guide-back"></div>
+  <aside class="guide" id="guide" role="dialog" aria-label="Правила разметки" aria-hidden="true">
+    <div class="guide-top"><h2>Как размечать</h2><button class="btn" id="guide-close">Закрыть ✕</button></div>
+    <label class="noauto"><input type="checkbox" id="guide-noauto"> Не открывать автоматически</label>
+    <div class="g">
+      <h3>Что перед вами</h3>
+      <p>Слева <b>U</b> — положение украинской методики (2002, z0317-02, или 2026, z1043-26). Справа <b>E</b> — пункт уведомления Еврокомиссии об определении рынка (1997 или 2024 года), на английском. Официального украинского перевода уведомлений нет, поэтому дословно тексты не сравнить: судьи сравнивали по смыслу.</p>
+      <p>Вопрос один: <b>взято ли U из E?</b> Правильность правил и то, должна ли Украина следовать ЕС, не оценивается.</p>
+      <h3>Три ответа</h3>
+      <table>
+        <tr><th>Метка</th><th>Когда</th></tr>
+        <tr><td><kbd>1</kbd> <b>rendered</b></td><td>U передаёт E или его часть: то же правило с теми же деталями — критерии, условия, пороги, сроки, примеры, пункты перечня, в основном в том же порядке. Читается как перевод или близкий пересказ. Часть E может быть опущена, если сказанное идёт за E по пунктам.</td></tr>
+        <tr><td><kbd>2</kbd> <b>same rule</b></td><td>То же правило, но не перевод: своими словами, со своими деталями (другие критерии, порог, срок, перечень) или только общая мысль, которую E раскрывает.</td></tr>
+        <tr><td><kbd>3</kbd> <b>different</b></td><td>Разные правила, или общая только тема и общая лексика конкурентного права (рынок, конкурент, замена, цена).</td></tr>
+      </table>
+      <h3>Трудные случаи</h3>
+      <ul>
+        <li><b>Общие места</b> любого антимонопольного текста («рынок определяется со стороны спроса», «доли указывают на рыночную власть») — не выше <b>same rule</b>; <b>rendered</b> — только если совпадают детали.</li>
+        <li><b>Определение в U</b> и пункт E, который этим понятием пользуется, не определяя его, — <b>different</b>.</li>
+        <li><b>Перечень в U</b>, повторяющий перечень E по пунктам (пусть короче), — <b>rendered</b>; совпадают один-два пункта — <b>same rule</b>.</li>
+        <li><b>Другой порог, срок или процент</b> («два года» против «одного», «5–10 %» против «5 %») — не <b>rendered</b>; <b>same rule</b>, если в остальном это правило E.</li>
+        <li><b>E о процедуре самой Комиссии</b> (её уведомлениях, делах, судах ЕС) — <b>same rule</b>, только если U формулирует то же правило для АМКУ.</li>
+      </ul>
+      <h3>Если не уверены</h3>
+      <p>Выбирайте более осторожную метку: <b>same rule</b> вместо rendered, <b>different</b> вместо same rule. Строку сомнения — в пояснение.</p>
+      <h3>Почему эти пары</h3>
+      <p>Каждое положение сравнили с тремя ближайшими по смыслу пунктами ЕС и наоборот: 2 120 пар в четырёх сравнениях (2002 с 1997, 2026 с 2024, 2026 с 1997 и контроль — 2002 с уведомлением о госпомощи, где rendered не было ни разу). Судьи разошлись на 113; здесь 60 — от которых зависит происхождение положения. Сначала 2026 с 2024 (главный вопрос), затем 2002 с 1997, затем 2026 с 1997 (было ли правило в ЕС уже в 1997 году).</p>
+      <details class="verbatim"><summary>Протокол дословно (так его получали судьи)</summary><pre># Is this Ukrainian rule taken from the EU text? (provenance protocol, Ukrainian Methodology, v1)
+
+You read proposition U from a Methodology of the Antimonopoly Committee of
+Ukraine for defining a market and establishing a monopoly (dominant) position
+-- the 2002 text (z0317-02) or its 2026 successor (z1043-26) -- in Ukrainian,
+and paragraph E from a notice of the European Commission, in English. You
+decide whether U comes from E. You do not judge whether either rule is right,
+or whether the Ukrainian authority should have followed the EU.
+
+## The three answers
+
+**rendered** — U renders E, or a part of E, into Ukrainian: the same rule
+with the same particulars -- the same criteria, conditions, thresholds,
+periods, examples or list items, mostly in the same order -- so that U reads
+as a translation or a close paraphrase of E. U may leave out part of E, or
+E&#x27;s examples, and still be **rendered**, as long as what U does say follows E
+point by point.
+
+**same rule** — U and E state the same rule, but U is not a rendering of E:
+U words it its own way, with its own particulars (other criteria, another
+threshold or period, another list), or states only the general idea E spells
+out.
+
+**different** — U and E are about different rules, or share only the topic
+or general vocabulary of competition law (market, competitor, substitution,
+price).
+
+## Rules for hard cases
+
+- Generic statements every competition-law text makes (&quot;the market is
+  defined from the demand side&quot;, &quot;market shares indicate market power&quot;) are
+  **same rule** at most: say **rendered** only when the particulars match.
+- A definition in U and a paragraph of E that uses the same concept without
+  defining it: **different**.
+- A list in U that reproduces E&#x27;s list item by item, even shortened:
+  **rendered**. A list that shares one or two items with E&#x27;s: **same rule**.
+- A threshold, a period or a percentage that differs between U and E
+  (&quot;two years&quot; against &quot;one year&quot;, &quot;5 to 10 %&quot; against &quot;5 %&quot;): not
+  **rendered**; **same rule** if the rule is otherwise E&#x27;s.
+- E is about the Commission&#x27;s own procedure (its notices, its cases, its
+  courts): U can only be **same rule** if it states the same rule for the
+  Ukrainian authority.
+
+## Answer
+
+Return only JSON: {&quot;answer&quot;: &quot;rendered&quot; | &quot;same rule&quot; | &quot;different&quot;, &quot;why&quot;: &quot;&lt;one sentence&gt;&quot;}
+</pre></details>
+    </div>
+  </aside>
+  <nav class="rail" id="rail" aria-label="Пары"></nav>
+  <main class="desk" id="desk"></main>
+  <div class="status" id="status">Метки хранятся в этом окне, пока не ответит хранилище.</div>
+</div>
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+  var state = Object.create(null), current = 0, db = null;
+  var LABEL = { same: "rendered", modified: "same rule", different: "different" };
+  var CODE = { "rendered": "same", "same rule": "modified", "different": "different" };
+  function key(d) { return d.id.replace(/[^\w.\-~:@+]/g, "_"); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function rail() {
+    document.getElementById("rail").innerHTML = DATA.map(function (d, i) {
+      var st = state[key(d)] || {};
+      return '<button class="item" data-i="' + i + '" aria-current="' + (i === current) + '"><span class="dot ' +
+        esc(st.answer || "") + '"></span>' + esc(d.run) + " · " + esc(d.u_pid) + " ← " + esc(d.e_pid) + "</button>";
+    }).join("");
+  }
+  function card(tag, pid, type, text) {
+    return '<section class="card"><div class="head"><span class="tag">' + tag + '</span><span class="pid">' + esc(pid) +
+      '</span><span class="type">' + esc(type) + '</span></div><div class="text">' + esc(text) + "</div></section>";
+  }
+  function desk() {
+    var d = DATA[current], st = state[key(d)] || {};
+    var judges = st.answer ? '<div class="judges">' + Object.keys(d.judges).map(function (j) {
+      return "<div><b>" + esc(j) + ": " + esc(d.judges[j].answer) + "</b> — " + esc(d.judges[j].why) + "</div>";
+    }).join("") + "</div>" : "";
+    document.getElementById("desk").innerHTML =
+      '<div class="pair">' + card("U · методика " + d.u_version + (d.u_version === "2002" ? " (z0317-02)" : " (z1043-26)"), d.u_pid, "", d.u_text) +
+      card("E · уведомление ЕС " + d.e_notice, "п. " + d.e_pid, d.e_section, d.e_text) + "</div>" +
+      '<div class="verdict">' + ["same", "modified", "different"].map(function (v, i) {
+        return '<button class="btn" data-v="' + v + '" aria-pressed="' + (st.answer === v) + '">' + LABEL[v] +
+          "<kbd>" + (i + 1) + "</kbd></button>";
+      }).join("") + '<span class="saved" id="saved">' + (st.answer ? "сохранено" : "") + "</span></div>" +
+      '<textarea id="note" placeholder="Пояснение, если нужно">' + esc(st.note || "") + "</textarea>" + judges +
+      '<div class="nav"><button class="btn" id="prev">← назад</button><button class="btn" id="next">дальше →</button></div>';
+    document.querySelectorAll(".verdict .btn").forEach(function (b) {
+      b.addEventListener("click", function () { setAnswer(b.getAttribute("data-v")); });
+    });
+    var note = document.getElementById("note"), t;
+    note.addEventListener("input", function () { clearTimeout(t); t = setTimeout(function () { save({ note: note.value }); }, 700); });
+    document.getElementById("prev").addEventListener("click", function () { go(current - 1); });
+    document.getElementById("next").addEventListener("click", function () { go(current + 1); });
+  }
+  function progress() {
+    var n = DATA.filter(function (d) { return (state[key(d)] || {}).answer; }).length;
+    document.getElementById("count").textContent = n + " / " + DATA.length;
+  }
+  function go(i) { if (i < 0 || i >= DATA.length) return; current = i; rail(); desk(); }
+  function setAnswer(v) { var st = state[key(DATA[current])] || {}; save({ answer: st.answer === v ? "" : v }); }
+  function save(patch) {
+    var d = DATA[current], k = key(d);
+    var st = state[k] = Object.assign({ answer: "", note: "" }, state[k], patch);
+    rail(); desk(); progress();
+    var s = document.getElementById("saved");
+    if (!db) { if (s) s.textContent = "только в этом окне"; return; }
+    if (s) s.textContent = "сохраняю…";
+    db.doc("eu/" + k).set({ id: d.id, run: d.run, u_pid: d.u_pid, e_pid: d.e_pid, answer: LABEL[st.answer] || "", note: st.note,
+      updatedAt: new Date().toISOString() }).then(function () {
+      var e = document.getElementById("saved"); if (e) e.textContent = st.answer ? "сохранено" : "снято";
+    }).catch(function (e) {
+      var x = document.getElementById("saved"); if (x) x.textContent = "не сохранено (" + (e && e.code ? e.code : "ошибка") + ")";
+    });
+  }
+  document.getElementById("rail").addEventListener("click", function (e) {
+    var b = e.target.closest(".item"); if (b) go(+b.getAttribute("data-i"));
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (guide.classList.contains("open")) return;
+    if (e.key === "1") setAnswer("same"); else if (e.key === "2") setAnswer("modified");
+    else if (e.key === "3") setAnswer("different");
+    else if (e.key === "j" || e.key === "ArrowDown") go(current + 1);
+    else if (e.key === "k" || e.key === "ArrowUp") go(current - 1);
+    else return;
+    e.preventDefault();
+  });
+  var guide = document.getElementById("guide"), back = document.getElementById("guide-back"),
+      noauto = document.getElementById("guide-noauto"), autoPref = null;
+  function openGuide(on) {
+    guide.classList.toggle("open", on); back.classList.toggle("open", on);
+    guide.setAttribute("aria-hidden", String(!on));
+  }
+  function remember(hidden) {
+    try { localStorage.setItem("mt-eu-guide-noauto", hidden ? "1" : "0"); } catch (e) {}
+    if (db) db.doc("prefs/guide").set({ noauto: hidden, updatedAt: new Date().toISOString() }).catch(function () {});
+  }
+  document.getElementById("help").addEventListener("click", function () { openGuide(true); });
+  document.getElementById("guide-close").addEventListener("click", function () { openGuide(false); });
+  back.addEventListener("click", function () { openGuide(false); });
+  noauto.addEventListener("change", function () { remember(noauto.checked); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") openGuide(false); });
+  try { autoPref = localStorage.getItem("mt-eu-guide-noauto"); } catch (e) {}
+  noauto.checked = autoPref === "1";
+  var firstVisit = autoPref === null;
+  go(0); progress();
+  if (window.claude && window.claude.use) {
+    window.claude.use("db").then(function (store) {
+      if (!store) { if (firstVisit) openGuide(true); document.getElementById("status").textContent = "Хранилище недоступно в этом просмотре — метки остаются только в окне."; return; }
+      db = store;
+      store.doc("prefs/guide").get().then(function (doc) {
+        var v = doc && doc.exists ? (doc.data() || {}) : null;
+        if (v) { noauto.checked = !!v.noauto; if (!v.noauto) openGuide(true); }
+        else if (!noauto.checked) openGuide(true);
+      }).catch(function () { if (firstVisit) openGuide(true); });
+      store.collection("eu").get().then(function (snap) {
+        snap.docs.forEach(function (doc) { var v = doc.data() || {}; state[doc.id] = { answer: CODE[v.answer] || "", note: v.note || "" }; });
+        rail(); desk(); progress();
+        document.getElementById("status").textContent = "Сохранено меток: " + snap.size + ". Клавиши: 1 rendered, 2 same rule, 3 different, j/k — листать.";
+      }).catch(function () { document.getElementById("status").textContent = "Хранилище доступно, чтение не удалось."; });
+    });
+  } else {
+    if (firstVisit) openGuide(true);
+    document.getElementById("status").textContent = "Просмотр без хранилища — метки остаются только в этом окне.";
+  }
+})();
+</script>

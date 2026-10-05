@@ -1,0 +1,1700 @@
+{
+ "2002>1997": [
+  {
+   "pid": "1.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "1.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "1.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.8",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.9",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.10",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.11",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.2",
+   "answer": "same rule",
+   "eu_paragraph": "25"
+  },
+  {
+   "pid": "3.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "3.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "3.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "3.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "5.1",
+   "answer": "same rule",
+   "eu_paragraph": "7"
+  },
+  {
+   "pid": "5.2",
+   "answer": "same rule",
+   "eu_paragraph": "15"
+  },
+  {
+   "pid": "5.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "5.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "6.1",
+   "answer": "same rule",
+   "eu_paragraph": "30"
+  },
+  {
+   "pid": "6.2",
+   "answer": "same rule",
+   "eu_paragraph": "31"
+  },
+  {
+   "pid": "6.3",
+   "answer": "same rule",
+   "eu_paragraph": "30"
+  },
+  {
+   "pid": "7.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "7.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "7.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.1",
+   "answer": "same rule",
+   "eu_paragraph": "53"
+  },
+  {
+   "pid": "8.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.4",
+   "answer": "same rule",
+   "eu_paragraph": "53"
+  },
+  {
+   "pid": "8.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.6",
+   "answer": "same rule",
+   "eu_paragraph": "54"
+  },
+  {
+   "pid": "9.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "9.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "9.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.3",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "10.4",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "10.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "11.1",
+   "answer": "same rule",
+   "eu_paragraph": "41"
+  }
+ ],
+ "2026>2024": [
+  {
+   "pid": "I.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.2",
+   "answer": "same rule",
+   "eu_paragraph": "1"
+  },
+  {
+   "pid": "I.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.1",
+   "answer": "rendered",
+   "eu_paragraph": "94"
+  },
+  {
+   "pid": "I.4.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.6",
+   "answer": "same rule",
+   "eu_paragraph": "12"
+  },
+  {
+   "pid": "I.4.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.8",
+   "answer": "same rule",
+   "eu_paragraph": "88"
+  },
+  {
+   "pid": "I.4.9",
+   "answer": "rendered",
+   "eu_paragraph": "85"
+  },
+  {
+   "pid": "I.4.10",
+   "answer": "same rule",
+   "eu_paragraph": "99"
+  },
+  {
+   "pid": "I.4.11",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.12",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.13",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.14",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.15",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.16",
+   "answer": "same rule",
+   "eu_paragraph": "94"
+  },
+  {
+   "pid": "I.4.17",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.18",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.19",
+   "answer": "same rule",
+   "eu_paragraph": "99"
+  },
+  {
+   "pid": "I.4.20",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.21",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.22",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.23",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.24",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.25",
+   "answer": "same rule",
+   "eu_paragraph": "105"
+  },
+  {
+   "pid": "I.4.26",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.27",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.28",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.29",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.30",
+   "answer": "rendered",
+   "eu_paragraph": "38"
+  },
+  {
+   "pid": "I.4.31",
+   "answer": "same rule",
+   "eu_paragraph": "97"
+  },
+  {
+   "pid": "I.4.32",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.33",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.34",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.35",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.36",
+   "answer": "same rule",
+   "eu_paragraph": "94"
+  },
+  {
+   "pid": "I.4.37",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.38",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.ref",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.4",
+   "answer": "same rule",
+   "eu_paragraph": "20"
+  },
+  {
+   "pid": "III.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "III.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "III.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IV.1",
+   "answer": "same rule",
+   "eu_paragraph": "25"
+  },
+  {
+   "pid": "IV.2",
+   "answer": "same rule",
+   "eu_paragraph": "48"
+  },
+  {
+   "pid": "IV.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IV.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.1",
+   "answer": "same rule",
+   "eu_paragraph": "24"
+  },
+  {
+   "pid": "V.2",
+   "answer": "same rule",
+   "eu_paragraph": "25"
+  },
+  {
+   "pid": "V.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.4",
+   "answer": "same rule",
+   "eu_paragraph": "26"
+  },
+  {
+   "pid": "V.5",
+   "answer": "same rule",
+   "eu_paragraph": "25"
+  },
+  {
+   "pid": "V.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.8",
+   "answer": "same rule",
+   "eu_paragraph": "99"
+  },
+  {
+   "pid": "V.9",
+   "answer": "rendered",
+   "eu_paragraph": "100"
+  },
+  {
+   "pid": "V.10",
+   "answer": "same rule",
+   "eu_paragraph": "87"
+  },
+  {
+   "pid": "V.11",
+   "answer": "same rule",
+   "eu_paragraph": "86"
+  },
+  {
+   "pid": "V.12",
+   "answer": "rendered",
+   "eu_paragraph": "88"
+  },
+  {
+   "pid": "V.13",
+   "answer": "same rule",
+   "eu_paragraph": "90"
+  },
+  {
+   "pid": "V.14",
+   "answer": "rendered",
+   "eu_paragraph": "57"
+  },
+  {
+   "pid": "V.15",
+   "answer": "same rule",
+   "eu_paragraph": "33"
+  },
+  {
+   "pid": "V.16",
+   "answer": "same rule",
+   "eu_paragraph": "33"
+  },
+  {
+   "pid": "V.17",
+   "answer": "same rule",
+   "eu_paragraph": "32"
+  },
+  {
+   "pid": "V.18",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VI.1",
+   "answer": "rendered",
+   "eu_paragraph": "12"
+  },
+  {
+   "pid": "VI.2",
+   "answer": "rendered",
+   "eu_paragraph": "39"
+  },
+  {
+   "pid": "VI.3",
+   "answer": "same rule",
+   "eu_paragraph": "41"
+  },
+  {
+   "pid": "VI.4",
+   "answer": "same rule",
+   "eu_paragraph": "39"
+  },
+  {
+   "pid": "VI.5",
+   "answer": "rendered",
+   "eu_paragraph": "40"
+  },
+  {
+   "pid": "VI.6",
+   "answer": "rendered",
+   "eu_paragraph": "41"
+  },
+  {
+   "pid": "VI.7",
+   "answer": "rendered",
+   "eu_paragraph": "43"
+  },
+  {
+   "pid": "VI.8",
+   "answer": "same rule",
+   "eu_paragraph": "71"
+  },
+  {
+   "pid": "VI.9",
+   "answer": "rendered",
+   "eu_paragraph": "30"
+  },
+  {
+   "pid": "VII.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VII.2",
+   "answer": "rendered",
+   "eu_paragraph": "113"
+  },
+  {
+   "pid": "VIII.1",
+   "answer": "same rule",
+   "eu_paragraph": "105"
+  },
+  {
+   "pid": "VIII.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.4",
+   "answer": "same rule",
+   "eu_paragraph": "105"
+  },
+  {
+   "pid": "VIII.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.6",
+   "answer": "rendered",
+   "eu_paragraph": "108"
+  },
+  {
+   "pid": "VIII.7",
+   "answer": "same rule",
+   "eu_paragraph": "113"
+  },
+  {
+   "pid": "VIII.8",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.4",
+   "answer": "same rule",
+   "eu_paragraph": "106"
+  },
+  {
+   "pid": "X.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "XI.1",
+   "answer": "same rule",
+   "eu_paragraph": "79"
+  }
+ ],
+ "2026>1997": [
+  {
+   "pid": "I.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.2",
+   "answer": "same rule",
+   "eu_paragraph": "1"
+  },
+  {
+   "pid": "I.3",
+   "answer": "same rule",
+   "eu_paragraph": "11"
+  },
+  {
+   "pid": "I.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.8",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.9",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.10",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.11",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.12",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.13",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.14",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.15",
+   "answer": "same rule",
+   "eu_paragraph": "57"
+  },
+  {
+   "pid": "I.4.16",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.17",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "I.4.18",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.19",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.20",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.21",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.22",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.23",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.24",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "I.4.25",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.26",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.27",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.28",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.29",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.30",
+   "answer": "rendered",
+   "eu_paragraph": "8"
+  },
+  {
+   "pid": "I.4.31",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.32",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.33",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.34",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.35",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.36",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.37",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.38",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "I.4.ref",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "II.4",
+   "answer": "same rule",
+   "eu_paragraph": "27"
+  },
+  {
+   "pid": "III.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "III.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "III.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IV.1",
+   "answer": "same rule",
+   "eu_paragraph": "13"
+  },
+  {
+   "pid": "IV.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IV.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IV.4",
+   "answer": "same rule",
+   "eu_paragraph": "53"
+  },
+  {
+   "pid": "V.1",
+   "answer": "same rule",
+   "eu_paragraph": "15"
+  },
+  {
+   "pid": "V.2",
+   "answer": "same rule",
+   "eu_paragraph": "15"
+  },
+  {
+   "pid": "V.3",
+   "answer": "same rule",
+   "eu_paragraph": "20"
+  },
+  {
+   "pid": "V.4",
+   "answer": "same rule",
+   "eu_paragraph": "36"
+  },
+  {
+   "pid": "V.5",
+   "answer": "same rule",
+   "eu_paragraph": "15"
+  },
+  {
+   "pid": "V.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.8",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.9",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.10",
+   "answer": "same rule",
+   "eu_paragraph": "57"
+  },
+  {
+   "pid": "V.11",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.12",
+   "answer": "rendered",
+   "eu_paragraph": "43"
+  },
+  {
+   "pid": "V.13",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "V.14",
+   "answer": "same rule",
+   "eu_paragraph": "42"
+  },
+  {
+   "pid": "V.15",
+   "answer": "same rule",
+   "eu_paragraph": "20"
+  },
+  {
+   "pid": "V.16",
+   "answer": "same rule",
+   "eu_paragraph": "20"
+  },
+  {
+   "pid": "V.17",
+   "answer": "same rule",
+   "eu_paragraph": "20"
+  },
+  {
+   "pid": "V.18",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VI.1",
+   "answer": "rendered",
+   "eu_paragraph": "8"
+  },
+  {
+   "pid": "VI.2",
+   "answer": "same rule",
+   "eu_paragraph": "30"
+  },
+  {
+   "pid": "VI.3",
+   "answer": "rendered",
+   "eu_paragraph": "45"
+  },
+  {
+   "pid": "VI.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VI.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VI.6",
+   "answer": "same rule",
+   "eu_paragraph": "43"
+  },
+  {
+   "pid": "VI.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VI.8",
+   "answer": "same rule",
+   "eu_paragraph": "32"
+  },
+  {
+   "pid": "VI.9",
+   "answer": "same rule",
+   "eu_paragraph": "18"
+  },
+  {
+   "pid": "VII.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VII.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.6",
+   "answer": "same rule",
+   "eu_paragraph": "54"
+  },
+  {
+   "pid": "VIII.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "VIII.8",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.2",
+   "answer": "same rule",
+   "eu_paragraph": "24"
+  },
+  {
+   "pid": "IX.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "IX.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.2",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "X.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "X.4",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "X.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "XI.1",
+   "answer": "different",
+   "eu_paragraph": null
+  }
+ ],
+ "2002>stateaid2016": [
+  {
+   "pid": "1.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "1.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "1.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.7",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.8",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.9",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.10",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.1.11",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "2.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "3.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "3.2",
+   "answer": "same rule",
+   "eu_paragraph": "10"
+  },
+  {
+   "pid": "3.3",
+   "answer": "same rule",
+   "eu_paragraph": "11"
+  },
+  {
+   "pid": "3.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.2.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "4.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "5.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "5.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "5.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "5.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "6.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "6.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "6.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "7.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "7.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "7.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "8.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "9.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "9.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "9.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.1.6.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.1",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.2",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.2.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.3",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.4",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "10.5",
+   "answer": "different",
+   "eu_paragraph": null
+  },
+  {
+   "pid": "11.1",
+   "answer": "different",
+   "eu_paragraph": null
+  }
+ ]
+}
