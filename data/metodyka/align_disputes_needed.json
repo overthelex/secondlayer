@@ -1,0 +1,162 @@
+[
+ {
+  "id": "2002:1.3>2026:X.2",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:2.1.1>2026:III.2",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:2.1.3>2026:IV.4",
+  "claude": "same",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:2.1.7>2026:VIII.1",
+  "claude": "same",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:2.1.8>2026:VIII.4",
+  "claude": "same",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:2.1.8>2026:VIII.6",
+  "claude": "same",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:4.2>2026:V.1",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:4.2>2026:V.5",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:4.2.2>2026:V.4",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:4.2.3>2026:IV.2",
+  "claude": "same",
+  "gemini": "modified"
+ },
+ {
+  "id": "2002:5.1>2026:V.15",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:5.1>2026:V.17",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:5.2>2026:I.4.4",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:6.1>2026:VI.3",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:6.2>2026:VI.2",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:7.2>2026:VII.2",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:8.2>2026:VIII.3",
+  "claude": "different",
+  "gemini": "modified"
+ },
+ {
+  "id": "2002:8.4>2026:I.4.25",
+  "claude": "same",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:8.4>2026:VIII.4",
+  "claude": "modified",
+  "gemini": "same"
+ },
+ {
+  "id": "2002:9.2>2026:I.4.3",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:9.3>2026:IX.1",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.1.1>2026:VIII.4",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.1.4>2026:I.4.17",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.1.5>2026:X.2",
+  "claude": "same",
+  "gemini": "modified"
+ },
+ {
+  "id": "2002:10.2.2>2026:I.4.17",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.2.4>2026:X.2",
+  "claude": "same",
+  "gemini": "modified"
+ },
+ {
+  "id": "2002:10.2.4>2026:X.3",
+  "claude": "different",
+  "gemini": "modified"
+ },
+ {
+  "id": "2002:10.3>2026:I.4.17",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.3>2026:I.4.24",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.3>2026:X.2",
+  "claude": "modified",
+  "gemini": "different"
+ },
+ {
+  "id": "2002:10.3>2026:X.3",
+  "claude": "modified",
+  "gemini": "same"
+ },
+ {
+  "id": "2002:10.4>2026:IX.2",
+  "claude": "modified",
+  "gemini": "different"
+ }
+]
