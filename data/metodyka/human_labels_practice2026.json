@@ -1,5 +1,5 @@
 {
- "source": "claude.ai/artifact/Whu1RwSth6zs4rUy26QXwc (db labels26), exported 2026-10-05",
+ "source": "claude.ai/artifact/Whu1RwSth6zs4rUy26QXwc (db labels26), exported 2026-10-05 (12 labels)",
  "labels": [
   {
    "id": "II.3|court:24202999|17",
@@ -64,6 +64,38 @@
    "ord": 63,
    "label": "застосовує",
    "new": null
+  },
+  {
+   "id": "II.3|court:100842667|53",
+   "number": "II.3",
+   "doc_id": "court:100842667",
+   "ord": 53,
+   "label": "лише переказує",
+   "new": null
+  },
+  {
+   "id": "II.3|court:100842726|53",
+   "number": "II.3",
+   "doc_id": "court:100842726",
+   "ord": 53,
+   "label": "лише переказує",
+   "new": null
+  },
+  {
+   "id": "II.3|court:125459739|44",
+   "number": "II.3",
+   "doc_id": "court:125459739",
+   "ord": 44,
+   "label": "лише переказує",
+   "new": null
+  },
+  {
+   "id": "X.4|court:15125452|9",
+   "number": "X.4",
+   "doc_id": "court:15125452",
+   "ord": 9,
+   "label": "застосовує",
+   "new": "ні"
   }
  ]
 }
