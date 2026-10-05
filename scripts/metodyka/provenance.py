@@ -21,6 +21,7 @@ Four comparisons:
     python3 provenance.py pairs  --out ../../data/metodyka/eu_pairs.json        (on the box: TEI)
     python3 provenance.py judge  --provider claude --model opus --out ../../data/metodyka/eu/claude-opus.jsonl
     python3 provenance.py merge
+    python3 provenance.py cross     (against codify_2026.json, PAPER-244)
 """
 from __future__ import annotations
 
@@ -190,6 +191,27 @@ def cmd_merge(args) -> int:
     return 0
 
 
+def cmd_cross(args) -> int:
+    """The 2026 norms PAPER-244 read, by verdict and by provenance in the 2024 and 1997 notices."""
+    pv = json.loads((DATA / "eu_provenance.json").read_text())
+    p24 = {r["pid"]: r for r in pv["2026>2024"]}
+    p97 = {r["pid"]: r for r in pv["2026>1997"]}
+    rows = []
+    for r in json.loads((DATA / "codify_2026.json").read_text())["norms"]:
+        n = r["number"]
+        rows.append({"number": n, "origin": r["origin"], "verdict": r["verdict"],
+                     "eu_2024": p24[n]["answer"], "eu_2024_paragraph": p24[n]["eu_paragraph"],
+                     "eu_1997": p97[n]["answer"], "eu_1997_paragraph": p97[n]["eu_paragraph"]})
+    table = collections.Counter((r["verdict"], r["eu_2024"]) for r in rows)
+    out = {"norms": rows, "verdict_by_eu_2024": {f"{v} / {a}": table[(v, a)] for v in ("codifies", "announces") for a in ANSWERS}}
+    (DATA / "eu_codify_2026.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
+    for k, v in out["verdict_by_eu_2024"].items():
+        print(f"  {k:<26} {v}")
+    new_in_2024 = [r["number"] for r in rows if r["eu_2024"] == "rendered" and r["eu_1997"] != "rendered"]
+    print(f"  rendered from 2024 and not from 1997: {len(new_in_2024)} {new_in_2024}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -202,8 +224,9 @@ def main() -> int:
     p.add_argument("--out", type=pathlib.Path, required=True)
     p.add_argument("--workers", type=int, default=4)
     sub.add_parser("merge")
+    sub.add_parser("cross")
     args = ap.parse_args()
-    return {"pairs": cmd_pairs, "judge": cmd_judge, "merge": cmd_merge}[args.cmd](args)
+    return {"pairs": cmd_pairs, "judge": cmd_judge, "merge": cmd_merge, "cross": cmd_cross}[args.cmd](args)
 
 
 if __name__ == "__main__":

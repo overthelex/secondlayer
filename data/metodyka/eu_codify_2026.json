@@ -1,0 +1,363 @@
+{
+ "norms": [
+  {
+   "number": "I.4.17",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "10"
+  },
+  {
+   "number": "II.3",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "II.4",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "20",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "27"
+  },
+  {
+   "number": "IV.1",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "25",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "13"
+  },
+  {
+   "number": "V.1",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "24",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "15"
+  },
+  {
+   "number": "V.2",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "25",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "15"
+  },
+  {
+   "number": "V.3",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "20"
+  },
+  {
+   "number": "V.5",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "25",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "15"
+  },
+  {
+   "number": "V.6",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "V.7",
+   "origin": "new",
+   "verdict": "codifies",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "V.8",
+   "origin": "new",
+   "verdict": "codifies",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "99",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "V.9",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "100",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "V.10",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "87",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "57"
+  },
+  {
+   "number": "V.11",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "86",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "V.12",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "88",
+   "eu_1997": "rendered",
+   "eu_1997_paragraph": "43"
+  },
+  {
+   "number": "V.13",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "90",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "V.14",
+   "origin": "new",
+   "verdict": "codifies",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "57",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "42"
+  },
+  {
+   "number": "V.15",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "33",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "20"
+  },
+  {
+   "number": "V.16",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "33",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "20"
+  },
+  {
+   "number": "V.17",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "32",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "20"
+  },
+  {
+   "number": "V.18",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "VI.2",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "39",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "30"
+  },
+  {
+   "number": "VI.3",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "41",
+   "eu_1997": "rendered",
+   "eu_1997_paragraph": "45"
+  },
+  {
+   "number": "VI.4",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "39",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "VI.5",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "40",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "VI.6",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "41",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "43"
+  },
+  {
+   "number": "VI.7",
+   "origin": "new",
+   "verdict": "codifies",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "43",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "VI.8",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "71",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "32"
+  },
+  {
+   "number": "VI.9",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "30",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "18"
+  },
+  {
+   "number": "VII.2",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "113",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "VIII.6",
+   "origin": "modified",
+   "verdict": "codifies",
+   "eu_2024": "rendered",
+   "eu_2024_paragraph": "108",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "54"
+  },
+  {
+   "number": "VIII.7",
+   "origin": "new",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "113",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "VIII.8",
+   "origin": "new",
+   "verdict": "codifies",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "IX.2",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "24"
+  },
+  {
+   "number": "IX.4",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "IX.6",
+   "origin": "new",
+   "verdict": "codifies",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "X.3",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "different",
+   "eu_2024_paragraph": null,
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  },
+  {
+   "number": "X.4",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "106",
+   "eu_1997": "same rule",
+   "eu_1997_paragraph": "10"
+  },
+  {
+   "number": "XI.1",
+   "origin": "modified",
+   "verdict": "announces",
+   "eu_2024": "same rule",
+   "eu_2024_paragraph": "79",
+   "eu_1997": "different",
+   "eu_1997_paragraph": null
+  }
+ ],
+ "verdict_by_eu_2024": {
+  "codifies / rendered": 3,
+  "codifies / same rule": 1,
+  "codifies / different": 3,
+  "announces / rendered": 7,
+  "announces / same rule": 17,
+  "announces / different": 8
+ }
+}
