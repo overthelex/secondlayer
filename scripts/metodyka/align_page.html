@@ -27,6 +27,15 @@ h1 { font: 600 20px/1.2 var(--sans); margin: 0; letter-spacing: -0.01em; text-wr
 details.proto { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); }
 details.proto summary { cursor: pointer; color: var(--ink); font-weight: 500; }
 details.proto p { margin: 8px 0 0; max-width: 72ch; }
+.g h3 { font: 600 14px var(--sans); color: var(--ink); margin: 16px 0 4px; }
+.g ol, .g ul { margin: 6px 0; padding-left: 20px; max-width: 76ch; }
+.g li { margin: 3px 0; }
+.g table { border-collapse: collapse; width: 100%; max-width: 860px; margin: 6px 0; font-size: 14px; }
+.g td, .g th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.g th { color: var(--ink); font-weight: 600; }
+.g kbd { font: 12px var(--mono); background: var(--surface-2); border-radius: 3px; padding: 0 4px; color: var(--ink); }
+details.verbatim { margin-top: 12px; }
+details.verbatim pre { white-space: pre-wrap; font: 12.5px/1.5 var(--mono); background: var(--surface-2); padding: 10px 12px; border-radius: 5px; color: var(--ink); max-width: 100%; overflow-x: auto; }
 .rail { display: flex; flex-direction: column; gap: 4px; }
 .item { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; font: 13px var(--mono); color: var(--ink-2); }
 .item[aria-current="true"] { background: var(--surface-2); color: var(--ink); }
@@ -67,11 +76,89 @@ textarea { width: 100%; min-height: 64px; font: 14px var(--sans); color: var(--i
     <span class="sub">Тот же ли это пункт в тексте 2026 года? Судьи разошлись; ваша метка решает.</span>
     <span class="progress" id="count">0 / 0</span>
   </header>
-  <details class="proto">
-    <summary>Протокол (link_ua.md v1), кратко</summary>
-    <p><b>same</b> — B содержит то же правило, что A: формулировка, нумерация, структура могут отличаться, но что анализ должен сделать и что из этого следует — то же. Более подробное изложение без изменения охвата — same. Если B сливает A с другими правилами и содержит A без изменений — same. Голое название этапа в A и перечень этапов 2026 года с тем же этапом — same.</p>
-    <p><b>modified</b> — B узнаваемо правило A, но изменено по существу: новый критерий, снятое условие, другой порог или срок, другое последствие. Если A разрезан на несколько пунктов 2026 года и B несёт его часть — modified.</p>
-    <p><b>different</b> — B о другом шаге анализа или другое правило, даже при общих словах или теме. Определение и пункт, применяющий определённый термин, — different.</p>
+  <details class="proto" id="guide">
+    <summary>Как размечать (протокол link_ua.md v1)</summary>
+    <div class="g">
+      <h3>Что перед вами</h3>
+      <p>Слева <b>A</b> — положение методики 2002 года (z0317-02), справа <b>B</b> — положение методики 2026 года (z1043-26), которое ближе всего к A по смыслу. Текст 2026 года — новый документ: всё перенумеровано и часто переписано, поэтому номера ничего не говорят. Под номером указан тип положения (norm, definition, scope, rationale, housekeeping) — по уже сделанной разметке.</p>
+      <p>Вопрос один: <b>несёт ли B правило, которое формулирует A?</b> Правильность правил не оценивается.</p>
+
+      <h3>Порядок работы</h3>
+      <ol>
+        <li>Прочитайте A и назовите для себя правило: что оно велит сделать в анализе и что из этого следует.</li>
+        <li>Найдите это правило в B. Не ищите совпадения слов — ищите то же действие и то же последствие.</li>
+        <li>Поставьте метку (клавиши <kbd>1</kbd> same, <kbd>2</kbd> modified, <kbd>3</kbd> different). Сомнение или находку — одной строкой в пояснение.</li>
+        <li>После метки откроются ответы двух судей. Если они вас переубедили — меняйте метку и пишите почему.</li>
+      </ol>
+
+      <h3>Три ответа</h3>
+      <table>
+        <tr><th>Метка</th><th>Когда</th></tr>
+        <tr><td><b>same</b></td><td>B содержит правило A. Формулировка, нумерация, структура фразы могут отличаться; что анализ должен сделать и что из этого следует — то же. Более подробное изложение без изменения охвата — same.</td></tr>
+        <tr><td><b>modified</b></td><td>B узнаваемо правило A, но изменено по существу: появился новый критерий, снято условие, изменён порог или срок, другое последствие; правило стало шире или уже.</td></tr>
+        <tr><td><b>different</b></td><td>B о другом шаге анализа или формулирует другое правило, даже если у них общие слова, тема или место в тексте.</td></tr>
+      </table>
+
+      <h3>Трудные случаи</h3>
+      <ul>
+        <li><b>A разрезан в 2026 году на несколько пунктов</b>, и B несёт его часть — <b>modified</b>.</li>
+        <li><b>B сливает A с другими правилами</b> и содержит A без изменений — <b>same</b>.</li>
+        <li><b>Голое название этапа</b> в A («Визначення товарних меж ринку.») и перечень этапов 2026 года, где этот этап назван, — <b>same</b>.</li>
+        <li><b>Определение и пункт, который применяет определённый термин</b>, — <b>different</b>.</li>
+      </ul>
+      <h3>Как эти правила ложатся на два текста</h3>
+      <p>Это не новые правила, а применение правил выше к особенностям этих текстов. Судьи получили только протокол (дословно ниже), поэтому, если применение здесь кажется спорным, решайте по протоколу.</p>
+      <ul>
+        <li><b>Пункт 1.3 текста 2002 года</b> содержит сразу цель методики, весь словарь терминов и пороги коллективного доминирования. В 2026 году словарь разрезан на отдельные определения (I.4.1, I.4.2…). Если B — одно из этих определений и оно есть в словаре 1.3, это часть разрезанного A: <b>modified</b> (правило «A разрезан»). Если в словаре 1.3 такого термина нет — <b>different</b>.</li>
+        <li><b>Порог из закона</b> (35, 50, 70 процентов по ст. 12 Закона) в обоих текстах с той же величиной — <b>same</b>, даже если в 2026 году прямо сказано, что он из закона (изменилась формулировка, не правило).</li>
+      </ul>
+
+      <h3>Если не уверены</h3>
+      <p>Выбирайте более осторожную метку: <b>modified</b> вместо same, если сомневаетесь, не изменился ли охват; <b>different</b> вместо modified, если сомневаетесь, то ли это вообще правило. Строку сомнения — в пояснение.</p>
+
+      <h3>Почему эти 18 пар</h3>
+      <p>Каждое положение одного текста сравнили с тремя ближайшими по смыслу в другом — 408 пар. Два судьи (Claude и Gemini) разошлись на 32; здесь 18 из них — те, от которых зависит, сохранено ли положение 2002 года, изменено или убрано, и новое ли положение 2026 года. Остальные 14 перекрыты парами, где судьи согласны.</p>
+
+      <details class="verbatim"><summary>Протокол дословно (так его получали судьи)</summary><pre># Is it the same rule in the 2026 text? (link protocol, Ukrainian Methodology, v1)
+
+You read proposition A from the 2002 Methodology of the Antimonopoly
+Committee of Ukraine for establishing a monopoly (dominant) position
+(z0317-02) and proposition B from its 2026 successor, the Methodology for
+defining the product market and the monopoly (dominant) position on it
+(z1043-26). The 2026 text is a new document: it is renumbered throughout and
+often reworded, so the numbers tell you nothing. You decide whether B carries
+the rule A states. You do not judge whether either rule is right.
+
+## The three answers
+
+**same** — B states the rule A states. The wording, the numbering or the
+sentence structure may differ; what the rule asks the analysis to do, and
+what follows from it, are the same. A rule spelled out in more detail without
+changing what it covers is the same.
+
+**modified** — B is recognisably A&#x27;s rule, but its substance changed: it now
+covers more or less (a new criterion, a removed condition, a threshold or a
+period changed), or a different consequence follows.
+
+**different** — B is about another step of the analysis or states another
+rule, even if it shares words or the topic with A.
+
+## Rules for hard cases
+
+- If A was split into several propositions of the 2026 text and B carries part
+  of it, answer **modified**.
+- If B merges A with other rules and still contains A&#x27;s rule unchanged, answer
+  **same**.
+- A bare stage name or heading in A (&quot;Визначення товарних меж ринку.&quot;) and a
+  2026 list of stages that names the same stage: **same**.
+- A definition and a provision that applies the defined term are
+  **different**.
+
+## Answer
+
+Return only JSON: {&quot;answer&quot;: &quot;same&quot; | &quot;modified&quot; | &quot;different&quot;, &quot;why&quot;: &quot;&lt;one sentence&gt;&quot;}
+</pre></details>
+    </div>
   </details>
   <nav class="rail" id="rail" aria-label="Пары"></nav>
   <main class="desk" id="desk"></main>
@@ -153,6 +240,12 @@ textarea { width: 100%; min-height: 64px; font: 14px var(--sans); color: var(--i
     else if (e.key === "k" || e.key === "ArrowUp") go(current - 1);
     else return;
     e.preventDefault();
+  });
+  var guide = document.getElementById("guide"), closed = false;
+  try { closed = localStorage.getItem("mt-align-guide-closed") === "1"; } catch (e) {}
+  guide.open = !closed;
+  guide.addEventListener("toggle", function () {
+    try { localStorage.setItem("mt-align-guide-closed", guide.open ? "0" : "1"); } catch (e) {}
   });
   go(0); progress();
   if (window.claude && window.claude.use) {
