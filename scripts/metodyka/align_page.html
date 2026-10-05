@@ -1,0 +1,172 @@
+<title>Методика 2002 → 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading desk — the 2002 provision and its 2026 candidate side by side, the verdict bar under them, the queue in a rail. */
+:root {
+  --bg: #f5f4f0; --surface: #ffffff; --surface-2: #eceae4; --ink: #1d1f21; --ink-2: #4a4e53;
+  --muted: #7b8086; --line: #d9d6ce; --accent: #2b5d8a; --same: #2f7d4f; --mod: #b07a1c; --diff: #9a3b33;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #16181a; --surface: #1f2225; --surface-2: #2a2e32; --ink: #e8e6e1; --ink-2: #b9bcc0;
+  --muted: #8a9096; --line: #34393e; --accent: #79a9d6; --same: #6cc28f; --mod: #e0b45a; --diff: #e08a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #16181a; --surface: #1f2225; --surface-2: #2a2e32; --ink: #e8e6e1; --ink-2: #b9bcc0;
+  --muted: #8a9096; --line: #34393e; --accent: #79a9d6; --same: #6cc28f; --mod: #e0b45a; --diff: #e08a80; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); margin: 0; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 20px 48px; padding-inline: 16px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } .rail { order: 2; } }
+header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+h1 { font: 600 20px/1.2 var(--sans); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; }
+.progress { margin-left: auto; font: 500 13px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+details.proto { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); }
+details.proto summary { cursor: pointer; color: var(--ink); font-weight: 500; }
+details.proto p { margin: 8px 0 0; max-width: 72ch; }
+.rail { display: flex; flex-direction: column; gap: 4px; }
+.item { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; font: 13px var(--mono); color: var(--ink-2); }
+.item[aria-current="true"] { background: var(--surface-2); color: var(--ink); }
+.item:focus-visible { outline: 2px solid var(--accent); }
+.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.dot.same { background: var(--same); border-color: var(--same); }
+.dot.modified { background: var(--mod); border-color: var(--mod); }
+.dot.different { background: var(--diff); border-color: var(--diff); }
+.desk { display: grid; gap: 16px; min-width: 0; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 700px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.card .head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 8px; }
+.tag { font: 500 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.pid { font: 600 15px var(--mono); }
+.type { font: 12px var(--mono); color: var(--accent); }
+.text { font: 15.5px/1.6 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
+.verdict { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { all: unset; cursor: pointer; border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 5px; font: 500 14px var(--sans); color: var(--ink); }
+.btn:focus-visible { outline: 2px solid var(--accent); }
+.btn kbd { font: 12px var(--mono); color: var(--muted); margin-left: 6px; }
+.btn[data-v="same"][aria-pressed="true"] { background: var(--same); border-color: var(--same); color: var(--surface); }
+.btn[data-v="modified"][aria-pressed="true"] { background: var(--mod); border-color: var(--mod); color: var(--surface); }
+.btn[data-v="different"][aria-pressed="true"] { background: var(--diff); border-color: var(--diff); color: var(--surface); }
+.btn[aria-pressed="true"] kbd { color: var(--surface); }
+textarea { width: 100%; min-height: 64px; font: 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; }
+.saved { font: 12px var(--mono); color: var(--muted); }
+.judges { background: var(--surface-2); border-radius: 6px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); display: grid; gap: 6px; }
+.judges b { color: var(--ink); }
+.nav { display: flex; gap: 8px; }
+.status { grid-column: 1 / -1; font: 12px var(--mono); color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Методика 2002 → 2026: спорные пары</h1>
+    <span class="sub">Тот же ли это пункт в тексте 2026 года? Судьи разошлись; ваша метка решает.</span>
+    <span class="progress" id="count">0 / 0</span>
+  </header>
+  <details class="proto">
+    <summary>Протокол (link_ua.md v1), кратко</summary>
+    <p><b>same</b> — B содержит то же правило, что A: формулировка, нумерация, структура могут отличаться, но что анализ должен сделать и что из этого следует — то же. Более подробное изложение без изменения охвата — same. Если B сливает A с другими правилами и содержит A без изменений — same. Голое название этапа в A и перечень этапов 2026 года с тем же этапом — same.</p>
+    <p><b>modified</b> — B узнаваемо правило A, но изменено по существу: новый критерий, снятое условие, другой порог или срок, другое последствие. Если A разрезан на несколько пунктов 2026 года и B несёт его часть — modified.</p>
+    <p><b>different</b> — B о другом шаге анализа или другое правило, даже при общих словах или теме. Определение и пункт, применяющий определённый термин, — different.</p>
+  </details>
+  <nav class="rail" id="rail" aria-label="Пары"></nav>
+  <main class="desk" id="desk"></main>
+  <div class="status" id="status">Метки хранятся в этом окне, пока не ответит хранилище.</div>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+  var state = Object.create(null), current = 0, db = null;
+  var LABEL = { same: "same", modified: "modified", different: "different" };
+  function key(d) { return d.id.replace(/[^\w.\-~:@+]/g, "_"); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function rail() {
+    document.getElementById("rail").innerHTML = DATA.map(function (d, i) {
+      var st = state[key(d)] || {};
+      return '<button class="item" data-i="' + i + '" aria-current="' + (i === current) + '"><span class="dot ' +
+        esc(st.answer || "") + '"></span>' + esc(d.a_pid) + " → " + esc(d.b_pid) + "</button>";
+    }).join("");
+  }
+  function card(tag, pid, type, text) {
+    return '<section class="card"><div class="head"><span class="tag">' + tag + '</span><span class="pid">' + esc(pid) +
+      '</span><span class="type">' + esc(type) + '</span></div><div class="text">' + esc(text) + "</div></section>";
+  }
+  function desk() {
+    var d = DATA[current], st = state[key(d)] || {};
+    var judges = st.answer ? '<div class="judges">' + Object.keys(d.judges).map(function (j) {
+      return "<div><b>" + esc(j) + ": " + esc(d.judges[j].answer) + "</b> — " + esc(d.judges[j].why) + "</div>";
+    }).join("") + "</div>" : "";
+    document.getElementById("desk").innerHTML =
+      '<div class="pair">' + card("A · 2002 (z0317-02)", d.a_pid, d.a_type, d.a_text) +
+      card("B · 2026 (z1043-26)", d.b_pid, d.b_type, d.b_text) + "</div>" +
+      '<div class="verdict">' + ["same", "modified", "different"].map(function (v, i) {
+        return '<button class="btn" data-v="' + v + '" aria-pressed="' + (st.answer === v) + '">' + LABEL[v] +
+          "<kbd>" + (i + 1) + "</kbd></button>";
+      }).join("") + '<span class="saved" id="saved">' + (st.answer ? "сохранено" : "") + "</span></div>" +
+      '<textarea id="note" placeholder="Пояснение, если нужно">' + esc(st.note || "") + "</textarea>" + judges +
+      '<div class="nav"><button class="btn" id="prev">← назад</button><button class="btn" id="next">дальше →</button></div>';
+    document.querySelectorAll(".verdict .btn").forEach(function (b) {
+      b.addEventListener("click", function () { setAnswer(b.getAttribute("data-v")); });
+    });
+    var note = document.getElementById("note"), t;
+    note.addEventListener("input", function () { clearTimeout(t); t = setTimeout(function () { save({ note: note.value }); }, 700); });
+    document.getElementById("prev").addEventListener("click", function () { go(current - 1); });
+    document.getElementById("next").addEventListener("click", function () { go(current + 1); });
+  }
+  function progress() {
+    var n = DATA.filter(function (d) { return (state[key(d)] || {}).answer; }).length;
+    document.getElementById("count").textContent = n + " / " + DATA.length;
+  }
+  function go(i) { if (i < 0 || i >= DATA.length) return; current = i; rail(); desk(); }
+  function setAnswer(v) { var st = state[key(DATA[current])] || {}; save({ answer: st.answer === v ? "" : v }); }
+  function save(patch) {
+    var d = DATA[current], k = key(d);
+    var st = state[k] = Object.assign({ answer: "", note: "" }, state[k], patch);
+    rail(); desk(); progress();
+    var s = document.getElementById("saved");
+    if (!db) { if (s) s.textContent = "только в этом окне"; return; }
+    if (s) s.textContent = "сохраняю…";
+    db.doc("align/" + k).set({ id: d.id, a_pid: d.a_pid, b_pid: d.b_pid, answer: st.answer, note: st.note,
+      updatedAt: new Date().toISOString() }).then(function () {
+      var e = document.getElementById("saved"); if (e) e.textContent = st.answer ? "сохранено" : "снято";
+    }).catch(function (e) {
+      var x = document.getElementById("saved"); if (x) x.textContent = "не сохранено (" + (e && e.code ? e.code : "ошибка") + ")";
+    });
+  }
+  document.getElementById("rail").addEventListener("click", function (e) {
+    var b = e.target.closest(".item"); if (b) go(+b.getAttribute("data-i"));
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (e.key === "1") setAnswer("same"); else if (e.key === "2") setAnswer("modified");
+    else if (e.key === "3") setAnswer("different");
+    else if (e.key === "j" || e.key === "ArrowDown") go(current + 1);
+    else if (e.key === "k" || e.key === "ArrowUp") go(current - 1);
+    else return;
+    e.preventDefault();
+  });
+  go(0); progress();
+  if (window.claude && window.claude.use) {
+    window.claude.use("db").then(function (store) {
+      if (!store) { document.getElementById("status").textContent = "Хранилище недоступно в этом просмотре — метки остаются только в окне."; return; }
+      db = store;
+      store.collection("align").get().then(function (snap) {
+        snap.docs.forEach(function (doc) { var v = doc.data() || {}; state[doc.id] = { answer: v.answer || "", note: v.note || "" }; });
+        rail(); desk(); progress();
+        document.getElementById("status").textContent = "Сохранено меток: " + snap.size + ". Клавиши: 1 same, 2 modified, 3 different, j/k — листать.";
+      }).catch(function () { document.getElementById("status").textContent = "Хранилище доступно, чтение не удалось."; });
+    });
+  } else {
+    document.getElementById("status").textContent = "Просмотр без хранилища — метки остаются только в этом окне.";
+  }
+})();
+</script>
