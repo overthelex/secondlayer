@@ -125,7 +125,13 @@ def cmd_merge(args) -> int:
     c, g = answers(args.judges / "claude-opus.jsonl"), answers(args.judges / "gemini-3.1-pro.jsonl")
     hf = DATA / "human_labels_align.json"
     human = {r["id"]: r["answer"] for r in json.loads(hf.read_text())["labels"]} if hf.exists() else {}
-    final, need = {}, []
+    # a split that decides no provision's fate or origin (align_disputes_decisive.json
+    # lists the ones that do) takes the lower of the two answers; the result is
+    # checked below to be the same with the higher one
+    df = DATA / "align_disputes_decisive.json"
+    decisive = {d["id"] for d in json.loads(df.read_text())} if df.exists() else set(pairs)
+    rank = {"same": 2, "modified": 1, "different": 0}
+    final, need, loose = {}, [], {}
     for pid in pairs:
         if pid not in c or pid not in g:
             raise SystemExit(f"{pid} not read by both models")
@@ -133,6 +139,9 @@ def cmd_merge(args) -> int:
             final[pid] = c[pid]
         elif pid in human:
             final[pid] = human[pid]
+        elif pid not in decisive:
+            final[pid] = min(c[pid], g[pid], key=rank.get)
+            loose[pid] = max(c[pid], g[pid], key=rank.get)
         else:
             need.append({"id": pid, "claude": c[pid], "gemini": g[pid]})
     if need:
@@ -140,14 +149,20 @@ def cmd_merge(args) -> int:
         print(len(need), "splits for the reader ->", DATA / "align_disputes_needed.json")
         return 1
     old, new = load()
-    rank = {"same": 2, "modified": 1, "different": 0}
-    fate, origin = {}, {}
-    for pid, a in final.items():
-        p = pairs[pid]
-        if p["a_pid"] not in fate or rank[a] > rank[fate[p["a_pid"]][0]]:
-            fate[p["a_pid"]] = (a, p["b_pid"])
-        if p["b_pid"] not in origin or rank[a] > rank[origin[p["b_pid"]][0]]:
-            origin[p["b_pid"]] = (a, p["a_pid"])
+
+    def resolve(fin):
+        fate, origin = {}, {}
+        for pid, a in fin.items():
+            p = pairs[pid]
+            if p["a_pid"] not in fate or rank[a] > rank[fate[p["a_pid"]][0]]:
+                fate[p["a_pid"]] = (a, p["b_pid"])
+            if p["b_pid"] not in origin or rank[a] > rank[origin[p["b_pid"]][0]]:
+                origin[p["b_pid"]] = (a, p["a_pid"])
+        return fate, origin
+    lo, hi = resolve(final), resolve({**final, **loose})
+    assert {k: v[0] for k, v in lo[0].items()} == {k: v[0] for k, v in hi[0].items()}, "a non-decisive split decides a fate"
+    assert {k: v[0] for k, v in lo[1].items()} == {k: v[0] for k, v in hi[1].items()}, "a non-decisive split decides an origin"
+    fate, origin = lo
     name = {"same": "kept", "modified": "modified", "different": "dropped"}
     rows_old = [{"number": p["number"], "fate": name[fate[p["number"]][0]],
                  "in_2026": fate[p["number"]][1] if fate[p["number"]][0] != "different" else None} for p in old]

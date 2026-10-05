@@ -1,0 +1,851 @@
+{
+ "old": [
+  {
+   "number": "1.1",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "1.2",
+   "fate": "modified",
+   "in_2026": "I.1"
+  },
+  {
+   "number": "1.3",
+   "fate": "modified",
+   "in_2026": "I.4.17"
+  },
+  {
+   "number": "2.1",
+   "fate": "modified",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "2.1.1",
+   "fate": "modified",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "2.1.2",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.3",
+   "fate": "kept",
+   "in_2026": "IV.4"
+  },
+  {
+   "number": "2.1.4",
+   "fate": "kept",
+   "in_2026": "II.1"
+  },
+  {
+   "number": "2.1.5",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.6",
+   "fate": "modified",
+   "in_2026": "VII.1"
+  },
+  {
+   "number": "2.1.7",
+   "fate": "kept",
+   "in_2026": "VIII.1"
+  },
+  {
+   "number": "2.1.8",
+   "fate": "kept",
+   "in_2026": "VIII.4"
+  },
+  {
+   "number": "2.1.9",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.10",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.11",
+   "fate": "kept",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "2.2",
+   "fate": "modified",
+   "in_2026": "II.3"
+  },
+  {
+   "number": "3.1",
+   "fate": "modified",
+   "in_2026": "III.1"
+  },
+  {
+   "number": "3.2",
+   "fate": "kept",
+   "in_2026": "III.1"
+  },
+  {
+   "number": "3.3",
+   "fate": "kept",
+   "in_2026": "III.2"
+  },
+  {
+   "number": "3.4",
+   "fate": "kept",
+   "in_2026": "III.3"
+  },
+  {
+   "number": "4.1",
+   "fate": "modified",
+   "in_2026": "IV.1"
+  },
+  {
+   "number": "4.2",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.1",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.2",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.3",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.4",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "4.3",
+   "fate": "kept",
+   "in_2026": "IV.3"
+  },
+  {
+   "number": "4.4",
+   "fate": "modified",
+   "in_2026": "IV.4"
+  },
+  {
+   "number": "5.1",
+   "fate": "modified",
+   "in_2026": "V.1"
+  },
+  {
+   "number": "5.2",
+   "fate": "modified",
+   "in_2026": "V.11"
+  },
+  {
+   "number": "5.3",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "5.4",
+   "fate": "modified",
+   "in_2026": "I.4.9"
+  },
+  {
+   "number": "6.1",
+   "fate": "modified",
+   "in_2026": "VI.1"
+  },
+  {
+   "number": "6.2",
+   "fate": "modified",
+   "in_2026": "VI.2"
+  },
+  {
+   "number": "6.3",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "7.1",
+   "fate": "modified",
+   "in_2026": "I.4.38"
+  },
+  {
+   "number": "7.2",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "7.3",
+   "fate": "modified",
+   "in_2026": "VII.2"
+  },
+  {
+   "number": "8.1",
+   "fate": "modified",
+   "in_2026": "VIII.1"
+  },
+  {
+   "number": "8.2",
+   "fate": "kept",
+   "in_2026": "VIII.2"
+  },
+  {
+   "number": "8.3",
+   "fate": "kept",
+   "in_2026": "VIII.3"
+  },
+  {
+   "number": "8.4",
+   "fate": "kept",
+   "in_2026": "I.4.25"
+  },
+  {
+   "number": "8.5",
+   "fate": "kept",
+   "in_2026": "VIII.5"
+  },
+  {
+   "number": "8.6",
+   "fate": "modified",
+   "in_2026": "VIII.6"
+  },
+  {
+   "number": "9.1",
+   "fate": "modified",
+   "in_2026": "IX.1"
+  },
+  {
+   "number": "9.2",
+   "fate": "modified",
+   "in_2026": "I.4.3"
+  },
+  {
+   "number": "9.3",
+   "fate": "modified",
+   "in_2026": "IX.2"
+  },
+  {
+   "number": "10.1",
+   "fate": "kept",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "10.1.1",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.2",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.3",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "10.1.4",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.5",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.6",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.6.1",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.6.2",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "10.1.6.3",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.2",
+   "fate": "kept",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.1",
+   "fate": "modified",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.2",
+   "fate": "modified",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.3",
+   "fate": "kept",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.4",
+   "fate": "kept",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.3",
+   "fate": "modified",
+   "in_2026": "X.3"
+  },
+  {
+   "number": "10.4",
+   "fate": "modified",
+   "in_2026": "X.3"
+  },
+  {
+   "number": "10.5",
+   "fate": "kept",
+   "in_2026": "X.5"
+  },
+  {
+   "number": "11.1",
+   "fate": "modified",
+   "in_2026": "XI.1"
+  }
+ ],
+ "new": [
+  {
+   "number": "I.1",
+   "origin": "modified",
+   "from_2002": "1.2"
+  },
+  {
+   "number": "I.2",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.3",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.1",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.2",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.3",
+   "origin": "modified",
+   "from_2002": "9.2"
+  },
+  {
+   "number": "I.4.4",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.5",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.6",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.7",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.8",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.9",
+   "origin": "modified",
+   "from_2002": "5.4"
+  },
+  {
+   "number": "I.4.10",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.11",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.12",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.13",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.14",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.15",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.16",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.17",
+   "origin": "modified",
+   "from_2002": "1.3"
+  },
+  {
+   "number": "I.4.18",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.19",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.20",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.21",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.22",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.23",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.24",
+   "origin": "modified",
+   "from_2002": "1.3"
+  },
+  {
+   "number": "I.4.25",
+   "origin": "same",
+   "from_2002": "8.4"
+  },
+  {
+   "number": "I.4.26",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.27",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.28",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.29",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.30",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.31",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.32",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.33",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.34",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.35",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.36",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.37",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "I.4.38",
+   "origin": "modified",
+   "from_2002": "7.1"
+  },
+  {
+   "number": "I.4.ref",
+   "origin": "modified",
+   "from_2002": "1.3"
+  },
+  {
+   "number": "II.1",
+   "origin": "same",
+   "from_2002": "2.1.4"
+  },
+  {
+   "number": "II.2",
+   "origin": "same",
+   "from_2002": "2.1.11"
+  },
+  {
+   "number": "II.3",
+   "origin": "modified",
+   "from_2002": "2.2"
+  },
+  {
+   "number": "II.4",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "III.1",
+   "origin": "same",
+   "from_2002": "3.2"
+  },
+  {
+   "number": "III.2",
+   "origin": "same",
+   "from_2002": "3.3"
+  },
+  {
+   "number": "III.3",
+   "origin": "same",
+   "from_2002": "3.4"
+  },
+  {
+   "number": "IV.1",
+   "origin": "modified",
+   "from_2002": "4.1"
+  },
+  {
+   "number": "IV.2",
+   "origin": "same",
+   "from_2002": "4.2"
+  },
+  {
+   "number": "IV.3",
+   "origin": "same",
+   "from_2002": "4.3"
+  },
+  {
+   "number": "IV.4",
+   "origin": "same",
+   "from_2002": "2.1.3"
+  },
+  {
+   "number": "V.1",
+   "origin": "modified",
+   "from_2002": "5.1"
+  },
+  {
+   "number": "V.2",
+   "origin": "modified",
+   "from_2002": "5.1"
+  },
+  {
+   "number": "V.3",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.4",
+   "origin": "same",
+   "from_2002": "4.2.1"
+  },
+  {
+   "number": "V.5",
+   "origin": "modified",
+   "from_2002": "5.1"
+  },
+  {
+   "number": "V.6",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.7",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.8",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.9",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.10",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.11",
+   "origin": "modified",
+   "from_2002": "5.2"
+  },
+  {
+   "number": "V.12",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.13",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.14",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.15",
+   "origin": "modified",
+   "from_2002": "5.1"
+  },
+  {
+   "number": "V.16",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "V.17",
+   "origin": "modified",
+   "from_2002": "5.1"
+  },
+  {
+   "number": "V.18",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VI.1",
+   "origin": "modified",
+   "from_2002": "6.1"
+  },
+  {
+   "number": "VI.2",
+   "origin": "modified",
+   "from_2002": "6.1"
+  },
+  {
+   "number": "VI.3",
+   "origin": "modified",
+   "from_2002": "6.1"
+  },
+  {
+   "number": "VI.4",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VI.5",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VI.6",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VI.7",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VI.8",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VI.9",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VII.1",
+   "origin": "modified",
+   "from_2002": "2.1.6"
+  },
+  {
+   "number": "VII.2",
+   "origin": "modified",
+   "from_2002": "7.1"
+  },
+  {
+   "number": "VIII.1",
+   "origin": "same",
+   "from_2002": "2.1.7"
+  },
+  {
+   "number": "VIII.2",
+   "origin": "same",
+   "from_2002": "8.2"
+  },
+  {
+   "number": "VIII.3",
+   "origin": "same",
+   "from_2002": "8.3"
+  },
+  {
+   "number": "VIII.4",
+   "origin": "same",
+   "from_2002": "2.1.8"
+  },
+  {
+   "number": "VIII.5",
+   "origin": "same",
+   "from_2002": "8.5"
+  },
+  {
+   "number": "VIII.6",
+   "origin": "modified",
+   "from_2002": "2.1.8"
+  },
+  {
+   "number": "VIII.7",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "VIII.8",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "IX.1",
+   "origin": "modified",
+   "from_2002": "9.1"
+  },
+  {
+   "number": "IX.2",
+   "origin": "modified",
+   "from_2002": "9.3"
+  },
+  {
+   "number": "IX.3",
+   "origin": "modified",
+   "from_2002": "9.2"
+  },
+  {
+   "number": "IX.4",
+   "origin": "modified",
+   "from_2002": "9.3"
+  },
+  {
+   "number": "IX.5",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "IX.6",
+   "origin": "new",
+   "from_2002": null
+  },
+  {
+   "number": "X.1",
+   "origin": "same",
+   "from_2002": "2.1.11"
+  },
+  {
+   "number": "X.2",
+   "origin": "same",
+   "from_2002": "10.1.2"
+  },
+  {
+   "number": "X.3",
+   "origin": "modified",
+   "from_2002": "10.3"
+  },
+  {
+   "number": "X.4",
+   "origin": "modified",
+   "from_2002": "10.3"
+  },
+  {
+   "number": "X.5",
+   "origin": "same",
+   "from_2002": "10.5"
+  },
+  {
+   "number": "XI.1",
+   "origin": "modified",
+   "from_2002": "11.1"
+  }
+ ]
+}
