@@ -24,9 +24,17 @@ header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: b
 h1 { font: 600 20px/1.2 var(--sans); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
 .sub { color: var(--muted); font-size: 13px; }
 .progress { margin-left: auto; font: 500 13px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
-details.proto { grid-column: 1 / -1; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); }
-details.proto summary { cursor: pointer; color: var(--ink); font-weight: 500; }
-details.proto p { margin: 8px 0 0; max-width: 72ch; }
+.guide-back { position: fixed; inset: 0; background: rgba(10, 12, 15, .45); z-index: 40; display: none; }
+.guide-back.open { display: block; }
+.guide { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100%); z-index: 41; background: var(--surface);
+  border-left: 1px solid var(--line); overflow-y: auto; padding: calc(16px + env(safe-area-inset-top, 0px)) 22px 48px;
+  transform: translateX(100%); transition: transform .2s ease; font-size: 14px; color: var(--ink-2); }
+.guide.open { transform: none; }
+.guide-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; background: var(--surface); padding-bottom: 8px; }
+.guide h2 { font: 600 18px var(--sans); margin: 0; color: var(--ink); }
+.guide p { margin: 8px 0 0; max-width: 72ch; }
+.noauto { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); margin: 4px 0 8px; cursor: pointer; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
 .g h3 { font: 600 14px var(--sans); color: var(--ink); margin: 16px 0 4px; }
 .g ol, .g ul { margin: 6px 0; padding-left: 20px; max-width: 76ch; }
 .g li { margin: 3px 0; }
@@ -74,10 +82,16 @@ textarea { width: 100%; min-height: 64px; font: 14px var(--sans); color: var(--i
   <header class="top">
     <h1>Методика 2002 → 2026: спорные пары</h1>
     <span class="sub">Тот же ли это пункт в тексте 2026 года? Судьи разошлись; ваша метка решает.</span>
+    <button class="btn small" id="help">Правила</button>
     <span class="progress" id="count">0 / 0</span>
   </header>
-  <details class="proto" id="guide">
-    <summary>Как размечать (протокол link_ua.md v1)</summary>
+  <div class="guide-back" id="guide-back"></div>
+  <aside class="guide" id="guide" role="dialog" aria-label="Правила разметки" aria-hidden="true">
+    <div class="guide-top">
+      <h2>Как размечать</h2>
+      <button class="btn" id="guide-close">Закрыть ✕</button>
+    </div>
+    <label class="noauto"><input type="checkbox" id="guide-noauto"> Не открывать автоматически</label>
     <div class="g">
       <h3>Что перед вами</h3>
       <p>Слева <b>A</b> — положение методики 2002 года (z0317-02), справа <b>B</b> — положение методики 2026 года (z1043-26), которое ближе всего к A по смыслу. Текст 2026 года — новый документ: всё перенумеровано и часто переписано, поэтому номера ничего не говорят. Под номером указан тип положения (norm, definition, scope, rationale, housekeeping) — по уже сделанной разметке.</p>
@@ -159,7 +173,7 @@ rule, even if it shares words or the topic with A.
 Return only JSON: {&quot;answer&quot;: &quot;same&quot; | &quot;modified&quot; | &quot;different&quot;, &quot;why&quot;: &quot;&lt;one sentence&gt;&quot;}
 </pre></details>
     </div>
-  </details>
+  </aside>
   <nav class="rail" id="rail" aria-label="Пары"></nav>
   <main class="desk" id="desk"></main>
   <div class="status" id="status">Метки хранятся в этом окне, пока не ответит хранилище.</div>
@@ -234,6 +248,7 @@ Return only JSON: {&quot;answer&quot;: &quot;same&quot; | &quot;modified&quot; |
   });
   document.addEventListener("keydown", function (e) {
     if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (guide.classList.contains("open")) return;
     if (e.key === "1") setAnswer("same"); else if (e.key === "2") setAnswer("modified");
     else if (e.key === "3") setAnswer("different");
     else if (e.key === "j" || e.key === "ArrowDown") go(current + 1);
@@ -241,17 +256,34 @@ Return only JSON: {&quot;answer&quot;: &quot;same&quot; | &quot;modified&quot; |
     else return;
     e.preventDefault();
   });
-  var guide = document.getElementById("guide"), closed = false;
-  try { closed = localStorage.getItem("mt-align-guide-closed") === "1"; } catch (e) {}
-  guide.open = !closed;
-  guide.addEventListener("toggle", function () {
-    try { localStorage.setItem("mt-align-guide-closed", guide.open ? "0" : "1"); } catch (e) {}
-  });
+  var guide = document.getElementById("guide"), back = document.getElementById("guide-back"),
+      noauto = document.getElementById("guide-noauto"), autoPref = null;
+  function openGuide(on) {
+    guide.classList.toggle("open", on); back.classList.toggle("open", on);
+    guide.setAttribute("aria-hidden", String(!on));
+  }
+  function remember(hidden) {
+    try { localStorage.setItem("mt-align-guide-noauto", hidden ? "1" : "0"); } catch (e) {}
+    if (db) db.doc("prefs/guide").set({ noauto: hidden, updatedAt: new Date().toISOString() }).catch(function () {});
+  }
+  document.getElementById("help").addEventListener("click", function () { openGuide(true); });
+  document.getElementById("guide-close").addEventListener("click", function () { openGuide(false); });
+  back.addEventListener("click", function () { openGuide(false); });
+  noauto.addEventListener("change", function () { remember(noauto.checked); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") openGuide(false); });
+  try { autoPref = localStorage.getItem("mt-align-guide-noauto"); } catch (e) {}
+  noauto.checked = autoPref === "1";
+  var firstVisit = autoPref === null;
   go(0); progress();
   if (window.claude && window.claude.use) {
     window.claude.use("db").then(function (store) {
-      if (!store) { document.getElementById("status").textContent = "Хранилище недоступно в этом просмотре — метки остаются только в окне."; return; }
+      if (!store) { if (firstVisit) openGuide(true); document.getElementById("status").textContent = "Хранилище недоступно в этом просмотре — метки остаются только в окне."; return; }
       db = store;
+      store.doc("prefs/guide").get().then(function (doc) {
+        var v = doc && doc.exists ? (doc.data() || {}) : null;
+        if (v) { noauto.checked = !!v.noauto; if (!v.noauto) openGuide(true); }
+        else if (!noauto.checked) openGuide(true);
+      }).catch(function () { if (firstVisit) openGuide(true); });
       store.collection("align").get().then(function (snap) {
         snap.docs.forEach(function (doc) { var v = doc.data() || {}; state[doc.id] = { answer: v.answer || "", note: v.note || "" }; });
         rail(); desk(); progress();
@@ -259,6 +291,7 @@ Return only JSON: {&quot;answer&quot;: &quot;same&quot; | &quot;modified&quot; |
       }).catch(function () { document.getElementById("status").textContent = "Хранилище доступно, чтение не удалось."; });
     });
   } else {
+    if (firstVisit) openGuide(true);
     document.getElementById("status").textContent = "Просмотр без хранилища — метки остаются только в этом окне.";
   }
 })();
