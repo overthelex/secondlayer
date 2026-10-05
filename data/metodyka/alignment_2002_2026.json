@@ -335,517 +335,737 @@
   {
    "number": "I.1",
    "origin": "modified",
-   "from_2002": "1.2"
+   "from_2002": "1.2",
+   "from_2002_all": [
+    "1.2"
+   ]
   },
   {
    "number": "I.2",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.3",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.1",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.2",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.3",
    "origin": "modified",
-   "from_2002": "9.2"
+   "from_2002": "9.2",
+   "from_2002_all": [
+    "9.2"
+   ]
   },
   {
    "number": "I.4.4",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.5",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.6",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.7",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.8",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.9",
    "origin": "modified",
-   "from_2002": "5.4"
+   "from_2002": "5.4",
+   "from_2002_all": [
+    "5.4"
+   ]
   },
   {
    "number": "I.4.10",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.11",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.12",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.13",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.14",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.15",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.16",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.17",
    "origin": "modified",
-   "from_2002": "1.3"
+   "from_2002": "1.3",
+   "from_2002_all": [
+    "1.3",
+    "10.2"
+   ]
   },
   {
    "number": "I.4.18",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.19",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.20",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.21",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.22",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.23",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.24",
    "origin": "modified",
-   "from_2002": "1.3"
+   "from_2002": "1.3",
+   "from_2002_all": [
+    "1.3"
+   ]
   },
   {
    "number": "I.4.25",
    "origin": "same",
-   "from_2002": "8.4"
+   "from_2002": "8.4",
+   "from_2002_all": [
+    "8.4"
+   ]
   },
   {
    "number": "I.4.26",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.27",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.28",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.29",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.30",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.31",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.32",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.33",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.34",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.35",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.36",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.37",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "I.4.38",
    "origin": "modified",
-   "from_2002": "7.1"
+   "from_2002": "7.1",
+   "from_2002_all": [
+    "7.1"
+   ]
   },
   {
    "number": "I.4.ref",
    "origin": "modified",
-   "from_2002": "1.3"
+   "from_2002": "1.3",
+   "from_2002_all": [
+    "1.3"
+   ]
   },
   {
    "number": "II.1",
    "origin": "same",
-   "from_2002": "2.1.4"
+   "from_2002": "2.1.4",
+   "from_2002_all": [
+    "2.1.4"
+   ]
   },
   {
    "number": "II.2",
    "origin": "same",
-   "from_2002": "2.1.11"
+   "from_2002": "2.1.11",
+   "from_2002_all": [
+    "2.1.11",
+    "10.1"
+   ]
   },
   {
    "number": "II.3",
    "origin": "modified",
-   "from_2002": "2.2"
+   "from_2002": "2.2",
+   "from_2002_all": [
+    "2.2"
+   ]
   },
   {
    "number": "II.4",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "III.1",
    "origin": "same",
-   "from_2002": "3.2"
+   "from_2002": "3.2",
+   "from_2002_all": [
+    "3.2"
+   ]
   },
   {
    "number": "III.2",
    "origin": "same",
-   "from_2002": "3.3"
+   "from_2002": "3.3",
+   "from_2002_all": [
+    "3.3"
+   ]
   },
   {
    "number": "III.3",
    "origin": "same",
-   "from_2002": "3.4"
+   "from_2002": "3.4",
+   "from_2002_all": [
+    "3.4"
+   ]
   },
   {
    "number": "IV.1",
    "origin": "modified",
-   "from_2002": "4.1"
+   "from_2002": "4.1",
+   "from_2002_all": [
+    "4.1"
+   ]
   },
   {
    "number": "IV.2",
    "origin": "same",
-   "from_2002": "4.2"
+   "from_2002": "4.2",
+   "from_2002_all": [
+    "4.2",
+    "4.2.1",
+    "4.2.2",
+    "4.2.3"
+   ]
   },
   {
    "number": "IV.3",
    "origin": "same",
-   "from_2002": "4.3"
+   "from_2002": "4.3",
+   "from_2002_all": [
+    "4.3"
+   ]
   },
   {
    "number": "IV.4",
    "origin": "same",
-   "from_2002": "2.1.3"
+   "from_2002": "2.1.3",
+   "from_2002_all": [
+    "2.1.3"
+   ]
   },
   {
    "number": "V.1",
    "origin": "modified",
-   "from_2002": "5.1"
+   "from_2002": "5.1",
+   "from_2002_all": [
+    "5.1"
+   ]
   },
   {
    "number": "V.2",
    "origin": "modified",
-   "from_2002": "5.1"
+   "from_2002": "5.1",
+   "from_2002_all": [
+    "5.1"
+   ]
   },
   {
    "number": "V.3",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.4",
    "origin": "same",
-   "from_2002": "4.2.1"
+   "from_2002": "4.2.1",
+   "from_2002_all": [
+    "4.2.1"
+   ]
   },
   {
    "number": "V.5",
    "origin": "modified",
-   "from_2002": "5.1"
+   "from_2002": "5.1",
+   "from_2002_all": [
+    "5.1"
+   ]
   },
   {
    "number": "V.6",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.7",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.8",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.9",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.10",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.11",
    "origin": "modified",
-   "from_2002": "5.2"
+   "from_2002": "5.2",
+   "from_2002_all": [
+    "5.2"
+   ]
   },
   {
    "number": "V.12",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.13",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.14",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.15",
    "origin": "modified",
-   "from_2002": "5.1"
+   "from_2002": "5.1",
+   "from_2002_all": [
+    "5.1"
+   ]
   },
   {
    "number": "V.16",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "V.17",
    "origin": "modified",
-   "from_2002": "5.1"
+   "from_2002": "5.1",
+   "from_2002_all": [
+    "5.1"
+   ]
   },
   {
    "number": "V.18",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VI.1",
    "origin": "modified",
-   "from_2002": "6.1"
+   "from_2002": "6.1",
+   "from_2002_all": [
+    "6.1"
+   ]
   },
   {
    "number": "VI.2",
    "origin": "modified",
-   "from_2002": "6.1"
+   "from_2002": "6.1",
+   "from_2002_all": [
+    "6.1",
+    "6.2"
+   ]
   },
   {
    "number": "VI.3",
    "origin": "modified",
-   "from_2002": "6.1"
+   "from_2002": "6.1",
+   "from_2002_all": [
+    "6.1"
+   ]
   },
   {
    "number": "VI.4",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VI.5",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VI.6",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VI.7",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VI.8",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VI.9",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VII.1",
    "origin": "modified",
-   "from_2002": "2.1.6"
+   "from_2002": "2.1.6",
+   "from_2002_all": [
+    "2.1.6",
+    "7.1"
+   ]
   },
   {
    "number": "VII.2",
    "origin": "modified",
-   "from_2002": "7.1"
+   "from_2002": "7.1",
+   "from_2002_all": [
+    "7.1",
+    "7.3"
+   ]
   },
   {
    "number": "VIII.1",
    "origin": "same",
-   "from_2002": "2.1.7"
+   "from_2002": "2.1.7",
+   "from_2002_all": [
+    "2.1.7"
+   ]
   },
   {
    "number": "VIII.2",
    "origin": "same",
-   "from_2002": "8.2"
+   "from_2002": "8.2",
+   "from_2002_all": [
+    "8.2"
+   ]
   },
   {
    "number": "VIII.3",
    "origin": "same",
-   "from_2002": "8.3"
+   "from_2002": "8.3",
+   "from_2002_all": [
+    "8.3"
+   ]
   },
   {
    "number": "VIII.4",
    "origin": "same",
-   "from_2002": "2.1.8"
+   "from_2002": "2.1.8",
+   "from_2002_all": [
+    "2.1.8",
+    "8.4"
+   ]
   },
   {
    "number": "VIII.5",
    "origin": "same",
-   "from_2002": "8.5"
+   "from_2002": "8.5",
+   "from_2002_all": [
+    "8.5"
+   ]
   },
   {
    "number": "VIII.6",
    "origin": "modified",
-   "from_2002": "2.1.8"
+   "from_2002": "2.1.8",
+   "from_2002_all": [
+    "2.1.8",
+    "8.4",
+    "8.6"
+   ]
   },
   {
    "number": "VIII.7",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "VIII.8",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "IX.1",
    "origin": "modified",
-   "from_2002": "9.1"
+   "from_2002": "9.1",
+   "from_2002_all": [
+    "9.1"
+   ]
   },
   {
    "number": "IX.2",
    "origin": "modified",
-   "from_2002": "9.3"
+   "from_2002": "9.3",
+   "from_2002_all": [
+    "9.3"
+   ]
   },
   {
    "number": "IX.3",
    "origin": "modified",
-   "from_2002": "9.2"
+   "from_2002": "9.2",
+   "from_2002_all": [
+    "9.2"
+   ]
   },
   {
    "number": "IX.4",
    "origin": "modified",
-   "from_2002": "9.3"
+   "from_2002": "9.3",
+   "from_2002_all": [
+    "9.3"
+   ]
   },
   {
    "number": "IX.5",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "IX.6",
    "origin": "new",
-   "from_2002": null
+   "from_2002": null,
+   "from_2002_all": []
   },
   {
    "number": "X.1",
    "origin": "same",
-   "from_2002": "2.1.11"
+   "from_2002": "2.1.11",
+   "from_2002_all": [
+    "2.1.11",
+    "10.1",
+    "10.1.1",
+    "10.1.2",
+    "10.1.4",
+    "10.1.5",
+    "10.1.6",
+    "10.1.6.1",
+    "10.1.6.3"
+   ]
   },
   {
    "number": "X.2",
    "origin": "same",
-   "from_2002": "10.1.2"
+   "from_2002": "10.1.2",
+   "from_2002_all": [
+    "10.1.2",
+    "10.1.4",
+    "10.2",
+    "10.2.3",
+    "10.2.4"
+   ]
   },
   {
    "number": "X.3",
    "origin": "modified",
-   "from_2002": "10.3"
+   "from_2002": "10.3",
+   "from_2002_all": [
+    "10.3",
+    "10.4"
+   ]
   },
   {
    "number": "X.4",
    "origin": "modified",
-   "from_2002": "10.3"
+   "from_2002": "10.3",
+   "from_2002_all": [
+    "10.3",
+    "10.4"
+   ]
   },
   {
    "number": "X.5",
    "origin": "same",
-   "from_2002": "10.5"
+   "from_2002": "10.5",
+   "from_2002_all": [
+    "10.5"
+   ]
   },
   {
    "number": "XI.1",
    "origin": "modified",
-   "from_2002": "11.1"
+   "from_2002": "11.1",
+   "from_2002_all": [
+    "11.1"
+   ]
   }
  ]
 }

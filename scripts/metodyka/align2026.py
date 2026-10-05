@@ -166,8 +166,21 @@ def cmd_merge(args) -> int:
     name = {"same": "kept", "modified": "modified", "different": "dropped"}
     rows_old = [{"number": p["number"], "fate": name[fate[p["number"]][0]],
                  "in_2026": fate[p["number"]][1] if fate[p["number"]][0] != "different" else None} for p in old]
+    # Several 2002 provisions can tie at the top answer (2002 split a rule
+    # across 10.3 and 10.4 that 2026 states twice over). from_2002 stays the
+    # first of them; from_2002_all lists every one, because a judge asked what
+    # a modified norm changed has to see all the text it came from.
+    tied = collections.defaultdict(list)
+    for pid, a in final.items():
+        p = pairs[pid]
+        if a != "different" and a == origin[p["b_pid"]][0]:
+            tied[p["b_pid"]].append(p["a_pid"])
+    order = {p["number"]: i for i, p in enumerate(old)}
     rows_new = [{"number": p["number"], "origin": "new" if origin[p["number"]][0] == "different" else origin[p["number"]][0],
-                 "from_2002": origin[p["number"]][1] if origin[p["number"]][0] != "different" else None} for p in new]
+                 "from_2002": origin[p["number"]][1] if origin[p["number"]][0] != "different" else None,
+                 "from_2002_all": sorted(set(tied[p["number"]]), key=order.get) if origin[p["number"]][0] != "different" else []}
+                for p in new]
+    assert all(r["from_2002"] in r["from_2002_all"] for r in rows_new if r["from_2002"])
     (DATA / "alignment_2002_2026.json").write_text(json.dumps({"old": rows_old, "new": rows_new}, ensure_ascii=False, indent=1))
     print("2002 ->", dict(collections.Counter(r["fate"] for r in rows_old)))
     print("2026 <-", dict(collections.Counter(r["origin"] for r in rows_new)))

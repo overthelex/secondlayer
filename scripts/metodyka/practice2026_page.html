@@ -1,0 +1,323 @@
+<title>Методика 2026: практика до тексту</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a reading desk — the 2002 provision and its 2026 candidate side by side, the verdict bar under them, the queue in a rail. */
+:root {
+  --bg: #f5f4f0; --surface: #ffffff; --surface-2: #eceae4; --ink: #1d1f21; --ink-2: #4a4e53;
+  --muted: #7b8086; --line: #d9d6ce; --accent: #2b5d8a; --same: #2f7d4f; --mod: #b07a1c; --diff: #9a3b33;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #16181a; --surface: #1f2225; --surface-2: #2a2e32; --ink: #e8e6e1; --ink-2: #b9bcc0;
+  --muted: #8a9096; --line: #34393e; --accent: #79a9d6; --same: #6cc28f; --mod: #e0b45a; --diff: #e08a80; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #16181a; --surface: #1f2225; --surface-2: #2a2e32; --ink: #e8e6e1; --ink-2: #b9bcc0;
+  --muted: #8a9096; --line: #34393e; --accent: #79a9d6; --same: #6cc28f; --mod: #e0b45a; --diff: #e08a80; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); margin: 0; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 20px 48px; padding-inline: 16px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } .rail { order: 2; } }
+header.top { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+h1 { font: 600 20px/1.2 var(--sans); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); font-size: 13px; }
+.progress { margin-left: auto; font: 500 13px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.guide-back { position: fixed; inset: 0; background: rgba(10, 12, 15, .45); z-index: 40; display: none; }
+.guide-back.open { display: block; }
+.guide { position: fixed; top: 0; right: 0; bottom: 0; width: min(720px, 100%); z-index: 41; background: var(--surface);
+  border-left: 1px solid var(--line); overflow-y: auto; padding: calc(16px + env(safe-area-inset-top, 0px)) 22px 48px;
+  transform: translateX(100%); transition: transform .2s ease; font-size: 14px; color: var(--ink-2); }
+.guide.open { transform: none; }
+.guide-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; background: var(--surface); padding-bottom: 8px; }
+.guide h2 { font: 600 18px var(--sans); margin: 0; color: var(--ink); }
+.guide p { margin: 8px 0 0; max-width: 72ch; }
+.noauto { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); margin: 4px 0 8px; cursor: pointer; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.g h3 { font: 600 14px var(--sans); color: var(--ink); margin: 16px 0 4px; }
+.g ol, .g ul { margin: 6px 0; padding-left: 20px; max-width: 76ch; }
+.g li { margin: 3px 0; }
+.g table { border-collapse: collapse; width: 100%; max-width: 860px; margin: 6px 0; font-size: 14px; }
+.g td, .g th { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.g th { color: var(--ink); font-weight: 600; }
+.g kbd { font: 12px var(--mono); background: var(--surface-2); border-radius: 3px; padding: 0 4px; color: var(--ink); }
+details.verbatim { margin-top: 12px; }
+details.verbatim pre { white-space: pre-wrap; font: 12.5px/1.5 var(--mono); background: var(--surface-2); padding: 10px 12px; border-radius: 5px; color: var(--ink); max-width: 100%; overflow-x: auto; }
+.rail { display: flex; flex-direction: column; gap: 4px; }
+.item { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px; font: 13px var(--mono); color: var(--ink-2); }
+.item[aria-current="true"] { background: var(--surface-2); color: var(--ink); }
+.item:focus-visible { outline: 2px solid var(--accent); }
+.dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.dot.same { background: var(--same); border-color: var(--same); }
+.dot.modified { background: var(--mod); border-color: var(--mod); }
+.dot.different { background: var(--diff); border-color: var(--diff); }
+.desk { display: grid; gap: 16px; min-width: 0; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 700px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+.card .head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 8px; }
+.tag { font: 500 12px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.pid { font: 600 15px var(--mono); }
+.type { font: 12px var(--mono); color: var(--accent); }
+.text { font: 15.5px/1.6 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
+.verdict { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { all: unset; cursor: pointer; border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 5px; font: 500 14px var(--sans); color: var(--ink); }
+.btn:focus-visible { outline: 2px solid var(--accent); }
+.btn kbd { font: 12px var(--mono); color: var(--muted); margin-left: 6px; }
+.btn[data-v="застосовує"][aria-pressed="true"], .btn[data-n="так"][aria-pressed="true"] { background: var(--same); border-color: var(--same); color: var(--surface); }
+.btn[data-v="лише переказує"][aria-pressed="true"], .btn[data-n="ні"][aria-pressed="true"] { background: var(--mod); border-color: var(--mod); color: var(--surface); }
+.btn[data-v="не про це"][aria-pressed="true"], .btn[data-v="суперечить"][aria-pressed="true"] { background: var(--diff); border-color: var(--diff); color: var(--surface); }
+.btn[aria-pressed="true"] kbd { color: var(--surface); }
+textarea { width: 100%; min-height: 64px; font: 14px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; }
+.saved { font: 12px var(--mono); color: var(--muted); }
+.judges { background: var(--surface-2); border-radius: 6px; padding: 10px 14px; font-size: 14px; color: var(--ink-2); display: grid; gap: 6px; }
+.judges b { color: var(--ink); }
+.nav { display: flex; gap: 8px; }
+.status { grid-column: 1 / -1; font: 12px var(--mono); color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.old { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.meta { font: 12px var(--mono); color: var(--muted); }
+.newq { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; color: var(--ink-2); }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Методика 2026: была ли практика до текста</h1>
+    <span class="sub">Применяет ли этот отрывок решения, вынесенного до 1 августа 2026 года, правило методики 2026 года? Судьи разошлись; ваша метка решает.</span>
+    <button class="btn small" id="help">Правила</button>
+    <span class="progress" id="count">0 / 0</span>
+  </header>
+  <nav class="rail" id="rail" aria-label="Отрывки"></nav>
+  <main class="desk" id="desk"></main>
+  <div class="status" id="status">Метки хранятся в этом окне, пока не ответит хранилище.</div>
+  <div class="guide-back" id="guide-back"></div>
+  <aside class="guide" id="guide" role="dialog" aria-label="Правила разметки" aria-hidden="true">
+    <div class="guide-top"><h2>Как размечать</h2><button class="btn" id="guide-close">Закрыть ✕</button></div>
+    <label class="noauto"><input type="checkbox" id="guide-noauto"> Не открывать автоматически</label>
+    <div class="g">
+      <h3>Что перед вами</h3>
+      <p>Слева — правило методики 2026 года (z1043-26). Если оно изменяет правило 2002 года, ниже показан и текст 2002 года. Справа — отрывок решения АМКУ или суда, вынесенного <b>до 1 августа 2026 года</b>, с номером и датой. Решение старше текста, поэтому сослаться на этот пункт оно не может: судите только по существу, использовано ли само правило.</p>
+      <h3>Метка — по протоколу украинского аудита</h3>
+      <p>Тот же протокол, по которому размечалась статья о методике 2002 года (дословно ниже). Единственное отличие задачи: «пункт Методики» здесь — пункт 2026 года.</p>
+      <table>
+        <tr><th>Метка</th><th>Когда</th></tr>
+        <tr><td><kbd>1</kbd> <b>застосовує</b></td><td>с правилом что-то делают: прикладывают к фактам, выводят следствие, проверяют по нему действия стороны или органа, опираются в мотивировке. Орган может описывать свой анализ своими словами, не называя методику.</td></tr>
+        <tr><td><kbd>2</kbd> <b>суперечить</b></td><td>решение идёт против правила: отступает, применяет другое правило вместо него или прямо признаёт его неприменимым.</td></tr>
+        <tr><td><kbd>3</kbd> <b>лише переказує</b></td><td>правило пересказано или процитировано (например, по закону, по методике 2002 года или по документам ЕС), и на этом всё.</td></tr>
+        <tr><td><kbd>4</kbd> <b>не про це</b></td><td>отрывок о другом. При сомнении — тоже сюда.</td></tr>
+      </table>
+      <h3>Изменённые правила</h3>
+      <p>Если правило 2026 года изменяет правило 2002 года и вы ставите <b>застосовує</b>, ответьте ещё: применено ли в отрывке <b>именно то, что изменено или добавлено в 2026 году</b> (<kbd>y</kbd> так), или только то, что было и в 2002 году (<kbd>n</kbd> ні). Применение одной старой части — не практика нового правила.</p>
+      <h3>Почему эти отрывки</h3>
+      <p>Для 39 новых и изменённых норм 2026 года судьи прочитали по 8 отрывков, затем ещё по 24 ближайших решения в порядке дат. Здесь только отрывки, где один судья видит применение, а другой нет: от них зависит, была ли практика и когда она началась.</p>
+      <details class="verbatim"><summary>Протокол дословно (так его получали судьи)</summary><pre># Протокол читання: як розмічати уривок
+
+Одиниця судження — **один уривок проти одного пункту Методики**. Питання завжди
+те саме:
+
+&gt; Чи видно в цьому уривку, що цей пункт **використано** при вирішенні справи?
+
+## Чотири позначки
+
+**1 · застосовує** — з правилом щось роблять: прикладають до фактів, виводять
+із нього наслідок, перевіряють за ним дії сторони чи органу, спираються на нього
+в мотивуванні.
+
+**2 · суперечить** — рішення стає проти того, що пункт каже: відступає від нього,
+застосовує інше правило замість нього, або прямо визнає його незастосовним.
+
+**3 · лише переказує** — текст пункту відтворено або переказано, і на цьому
+все: цитата, перелік норм, що регулюють спір, посилання без наслідку.
+
+**4 · не про це** — уривок про інше, зокрема про інший пункт Методики.
+
+## Порядок питань
+
+Ідіть згори вниз, зупиняйтесь на першому «так»:
+
+1. Уривок узагалі про предмет цього пункту? Ні → **не про це**.
+2. З правилом роблять щось, крім переказу? Ні → **лише переказує**.
+3. Рішення йде проти правила? Так → **суперечить**.
+4. Інакше → **застосовує**.
+
+## Як виглядає «щось роблять з правилом»
+
+Наслідок буває довгим і буває одним підрядним реченням посеред абзацу. Друге
+пропускають найчастіше, тому шукайте його прицільно. Слова, після яких він
+зазвичай стоїть:
+
+&gt; отже · таким чином · тобто · а тому · з огляду на це · виходячи з цього ·
+&gt; відповідно до наведеного · зазначене свідчить · що вказує на · тож · оскільки
+
+Приклад, який легко не помітити. Суд відтворює визначення бар&#x27;єра вступу з
+Методики і додає: «Отже, дане твердження стосується тільки для нових суб&#x27;єктів
+господарювання, а не для існуючих». Це **застосовує**: з правила виведено
+наслідок, і неважливо, що на нього пішло одне речення.
+
+**Пункт-визначення застосовано тоді, коли визначеним терміном щось вирішують.**
+Багато пунктів Методики — це визначення (товарні межі, часові межі, бар&#x27;єри,
+об&#x27;єкти аналізу). Відтворити таке визначення — переказ. Використати його, щоб
+сказати щось про справу («оскільки часові межі — це рік стабільної структури,
+досліджуваний період обрано правильно») — застосування.
+
+**А ось чого замало.** Уривок про той самий предмет, що й пункт, — це ще не
+застосування. Перелік кроків аналізу своїми словами — не застосування.
+Збіг теми з темою пункту — не застосування. Має бути видно рух від правила до
+висновку, хоч куди: до факту, до дії органу, до тлумачення іншої норми.
+
+## Межі, які легко переплутати
+
+**Суд каже, що АМКУ пункт порушив** — це **застосовує**, а не суперечить.
+Правило тут працює як мірило, за яким перевіряють дії органу. «Суперечить»
+залишено для рідкого випадку, коли рішення приймає правило, протилежне пункту.
+
+**Цитата, а за нею висновок** — «згідно з пунктом 6.1 … отже, територіальні межі
+визначено правильно» — це **застосовує**. Переказ став засновком. Висновок може
+стояти і перед цитатою, і всередині неї.
+
+**Пункт у переліку норм** — «спірні правовідносини регулюються ст. 12 Закону,
+пунктами 5.1, 6.1 Методики» і далі про інше — це **лише переказує**.
+
+**Орган описує свій аналіз словами Методики, не називаючи її** — це
+**застосовує**. Назви пункту може не бути зовсім.
+
+**Уривок застосовує інший пункт** — **не про це**, навіть якщо він про Методику.
+
+## Чого не враховувати
+
+- **Чи названо номер пункту.** Рішення може застосовувати 6.1, посилаючись на
+  5.1 або ні на що. Судіть по суті, а не по посиланню.
+- **Чи правильний результат справи.** Ви не перевіряєте рішення, ви дивитесь,
+  чи використано правило.
+- **Вилучення** «Інформація, доступ до якої обмежено» — це нормально, дивіться
+  на міркування навколо них.
+- **Обрив на початку і в кінці.** Уривок нарізано по 1 200 символів, тому він
+  може починатися з середини речення. Судіть по видимому; якщо видимого не
+  досить, щоб сказати, це **не про це**, а не здогад.
+
+## Чого ви не бачите навмисно
+
+Чи цитує це рішення саме цей пункт, і чи є уривок переказом за формальною мірою.
+Обидва прапорці є в даних і потрібні потім, щоб порахувати узгодженість. Читач,
+якому сказали відповідь, перестає читати.
+
+## Коли сумніваєтесь
+
+Ставте **не про це**. Пропущене застосування псує менше, ніж вигадане: судія
+проходить ті самі уривки, і розбіжність буде видно.
+</pre></details>
+    </div>
+  </aside>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+  var LABELS = ["застосовує", "суперечить", "лише переказує", "не про це"];
+  var state = Object.create(null), current = 0, db = null;
+  function key(d) { return d.id.replace(/[^\w.\-~:@+]/g, "_"); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function done(d) { var st = state[key(d)] || {}; return st.label && (st.label !== "застосовує" || d.origin !== "modified" || st.newpart); }
+  function rail() {
+    document.getElementById("rail").innerHTML = DATA.map(function (d, i) {
+      var st = state[key(d)] || {};
+      var cls = !done(d) ? "" : st.label === "застосовує" ? "same" : st.label === "лише переказує" ? "modified" : "different";
+      return '<button class="item" data-i="' + i + '" aria-current="' + (i === current) + '"><span class="dot ' + cls + '"></span>' +
+        esc(d.number) + " · " + esc(d.date) + "</button>";
+    }).join("");
+  }
+  function desk() {
+    var d = DATA[current], st = state[key(d)] || {};
+    var rule = '<section class="card"><div class="head"><span class="tag">Правило 2026 (z1043-26)</span><span class="pid">' + esc(d.number) +
+      '</span><span class="type">' + esc(d.origin === "new" ? "нове" : "змінене") + '</span></div><div class="text">' + esc(d.text) + "</div>" +
+      (d.text_2002 ? '<div class="old"><div class="head"><span class="tag">Було у 2002 (z0317-02)</span><span class="pid">' + esc(d.from_2002) +
+        '</span></div><div class="text">' + esc(d.text_2002) + "</div></div>" : "") + "</section>";
+    var pas = '<section class="card"><div class="head"><span class="tag">Уривок</span><span class="pid">' + esc(d.doc_ref || d.doc_id) +
+      '</span><span class="meta">' + esc(d.corpus === "amcu" ? "АМКУ" : "суд") + " · " + esc(d.date) + " · " + esc(d.stage) +
+      '</span></div><div class="text">' + esc(d.body) + "</div></section>";
+    var newq = (d.origin === "modified" && st.label === "застосовує") ? '<div class="newq">Застосовано саме те, що змінено у 2026? ' +
+      ["так", "ні"].map(function (v) { return '<button class="btn" data-n="' + v + '" aria-pressed="' + (st.newpart === v) + '">' + v +
+      "<kbd>" + (v === "так" ? "y" : "n") + "</kbd></button>"; }).join("") + "</div>" : "";
+    var judges = done(d) ? '<div class="judges">' + Object.keys(d.judges).map(function (j) {
+      var x = d.judges[j]; return "<div><b>" + esc(j) + ": " + esc(x.label) + (x["new"] ? " (нове: " + esc(x["new"]) + ")" : "") + "</b> — " + esc(x.why) + "</div>";
+    }).join("") + "</div>" : "";
+    document.getElementById("desk").innerHTML = '<div class="pair">' + rule + pas + "</div>" +
+      '<div class="verdict">' + LABELS.map(function (v, i) {
+        return '<button class="btn" data-v="' + v + '" aria-pressed="' + (st.label === v) + '">' + v + "<kbd>" + (i + 1) + "</kbd></button>";
+      }).join("") + '<span class="saved" id="saved">' + (done(d) ? "сохранено" : "") + "</span></div>" + newq +
+      '<textarea id="note" placeholder="Пояснение, если нужно">' + esc(st.note || "") + "</textarea>" + judges +
+      '<div class="nav"><button class="btn" id="prev">← назад</button><button class="btn" id="next">дальше →</button></div>';
+    document.querySelectorAll(".verdict .btn").forEach(function (b) { b.addEventListener("click", function () { setLabel(b.getAttribute("data-v")); }); });
+    document.querySelectorAll(".newq .btn").forEach(function (b) { b.addEventListener("click", function () { save({ newpart: b.getAttribute("data-n") }); }); });
+    var note = document.getElementById("note"), t;
+    note.addEventListener("input", function () { clearTimeout(t); t = setTimeout(function () { save({ note: note.value }); }, 700); });
+    document.getElementById("prev").addEventListener("click", function () { go(current - 1); });
+    document.getElementById("next").addEventListener("click", function () { go(current + 1); });
+  }
+  function progress() { document.getElementById("count").textContent = DATA.filter(done).length + " / " + DATA.length; }
+  function go(i) { if (i < 0 || i >= DATA.length) return; current = i; rail(); desk(); }
+  function setLabel(v) {
+    var st = state[key(DATA[current])] || {};
+    var lab = st.label === v ? "" : v;
+    save({ label: lab, newpart: lab === "застосовує" ? (st.newpart || "") : "" });
+  }
+  function save(patch) {
+    var d = DATA[current], k = key(d);
+    var st = state[k] = Object.assign({ label: "", newpart: "", note: "" }, state[k], patch);
+    rail(); desk(); progress();
+    var s = document.getElementById("saved");
+    if (!db) { if (s) s.textContent = "только в этом окне"; return; }
+    if (s) s.textContent = "сохраняю…";
+    db.doc("labels26/" + k).set({ id: d.id, number: d.number, doc_id: d.doc_id, ord: d.ord, stage: d.stage, label: st.label,
+      newpart: st.newpart, note: st.note, updatedAt: new Date().toISOString() }).then(function () {
+      var e = document.getElementById("saved"); if (e) e.textContent = done(d) ? "сохранено" : (st.label ? "ответьте про новую часть" : "снято");
+    }).catch(function (e) { var x = document.getElementById("saved"); if (x) x.textContent = "не сохранено (" + (e && e.code ? e.code : "ошибка") + ")"; });
+  }
+  document.getElementById("rail").addEventListener("click", function (e) { var b = e.target.closest(".item"); if (b) go(+b.getAttribute("data-i")); });
+  var guide = document.getElementById("guide"), back = document.getElementById("guide-back"), noauto = document.getElementById("guide-noauto"), autoPref = null;
+  function openGuide(on) { guide.classList.toggle("open", on); back.classList.toggle("open", on); guide.setAttribute("aria-hidden", String(!on)); }
+  function remember(hidden) {
+    try { localStorage.setItem("mt26-guide-noauto", hidden ? "1" : "0"); } catch (e) {}
+    if (db) db.doc("prefs/guide").set({ noauto: hidden, updatedAt: new Date().toISOString() }).catch(function () {});
+  }
+  document.getElementById("help").addEventListener("click", function () { openGuide(true); });
+  document.getElementById("guide-close").addEventListener("click", function () { openGuide(false); });
+  back.addEventListener("click", function () { openGuide(false); });
+  noauto.addEventListener("change", function () { remember(noauto.checked); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") { openGuide(false); return; }
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if (guide.classList.contains("open")) return;
+    var d = DATA[current], st = state[key(d)] || {};
+    if (/^[1-4]$/.test(e.key)) setLabel(LABELS[+e.key - 1]);
+    else if ((e.key === "y" || e.key === "n") && d.origin === "modified" && st.label === "застосовує") save({ newpart: e.key === "y" ? "так" : "ні" });
+    else if (e.key === "j" || e.key === "ArrowDown") go(current + 1);
+    else if (e.key === "k" || e.key === "ArrowUp") go(current - 1);
+    else return;
+    e.preventDefault();
+  });
+  try { autoPref = localStorage.getItem("mt26-guide-noauto"); } catch (e) {}
+  noauto.checked = autoPref === "1";
+  var firstVisit = autoPref === null;
+  go(0); progress();
+  if (window.claude && window.claude.use) {
+    window.claude.use("db").then(function (store) {
+      if (!store) { if (firstVisit) openGuide(true); document.getElementById("status").textContent = "Хранилище недоступно — метки остаются только в окне."; return; }
+      db = store;
+      store.doc("prefs/guide").get().then(function (doc) {
+        var v = doc && doc.exists ? (doc.data() || {}) : null;
+        if (v) { noauto.checked = !!v.noauto; if (!v.noauto) openGuide(true); } else if (!noauto.checked) openGuide(true);
+      }).catch(function () { if (firstVisit) openGuide(true); });
+      store.collection("labels26").get().then(function (snap) {
+        snap.docs.forEach(function (doc) { var v = doc.data() || {}; state[doc.id] = { label: v.label || "", newpart: v.newpart || "", note: v.note || "" }; });
+        rail(); desk(); progress();
+        document.getElementById("status").textContent = "Сохранено меток: " + snap.size + ". Клавиши: 1–4 метка, y/n новая часть, j/k листать.";
+      }).catch(function () { document.getElementById("status").textContent = "Хранилище доступно, чтение не удалось."; });
+    });
+  } else { if (firstVisit) openGuide(true); document.getElementById("status").textContent = "Просмотр без хранилища — метки остаются только в этом окне."; }
+})();
+</script>

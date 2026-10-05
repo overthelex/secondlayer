@@ -1,0 +1,659 @@
+{
+ "cutoff": "2026-08-01",
+ "norms": [
+  {
+   "number": "I.4.17",
+   "origin": "modified",
+   "from_2002": "1.3",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "II.3",
+   "origin": "modified",
+   "from_2002": "2.2",
+   "read": 43,
+   "applied": [],
+   "applied_old_part": 2,
+   "contradicted": [
+    {
+     "doc_id": "court:24202999",
+     "doc_ref": "2а-6307/11/1270",
+     "date": "2012-04-19",
+     "stage": "first reading",
+     "by": "reader"
+    }
+   ],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 284
+  },
+  {
+   "number": "II.4",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "IV.1",
+   "origin": "modified",
+   "from_2002": "4.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.1",
+   "origin": "modified",
+   "from_2002": "5.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.2",
+   "origin": "modified",
+   "from_2002": "5.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 1,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.3",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.5",
+   "origin": "modified",
+   "from_2002": "5.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 1,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.6",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.7",
+   "origin": "new",
+   "from_2002": null,
+   "read": 34,
+   "applied": [
+    {
+     "doc_id": "court:66902626",
+     "doc_ref": "910/3047/17",
+     "date": "2017-05-31",
+     "stage": "outside the record",
+     "by": "judges"
+    },
+    {
+     "doc_id": "court:135653491",
+     "doc_ref": "910/2878/24",
+     "date": "2026-03-18",
+     "stage": "date-ordered search",
+     "by": "judges"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "court:66902626",
+    "doc_ref": "910/3047/17",
+    "date": "2017-05-31",
+    "stage": "outside the record",
+    "by": "judges"
+   },
+   "text_lag_years": 9.2,
+   "edrsr_term_hits": 2
+  },
+  {
+   "number": "V.8",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [
+    {
+     "doc_id": "court:25585425",
+     "doc_ref": "5004/923/12",
+     "date": "2012-08-08",
+     "stage": "date-ordered search",
+     "by": "judges"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "court:25585425",
+    "doc_ref": "5004/923/12",
+    "date": "2012-08-08",
+    "stage": "date-ordered search",
+    "by": "judges"
+   },
+   "text_lag_years": 14.0,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.9",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.10",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.11",
+   "origin": "modified",
+   "from_2002": "5.2",
+   "read": 33,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 25
+  },
+  {
+   "number": "V.12",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.13",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.14",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [
+    {
+     "doc_id": "court:42788651",
+     "doc_ref": "922/5789/14",
+     "date": "2015-02-11",
+     "stage": "date-ordered search",
+     "by": "judges"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "court:42788651",
+    "doc_ref": "922/5789/14",
+    "date": "2015-02-11",
+    "stage": "date-ordered search",
+    "by": "judges"
+   },
+   "text_lag_years": 11.5,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.15",
+   "origin": "modified",
+   "from_2002": "5.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.16",
+   "origin": "new",
+   "from_2002": null,
+   "read": 36,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 4
+  },
+  {
+   "number": "V.17",
+   "origin": "modified",
+   "from_2002": "5.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "V.18",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VI.2",
+   "origin": "modified",
+   "from_2002": "6.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VI.3",
+   "origin": "modified",
+   "from_2002": "6.1",
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VI.4",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VI.5",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VI.6",
+   "origin": "new",
+   "from_2002": null,
+   "read": 34,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 2
+  },
+  {
+   "number": "VI.7",
+   "origin": "new",
+   "from_2002": null,
+   "read": 34,
+   "applied": [
+    {
+     "doc_id": "amcu:364",
+     "doc_ref": "598-р",
+     "date": "2019-09-05",
+     "stage": "first reading",
+     "by": "judges"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "amcu:364",
+    "doc_ref": "598-р",
+    "date": "2019-09-05",
+    "stage": "first reading",
+    "by": "judges"
+   },
+   "text_lag_years": 6.9,
+   "edrsr_term_hits": 11
+  },
+  {
+   "number": "VI.8",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VI.9",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VII.2",
+   "origin": "modified",
+   "from_2002": "7.1",
+   "read": 35,
+   "applied": [],
+   "applied_old_part": 5,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 5
+  },
+  {
+   "number": "VIII.6",
+   "origin": "modified",
+   "from_2002": "2.1.8",
+   "read": 33,
+   "applied": [
+    {
+     "doc_id": "amcu:11103",
+     "doc_ref": "591-р",
+     "date": "2018-10-25",
+     "stage": "first reading",
+     "by": "judges, again"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "amcu:11103",
+    "doc_ref": "591-р",
+    "date": "2018-10-25",
+    "stage": "first reading",
+    "by": "judges, again"
+   },
+   "text_lag_years": 7.8,
+   "edrsr_term_hits": 2
+  },
+  {
+   "number": "VIII.7",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "VIII.8",
+   "origin": "new",
+   "from_2002": null,
+   "read": 41,
+   "applied": [
+    {
+     "doc_id": "amcu:7260",
+     "doc_ref": "467-р",
+     "date": "2018-09-13",
+     "stage": "first reading",
+     "by": "judges"
+    },
+    {
+     "doc_id": "amcu:11103",
+     "doc_ref": "591-р",
+     "date": "2018-10-25",
+     "stage": "first reading",
+     "by": "judges"
+    },
+    {
+     "doc_id": "amcu:1148",
+     "doc_ref": "694-р",
+     "date": "2021-12-21",
+     "stage": "first reading",
+     "by": "judges"
+    },
+    {
+     "doc_id": "amcu:1177",
+     "doc_ref": "723-р",
+     "date": "2021-12-29",
+     "stage": "first reading",
+     "by": "reader"
+    },
+    {
+     "doc_id": "amcu:109",
+     "doc_ref": "1028-р",
+     "date": "2025-12-25",
+     "stage": "first reading",
+     "by": "judges"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "amcu:7260",
+    "doc_ref": "467-р",
+    "date": "2018-09-13",
+    "stage": "first reading",
+    "by": "judges"
+   },
+   "text_lag_years": 7.9,
+   "edrsr_term_hits": 15
+  },
+  {
+   "number": "IX.2",
+   "origin": "modified",
+   "from_2002": "9.3",
+   "read": 33,
+   "applied": [],
+   "applied_old_part": 1,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 1
+  },
+  {
+   "number": "IX.4",
+   "origin": "modified",
+   "from_2002": "9.3",
+   "read": 43,
+   "applied": [],
+   "applied_old_part": 1,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 121
+  },
+  {
+   "number": "IX.6",
+   "origin": "new",
+   "from_2002": null,
+   "read": 32,
+   "applied": [
+    {
+     "doc_id": "amcu:1679",
+     "doc_ref": "223-р",
+     "date": "2021-04-22",
+     "stage": "first reading",
+     "by": "judges"
+    }
+   ],
+   "applied_old_part": 0,
+   "contradicted": [],
+   "verdict": "codifies",
+   "first_applied": {
+    "doc_id": "amcu:1679",
+    "doc_ref": "223-р",
+    "date": "2021-04-22",
+    "stage": "first reading",
+    "by": "judges"
+   },
+   "text_lag_years": 5.3,
+   "edrsr_term_hits": 0
+  },
+  {
+   "number": "X.3",
+   "origin": "modified",
+   "from_2002": "10.3",
+   "read": 69,
+   "applied": [],
+   "applied_old_part": 21,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 129
+  },
+  {
+   "number": "X.4",
+   "origin": "modified",
+   "from_2002": "10.3",
+   "read": 33,
+   "applied": [],
+   "applied_old_part": 5,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 20
+  },
+  {
+   "number": "XI.1",
+   "origin": "modified",
+   "from_2002": "11.1",
+   "read": 39,
+   "applied": [],
+   "applied_old_part": 4,
+   "contradicted": [],
+   "verdict": "announces",
+   "first_applied": null,
+   "text_lag_years": null,
+   "edrsr_term_hits": 34
+  }
+ ],
+ "summary": {
+  "new codifies": 6,
+  "new announces": 15,
+  "modified codifies": 1,
+  "modified announces": 17
+ }
+}
