@@ -1,0 +1,245 @@
+{
+ "source": "claude.ai/artifact/1DS9m6YLgFQm6S4PR5d7nB (db eu), exported 2026-10-05",
+ "labels": [
+  {
+   "id": "2002:1.3>1997:10",
+   "answer": "different"
+  },
+  {
+   "id": "2002:10.1.1>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2002:10.1.4>1997:10",
+   "answer": "different"
+  },
+  {
+   "id": "2002:10.4>1997:10",
+   "answer": "same rule"
+  },
+  {
+   "id": "2002:11.1>1997:41",
+   "answer": "same rule"
+  },
+  {
+   "id": "2002:2.1.1>1997:16",
+   "answer": "different"
+  },
+  {
+   "id": "2002:2.1.2>1997:26",
+   "answer": "different"
+  },
+  {
+   "id": "2002:2.1.3>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2002:2.1.7>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2002:2.1.8>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2002:2.1.9>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2002:2.2>1997:25",
+   "answer": "same rule"
+  },
+  {
+   "id": "2002:2.2>1997:52",
+   "answer": "same rule"
+  },
+  {
+   "id": "2002:4.1>1997:21",
+   "answer": "different"
+  },
+  {
+   "id": "2002:4.2.1>1997:36",
+   "answer": "different"
+  },
+  {
+   "id": "2002:4.2>1997:37",
+   "answer": "different"
+  },
+  {
+   "id": "2002:5.2>1997:15",
+   "answer": "same rule"
+  },
+  {
+   "id": "2002:6.3>1997:30",
+   "answer": "same rule"
+  },
+  {
+   "id": "2002:8.2>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2026:I.4.10>2024:99",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:I.4.16>2024:94",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:I.4.19>2024:99",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:I.4.25>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2026:I.4.30>2024:38",
+   "answer": "rendered"
+  },
+  {
+   "id": "2026:I.4.36>2024:94",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:I.4.9>2024:85",
+   "answer": "rendered"
+  },
+  {
+   "id": "2026:II.2>2024:8",
+   "answer": "different"
+  },
+  {
+   "id": "2026:II.4>1997:27",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:IV.1>1997:13",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:IV.1>1997:16",
+   "answer": "different"
+  },
+  {
+   "id": "2026:IV.2>1997:36",
+   "answer": "different"
+  },
+  {
+   "id": "2026:IV.4>1997:53",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:IV.4>2024:105",
+   "answer": "different"
+  },
+  {
+   "id": "2026:IX.2>1997:24",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:V.17>2024:32",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:V.17>2024:47",
+   "answer": "different"
+  },
+  {
+   "id": "2026:V.1>1997:15",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:V.3>2024:32",
+   "answer": "different"
+  },
+  {
+   "id": "2026:V.6>1997:7",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VI.2>1997:30",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:VI.3>2024:41",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:VI.4>1997:12",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VI.4>2024:38",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VI.4>2024:39",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:VI.6>1997:43",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:VI.7>2024:43",
+   "answer": "rendered"
+  },
+  {
+   "id": "2026:VI.8>2024:71",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:VI.9>1997:18",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:VI.9>2024:30",
+   "answer": "rendered"
+  },
+  {
+   "id": "2026:VII.2>2024:113",
+   "answer": "rendered"
+  },
+  {
+   "id": "2026:VIII.1>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VIII.2>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VIII.2>2024:105",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VIII.4>1997:53",
+   "answer": "different"
+  },
+  {
+   "id": "2026:VIII.7>2024:113",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:X.2>1997:10",
+   "answer": "same rule"
+  },
+  {
+   "id": "2026:X.2>2024:106",
+   "answer": "different"
+  },
+  {
+   "id": "2026:X.3>1997:10",
+   "answer": "different"
+  },
+  {
+   "id": "2026:X.3>2024:106",
+   "answer": "different"
+  },
+  {
+   "id": "2026:X.4>1997:10",
+   "answer": "same rule"
+  }
+ ]
+}
