@@ -1,0 +1,47 @@
+{
+ "source": "reader, 2026-10-05, on the 7 typology splits of typology_ua.md v1",
+ "labels": [
+  {
+   "version": "2002",
+   "pid": "1.3",
+   "type": "norm",
+   "note": "purpose + the whole glossary + the 50/70% thresholds in one parsed item; typed by the thresholds"
+  },
+  {
+   "version": "2002",
+   "pid": "10.1.6.3",
+   "type": "housekeeping",
+   "note": "bare sub-stage name, asserts no criterion"
+  },
+  {
+   "version": "2002",
+   "pid": "3.1",
+   "type": "scope",
+   "note": "objects of analysis: what the analysis covers"
+  },
+  {
+   "version": "2026",
+   "pid": "III.1",
+   "type": "scope",
+   "note": "same as 2002 3.1, extended"
+  },
+  {
+   "version": "2002",
+   "pid": "5.2",
+   "type": "norm",
+   "note": "'must take into account': a criterion"
+  },
+  {
+   "version": "2026",
+   "pid": "IV.3",
+   "type": "norm",
+   "note": "excludes captive intermediate output from 'product'"
+  },
+  {
+   "version": "2026",
+   "pid": "V.15",
+   "type": "norm",
+   "note": "supply-side substitutability with the two-year criterion"
+  }
+ ]
+}
