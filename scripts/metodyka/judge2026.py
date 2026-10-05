@@ -48,7 +48,10 @@ def prompt(protocol: str, item: dict, body: str) -> tuple[str, str]:
     system = TASK + (TASK_MODIFIED if item["origin"] == "modified" else "") + "\n\n--- ПРОТОКОЛ ---\n" + protocol
     user = f"ПУНКТ {item['number']} МЕТОДИКИ 2026 РОКУ:\n{item['text']}\n\n"
     if item["origin"] == "modified":
-        user += f"ВІДПОВІДНИЙ ПУНКТ {item['from_2002']} МЕТОДИКИ 2002 РОКУ:\n{item['text_2002']}\n\n"
+        many = len(item.get("from_2002_all") or []) > 1
+        head = (f"ВІДПОВІДНІ ПУНКТИ {', '.join(item['from_2002_all'])} МЕТОДИКИ 2002 РОКУ" if many
+                else f"ВІДПОВІДНИЙ ПУНКТ {item['from_2002']} МЕТОДИКИ 2002 РОКУ")
+        user += f"{head}:\n{item['text_2002']}\n\n"
     return system, user + f"--- УРИВОК З РІШЕННЯ ---\n{body}"
 
 
