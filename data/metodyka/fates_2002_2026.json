@@ -1,0 +1,500 @@
+{
+ "provisions": [
+  {
+   "number": "1.1",
+   "type": "housekeeping",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "1.2",
+   "type": "scope",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "I.1"
+  },
+  {
+   "number": "1.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "I.4.17"
+  },
+  {
+   "number": "2.1",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "2.1.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "2.1.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "IV.4"
+  },
+  {
+   "number": "2.1.4",
+   "type": "housekeeping",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "II.1"
+  },
+  {
+   "number": "2.1.5",
+   "type": "housekeeping",
+   "use": "applied",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.6",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "VII.1"
+  },
+  {
+   "number": "2.1.7",
+   "type": "housekeeping",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "VIII.1"
+  },
+  {
+   "number": "2.1.8",
+   "type": "housekeeping",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "VIII.4"
+  },
+  {
+   "number": "2.1.9",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.10",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "2.1.11",
+   "type": "housekeeping",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "2.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "II.3"
+  },
+  {
+   "number": "3.1",
+   "type": "scope",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "III.1"
+  },
+  {
+   "number": "3.2",
+   "type": "scope",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "III.1"
+  },
+  {
+   "number": "3.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "III.2"
+  },
+  {
+   "number": "3.4",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "III.3"
+  },
+  {
+   "number": "4.1",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "IV.1"
+  },
+  {
+   "number": "4.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.3",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "IV.2"
+  },
+  {
+   "number": "4.2.4",
+   "type": "norm",
+   "use": "never cited",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "4.3",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "IV.3"
+  },
+  {
+   "number": "4.4",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "IV.4"
+  },
+  {
+   "number": "5.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "V.1"
+  },
+  {
+   "number": "5.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "V.11"
+  },
+  {
+   "number": "5.3",
+   "type": "definition",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "5.4",
+   "type": "definition",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "I.4.9"
+  },
+  {
+   "number": "6.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "VI.1"
+  },
+  {
+   "number": "6.2",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "VI.2"
+  },
+  {
+   "number": "6.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "7.1",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "I.4.38"
+  },
+  {
+   "number": "7.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "7.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "VII.2"
+  },
+  {
+   "number": "8.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "VIII.1"
+  },
+  {
+   "number": "8.2",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "VIII.2"
+  },
+  {
+   "number": "8.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "VIII.3"
+  },
+  {
+   "number": "8.4",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "I.4.25"
+  },
+  {
+   "number": "8.5",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "VIII.5"
+  },
+  {
+   "number": "8.6",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "VIII.6"
+  },
+  {
+   "number": "9.1",
+   "type": "definition",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "IX.1"
+  },
+  {
+   "number": "9.2",
+   "type": "definition",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "I.4.3"
+  },
+  {
+   "number": "9.3",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "IX.2"
+  },
+  {
+   "number": "10.1",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "II.2"
+  },
+  {
+   "number": "10.1.1",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.3",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "10.1.4",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.5",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.6",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.6.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.1.6.2",
+   "type": "norm",
+   "use": "applied",
+   "fate": "dropped",
+   "in_2026": null
+  },
+  {
+   "number": "10.1.6.3",
+   "type": "housekeeping",
+   "use": "never cited",
+   "fate": "kept",
+   "in_2026": "X.1"
+  },
+  {
+   "number": "10.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.1",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.2",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "modified",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.3",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.2.4",
+   "type": "norm",
+   "use": "never cited",
+   "fate": "kept",
+   "in_2026": "X.2"
+  },
+  {
+   "number": "10.3",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "X.3"
+  },
+  {
+   "number": "10.4",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "X.3"
+  },
+  {
+   "number": "10.5",
+   "type": "norm",
+   "use": "cited only",
+   "fate": "kept",
+   "in_2026": "X.5"
+  },
+  {
+   "number": "11.1",
+   "type": "norm",
+   "use": "applied",
+   "fate": "modified",
+   "in_2026": "XI.1"
+  }
+ ],
+ "all": {
+  "applied": {
+   "kept": 10,
+   "modified": 12,
+   "dropped": 3
+  },
+  "cited only": {
+   "kept": 17,
+   "modified": 14,
+   "dropped": 7
+  },
+  "never cited": {
+   "kept": 2,
+   "modified": 0,
+   "dropped": 1
+  }
+ },
+ "norms": {
+  "applied": {
+   "kept": 7,
+   "modified": 10,
+   "dropped": 2
+  },
+  "cited only": {
+   "kept": 15,
+   "modified": 11,
+   "dropped": 5
+  },
+  "never cited": {
+   "kept": 1,
+   "modified": 0,
+   "dropped": 1
+  }
+ }
+}
