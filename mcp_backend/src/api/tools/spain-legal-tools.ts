@@ -230,7 +230,7 @@ Util para analizar tendencias en la aplicacion del RGPD en Espana.`,
           estado_consolidacion,
           url_eli,
           url_html,
-          ts_headline('spanish', coalesce(full_text, ''), to_tsquery('spanish', $1),
+          safe_ts_headline('spanish'::regconfig, coalesce(full_text, ''), to_tsquery('spanish', $1),
             'MaxWords=60, MinWords=30, StartSel=<<, StopSel=>>') AS snippet
         FROM spain_boe_legislation
         WHERE ${whereClause}
@@ -378,7 +378,7 @@ Util para analizar tendencias en la aplicacion del RGPD en Espana.`,
           conceptos,
           articulos_infringidos,
           pdf_url,
-          ts_headline('spanish', coalesce(extracto, ''), to_tsquery('spanish', $1),
+          safe_ts_headline('spanish'::regconfig, coalesce(extracto, ''), to_tsquery('spanish', $1),
             'MaxWords=60, MinWords=30, StartSel=<<, StopSel=>>') AS snippet
         FROM spain_aepd_resolutions
         WHERE ${whereClause}
