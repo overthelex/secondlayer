@@ -73,6 +73,47 @@ async function dropIndexes(pool: Pool, tableName: string): Promise<IndexDef[]> {
   return result;
 }
 
+/**
+ * Persist index definitions so a run that dies between drop and recreate
+ * (container restart, OOM, deploy) leaves a durable record to repair from.
+ */
+async function saveIndexDefs(pool: Pool, tableName: string, indexes: IndexDef[]): Promise<void> {
+  for (const idx of indexes) {
+    await pool.query(
+      `INSERT INTO csv_import_saved_indexes
+         (table_name, index_name, index_def, is_constraint, constraint_type)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (table_name, index_name) DO UPDATE SET
+         index_def = EXCLUDED.index_def,
+         is_constraint = EXCLUDED.is_constraint,
+         constraint_type = EXCLUDED.constraint_type,
+         saved_at = CURRENT_TIMESTAMP`,
+      [tableName, idx.indexname, idx.indexdef, idx.is_constraint, idx.constraint_type]
+    );
+  }
+}
+
+/** Index defs left behind by a previous run that never got to recreate them. */
+async function loadOrphanedIndexDefs(pool: Pool, tableName: string): Promise<IndexDef[]> {
+  const { rows } = await pool.query<{
+    index_name: string; index_def: string; is_constraint: boolean; constraint_type: string | null;
+  }>(
+    `SELECT index_name, index_def, is_constraint, constraint_type
+       FROM csv_import_saved_indexes WHERE table_name = $1`,
+    [tableName]
+  );
+  return rows.map(r => ({
+    indexname: r.index_name,
+    indexdef: r.index_def,
+    is_constraint: r.is_constraint,
+    constraint_type: r.constraint_type,
+  }));
+}
+
+async function clearSavedIndexDefs(pool: Pool, tableName: string): Promise<void> {
+  await pool.query(`DELETE FROM csv_import_saved_indexes WHERE table_name = $1`, [tableName]);
+}
+
 async function recreateIndexes(pool: Pool, tableName: string, indexes: IndexDef[]): Promise<void> {
   for (const idx of indexes) {
     if (idx.is_constraint && idx.constraint_type === 'u') {
@@ -122,7 +163,21 @@ export async function importCsv(
     // daily reimport permanently consumed ~N sequence values and the id
     // sequence eventually overflowed its type (see migration 017).
     await pool.query(`TRUNCATE ${config.tableName} RESTART IDENTITY`);
-    savedIndexes = await dropIndexes(pool, config.tableName);
+
+    // Defs orphaned by a previous run that died before recreating its indexes.
+    // Merged in (by index name) so this run rebuilds them rather than leaving
+    // the table permanently unindexed.
+    const orphaned = await loadOrphanedIndexDefs(pool, config.tableName);
+    if (orphaned.length > 0) {
+      console.log(`  Found ${orphaned.length} index(es) orphaned by a previous run — will rebuild`);
+    }
+
+    const dropped = await dropIndexes(pool, config.tableName);
+    const merged = new Map<string, IndexDef>();
+    for (const idx of [...orphaned, ...dropped]) merged.set(idx.indexname, idx);
+    savedIndexes = [...merged.values()];
+
+    await saveIndexDefs(pool, config.tableName, savedIndexes);
 
     // Disable autovacuum during bulk load
     await pool.query(`ALTER TABLE ${config.tableName} SET (autovacuum_enabled = false)`);
@@ -248,6 +303,9 @@ export async function importCsv(
     const idxStart = Date.now();
     await recreateIndexes(pool, config.tableName, savedIndexes);
     console.log(`  Indexes recreated in ${((Date.now() - idxStart) / 1000).toFixed(1)}s`);
+
+    // Only now are the defs safe to forget.
+    await clearSavedIndexDefs(pool, config.tableName);
 
     await pool.query(`ALTER TABLE ${config.tableName} SET (autovacuum_enabled = true)`);
     console.log(`  Running ANALYZE ${config.tableName}...`);
