@@ -83,14 +83,6 @@ export const tools: Tool[] = [
       { name: 'case_ids', type: 'string[]', required: false, description: 'ID справ для аналізу' },
     ],
   },
-  { name: 'get_similar_reasoning', category: 'Analysis', description: 'Подібні судові обґрунтування за векторною схожістю', cost: '$0.01–$0.03',
-    params: [
-      { name: 'query', type: 'string', required: true, description: 'Текст обґрунтування' },
-      { name: 'section_type', type: 'string', required: false, description: 'Тип секції' },
-      { name: 'date_from', type: 'string', required: false, description: 'Дата від' },
-      { name: 'date_to', type: 'string', required: false, description: 'Дата до' },
-    ],
-  },
   { name: 'get_citation_graph', category: 'Analysis', description: 'Граф цитувань між справами', cost: '$0.005–$0.02',
     params: [
       { name: 'case_id', type: 'string', required: true, description: 'ID справи' },
