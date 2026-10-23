@@ -144,12 +144,12 @@ export class CacheAdapter implements ICachePort {
    * Версия Redis роли не играет, в отличие от `EXPIRE ... NX`, который есть
    * только с 7.0.
    */
-  async increment(key: string, ttlSeconds: number): Promise<number> {
+  async increment(key: string, ttlSeconds: number, by: number = 1): Promise<number> {
     const results = await this.withTimeout(
       this.client
         .multi()
         .set(key, '0', { EX: ttlSeconds, NX: true })
-        .incr(key)
+        .incrBy(key, by)
         .exec(),
       'INCR',
     );

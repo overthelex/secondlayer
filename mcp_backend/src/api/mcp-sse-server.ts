@@ -10,6 +10,8 @@
  */
 
 import { Request, Response } from 'express';
+import { acquireMcpCall } from '../services/mcp-usage-limits.js';
+import type { Queryable } from '../services/tool-fixed-price.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
 import { ToolRegistry } from './tool-registry.js';
@@ -64,7 +66,9 @@ export class MCPSSEServer {
   constructor(
     private toolRegistry: ToolRegistry,
     private costTracker: CostTracker,
-    private creditService?: CreditService
+    private creditService?: CreditService,
+    // For the per-account call limits (mcp_usage_limits); without it /sse is not limited.
+    private db?: Queryable
   ) {}
 
   /**
@@ -423,6 +427,21 @@ export class MCPSSEServer {
     const requestId = `sse-${request.id}-${Date.now()}`;
     const startTime = Date.now();
 
+    // Per-account call limits, the same as on /v1/mcp and /v2/mcp.
+    let releaseLimit = () => {};
+    if (context.userId && this.db) {
+      const limit = await acquireMcpCall(this.db, context.userId, name, (args || {}) as Record<string, any>);
+      if (!limit.allowed) {
+        this.sendSSEMessage(res, {
+          jsonrpc: '2.0',
+          id: request.id,
+          result: { content: [{ type: 'text', text: limit.message }], isError: true },
+        });
+        return;
+      }
+      releaseLimit = limit.release;
+    }
+
     try {
       // 1. Phase 2 Billing: Check credits BEFORE execution
       if (context.userId && this.creditService) {
@@ -642,6 +661,8 @@ export class MCPSSEServer {
           },
         },
       });
+    } finally {
+      releaseLimit();
     }
   }
 

@@ -28,8 +28,10 @@ export interface ICachePort {
    *
    * This abstracts the common rate-limiting pattern:
    *   MULTI → INCR key → EXPIRE key ttl → EXEC
+   *
+   * `by` (default 1) adds more than one in the same transaction (INCRBY).
    */
-  increment(key: string, ttlSeconds: number): Promise<number>;
+  increment(key: string, ttlSeconds: number, by?: number): Promise<number>;
 
   /** Connectivity check. */
   ping(): Promise<boolean>;
