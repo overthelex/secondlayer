@@ -679,5 +679,26 @@ describe('EdsrUnifiedSearchTool', () => {
       expect(parsed.structural_filter).toBeUndefined();
       expect(mockFtsService.filterDocIdsByConstraints).not.toHaveBeenCalled();
     });
+
+    it('reports the candidate pool, not a corpus total', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      // Two chunks of doc 555 plus one of 666: the pool is 2 documents, not 3 chunks,
+      // and certainly not "2 matching decisions in ЄДРСР".
+      mockVectorizer.semanticSearch = jest.fn(() => Promise.resolve([
+        vectorHit(555, 0.9), vectorHit(555, 0.8), vectorHit(666, 0.7),
+      ]));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+
+      const result = await tool.executeTool('search_court_decisions', {
+        mode: 'semantic', query: 'тест', limit: 1,
+      });
+
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+      expect(parsed.total).toBeUndefined();
+      expect(parsed.candidates).toBe(2);
+      expect(parsed.returned).toBe(1);
+      expect(parsed.note).toContain('limit');
+      expect(mockVectorizer.semanticSearch).toHaveBeenCalledWith('тест', expect.anything(), 3);
+    });
   });
 });
