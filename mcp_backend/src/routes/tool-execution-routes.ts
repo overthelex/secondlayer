@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { mcpUsageLimitMiddleware } from '../services/mcp-usage-limits.js';
 import { v4 as uuidv4 } from 'uuid';
 import { dualAuth, AuthenticatedRequest as DualAuthRequest } from '../middleware/dual-auth.js';
 import { createBalanceCheckMiddleware } from '../middleware/balance-check.js';
@@ -249,6 +250,9 @@ export function createToolExecutionRoutes(deps: {
   });
 
   // GET / — List available tools
+  // Per-account call limits (mcp_usage_limits), the same as on the MCP transports.
+  const usageLimits = mcpUsageLimitMiddleware(deps.db);
+
   router.get('/', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
     try {
       const gatewayEnabled = process.env.ENABLE_UNIFIED_GATEWAY === 'true';
@@ -297,7 +301,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /batch — Batch tool calls (must be before /:toolName)
-  router.post('/batch', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.post('/batch', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { calls } = req.body;
 
@@ -408,7 +412,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName/stream — Dedicated SSE streaming endpoint
-  router.post('/:toolName/stream', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName/stream', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const streamRequestId = `stream-${uuidv4()}`;
     const streamStartTime = Date.now();
 
@@ -492,7 +496,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName — Execute MCP tool (with SSE support and cost tracking)
-  router.post('/:toolName', dualAuth as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const requestId = uuidv4();
     const startTime = Date.now();
 

@@ -66,6 +66,7 @@ import { createTimeEntryRoutes } from './routes/time-entry-routes.js';
 import { createInvoiceRoutes } from './routes/invoice-routes.js';
 import { getLLMManager } from './utils/llm-client-manager.js';
 import { setRateLimitCache } from './middleware/rate-limit.js';
+import { setMcpUsageLimitCache } from './services/mcp-usage-limits.js';
 import { setUploadRateLimitCache } from './middleware/upload-rate-limit.js';
 import { requireEmailVerified } from './middleware/require-email-verified.js';
 import { createClassificationRoutes } from './routes/classification-routes.js';
@@ -1076,6 +1077,7 @@ class HTTPMCPServer {
         setAuthCache(cache);
         setOidcCache(cache);
         setRateLimitCache(cache);
+        setMcpUsageLimitCache(cache);
         setUploadRateLimitCache(cache);
         // EDRSR cache service (fulltext, metadata, FTS results)
         const { EdsrCacheService } = await import('./services/edrsr-cache-service.js');

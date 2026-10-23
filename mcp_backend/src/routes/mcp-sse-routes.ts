@@ -28,6 +28,7 @@ import { CreditService } from '../services/credit-service.js';
 import { BillingService } from '../services/billing-service.js';
 import { FixedPriceBilling } from '../services/fixed-price-billing.js';
 import { getFixedToolPrice, FixedToolPrice } from '../services/tool-fixed-price.js';
+import { acquireMcpCall } from '../services/mcp-usage-limits.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -202,6 +203,8 @@ export function createMCPSSERoutes(deps: {
       const args = request.params.arguments || {};
       const requestId = `mcp-v1-${uuidv4()}`;
       const startTime = Date.now();
+      let releaseLimit = () => {};
+      let limitWarning: string | undefined;
 
       try {
         logger.info('[MCP] Tool call', { tool: toolName, userId: safeUserId });
@@ -222,6 +225,18 @@ export function createMCPSSERoutes(deps: {
             content: [{ type: 'text', text: `Error: tool '${toolName}' is not available on this endpoint.` }],
             isError: true,
           };
+        }
+
+        // Per-account call limits (mcp_usage_limits): concurrency, per-minute/hour/day and a
+        // daily quota of full decision texts. Checked per call, so they hold for API keys and
+        // OAuth alike and across all of the account's sessions.
+        if (userId) {
+          const limit = await acquireMcpCall(deps.db, userId, toolName, args as Record<string, any>);
+          if (!limit.allowed) {
+            return { content: [{ type: 'text', text: limit.message }], isError: true };
+          }
+          releaseLimit = limit.release;
+          limitWarning = limit.warning;
         }
 
         // Billing gate BEFORE execution.
@@ -361,8 +376,9 @@ export function createMCPSSERoutes(deps: {
           }
         }
 
+        const content = result.content || [{ type: 'text', text: JSON.stringify(result, null, 2) }];
         return {
-          content: result.content || [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          content: limitWarning ? [...content, { type: 'text', text: limitWarning }] : content,
         };
       } catch (error: any) {
         logger.error('[MCP] Tool execution error', { tool: toolName, error: error.message });
@@ -372,6 +388,8 @@ export function createMCPSSERoutes(deps: {
           content: [{ type: 'text', text: `Error: ${error.message}` }],
           isError: true,
         };
+      } finally {
+        releaseLimit();
       }
     });
 

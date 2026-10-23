@@ -284,7 +284,8 @@ export function createAppServices(
   const mcpSSEServer = new MCPSSEServer(
     tools.toolRegistry,
     billing.costTracker,
-    billing.creditService
+    billing.creditService,
+    coreServices.db
   );
   logger.info('MCP SSE Server initialized with Phase 2 billing support');
 
