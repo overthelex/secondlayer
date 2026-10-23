@@ -20,6 +20,8 @@ const OBJ_TYPES = [1, 2, 4, 6];
 const OBJ_STATES = [1, 2];
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
+// Per-source cap for the individual-owner name fan-out in the dossier.
+const OWNER_FANOUT_LIMIT = 10;
 
 // Columns returned by the list tools — compact, panel-friendly (no raw_data).
 const LIST_COLUMNS = `id, obj_type, obj_type_name, obj_state, app_number, app_date,
@@ -420,6 +422,58 @@ export class IpObjectsTools extends BaseToolHandler {
   }
 
   /**
+   * Owner check for the dossier. Legal entities (owner_edrpou present) are
+   * resolved deterministically via the state register. Individuals have no
+   * РНОКПП in the TM registry, so the only key is the full name — fan out
+   * best-effort across public registers and mark everything as name-only
+   * probable matches (однофамільці possible; owner_address is attached for
+   * manual cross-checking). A downed service never fails the dossier: it is
+   * reported as { skipped, reason: 'service_unavailable' } instead of null,
+   * so "nothing to check" and "service down" stay distinguishable.
+   */
+  private async buildOwnerCheck(tm: any): Promise<any> {
+    if (tm.owner_edrpou) {
+      const entity = await this.callTool('openreyestr_get_by_edrpou', { edrpou: tm.owner_edrpou });
+      return entity ?? { skipped: true, reason: 'service_unavailable' };
+    }
+    const ownerName = String(tm.owner_name ?? '').trim();
+    if (!ownerName) return { skipped: true, reason: 'no_owner_identifier' };
+
+    const sources: Array<[key: string, tool: string, args: any]> = [
+      ['debtors', 'openreyestr_search_debtors', { query: ownerName, limit: OWNER_FANOUT_LIMIT }],
+      ['enforcement_proceedings', 'openreyestr_search_enforcement_proceedings', { query: ownerName, limit: OWNER_FANOUT_LIMIT }],
+      ['bankruptcy_cases', 'openreyestr_search_bankruptcy_cases', { query: ownerName, limit: OWNER_FANOUT_LIMIT }],
+      ['sanctions', 'search_registry', { registry: 'sanctions', filters: { name: ownerName }, limit: OWNER_FANOUT_LIMIT }],
+      // ФОП / участь у юрособах
+      ['business_entities', 'openreyestr_search_entities', { query: ownerName, limit: OWNER_FANOUT_LIMIT }],
+      // решта портфеля ІВ цього власника
+      ['ip_portfolio', 'search_ip_objects', { owner: ownerName, limit: OWNER_FANOUT_LIMIT }],
+      ['court_hearings', 'search_court_hearing_schedule', { source: 'opendata', participant: ownerName, limit: OWNER_FANOUT_LIMIT }],
+    ];
+    const settled = await Promise.all(sources.map(async ([key, toolName, toolArgs]) => {
+      const res = await this.callTool(toolName, toolArgs);
+      return [key, res ?? { skipped: true, reason: 'service_unavailable' }] as const;
+    }));
+
+    return {
+      match_basis: 'name_only',
+      owner_name: ownerName,
+      owner_address: this.extractOwnerAddress(tm.raw_data),
+      caveat: 'Збіги знайдено лише за ПІБ — у реєстрі ТМ немає РНОКПП, можливі однофамільці. Звірте owner_address із адресами у знайдених записах вручну.',
+      probable_matches: Object.fromEntries(settled),
+    };
+  }
+
+  /** Owner address lives only in the SIS dossier (raw_data), not in a column. */
+  private extractOwnerAddress(raw: any): any {
+    const party = raw?.HolderDetails?.Holder?.[0]?.HolderAddressBook
+      ?? raw?.ApplicantDetails?.Applicant?.[0]?.ApplicantAddressBook;
+    const address = party?.FormattedNameAddress?.Address;
+    if (!address) return null;
+    return address.FreeFormatAddress?.FreeFormatAddressLine ?? address.FreeFormatAddressLine ?? address;
+  }
+
+  /**
    * One-shot full trademark dossier (matches the reference artifact layout):
    * disambiguation → registry card + events + legal_status → collisions →
    * court practice → temporal art.6 → owner check. Registry parts are
@@ -491,10 +545,8 @@ export class IpObjectsTools extends BaseToolHandler {
         }
       }
 
-      // 4-6. Enrichment via other tools (best-effort, null when a service is down).
-      const owner_check = tm.owner_edrpou
-        ? await this.callTool('openreyestr_get_by_edrpou', { edrpou: tm.owner_edrpou })
-        : null;
+      // 4-6. Enrichment via other tools (best-effort, skip markers when a service is down).
+      const owner_check = await this.buildOwnerCheck(tm);
       const court_practice = await this.callTool('search_court_decisions', {
         mode: 'fulltext', justice_kind: 3, limit: 5,
         query: `${tm.title_ua} свідоцтво недійсне торговельна марка`,
@@ -522,7 +574,7 @@ export class IpObjectsTools extends BaseToolHandler {
         court_practice,
         temporal,
         owner_check,
-        guidance: 'Сформуй повне досьє за розділами: (1) Дизамбігуація та мета; (2) Реєстрові дані та статус; (3) Обсяг охорони (класи МКТП); (4) Правоволодіння; (5) Перевірка на «зіткнення» — таблиця схожих позначень із рівнем ризику, познач найсильніший блокер; (6) Судова практика з ланцюгом інстанцій і статусом позицій; (7) Темпоральний зріз ст. 6 ЗУ №3689-XII (редакція на дату заявки vs чинна); (8) Перевірка правовласника; (9) Підсумок і ризики.',
+        guidance: 'Сформуй повне досьє за розділами: (1) Дизамбігуація та мета; (2) Реєстрові дані та статус; (3) Обсяг охорони (класи МКТП); (4) Правоволодіння; (5) Перевірка на «зіткнення» — таблиця схожих позначень із рівнем ризику, познач найсильніший блокер; (6) Судова практика з ланцюгом інстанцій і статусом позицій; (7) Темпоральний зріз ст. 6 ЗУ №3689-XII (редакція на дату заявки vs чинна); (8) Перевірка правовласника — якщо owner_check.match_basis="name_only", познач збіги як ймовірні (можливі однофамільці) і запропонуй адресну звірку за owner_address; (9) Підсумок і ризики.',
       };
       return this.wrapResponse(dossier);
     } catch (error: any) {

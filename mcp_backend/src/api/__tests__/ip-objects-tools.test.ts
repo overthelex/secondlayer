@@ -209,5 +209,95 @@ describe('IpObjectsTools', () => {
     // enrichment tools were orchestrated via the registry
     const called = registry.executeTool.mock.calls.map((c: any[]) => c[0]);
     expect(called).toEqual(expect.arrayContaining(['search_court_decisions', 'get_legislation_section']));
+    // legal entity: owner check via EDRPOU, no skip marker
+    expect(called).toContain('openreyestr_get_by_edrpou');
+    expect(p.owner_check).toEqual({ ok: true });
+  });
+
+  // A dossier DB mock: disambiguation + card (customisable) + no events/collisions.
+  function makeDossierDb(cardRow: any) {
+    return makeDb((sql) => {
+      if (sql.includes('ip_object_events')) return { rows: [] };
+      if (sql.includes('similarity(title_ua')) return { rows: [] };
+      if (sql.includes('obj_type = 4 ORDER BY obj_state')) return { rows: [cardRow] };
+      return { rows: [{ obj_type: 4, obj_type_name: 'Торговельні марки', obj_state: 2,
+        app_number: cardRow.app_number, registration_number: cardRow.registration_number,
+        title_ua: cardRow.title_ua, owner_name: cardRow.owner_name, status: 'green' }] };
+    });
+  }
+
+  it('get_trademark_dossier marks owner_check as service_unavailable when the EDRPOU lookup fails', async () => {
+    const db = makeDossierDb({ ...tmRow, obj_state: 2, registration_number: '67482', raw_data: {} });
+    const registry = { executeTool: jest.fn(async (name: string) =>
+      name === 'openreyestr_get_by_edrpou'
+        ? { isError: true, content: [{ type: 'text', text: 'down' }] }
+        : { content: [{ type: 'text', text: '{"ok":true}' }] }) };
+    const tool = new IpObjectsTools(db, registry);
+    const p = parse(await tool.executeTool('get_trademark_dossier', { number: '67482' }));
+    expect(p.owner_check).toEqual({ skipped: true, reason: 'service_unavailable' });
+  });
+
+  it('get_trademark_dossier fans out by name for an individual owner (no EDRPOU)', async () => {
+    const individual = {
+      ...tmRow, obj_state: 2, registration_number: '67482',
+      owner_name: 'Дьяконенко Олександр Євгенович', owner_edrpou: null, owner_kind: 'individual',
+      raw_data: { HolderDetails: { Holder: [{ HolderAddressBook: { FormattedNameAddress: {
+        Address: { AddressCountryCode: 'UA', FreeFormatAddress: { FreeFormatAddressLine: 'вул. Тестова, 1, м. Київ' } },
+      } } }] } },
+    };
+    const db = makeDossierDb(individual);
+    const registry = { executeTool: jest.fn(async (name: string) =>
+      name === 'openreyestr_search_debtors'
+        ? { content: [{ type: 'text', text: '{"results":[{"debtor_name":"Дьяконенко О.Є."}]}' }] }
+        : { content: [{ type: 'text', text: '{"results":[]}' }] }) };
+    const tool = new IpObjectsTools(db, registry);
+    const p = parse(await tool.executeTool('get_trademark_dossier', { number: '67482' }));
+
+    const check = p.owner_check;
+    expect(check.skipped).toBeUndefined();
+    expect(check.match_basis).toBe('name_only');
+    expect(check.owner_address).toBe('вул. Тестова, 1, м. Київ');
+    expect(check.probable_matches.debtors.results[0].debtor_name).toBe('Дьяконенко О.Є.');
+    expect(Object.keys(check.probable_matches)).toEqual(expect.arrayContaining([
+      'debtors', 'enforcement_proceedings', 'bankruptcy_cases', 'sanctions',
+      'business_entities', 'ip_portfolio', 'court_hearings',
+    ]));
+
+    const calls = registry.executeTool.mock.calls;
+    const byTool = (n: string) => calls.filter((c: any[]) => c[0] === n).map((c: any[]) => c[1]);
+    expect(calls.map((c: any[]) => c[0])).not.toContain('openreyestr_get_by_edrpou');
+    expect(byTool('openreyestr_search_debtors')[0]).toMatchObject({ query: 'Дьяконенко Олександр Євгенович' });
+    expect(byTool('search_registry')[0]).toMatchObject({ registry: 'sanctions', filters: { name: 'Дьяконенко Олександр Євгенович' } });
+    expect(byTool('search_ip_objects')[0]).toMatchObject({ owner: 'Дьяконенко Олександр Євгенович' });
+    expect(byTool('search_court_hearing_schedule')[0]).toMatchObject({ participant: 'Дьяконенко Олександр Євгенович' });
+    // volume capped per source
+    for (const [name, args] of calls as unknown as Array<[string, any]>) {
+      if (name !== 'search_court_decisions' && name !== 'get_legislation_section') {
+        expect(args.limit).toBeLessThanOrEqual(10);
+      }
+    }
+  });
+
+  it('get_trademark_dossier marks a failed fan-out source without failing the dossier', async () => {
+    const individual = { ...tmRow, obj_state: 2, registration_number: '67482',
+      owner_name: 'Дьяконенко Олександр Євгенович', owner_edrpou: null, raw_data: {} };
+    const db = makeDossierDb(individual);
+    const registry = { executeTool: jest.fn(async (name: string) => {
+      if (name === 'openreyestr_search_debtors') throw new Error('service down');
+      return { content: [{ type: 'text', text: '{"results":[]}' }] };
+    }) };
+    const tool = new IpObjectsTools(db, registry);
+    const p = parse(await tool.executeTool('get_trademark_dossier', { number: '67482' }));
+    expect(p.owner_check.probable_matches.debtors).toEqual({ skipped: true, reason: 'service_unavailable' });
+    expect(p.owner_check.probable_matches.sanctions).toEqual({ results: [] });
+  });
+
+  it('get_trademark_dossier skips owner_check with a reason when there is no owner at all', async () => {
+    const db = makeDossierDb({ ...tmRow, obj_state: 2, registration_number: '67482',
+      owner_name: null, owner_edrpou: null, raw_data: {} });
+    const registry = { executeTool: jest.fn(async () => ({ content: [{ type: 'text', text: '{"ok":true}' }] })) };
+    const tool = new IpObjectsTools(db, registry);
+    const p = parse(await tool.executeTool('get_trademark_dossier', { number: '67482' }));
+    expect(p.owner_check).toEqual({ skipped: true, reason: 'no_owner_identifier' });
   });
 });
