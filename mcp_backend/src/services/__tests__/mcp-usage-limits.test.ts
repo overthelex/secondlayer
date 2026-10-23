@@ -74,6 +74,13 @@ describe('acquireMcpCall', () => {
     expect(bulk).toEqual({ allowed: false, message: expect.stringContaining('5 повних текстів') });
   });
 
+  it('does not spend the document quota on a refused request', async () => {
+    const big = await acquireMcpCall(db, 'braun', 'load_full_texts', { doc_ids: new Array(50).fill(1) }, T0);
+    expect(big.allowed).toBe(false);
+    const one = await acquireMcpCall(db, 'braun', 'get_court_decision', { doc_id: 1 }, T0 + 60_000);
+    expect(one.allowed).toBe(true);
+  });
+
   it('uses INCRBY on the cache for a multi-document call', async () => {
     const increment = jest.fn(async (_k: string, _t: number, by = 1) => by);
     setMcpUsageLimitCache({ increment } as any);

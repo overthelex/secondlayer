@@ -168,8 +168,12 @@ export async function acquireMcpCall(
 
   const docs = documentsFetched(toolName, args);
   if (docs > 0 && limits.docFetchPerDay !== null) {
-    const count = await increment(`mcplim:${userId}:docs:${day}`, 86400, docs);
+    const docKey = `mcplim:${userId}:docs:${day}`;
+    const count = await increment(docKey, 86400, docs);
     if (count > limits.docFetchPerDay) {
+      // A refused request fetches nothing, so it must not spend the quota: otherwise one
+      // load_full_texts with too many doc_ids would lock the account out for the day.
+      await increment(docKey, 86400, -docs);
       logger.warn('[McpUsageLimits] Document quota', { userId, toolName, docs, count, limit: limits.docFetchPerDay });
       return {
         allowed: false,
