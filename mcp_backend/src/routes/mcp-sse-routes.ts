@@ -330,7 +330,15 @@ export function createMCPSSERoutes(deps: {
         );
 
         const executionTime = Date.now() - startTime;
-        await deps.costTracker.completeTrackingRecord({ requestId, executionTimeMs: executionTime, status: 'completed' });
+        // A tool that answered with an error is recorded as failed, which is never charged
+        // (the list-price floor in costTracker would otherwise bill a failed lookup).
+        const toolFailed = Boolean((result as any)?.isError);
+        await deps.costTracker.completeTrackingRecord({
+          requestId,
+          executionTimeMs: executionTime,
+          status: toolFailed ? 'failed' : 'completed',
+          ...(toolFailed ? { errorMessage: 'Tool returned isError' } : {}),
+        });
 
         // Fixed price: charge only a call that produced a result, never an error.
         if (userId && fixedPrice && chargeFixedPrice && !(result as any)?.isError) {
