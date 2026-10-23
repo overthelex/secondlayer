@@ -912,7 +912,11 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
         ...(instanceCode ? { instance_code: instanceCode } : {}),
         ...(partyName ? { party_filter: { party_name: partyName, party_role: partyRole || 'any' } } : {}),
         ...(structuralFilter ? { structural_filter: structuralFilter } : {}),
-        total: deduped.size, returned: output.filtered.length,
+        // No `total`: nearest-neighbour search has no corpus-wide match count. The pool is
+        // limit×3 chunks deduped by doc, so a "total" of 6 for limit=2 read as "only 6
+        // decisions exist" (cf. total_fused in hybrid).
+        candidates: deduped.size, returned: output.filtered.length,
+        note: 'Семантичний пошук повертає найближчі за змістом рішення; загальна кількість збігів у ЄДРСР не визначається. candidates — розмір пулу кандидатів (limit × 3 фрагментів). Для більшої вибірки збільште limit.',
         results: output.filtered,
         ...(output.original_count !== output.filtered_count
           ? { relevance_filter: { from: output.original_count, to: output.filtered_count } }
