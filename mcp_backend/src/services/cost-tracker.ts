@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.js';
 import { maskSensitive, sanitizeId, sanitizeClassified } from '../utils/sanitize-log.js';
 import { BillingService } from './billing-service.js';
 import { getFixedToolPrice } from './tool-fixed-price.js';
+import { getToolListPriceUsd } from './tool-list-price.js';
 
 export class CostTracker extends BaseCostTracker {
   private billingService?: BillingService;
@@ -140,7 +141,14 @@ export class CostTracker extends BaseCostTracker {
     const avgCostPer1kTokens = 0.002;
     const openaiEstimatedCost = (estimatedTokens / 1000) * avgCostPer1kTokens;
 
-    const totalUsd = openaiEstimatedCost + secondLayerEstimatedCost;
+    // A tool with a list price is charged at least that much, so the pre-flight balance
+    // check must expect at least that much too.
+    const listPriceUsd = await getToolListPriceUsd(this.db as any, params.toolName);
+    if (listPriceUsd > 0) {
+      notes.push(`List price $${listPriceUsd.toFixed(6)}`);
+    }
+
+    const totalUsd = Math.max(openaiEstimatedCost + secondLayerEstimatedCost, listPriceUsd);
 
     return {
       openai_estimated_tokens: estimatedTokens,
@@ -154,7 +162,7 @@ export class CostTracker extends BaseCostTracker {
 
   protected override async calculateAdditionalCosts(record: any): Promise<AdditionalCostResult> {
     return {
-      additionalCostUsd: 0,
+      additionalCostUsd: await this.listPriceTopUp(record),
       additionalBreakdownSections: {
         secondlayer: {
           total_calls: record.secondlayer_api_calls || 0,
@@ -167,6 +175,23 @@ export class CostTracker extends BaseCostTracker {
         },
       },
     };
+  }
+
+  /**
+   * The amount that lifts a tool call's usage cost up to the tool's list price
+   * (tool_pricing), so the call totals max(usage, list price). Zero when the usage cost
+   * already covers it or the tool has no list price.
+   */
+  private async listPriceTopUp(record: any): Promise<number> {
+    if (!record.tool_name) return 0;
+    const listPriceUsd = await getToolListPriceUsd(this.db as any, record.tool_name);
+    if (listPriceUsd <= 0) return 0;
+    const usageCostUsd =
+      Number(record.openai_cost_usd || 0) +
+      Number(record.anthropic_cost_usd || 0) +
+      Number(record.voyage_cost_usd || 0) +
+      Number(record.secondlayer_cost_usd || 0);
+    return Math.max(0, listPriceUsd - usageCostUsd);
   }
 
   protected override async onTrackingComplete(
