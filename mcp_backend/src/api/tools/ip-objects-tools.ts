@@ -20,6 +20,9 @@ const OBJ_TYPES = [1, 2, 4, 6];
 const OBJ_STATES = [1, 2];
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
+// Soft deadline for each get_trademark_dossier enrichment sub-tool (they run in parallel),
+// well inside the 60 s tool timeout.
+const DOSSIER_SUBTOOL_TIMEOUT_MS = 30_000;
 
 // Columns returned by the list tools — compact, panel-friendly (no raw_data).
 const LIST_COLUMNS = `id, obj_type, obj_type_name, obj_state, app_number, app_date,
@@ -405,10 +408,24 @@ export class IpObjectsTools extends BaseToolHandler {
   }
 
   /** Best-effort call of another registered tool; returns parsed JSON or null. */
-  private async callTool(name: string, args: any): Promise<any> {
+  private async callTool(name: string, args: any, timeoutMs?: number): Promise<any> {
     if (!this.toolRegistry) return null;
+    let timer: NodeJS.Timeout | undefined;
     try {
-      const res = await this.toolRegistry.executeTool(name, args);
+      const call = this.toolRegistry.executeTool(name, args);
+      // A soft deadline: the dossier is useful without its enrichment, and one slow
+      // sub-tool must not take the whole call past the 60 s tool timeout.
+      const res = timeoutMs
+        ? await Promise.race([
+            call,
+            new Promise<null>((resolve) => {
+              timer = setTimeout(() => {
+                logger.warn(`get_trademark_dossier: sub-tool ${name} exceeded ${timeoutMs} ms, skipped`);
+                resolve(null);
+              }, timeoutMs);
+            }),
+          ])
+        : await call;
       if (!res || res.isError) return null;
       const txt = res.content?.[0]?.text;
       if (typeof txt !== 'string') return null;
@@ -416,6 +433,8 @@ export class IpObjectsTools extends BaseToolHandler {
     } catch (e: any) {
       logger.warn(`get_trademark_dossier: sub-tool ${name} failed`, { error: e.message });
       return null;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
@@ -491,28 +510,35 @@ export class IpObjectsTools extends BaseToolHandler {
         }
       }
 
-      // 4-6. Enrichment via other tools (best-effort, null when a service is down).
-      const owner_check = tm.owner_edrpou
-        ? await this.callTool('openreyestr_get_by_edrpou', { edrpou: tm.owner_edrpou })
-        : null;
-      const court_practice = await this.callTool('search_court_decisions', {
-        mode: 'fulltext', justice_kind: 3, limit: 5,
-        query: `${tm.title_ua} свідоцтво недійсне торговельна марка`,
-      });
+      // 4-6. Enrichment via other tools (best-effort, null when a service is down or
+      // slow). Run in parallel under soft deadlines: one after another, the fulltext court
+      // search alone could take the dossier past the 60 s tool timeout, and the caller got
+      // nothing — not even the registry card that was already in hand (24.10.2026).
       // app_date comes back as a Date/timestamptz — String(date).slice gives
       // "Tue Apr 04", not "2006-04-04"; normalise to YYYY-MM-DD for as_of_date.
       const filingDate = tm.app_date
         ? (() => { const d = new Date(tm.app_date); return isNaN(d.getTime()) ? String(tm.app_date).slice(0, 10) : d.toISOString().slice(0, 10); })()
         : null;
-      const temporal = filingDate ? {
-        filing_date: filingDate,
-        article6_as_of_filing: await this.callTool('get_legislation_section', {
-          rada_id: '3689-12', article_number: '6', as_of_date: filingDate,
-        }),
-        article6_current: await this.callTool('get_legislation_section', {
-          rada_id: '3689-12', article_number: '6',
-        }),
-      } : null;
+      const [owner_check, court_practice, article6_as_of_filing, article6_current] = await Promise.all([
+        tm.owner_edrpou
+          ? this.callTool('openreyestr_get_by_edrpou', { edrpou: tm.owner_edrpou }, DOSSIER_SUBTOOL_TIMEOUT_MS)
+          : null,
+        this.callTool('search_court_decisions', {
+          mode: 'fulltext', justice_kind: 3, limit: 5,
+          query: `${tm.title_ua} свідоцтво недійсне торговельна марка`,
+        }, DOSSIER_SUBTOOL_TIMEOUT_MS),
+        filingDate
+          ? this.callTool('get_legislation_section', {
+              rada_id: '3689-12', article_number: '6', as_of_date: filingDate,
+            }, DOSSIER_SUBTOOL_TIMEOUT_MS)
+          : null,
+        filingDate
+          ? this.callTool('get_legislation_section', {
+              rada_id: '3689-12', article_number: '6',
+            }, DOSSIER_SUBTOOL_TIMEOUT_MS)
+          : null,
+      ]);
+      const temporal = filingDate ? { filing_date: filingDate, article6_as_of_filing, article6_current } : null;
 
       const dossier = {
         query_number: number,
