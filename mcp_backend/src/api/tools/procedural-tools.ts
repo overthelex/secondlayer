@@ -19,7 +19,7 @@ import { EdsrFtsService, EdsrFtsFilters } from '../../services/edrsr-fts-service
 import { EdsrVectorizerService, EdrsrSearchFilters } from '../../services/edrsr-vectorizer-service.js';
 import { SectionType } from '../../types/index.js';
 import { logger } from '../../utils/logger.js';
-import { extractSearchTermsWithAI } from '../../utils/html-parser.js';
+import { extractFactPatternTerms, termsToStems, countTermHits } from '../../utils/fact-pattern-terms.js';
 import { extractDispositiveFromText, classifyOutcome, DecisionOutcome } from '../../utils/dispositive.js';
 import { SemanticSectionizer } from '../../services/semantic-sectionizer.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
@@ -67,6 +67,26 @@ function trimFtsQuery(query: string, maxWords: number = 6): string {
     .split(/\s+/)
     .filter(w => w.length > 2 && !UK_STOP_WORDS.has(w.toLowerCase()));
   return words.slice(0, maxWords).join(' ');
+}
+
+// Weight of full term coverage relative to cosine similarity. BGE-M3 scores for a fact
+// pattern cluster within ~0.01 of each other (0.549–0.554 on the LEXAI-2101 example), so
+// coverage of the extracted terms decides between near-ties without letting a lexically
+// lucky but semantically distant chunk jump the queue.
+const TERM_COVERAGE_WEIGHT = 0.03;
+
+/** Stable rerank of semantic candidates by cosine + coverage of the extracted terms. */
+export function rerankByTermCoverage<T extends { text: string; score?: number }>(
+  pool: T[],
+  terms: string[],
+): Array<{ c: T; termHits: number }> {
+  const scored = pool.map((c, i) => {
+    const termHits = terms.length > 0 ? countTermHits(c.text, terms) : 0;
+    const coverage = terms.length > 0 ? termHits / terms.length : 0;
+    return { c, termHits, i, rank: (c.score ?? 0) + TERM_COVERAGE_WEIGHT * coverage };
+  });
+  scored.sort((a, b) => (b.rank - a.rank) || (a.i - b.i));
+  return scored.map(({ c, termHits }) => ({ c, termHits }));
 }
 
 /**
@@ -1169,15 +1189,16 @@ export class ProceduralTools extends BaseToolHandler {
     let results: any[] = [];
     let courtLevel = '';
     let searchMethod = '';
-    // Term extraction is deferred to the FTS fallback (below). The semantic path
-    // embeds the full fact pattern directly, so we no longer block on an upfront
-    // keyword-extraction LLM call that — when it returned no keywords — collapsed
-    // the query to a truncated literal and zeroed out the results.
-    let extractedTerms: string[] = [];
     let ftsQuery = '';
     // BGE-M3 is the ideal consumer of natural-language facts; pass the fact pattern
     // straight through (capped — the model truncates long input anyway).
     const semanticQuery = factsText.slice(0, 4000);
+
+    // LEXAI-2101: extract search terms up front, in parallel with the semantic leg (the
+    // quick-tier call is ~1 s, under the HNSW round-trip), so every response reports the
+    // terms it searched with and both legs use them. Falls back to deterministic keywords
+    // when the LLM is unavailable or returns nothing — never an empty list.
+    const termsPromise = extractFactPatternTerms(factsText, this.llm);
 
     // Primary path: HNSW semantic search over the unified edrsr_serving collection
     // (BGE-M3 vectors, 296M chunks). Semantic similarity is the natural fit for
@@ -1193,8 +1214,9 @@ export class ProceduralTools extends BaseToolHandler {
       // Over-fetch chunks, then dedupe to distinct cases (a case may match on
       // several chunks; we want the top distinct decisions). When restricting to a
       // court level (SC is a minority of the corpus), over-fetch much wider so enough
-      // 99* decisions survive the post-filter.
-      const overfetch = courtLevelFilter ? Math.max(limit * 20, 200) : limit * 4;
+      // 99* decisions survive the post-filter. The pool is wider than `limit` so the
+      // term-coverage rerank below has candidates to promote.
+      const overfetch = courtLevelFilter ? Math.max(limit * 20, 200) : limit * 6;
       // Soft-bound the cross-network qdrant leg; on timeout/failure `hits` is null and we
       // fall through to the FTS fallback below instead of stalling toward the 120s hard cap.
       const hits = await withSoftTimeout(
@@ -1203,33 +1225,48 @@ export class ProceduralTools extends BaseToolHandler {
       );
       if (hits) {
         const seen = new Set<number>();
+        const pool: Array<{ doc_id: number; court_code: any; adjudication_date: any; cause_num: any; text: string; score?: number }> = [];
         for (const h of hits) {
           if (seen.has(h.doc_id)) continue;
           if (!matchesCourtLevel(h.metadata.court_code)) continue;
           seen.add(h.doc_id);
-          results.push({
+          pool.push({
             doc_id: h.doc_id,
             court_code: h.metadata.court_code,
-            date: formatCourtDate(h.metadata.adjudication_date),
-            case_number: h.metadata.cause_num,
-            snippet: (h.text || '').slice(0, 600) + ((h.text || '').length > 600 ? '…' : ''),
-            score: typeof h.score === 'number' ? Number(h.score.toFixed(4)) : undefined,
+            adjudication_date: h.metadata.adjudication_date,
+            cause_num: h.metadata.cause_num,
+            text: h.text || '',
+            score: typeof h.score === 'number' ? h.score : undefined,
           });
-          if (results.length >= limit) break;
         }
+        const { terms } = await termsPromise;
+        results = rerankByTermCoverage(pool, terms)
+          .slice(0, limit)
+          .map(({ c, termHits }) => ({
+            doc_id: c.doc_id,
+            court_code: c.court_code,
+            date: formatCourtDate(c.adjudication_date),
+            case_number: c.cause_num,
+            snippet: c.text.slice(0, 600) + (c.text.length > 600 ? '…' : ''),
+            score: typeof c.score === 'number' ? Number(c.score.toFixed(4)) : undefined,
+            term_hits: termHits,
+          }));
         if (results.length > 0) searchMethod = 'semantic_hnsw';
       }
     }
 
+    const { terms: extractedTerms, source: termsSource } = await termsPromise;
+
     // Fallback: multi-instance FTS (when the vectorizer is unavailable or returns
     // nothing — e.g. very rare terminology not well represented in embeddings).
     if (results.length === 0 && this.ftsService && this.db) {
-      // FTS is lexical, so here (and only here) we extract keywords from the facts.
-      const extracted = await extractSearchTermsWithAI(factsText, this.llm);
-      extractedTerms = Array.isArray(extracted?.keywords) ? extracted.keywords : [];
-      ftsQuery = typeof extracted?.searchQuery === 'string' && extracted.searchQuery.trim().length > 0
-        ? extracted.searchQuery.trim()
-        : (extractedTerms.length > 0 ? extractedTerms.join(' ') : factsText.slice(0, 180));
+      // AND of the extracted terms' words, as the model wrote them (nominative legal
+      // phrases — «звільнення прогул листок непрацездатності»). The old path ANDed the first
+      // six literal words of the facts and matched generic boilerplate. Exact words, not
+      // prefix stems: «звільнен:*»-style prefixes expand to millions of postings and ran
+      // into the 8 s FTS statement timeout on every instance (measured 48 s, 0 results).
+      const words = termsToStems(extractedTerms, 4, false);
+      ftsQuery = words.join(' ') || trimFtsQuery(factsText);
 
       const baseFilters: EdsrFtsFilters = {
         ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
@@ -1246,24 +1283,30 @@ export class ProceduralTools extends BaseToolHandler {
             { code: 2, label: 'апеляційні суди' },
             { code: 3, label: 'суди першої інстанції' },
           ] as const);
-      for (const inst of instances) {
-        const resp = await this.ftsService.searchFulltext(
-          trimFtsQuery(ftsQuery), this.db, { ...baseFilters, instance_code: inst.code }, limit,
-        );
-        if (resp.results.length > 0) {
-          courtLevel = inst.label;
-          results = resp.results
-            .filter((d) => matchesCourtLevel(d.court_code))
-            .slice(0, limit)
-            .map((d) => ({
-            doc_id: d.doc_id,
-            court_code: d.court_code,
-            date: d.adjudication_date,
-            case_number: d.cause_num,
-            snippet: d.headline,
-          }));
-          searchMethod = 'fts';
-          break;
+      // Full word set first; if nothing matches anywhere, one relaxed pass on the two
+      // leading words.
+      const attempts = words.length > 2 ? [ftsQuery, words.slice(0, 2).join(' ')] : [ftsQuery];
+      outer: for (const attempt of attempts) {
+        for (const inst of instances) {
+          const resp = await this.ftsService.searchFulltext(
+            attempt, this.db, { ...baseFilters, instance_code: inst.code }, limit,
+          );
+          if (resp.results.length > 0) {
+            courtLevel = inst.label;
+            ftsQuery = attempt;
+            results = resp.results
+              .filter((d) => matchesCourtLevel(d.court_code))
+              .slice(0, limit)
+              .map((d) => ({
+              doc_id: d.doc_id,
+              court_code: d.court_code,
+              date: d.adjudication_date,
+              case_number: d.cause_num,
+              snippet: d.headline,
+            }));
+            searchMethod = 'fts';
+            break outer;
+          }
         }
       }
     }
@@ -1275,6 +1318,7 @@ export class ProceduralTools extends BaseToolHandler {
       court_level_filter: courtLevelFilter || undefined,
       search_method: searchMethod || undefined,
       extracted_search_terms: extractedTerms,
+      extracted_terms_source: termsSource,
       search_query: searchMethod === 'fts' ? ftsQuery : factsText.slice(0, 200),
       results,
     };
