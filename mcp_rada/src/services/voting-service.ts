@@ -381,7 +381,12 @@ Only return the JSON array, no additional text.
         [date]
       );
 
-      return result.rows as VotingRecord[];
+      // question_number / event_id are BIGINT (migration 011), which pg returns as strings
+      return result.rows.map((row: any) => ({
+        ...row,
+        question_number: row.question_number == null ? row.question_number : Number(row.question_number),
+        event_id: row.event_id == null ? row.event_id : Number(row.event_id),
+      })) as VotingRecord[];
     } catch (error: any) {
       logger.error('Failed to get cached voting', {
         date,

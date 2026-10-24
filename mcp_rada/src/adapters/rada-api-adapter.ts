@@ -250,23 +250,33 @@ export class RadaAPIAdapter {
     const endpoint = `/ogd/zal/ppz/skl${convocation}/dict/dates.txt`;
     logger.info('Fetching available session dates', { convocation });
 
-    try {
-      const response = await this.client.get(endpoint, { responseType: 'text' });
-      const text = typeof response.data === 'string' ? response.data : String(response.data);
-
-      // dates.txt has DD.MM.YYYY format, one per line
-      return text
-        .split('\n')
-        .map((line: string) => line.trim())
-        .filter((line: string) => /^\d{2}\.\d{2}\.\d{4}$/.test(line))
-        .map((line: string) => {
-          const [d, m, y] = line.split('.');
-          return `${y}-${m}-${d}`;
-        });
-    } catch (error: any) {
-      logger.error('Failed to fetch available session dates', { error: error.message });
-      return [];
+    // A single dropped connection (ECONNRESET, 24.10.2026) used to fail the whole
+    // nightly sync, so retry a few times before giving up.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await this.fetchSessionDatesOnce(endpoint);
+      } catch (error: any) {
+        logger.warn('Failed to fetch available session dates', { attempt, error: error.message });
+        if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 5000));
+      }
     }
+    logger.error('Giving up on available session dates', { convocation });
+    return [];
+  }
+
+  private async fetchSessionDatesOnce(endpoint: string): Promise<string[]> {
+    const response = await this.client.get(endpoint, { responseType: 'text' });
+    const text = typeof response.data === 'string' ? response.data : String(response.data);
+
+    // dates.txt has DD.MM.YYYY format, one per line
+    return text
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string) => /^\d{2}\.\d{2}\.\d{4}$/.test(line))
+      .map((line: string) => {
+        const [d, m, y] = line.split('.');
+        return `${y}-${m}-${d}`;
+      });
   }
 
   /**
