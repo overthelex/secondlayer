@@ -1046,9 +1046,14 @@ export class EdsrFtsService {
    * timeout. A timeout surfaces as the pg error with code 57014.
    */
   private async queryWithTimeout(dbPool: any, sql: string, args: any[], timeoutMs: number): Promise<any> {
+    // The shared Database wrapper (what CourtDecisionTools passes) has a connect() that only
+    // pings and returns nothing, so the timeout was silently skipped for count_cases_by_party:
+    // a 68 s count outlived the 60 s tool timeout after this method was introduced. Unwrap
+    // to its pg Pool.
+    const pool = typeof dbPool.getPool === 'function' ? dbPool.getPool() : dbPool;
     let client: any;
-    if (typeof dbPool.connect === 'function') {
-      try { client = await dbPool.connect(); } catch { client = undefined; }
+    if (pool && typeof pool.connect === 'function') {
+      try { client = await pool.connect(); } catch { client = undefined; }
     }
     if (!client || typeof client.query !== 'function' || typeof client.release !== 'function') {
       if (client && typeof client.release === 'function') client.release();
