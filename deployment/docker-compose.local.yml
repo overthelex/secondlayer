@@ -329,7 +329,8 @@ services:
     volumes:
       - tei_cache_local:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/health || exit 1"]
+      # the TEI image ships curl, not wget
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:80/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 20
@@ -1091,7 +1092,8 @@ services:
     image: platform-local:latest
     container_name: platform-local
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      # 127.0.0.1, not localhost: localhost resolves to ::1 and nginx listens on IPv4 only
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 3s
       start_period: 5s
@@ -1364,13 +1366,14 @@ services:
 
   # TURN/STUN для видеозвонков. host-сеть: релей-порты 49152-65535/udp.
   # external-ip приходит аргументом, чтобы конфиг не содержал адрес машины.
+  # Машина за NAT, поэтому формат public/private (TURN_EXTERNAL_IP в .env.local).
   coturn-local:
     image: coturn/coturn:4.6
     container_name: sl-coturn-local
     network_mode: host
     volumes:
       - ./coturn/turnserver.local.conf:/etc/turnserver.conf:ro
-    command: ["-c", "/etc/turnserver.conf", "--static-auth-secret=${TURN_SHARED_SECRET:-}", "--external-ip=${TURN_EXTERNAL_IP:-178.150.37.146}"]
+    command: ["-c", "/etc/turnserver.conf", "--static-auth-secret=${TURN_SHARED_SECRET:-}", "--external-ip=${TURN_EXTERNAL_IP:-217.20.188.127/192.168.0.88}"]
     restart: unless-stopped
 
 volumes:
