@@ -73,10 +73,20 @@ x-app-local-base: &app_local_base
     VOYAGEAI_EMBEDDING_MODEL: ${VOYAGEAI_EMBEDDING_MODEL:-voyage-multilingual-2}
     BGE_M3_URL: ${BGE_M3_URL:-http://tei-bge-m3:80}
 
-    # LLM Provider Strategy
-    LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-bedrock-first}
-
-    # No Anthropic/OpenAI — Bedrock only
+    # LLM Provider Strategy. The AWS account behind the Bedrock key is suspended
+    # (sts: InvalidClientTokenId) and the backend never received an OpenAI key,
+    # so every LLM step failed: compare_practice_pro_contra timed out, fulltext
+    # search lost its query distillation, the legislation classifier returned
+    # nothing. OpenAI first; bedrock-first again only with a working AWS key.
+    LLM_PROVIDER_STRATEGY: ${LLM_PROVIDER_STRATEGY:-openai-first}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    OPENAI_API_KEY2: ${OPENAI_API_KEY2:-}
+    # Empty = api.openai.com (that key has no credits). On cthulhu .env.local
+    # points it at Azure Foundry (lexai-foundry-swc); model = deployment name.
+    OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    OPENAI_MODEL_QUICK: ${OPENAI_MODEL_QUICK:-gpt-5-nano}
+    OPENAI_MODEL_STANDARD: ${OPENAI_MODEL_STANDARD:-gpt-5-mini}
+    OPENAI_MODEL_DEEP: ${OPENAI_MODEL_DEEP:-gpt-5.1}
 
     # ZakonOnline API (deprecated, removal pending)
     ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}

@@ -149,6 +149,8 @@ export class ModelSelector {
     const normalizedModel = this.normalizeModelId(model);
     const costPer1M: Record<string, { input: number; output: number }> = {
       // GPT-5 family
+      'gpt-5.4': { input: 2.50, output: 15.00 },
+      'gpt-5.4-mini': { input: 0.75, output: 4.50 },
       'gpt-5.1': { input: 2.00, output: 8.00 },
       'gpt-5': { input: 2.00, output: 8.00 },
       'gpt-5-mini': { input: 0.40, output: 1.60 },
@@ -243,6 +245,8 @@ export class ModelSelector {
     const normalizedModel = this.normalizeModelId(model);
     const costPer1M: Record<string, { input: number; output: number }> = {
       // GPT-5 family
+      'gpt-5.4': { input: 2.50, output: 15.00 },
+      'gpt-5.4-mini': { input: 0.75, output: 4.50 },
       'gpt-5.1': { input: 2.00, output: 8.00 },
       'gpt-5': { input: 2.00, output: 8.00 },
       'gpt-5-mini': { input: 0.40, output: 1.60 },
