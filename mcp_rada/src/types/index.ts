@@ -105,6 +105,8 @@ export interface VotingRecord {
   session_date: Date;
   session_number?: number;
   question_number?: number;
+  /** RADA id_event: one question carries several roll-calls (amendments, as a whole). */
+  event_id?: number;
   question_text?: string;
   bill_number?: string;
   question_type?: string;
@@ -119,7 +121,7 @@ export interface VotingRecord {
   created_at?: Date;
 }
 
-export type VoteType = 'За' | 'Проти' | 'Утримався' | 'Не голосував';
+export type VoteType = 'За' | 'Проти' | 'Утримався' | 'Не голосував' | 'Відсутній';
 
 export interface Faction {
   id: string;

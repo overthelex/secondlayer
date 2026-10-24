@@ -76,7 +76,7 @@ class WeekDataSyncer {
       logger.info('Syncing voting records from API', { date });
 
       // getVotingByDate fetches from RADA API and saves to DB
-      const records = await this.votingService.getVotingByDate(date, 9);
+      const records = await this.votingService.getVotingByDate(date, 9, true);
 
       logger.info('Voting records synced', { date, count: records.length });
       return records.length;
