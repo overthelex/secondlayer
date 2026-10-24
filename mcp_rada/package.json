@@ -16,6 +16,7 @@
     "sync:laws": "npm run build && node dist/scripts/sync-laws.js",
     "sync:voting": "npm run build && node dist/scripts/sync-voting.js",
     "sync:reference": "npm run build && node dist/scripts/sync-reference-data.js",
+    "sync:bills": "npm run build && node --max-old-space-size=4096 dist/scripts/sync-bills.js",
     "sync:bill-documents": "npm run build && node --max-old-space-size=4096 dist/scripts/sync-bill-documents.js",
     "cleanup:cache": "npm run build && node dist/scripts/cleanup-cache.js",
     "test": "jest --no-cache --verbose",

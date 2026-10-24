@@ -20,10 +20,9 @@
  */
 
 import { Pool } from 'pg';
+import { fetchBillFeed, extractInitiators as extractInitiatorList, nz } from '../services/bill-feed';
 
-const API_BASE = 'https://data.rada.gov.ua/ogd/zpr';
 const BATCH_SIZE = 200;
-const FETCH_TIMEOUT_MS = 180_000;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -37,12 +36,6 @@ const pool = new Pool({
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function nz(v: any): any {
-  if (v === undefined || v === null) return null;
-  if (typeof v === 'string' && v.trim() === '') return null;
-  return v;
-}
-
 // The legacy feeds contain source-typo dates (year 0006, 3013, …). Drop anything whose
 // year is outside a sane window so they don't pollute registration_date / its index.
 const MAX_DATE_YEAR = new Date().getFullYear() + 2;
@@ -54,72 +47,10 @@ function nzDate(v: any): any {
   return s;
 }
 
-// Current convocations expose the rich `billinfo-sklN.json` (documents carry kindId,
-// short_review/formal_review verdicts, direct-PDF docFiles). Past convocations only have
-// the legacy `bills-sklN.json`, where each doc is just {date, type, uri} with the doc id in
-// the uri's pf35401 param and no verdict/PDF. We auto-detect and handle both.
-async function fetchFeed(conv: number): Promise<{ bills: any[]; modern: boolean }> {
-  const candidates: [string, boolean][] = [
-    [`${API_BASE}/skl${conv}/billinfo-skl${conv}.json`, true],
-    [`${API_BASE}/skl${conv}/bills-skl${conv}.json`, false],
-  ];
-  for (const [url, modern] of candidates) {
-    console.log(`\n📥 Trying ${url} …`);
-    const resp = await fetch(url, {
-      headers: { Accept: 'application/json', 'User-Agent': 'SecondLayer-Legal-Platform/1.0' },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (resp.status === 404) {
-      console.log('   404 — trying next candidate…');
-      continue;
-    }
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-    let text = await resp.text();
-    console.log(`   Downloaded ${(text.length / 1_048_576).toFixed(1)} MB (${modern ? 'modern' : 'legacy'} format), parsing…`);
-    // The Rada feed embeds raw control characters inside string values, which strict
-    // JSON.parse rejects. Escaped sequences (\\n) are two chars and untouched; only raw
-    // bytes 0x00–0x1F get flattened to spaces.
-    text = text.replace(/[\x00-\x1F]/g, ' ');
-    const data = JSON.parse(text);
-    const bills = Array.isArray(data)
-      ? data
-      : (Object.values(data).find((v) => Array.isArray(v)) as any[]) || [];
-    console.log(`   ${bills.length.toLocaleString()} bills in feed`);
-    return { bills, modern };
-  }
-  throw new Error(`No bill feed found for skl${conv} (billinfo/bills both 404)`);
-}
-
-// Extract the bill's initiators (co-sponsors) as a readable "; "-joined name list plus the
-// deputy person-ids (for linking to rada.deputies). Handles both feeds: modern wraps each
-// initiator in mp/inner/outter, legacy in `official`; all carry person {surname,firstname,
-// patronymic,id}. Bodies (President/Cabinet/committee) without a person fall back to the
-// post/organization/department label.
+// Initiators as a readable "; "-joined name list plus the deputy person-ids
+// (for linking to rada.deputies). See bill-feed.ts for the per-feed shapes.
 function extractInitiators(bill: any): { names: string | null; ids: number[] } {
-  const arr = Array.isArray(bill.initiators)
-    ? bill.initiators
-    : Array.isArray(bill.authors)
-      ? bill.authors
-      : [];
-  const names: string[] = [];
-  const ids: number[] = [];
-  for (const ini of arr) {
-    if (typeof ini === 'string') {
-      const s = ini.trim();
-      if (s) names.push(s);
-      continue;
-    }
-    const slot = ini?.mp || ini?.inner || ini?.outter || ini?.official || ini || {};
-    const p = slot.person || null;
-    let nm = '';
-    if (p) {
-      nm = [p.surname, p.firstname, p.patronymic].filter(Boolean).join(' ').trim();
-      const pid = Number(p.id);
-      if (Number.isFinite(pid) && pid > 0) ids.push(pid);
-    }
-    if (!nm) nm = (slot.post || slot.organization || slot.department || '').trim();
-    if (nm) names.push(nm);
-  }
+  const { names, ids } = extractInitiatorList(bill);
   return { names: names.length ? names.join('; ') : null, ids };
 }
 
@@ -217,7 +148,7 @@ async function upsertBatch(rows: any[][]): Promise<number> {
 }
 
 async function syncConvocation(conv: number): Promise<{ docs: number; gneu: number }> {
-  const { bills, modern } = await fetchFeed(conv);
+  const { bills, modern } = await fetchBillFeed(conv);
 
   // A document id can appear more than once in the feed (same doc listed under both
   // `workflow` and `source`, or attached to more than one bill). Postgres rejects a

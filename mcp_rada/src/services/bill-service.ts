@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { RadaAPIAdapter } from '../adapters/rada-api-adapter';
 import { v4 as uuidv4 } from 'uuid';
 import { Bill, BillSearchParams, BillSearchResult } from '../types';
+import { billCardUrl } from './bill-feed';
 
 export class BillService {
   private cacheTTLSeconds: number;
@@ -107,75 +108,23 @@ export class BillService {
         );
       }
 
-      let query = 'SELECT * FROM bills WHERE 1=1';
-      const queryParams: any[] = [];
-      let paramIndex = 1;
+      const filters = this.buildBillFilters(params);
+      // Inlined into SQL below, so force a bounded integer.
+      const limit = Math.min(Math.max(Math.floor(Number(params.limit)) || 50, 1), 200);
+      const runSearch = () => this.runBillSearch(params.query, filters, limit);
 
-      // Filter by query (search in title, initiator names, and subject area)
-      if (params.query) {
-        query += ` AND (title ILIKE $${paramIndex} OR EXISTS (SELECT 1 FROM unnest(initiator_names) AS n WHERE n ILIKE $${paramIndex}) OR subject_area ILIKE $${paramIndex})`;
-        queryParams.push(`%${params.query}%`);
-        paramIndex++;
-      }
-
-      // Filter by status
-      if (params.status && params.status !== 'all') {
-        query += ` AND status = $${paramIndex}`;
-        queryParams.push(params.status);
-        paramIndex++;
-      }
-
-      // Filter by initiator
-      if (params.initiator) {
-        query += ` AND ($${paramIndex} = ANY(initiator_names) OR initiator_type ILIKE $${paramIndex})`;
-        queryParams.push(params.initiator);
-        paramIndex++;
-      }
-
-      // Filter by committee
-      if (params.committee) {
-        query += ` AND (main_committee_id = $${paramIndex} OR main_committee_name ILIKE $${paramIndex + 1})`;
-        queryParams.push(params.committee, `%${params.committee}%`);
-        paramIndex += 2;
-      }
-
-      // Filter by date range
-      if (params.date_from) {
-        query += ` AND registration_date >= $${paramIndex}`;
-        queryParams.push(params.date_from);
-        paramIndex++;
-      }
-
-      if (params.date_to) {
-        query += ` AND registration_date <= $${paramIndex}`;
-        queryParams.push(params.date_to);
-        paramIndex++;
-      }
-
-      // Limit
-      const limit = params.limit || 50;
-      query += ` ORDER BY registration_date DESC LIMIT ${limit}`;
-
-      const result = await this.db.query(query, queryParams);
-      const bills = result.rows as Bill[];
-
+      let { bills, relaxed } = await runSearch();
       // If no results and query provided, try fetching fresh data
       if (bills.length === 0 && params.query) {
         logger.info('No cached bills found, fetching from API', { params });
         await this.syncRecentBills();
-        // Retry query
-        const retryResult = await this.db.query(query, queryParams);
-        return {
-          bills: retryResult.rows as Bill[],
-          total: retryResult.rows.length,
-          query: params.query,
-          filters: params,
-        };
+        ({ bills, relaxed } = await runSearch());
       }
 
       logger.info('Bills search completed', {
         params,
         resultsCount: bills.length,
+        relaxed,
       });
 
       return {
@@ -183,6 +132,7 @@ export class BillService {
         total: bills.length,
         query: params.query,
         filters: params,
+        ...(relaxed ? { relaxed: true } : {}),
       };
     } catch (error: any) {
       logger.error('Failed to search bills', {
@@ -191,6 +141,167 @@ export class BillService {
       });
       throw error;
     }
+  }
+
+  /** The expression idx_bills_title is built on; must match it verbatim to use the index. */
+  private static readonly TITLE_TSV = "to_tsvector('simple', title)";
+
+  /**
+   * The tool's status enum mapped onto Rada's own phase labels (currentPhase.status in
+   * billinfo-sklN.json). Any other value is matched as a substring of the label.
+   */
+  static readonly STATUS_GROUPS: Record<string, string[]> = {
+    registered: ['Одержано проєкт', 'Опрацьовується в комітеті', 'Очікує розгляду'],
+    first_reading: ['Очікує розгляду', 'Готується на повторне перше читання', 'Розгляд відкладено'],
+    second_reading: [
+      'Готується на друге читання',
+      'Очікує на друге читання',
+      'Очікує на повторне друге читання',
+    ],
+    adopted: [
+      'Закон підписано',
+      'Постанову підписано',
+      'Акт підписано',
+      'Передано на підпис Президенту',
+      'Готується на підпис',
+      'Готується на підпис (після вето)',
+    ],
+    rejected: [
+      'Знято з розгляду',
+      'Відхилено та знято з розгляду',
+      'Заслухано та знято з розгляду',
+      'Повернуто на доопрацювання',
+    ],
+  };
+
+  /** Non-text filters as SQL clauses; `bind` appends a parameter and returns its placeholder. */
+  private buildBillFilters(params: BillSearchParams): (bind: (v: any) => string) => string[] {
+    return (bind) => {
+      const clauses: string[] = [];
+      if (params.status && params.status !== 'all') {
+        const group = BillService.STATUS_GROUPS[params.status];
+        clauses.push(
+          group ? `status = ANY(${bind(group)}::text[])` : `status ILIKE ${bind(`%${params.status}%`)}`
+        );
+      }
+      if (params.initiator) {
+        const like = bind(`%${params.initiator}%`);
+        clauses.push(
+          `(EXISTS (SELECT 1 FROM unnest(initiator_names) AS n WHERE n ILIKE ${like}) OR initiator_type ILIKE ${like})`
+        );
+      }
+      if (params.committee) {
+        clauses.push(
+          `(main_committee_id = ${bind(params.committee)} OR main_committee_name ILIKE ${bind(`%${params.committee}%`)})`
+        );
+      }
+      if (params.date_from) clauses.push(`registration_date >= ${bind(params.date_from)}`);
+      if (params.date_to) clauses.push(`registration_date <= ${bind(params.date_to)}`);
+      return clauses;
+    };
+  }
+
+  /**
+   * Word-level title search (LEXAI-2099). The old `title ILIKE '%<whole query>%'` only
+   * found titles containing the exact phrase, so «бронювання працівників» returned 1 bill
+   * although a dozen titles are about бронювання.
+   *
+   * 1. Strict pass: every query word (inflection-tolerant stem prefix) in the title, or the
+   *    phrase in title / initiators / rubric / committee / bill number. Title matches rank
+   *    first, by ts_rank, then newest.
+   * 2. Relaxed pass (multi-word query, strict pass short of `limit`): any word in the title,
+   *    each word weighted by its rarity across bill titles (idf). A bill is kept only when
+   *    its matched words carry at least half of the query's total weight, so a rare topical
+   *    word («бронювання») qualifies a bill while a common one alone («працівників») does not.
+   */
+  private async runBillSearch(
+    query: string | undefined,
+    filters: (bind: (v: any) => string) => string[],
+    limit: number
+  ): Promise<{ bills: Bill[]; relaxed: boolean }> {
+    const TSV = BillService.TITLE_TSV;
+    const binder = () => {
+      const vals: any[] = [];
+      return { vals, bind: (v: any) => (vals.push(v), `$${vals.length}`) };
+    };
+
+    const q = (query || '').trim();
+    const andTsq = q ? BillService.toPrefixTsQuery(q) : '';
+
+    // ── Strict pass
+    const strict = binder();
+    const where = filters(strict.bind);
+    let orderBy = 'registration_date DESC NULLS LAST';
+    if (q) {
+      const like = strict.bind(`%${q}%`);
+      const conds = [
+        `title ILIKE ${like}`,
+        `EXISTS (SELECT 1 FROM unnest(initiator_names) AS n WHERE n ILIKE ${like})`,
+        `subject_area ILIKE ${like}`,
+        `main_committee_name ILIKE ${like}`,
+        `bill_number = ${strict.bind(q)}`,
+      ];
+      if (andTsq) {
+        const t = strict.bind(andTsq);
+        const titleHit = `${TSV} @@ to_tsquery('simple', ${t})`;
+        conds.unshift(titleHit);
+        orderBy = `(${titleHit} OR title ILIKE ${like}) DESC, ts_rank(${TSV}, to_tsquery('simple', ${t})) DESC, ${orderBy}`;
+      }
+      where.push(`(${conds.join(' OR ')})`);
+    }
+    const strictSql =
+      `SELECT * FROM bills` +
+      (where.length ? ` WHERE ${where.join(' AND ')}` : '') +
+      ` ORDER BY ${orderBy} LIMIT ${limit}`;
+    const strictRows = (await this.db.query(strictSql, strict.vals)).rows as Bill[];
+
+    const tokens = andTsq ? andTsq.split(' & ') : [];
+    if (tokens.length < 2 || strictRows.length >= limit) {
+      return { bills: strictRows, relaxed: false };
+    }
+
+    // ── Relaxed pass: idf-weighted any-word title match
+    const rb = binder();
+    const tokensP = rb.bind(tokens);
+    const orP = rb.bind(tokens.join(' | '));
+    const excludeP = rb.bind(strictRows.map((b) => b.bill_number));
+    const relaxedWhere = [
+      `${TSV} @@ to_tsquery('simple', ${orP})`,
+      `NOT (bill_number = ANY(${excludeP}::text[]))`,
+      ...filters(rb.bind),
+    ];
+    const relaxedSql = `
+      WITH n AS (SELECT GREATEST(count(*), 1)::float8 AS total FROM bills),
+      w AS (
+        SELECT tq, CASE WHEN df = 0 THEN NULL ELSE ln((SELECT total FROM n) / df) END AS idf
+        FROM (
+          SELECT tq, (SELECT count(*) FROM bills WHERE ${TSV} @@ to_tsquery('simple', tq)) AS df
+          FROM unnest(${tokensP}::text[]) AS tq
+        ) d
+      ),
+      scored AS (
+        SELECT bills.*,
+               (SELECT COALESCE(sum(w.idf), 0) FROM w
+                 WHERE w.idf IS NOT NULL AND ${TSV} @@ to_tsquery('simple', w.tq)) AS _score
+        FROM bills
+        WHERE ${relaxedWhere.join(' AND ')}
+      )
+      SELECT * FROM scored
+      WHERE _score > 0 AND _score >= 0.5 * (SELECT COALESCE(sum(idf), 0) FROM w)
+      ORDER BY _score DESC, registration_date DESC NULLS LAST
+      LIMIT ${limit - strictRows.length}`;
+    const relaxedRows = (await this.db.query(relaxedSql, rb.vals)).rows.map(
+      ({ _score, ...bill }: any) => bill as Bill
+    );
+
+    if (relaxedRows.length > 0) {
+      logger.info('Bills search extended with weighted any-word matches', {
+        query: q,
+        strict: strictRows.length,
+        relaxed: relaxedRows.length,
+      });
+    }
+    return { bills: [...strictRows, ...relaxedRows], relaxed: relaxedRows.length > 0 };
   }
 
   /**
@@ -510,18 +621,18 @@ export class BillService {
         DO UPDATE SET
           title = EXCLUDED.title,
           registration_date = EXCLUDED.registration_date,
-          status = EXCLUDED.status,
-          stage = EXCLUDED.stage,
-          initiator_type = EXCLUDED.initiator_type,
+          status = COALESCE(EXCLUDED.status, bills.status),
+          stage = COALESCE(EXCLUDED.stage, bills.stage),
+          initiator_type = COALESCE(EXCLUDED.initiator_type, bills.initiator_type),
           initiator_names = EXCLUDED.initiator_names,
           initiator_ids = EXCLUDED.initiator_ids,
-          main_committee_id = EXCLUDED.main_committee_id,
-          main_committee_name = EXCLUDED.main_committee_name,
-          subject_area = EXCLUDED.subject_area,
+          main_committee_id = COALESCE(EXCLUDED.main_committee_id, bills.main_committee_id),
+          main_committee_name = COALESCE(EXCLUDED.main_committee_name, bills.main_committee_name),
+          subject_area = COALESCE(EXCLUDED.subject_area, bills.subject_area),
           law_articles = EXCLUDED.law_articles,
           full_text = COALESCE(EXCLUDED.full_text, bills.full_text),
           explanatory_note = COALESCE(EXCLUDED.explanatory_note, bills.explanatory_note),
-          url = EXCLUDED.url,
+          url = COALESCE(EXCLUDED.url, bills.url),
           metadata = bills.metadata || EXCLUDED.metadata,
           cached_at = NOW(),
           cache_expires_at = EXCLUDED.cache_expires_at,
@@ -605,7 +716,7 @@ export class BillService {
       law_articles: raw.law_articles || [],
       full_text: raw.full_text || null,
       explanatory_note: raw.explanatory_note || null,
-      url: raw.url || null,
+      url: raw.url || billCardUrl(raw.bill_id) || null,
       metadata: raw,
     };
   }
