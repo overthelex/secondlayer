@@ -205,6 +205,9 @@ describe('appeal boilerplate (24.10.2026: a custody case counted as "pro" on an 
     // A Qdrant chunk cut mid-sentence: «Учасник справи, якому» is in the previous chunk.
     const chunk = ' повне рішення не було вручене у день його складання, має право на поновлення строку на апеляційне оскарження шляхом подання апеляційної скарги протягом тридцяти днів з дня вручення йому повного рішення суду.\n\nПовний текст судового рішення буде складений 18.02.2022 року.\n\nСУДДЯ';
     expect(stripAppealBoilerplate(chunk)).toEqual({ text: 'СУДДЯ', removed: true });
+    // Live semantic hits 24.10.2026: the notice without «йому», plus its «може бути також поновлений» sentence.
+    const notice2 = ' право на поновлення пропущеного строку на апеляційне оскарження рішення суду - якщо апеляційна скарга подана протягом тридцяти днів з дня вручення повного рішення суду.\n\nСтрок на апеляційне оскарження може бути також поновлений в разі пропуску з інших поважних причин, крім випадків, зазначених у частині другій статті 358 ЦПК України.\n\nСуддя  Красовський О.О.';
+    expect(stripAppealBoilerplate(notice2)).toEqual({ text: 'Суддя Красовський О.О.', removed: true });
     const reasoning = 'Ухвала про забезпечення позову може бути оскаржена окремо від рішення суду.';
     expect(stripAppealBoilerplate(reasoning)).toEqual({ text: reasoning, removed: false });
   });
