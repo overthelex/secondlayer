@@ -95,6 +95,17 @@ export function buildLegislationTsquery(query: string): string {
 }
 
 /**
+ * Fold every apostrophe look-alike to the ASCII one. Ukrainian text in the corpora uses
+ * ' (U+0027), ’ (U+2019) and ʼ (U+02BC) interchangeably. U+02BC is a *letter* (\p{Lm}),
+ * so without this fold «військовозобовʼязаних» stays one token while
+ * «військовозобов'язаних» splits into two, and the same word never matches itself.
+ * ASCII ' is what PostgreSQL's 'simple' parser and our \p{L} tokeniser both split on.
+ */
+export function normalizeApostrophes(text: string): string {
+  return String(text ?? '').replace(/[ʼ’‘ʹ`´′]/g, "'");
+}
+
+/**
  * Content stems of a free-text query, deduped and capped — the shared basis for every
  * tsquery we build. Exported so callers that need a different boolean join (search_npa
  * runs AND-first over 429K editions, where OR-of-prefixes matches almost everything)

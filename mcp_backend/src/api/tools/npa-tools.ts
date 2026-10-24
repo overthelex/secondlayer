@@ -16,7 +16,7 @@
  */
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { legislationStems } from '../../services/legislation-search-utils.js';
+import { legislationStems, normalizeApostrophes } from '../../services/legislation-search-utils.js';
 import { resolveActNumber, pickActNumber, normalizeArticleNumber, type ActNumberMatch } from '../../services/act-number.js';
 import {
   NPA_REPEALED_CODES,
@@ -28,8 +28,47 @@ import {
 } from './npa-dicts.js';
 import { logger } from '../../utils/logger.js';
 
-/** Candidate cap for the FTS leg — total_found is a lower bound, never exact. */
-const FTS_CANDIDATE_CAP = 2000;
+/**
+ * Candidate cap for the FTS leg — total_found is a lower bound, never exact. The index
+ * scan is cheap (≈0.5 s for 9.3K matches of «порядок видачі ліцензій»); ranking happens
+ * on metadata, so a higher cap only widens the pool the reranker sees.
+ */
+const FTS_CANDIDATE_CAP = 10000;
+
+/**
+ * search_npa relevance (LEXAI-2097). The old ORDER BY (status, last_ed) was a recency
+ * sort over an arbitrary 2000-row slice, so «порядок бронювання військовозобов'язаних»
+ * put «Про місцеве самоврядування» and the ПКУ above КМУ 76-2023-п (#5).
+ *
+ * Two stages, because ts_rank_cd over every matched body costs ~8 ms per act (detoast
+ * + retokenise): all candidates are pre-ranked on cheap act metadata (share of query
+ * stems in the title, year match, amendment flag), then only the best RERANK_POOL get
+ * ts_rank_cd over the first BODY_RANK_CHARS of the current edition. Final score:
+ *   TITLE_WEIGHT·title_cov + ts_rank_cd(body, q, 32) + year_adj − amendment + status
+ * ts_rank_cd with normalisation 32 lies in [0,1), so a full title match outweighs any
+ * body score; act type/recency only break ties.
+ */
+export const NPA_RANK = {
+  RERANK_POOL: 150,
+  BODY_RANK_CHARS: 100_000,
+  TITLE_WEIGHT: 1.0,
+  /** «Про внесення змін…» / «Про затвердження Змін…» — the amended act is the answer. */
+  AMENDMENT_PENALTY: 0.2,
+  /** Query names a year («… 2026») and the title carries it. */
+  YEAR_MATCH_BONUS: 1.0,
+  /** Query names a year and the title names a different one («… на 2003 рік»). */
+  YEAR_MISMATCH_PENALTY: 0.3,
+  /** Чинний over everything else when status=«будь-який». */
+  IN_FORCE_BONUS: 0.05,
+} as const;
+
+/** Case-insensitive POSIX regex for amendment acts, applied to npa.act.title. */
+const AMENDMENT_TITLE_RE = '^\\s*Про (внесення|затвердження) (до .{0,200})?змін';
+
+/** 4-digit years (1900–2099) named in a query — used only for title boosting. */
+export function queryYears(query: string): string[] {
+  return [...new Set(String(query || '').match(/(?<!\d)(?:19|20)\d{2}(?!\d)/g) || [])];
+}
 /** Same ceiling get_legislation_section uses for a single text payload. */
 const MAX_TEXT_CHARS = 60000;
 
@@ -256,16 +295,29 @@ export class NpaTools extends BaseToolHandler {
   }
 
   private async searchNpaByTitle(title: string, statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, lim: number): Promise<ToolResult> {
-    const values: any[] = [title];
-    const { sql: filter, nextIdx } = this.actFilterSql(statusCode, excludeRepealed, docTypeId, values, 2);
+    // Word-level (LEXAI-2097): every content stem must occur in the title, in any order —
+    // ILIKE '%whole phrase%' missed a title with one extra word between the terms. Each
+    // stem is its own ILIKE so act_title_trgm can still serve the AND.
+    const folded = normalizeApostrophes(title);
+    const stems = legislationStems(folded);
+    const values: any[] = [folded];
+    const wordConds: string[] = [];
+    if (stems.length === 0) {
+      wordConds.push(`a.title ILIKE '%' || $1 || '%'`);
+    } else {
+      for (const s of stems) { values.push(`%${s}%`); wordConds.push(`a.title ILIKE $${values.length}`); }
+    }
+    const { sql: filter, nextIdx } = this.actFilterSql(statusCode, excludeRepealed, docTypeId, values, values.length + 1);
     values.push(lim);
     const rows = (await this.db.query(
       `SELECT a.nreg, a.title, a.status_code, a.types_raw, a.editions_cnt, a.has_articles,
               to_char(a.first_ed, 'YYYY-MM-DD') AS first_ed, to_char(a.last_ed, 'YYYY-MM-DD') AS last_ed,
               COUNT(*) OVER() AS _total_count
          FROM npa.act a
-        WHERE a.title ILIKE '%' || $1 || '%' ${filter}
-        ORDER BY (a.status_code = 5) DESC, similarity(a.title, $1) DESC, a.last_ed DESC NULLS LAST
+        WHERE ${wordConds.join(' AND ')} ${filter}
+        ORDER BY (a.status_code = 5) DESC,
+                 strpos(lower(a.title), lower($1)) > 0 DESC,
+                 similarity(a.title, $1) DESC, a.last_ed DESC NULLS LAST
         LIMIT $${nextIdx}`,
       values
     )).rows;
@@ -280,18 +332,22 @@ export class NpaTools extends BaseToolHandler {
   }
 
   private async searchNpaByText(query: string, statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, lim: number): Promise<ToolResult> {
-    const stems = legislationStems(query);
+    // ʼ (U+02BC) is a letter to both tokenisers; fold it so «військовозобовʼязаних»
+    // splits the same way the ASCII-apostrophe corpus text does.
+    const folded = normalizeApostrophes(query);
+    const stems = legislationStems(folded);
     if (stems.length === 0) {
       return this.wrapResponse('Запит не містить слів, придатних для пошуку. Додайте змістовні терміни.');
     }
     const anchor = stems[0];
+    const years = queryYears(folded);
 
     // AND first. OR-of-prefixes over 429K editions matches almost everything, so it is a
     // fallback for a thin result set, not the default (same relax pattern as the ГНЕУ search).
-    let rows = await this.ftsCandidates(stems, ' & ', statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
+    let rows = await this.ftsCandidates(stems, ' & ', years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
     let relaxed = false;
     if (rows.length < 3 && stems.length > 1) {
-      const orRows = await this.ftsCandidates(stems, ' | ', statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
+      const orRows = await this.ftsCandidates(stems, ' | ', years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
       if (orRows.length > rows.length) { rows = orRows; relaxed = true; }
     }
 
@@ -309,12 +365,13 @@ export class NpaTools extends BaseToolHandler {
       results: rows.map((r: any) => this.shapeAct(r, {
         shown_edition: r.shown_edition,
         is_current: r.shown_is_current,
+        relevance: Math.round(Number(r.score) * 1000) / 1000,
         snippet: stripChrome(r.snippet),
       })),
     });
   }
 
-  private async ftsCandidates(stems: string[], join: string, statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, anchor: string, lim: number): Promise<any[]> {
+  private async ftsCandidates(stems: string[], join: string, years: string[], statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, anchor: string, lim: number): Promise<any[]> {
     const tsquery = stems.map((s) => `${s}:*`).join(join);
     const values: any[] = [tsquery];
     const { sql: filter, nextIdx } = this.actFilterSql(statusCode, excludeRepealed, docTypeId, values, 2);
@@ -323,10 +380,14 @@ export class NpaTools extends BaseToolHandler {
     const limIdx = pi; values.push(lim); pi++;
     const asOfIdx = pi; values.push(asOfDate ?? null); pi++;
     const anchorIdx = pi; values.push(anchor); pi++;
+    const stemsIdx = pi; values.push(stems); pi++;
+    const yearsIdx = pi; values.push(years); pi++;
+    const poolIdx = pi; values.push(NPA_RANK.RERANK_POOL); pi++;
+    const prefixIdx = pi; values.push(NPA_RANK.BODY_RANK_CHARS); pi++;
+    const R = NPA_RANK;
 
-    // Ranking never touches the bodies: ts_rank_cd over matched editions measured ~8s
-    // (detoast + retokenise of hundreds of MB). Ordering is on act metadata instead, and
-    // only the surviving `lim` rows get a snippet.
+    // See NPA_RANK. Stage 1 (pre/pool) touches only npa.act; stage 2 (ranked) detoasts
+    // at most RERANK_POOL bodies, sliced via `body || ''` (TOAST note at the top).
     const sql = `
       WITH cand AS (
         SELECT t.nreg, t.ed_date
@@ -335,14 +396,36 @@ export class NpaTools extends BaseToolHandler {
            AND to_tsvector('simple', t.body) @@ to_tsquery('simple', $1)
          LIMIT $${capIdx}
       ),
-      ranked AS (
+      pre AS (
         SELECT c.nreg, c.ed_date, a.title, a.status_code, a.types_raw, a.editions_cnt, a.has_articles,
+               a.last_ed AS last_ed_d,
                to_char(a.first_ed, 'YYYY-MM-DD') AS first_ed, to_char(a.last_ed, 'YYYY-MM-DD') AS last_ed,
-               COUNT(*) OVER() AS _total_count
+               COUNT(*) OVER() AS _total_count,
+               (SELECT count(*) FROM unnest($${stemsIdx}::text[]) s WHERE strpos(lower(a.title), s) > 0)::float8
+                 / cardinality($${stemsIdx}::text[]) AS title_cov,
+               CASE WHEN a.title ~* '${AMENDMENT_TITLE_RE}' THEN ${R.AMENDMENT_PENALTY} ELSE 0 END AS amend_pen,
+               CASE WHEN cardinality($${yearsIdx}::text[]) = 0 THEN 0
+                    WHEN EXISTS (SELECT 1 FROM unnest($${yearsIdx}::text[]) y WHERE strpos(a.title, y) > 0) THEN ${R.YEAR_MATCH_BONUS}
+                    WHEN a.title ~ '(19|20)[0-9]{2}' THEN -${R.YEAR_MISMATCH_PENALTY}
+                    ELSE 0 END AS year_adj,
+               CASE WHEN a.status_code = 5 THEN ${R.IN_FORCE_BONUS} ELSE 0 END AS status_bonus
           FROM cand c
           JOIN npa.act a ON a.nreg = c.nreg
          WHERE true ${filter}
-         ORDER BY (a.status_code = 5) DESC, a.last_ed DESC NULLS LAST
+      ),
+      pool AS (
+        SELECT * FROM pre
+         ORDER BY ${R.TITLE_WEIGHT} * title_cov + year_adj - amend_pen + status_bonus DESC, last_ed_d DESC NULLS LAST
+         LIMIT $${poolIdx}
+      ),
+      ranked AS (
+        SELECT p.*,
+               ${R.TITLE_WEIGHT} * p.title_cov
+                 + ts_rank_cd(to_tsvector('simple', substr(t.body || '', 1, $${prefixIdx})), to_tsquery('simple', $1), 32)
+                 + p.year_adj - p.amend_pen + p.status_bonus AS score
+          FROM pool p
+          JOIN npa.edition_text t ON t.nreg = p.nreg AND t.ed_date = p.ed_date
+         ORDER BY score DESC, p.last_ed_d DESC NULLS LAST
          LIMIT $${limIdx}
       )
       SELECT r.*,
@@ -358,7 +441,8 @@ export class NpaTools extends BaseToolHandler {
            ORDER BY (CASE WHEN $${asOfIdx}::date IS NULL THEN e.is_current END) DESC NULLS LAST, e.ed_date DESC
            LIMIT 1
         ) sel
-        JOIN npa.edition_text t ON t.nreg = r.nreg AND t.ed_date = sel.ed_date`;
+        JOIN npa.edition_text t ON t.nreg = r.nreg AND t.ed_date = sel.ed_date
+       ORDER BY r.score DESC, r.last_ed_d DESC NULLS LAST`;
 
     return (await this.db.query(sql, values)).rows;
   }

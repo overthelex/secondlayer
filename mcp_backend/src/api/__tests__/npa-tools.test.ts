@@ -6,7 +6,8 @@
  * branch, and the TOAST-safe / chrome-stripped text paths.
  */
 
-import { NpaTools } from '../tools/npa-tools.js';
+import { NpaTools, NPA_RANK, queryYears } from '../tools/npa-tools.js';
+import { normalizeApostrophes } from '../../services/legislation-search-utils.js';
 import { docTypeIdFromLabel, docTypeLabels, npaUrl, statusLabel } from '../tools/npa-dicts.js';
 
 jest.mock('../../utils/logger.js', () => ({
@@ -158,20 +159,73 @@ describe('search_npa', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
-  it('excludes repealed acts by default and never ranks on document bodies', async () => {
+  it('excludes repealed acts by default and body-ranks only a bounded pool', async () => {
     db.query.mockResolvedValue({
-      rows: [{ ...ACT_ROW, _total_count: 190, shown_edition: '2026-01-01', shown_is_current: true, snippet: 'фрагмент' }],
+      rows: [{ ...ACT_ROW, _total_count: 190, score: 1.23456, shown_edition: '2026-01-01', shown_is_current: true, snippet: 'фрагмент' }],
     });
 
     const out = parse(await tools.executeTool('search_npa', { query: 'відстрочка від мобілізації' }));
 
-    const sql = db.query.mock.calls[0][0];
+    const [sql, values] = db.query.mock.calls[0];
     expect(sql).toContain('t.is_current');            // required to hit the partial FTS index
-    expect(sql).not.toContain('ts_rank');             // ~8s over full bodies — must stay out
-    expect(sql).toContain("body || ''");              // TOAST-safe snippet
+    expect(sql).toContain("body || ''");              // TOAST-safe snippet and rank slice
+    // ts_rank_cd over every matched body is ~8 s: it must run only on the metadata-
+    // ranked pool, over a bounded prefix of the text.
+    const poolAt = sql.indexOf('pool AS');
+    const rankAt = sql.indexOf('ts_rank_cd');
+    expect(poolAt).toBeGreaterThan(0);
+    expect(rankAt).toBeGreaterThan(poolAt);
+    expect(sql.slice(poolAt, rankAt)).toMatch(/LIMIT \$\d+/);
+    expect(sql).toMatch(/ts_rank_cd\(to_tsvector\('simple', substr\(t\.body \|\| '', 1, \$\d+\)\)/);
+    expect(values).toContain(NPA_RANK.RERANK_POOL);
+    expect(values).toContain(NPA_RANK.BODY_RANK_CHARS);
+    // the final SELECT must keep the score order — the LATERAL join does not preserve it
+    expect(sql.trim()).toMatch(/ORDER BY r\.score DESC[^)]*$/);
     expect(out.results[0].status).toBe('Чинний');
+    expect(out.results[0].relevance).toBe(1.235);
     expect(out.total_count_at_least).toBe(190);
     expect(out.capped).toBe(false);
+  });
+
+  it('ranks by title coverage, demotes amendments, uses years only as title signals (LEXAI-2097)', async () => {
+    db.query.mockResolvedValue({ rows: [] });
+
+    await tools.executeTool('search_npa', { query: 'мінімальна заробітна плата 2026' });
+
+    const [sql, values] = db.query.mock.calls[0];
+    // stems feed both the tsquery and the title-coverage array; the year is not a stem
+    expect(values[0]).toBe('мінімал:* & заробі:* & плат:*');
+    expect(values).toContainEqual(['мінімал', 'заробі', 'плат']);
+    expect(values).toContainEqual(['2026']);
+    expect(sql).toContain('strpos(lower(a.title), s)');
+    expect(sql).toContain(`THEN ${NPA_RANK.AMENDMENT_PENALTY}`);
+    expect(sql).toContain(`THEN ${NPA_RANK.YEAR_MATCH_BONUS}`);
+    expect(sql).toContain(`-${NPA_RANK.YEAR_MISMATCH_PENALTY}`);
+    // the old recency-first order is gone
+    expect(sql).not.toMatch(/ORDER BY \(a\.status_code = 5\) DESC, a\.last_ed DESC/);
+  });
+
+  it('folds the ʼ apostrophe so the query tokenises like the corpus', async () => {
+    db.query.mockResolvedValue({ rows: [] });
+
+    await tools.executeTool('search_npa', { query: 'бронювання військовозобовʼязаних' });
+    const typographic = db.query.mock.calls[0][1][0];
+    db.query.mockClear();
+    await tools.executeTool('search_npa', { query: "бронювання військовозобов'язаних" });
+
+    expect(typographic).toBe(db.query.mock.calls[0][1][0]);
+    expect(typographic).toContain('язан:*');
+  });
+
+  it('title mode matches every word anywhere in the title, not the literal phrase', async () => {
+    db.query.mockResolvedValue({ rows: [] });
+
+    await tools.executeTool('search_npa', { title: 'бронювання військовозобовʼязаних' });
+
+    const [sql, values] = db.query.mock.calls[0];
+    expect(sql).not.toContain("'%' || $1 || '%'");
+    expect(values.slice(1, 4)).toEqual(['%бронюва%', '%військовозо%', '%язан%']);
+    expect(sql).toContain('a.title ILIKE $2 AND a.title ILIKE $3 AND a.title ILIKE $4');
   });
 
   it('relaxes an over-strict AND query to OR only when the strict pass is thin', async () => {
@@ -199,5 +253,19 @@ describe('search_npa', () => {
     const out = await tools.executeTool('search_npa', { query: 'та і в на' });
     expect(out!.content[0].text).toContain('придатних для пошуку');
     expect(db.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('query normalisation helpers', () => {
+  it('folds every apostrophe look-alike to ASCII', () => {
+    expect(normalizeApostrophes('військовозобовʼязаних')).toBe("військовозобов'язаних");
+    expect(normalizeApostrophes('військовозобов’язаних')).toBe("військовозобов'язаних");
+    expect(normalizeApostrophes("п'ять")).toBe("п'ять");
+  });
+
+  it('extracts years but not article numbers or longer digit runs', () => {
+    expect(queryYears('мінімальна заробітна плата 2026')).toEqual(['2026']);
+    expect(queryYears('стаття 1999 та 2026, 2026')).toEqual(['1999', '2026']);
+    expect(queryYears('ст. 625 ЦК, номер 120260')).toEqual([]);
   });
 });

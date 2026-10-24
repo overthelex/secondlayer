@@ -9,6 +9,28 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { legislationStems, normalizeApostrophes } from '../../services/legislation-search-utils.js';
+
+/**
+ * date_acc / reestr_date are TEXT in DD.MM.YYYY. Ordering by the raw column (the old
+ * `ORDER BY c.reestr_date DESC`) sorted by day-of-month, so «31.12.1997» beat
+ * «08.12.2025». Rearranged to YYYYMMDD as text: no to_date(), so a malformed value
+ * can never raise mid-query.
+ */
+const EDRNPA_DATE_ORDER =
+  `(substr(c.date_acc, 7, 4) || substr(c.date_acc, 4, 2) || substr(c.date_acc, 1, 2)) DESC NULLS LAST, c.id DESC`;
+
+/** c.name lower-cased with apostrophe variants folded to ASCII and whitespace collapsed. */
+const EDRNPA_NAME_KEY_SQL =
+  `regexp_replace(translate(lower(c.name), 'ʼ’‘', ''''''''), '\\s+', ' ', 'g')`;
+
+/** Amendment acts — «Про внесення змін…», «Про затвердження Змін…». */
+const EDRNPA_AMENDMENT_RE = '^\\s*Про (внесення|затвердження) (до .{0,200})?змін';
+
+/** Query-side twin of EDRNPA_NAME_KEY_SQL. Exported for tests. */
+export function edrnpaPhraseKey(text: string): string {
+  return normalizeApostrophes(String(text ?? '')).toLowerCase().replace(/\s+/g, ' ').trim();
+}
 
 export class OpenDataTools extends BaseToolHandler {
   constructor(private db: any) {
@@ -105,7 +127,37 @@ export class OpenDataTools extends BaseToolHandler {
     const values: any[] = [];
     let pi = 1;
 
-    if (name) { conditions.push(`c.name ILIKE $${pi}`); values.push(`%${name}%`); pi++; }
+    // Word-level name match (LEXAI-2100). `c.name ILIKE '%phrase%'` was an exact
+    // substring: «бронювання військовозобов'язаних» typed with an ASCII apostrophe never
+    // matched the КМУ постанова 76/2023 stored with ʼ (U+02BC), and any word between
+    // the two terms in a title broke the match too. Each content stem is now matched on
+    // its own; the stems never contain an apostrophe, so the variant does not matter.
+    // A seq scan over 141K names takes ~0.1-0.2 s — no index needed.
+    // Stems are letters/digits only (see legislationStems), so no LIKE escaping is needed.
+    let nameStems: string[] = [];
+    let minMatchIdx = 0;
+    let orderBy = EDRNPA_DATE_ORDER;
+    if (name) {
+      nameStems = legislationStems(normalizeApostrophes(String(name)));
+      if (nameStems.length === 0) {
+        // Only stopwords/short tokens — fall back to the literal substring.
+        conditions.push(`c.name ILIKE $${pi}`); values.push(`%${name}%`); pi++;
+      } else {
+        // Inline sum of per-stem ILIKEs: an unnest() subquery per row cost ~7x more
+        // over the full-table scan.
+        const terms: string[] = [];
+        for (const s of nameStems) { terms.push(`(c.name ILIKE $${pi})::int`); values.push(`%${s}%`); pi++; }
+        const matchedSql = `(${terms.join(' + ')})`;
+        minMatchIdx = pi; values.push(nameStems.length); pi++;
+        conditions.push(`${matchedSql} >= $${minMatchIdx}`);
+        const phraseIdx = pi; values.push(edrnpaPhraseKey(String(name))); pi++;
+        // Exact phrase (apostrophes/whitespace folded) first, then how many of the
+        // terms the name carries (matters only in the relaxed pass), amending acts
+        // («Про внесення змін до…») after the acts they amend, then newest.
+        orderBy = `strpos(${EDRNPA_NAME_KEY_SQL}, $${phraseIdx}) > 0 DESC, ${matchedSql} DESC, `
+          + `(c.name ~* '${EDRNPA_AMENDMENT_RE}') ASC, ${EDRNPA_DATE_ORDER}`;
+      }
+    }
     // Normalised on BOTH sides. c.number = $n was raw equality against a column
     // holding 5 435 NULLs, 97 zero-padded numbers ("007"), 11 929 with Roman
     // characters, and shapes like 08-а, 02/01, 1-зп, 10-VII — so a user typing
@@ -128,16 +180,37 @@ export class OpenDataTools extends BaseToolHandler {
       ? `, LEFT(t.full_text, 3000) AS full_text`
       : '';
 
-    const sql = `SELECT c.id, c.publisher, c.doc_type, c.date_acc, c.number, c.name, c.status, c.reestr_date, c.keywords${textCol}
+    const sql = `SELECT c.id, c.publisher, c.doc_type, c.date_acc, c.number, c.name, c.status, c.reestr_date, c.keywords${textCol},
+             COUNT(*) OVER() AS _total_count
       FROM opendata_edrnpa_cards c ${textJoin}
       WHERE ${conditions.join(' AND ')}
-      ORDER BY c.reestr_date DESC NULLS LAST
+      ORDER BY ${orderBy}
       LIMIT $${pi}`;
 
     try {
-      const result = await this.db.query(sql, values);
+      let result = await this.db.query(sql, values);
+      let relaxed = false;
+      // AND over all name terms first; a thin result relaxes to "most of the terms"
+      // (ranked by how many match), same relax pattern as search_npa. Not with a
+      // number: name + number is a lookup, and one exact hit is the right answer.
+      if (result.rows.length < 3 && nameStems.length > 1 && !number) {
+        const relaxedValues = [...values];
+        relaxedValues[minMatchIdx - 1] = Math.ceil(nameStems.length / 2);
+        const relaxedResult = await this.db.query(sql, relaxedValues);
+        if (relaxedResult.rows.length > result.rows.length) { result = relaxedResult; relaxed = true; }
+      }
       if (result.rows.length === 0) return this.wrapResponse('Нормативних актів не знайдено');
-      return this.wrapSearchResults(result.rows, lim);
+      if (!relaxed) return this.wrapSearchResults(result.rows, lim);
+      const total = Number(result.rows[0]._total_count ?? result.rows.length);
+      const cleaned = result.rows.map(({ _total_count, ...rest }: any) => rest);
+      return this.wrapResponse({
+        note: 'За всіма словами назви знайдено замало актів — показано акти, що містять більшість слів.',
+        results: cleaned,
+        total_count: total,
+        has_more: cleaned.length < total,
+        limit: lim,
+        offset: 0,
+      });
     } catch (error: any) {
       logger.error('search_edrnpa error', { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
