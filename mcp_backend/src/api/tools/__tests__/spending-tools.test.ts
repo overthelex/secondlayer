@@ -117,3 +117,46 @@ describe('search_public_spending contractor_name', () => {
     expect(out.failed_tables.map((t: any) => t.table)).toEqual(['spending_addendums']);
   });
 });
+
+/**
+ * Units (LEXAI-2088). `amount` is whole hryvnias as spending.gov.ua sends it; the tool used
+ * to divide it by 100 into `amount_uah` and described min/max_amount as kopecks, so a
+ * 195 UAH Nova Poshta act with 32.5 UAH VAT came out as "amount_uah": "1.95".
+ */
+describe('search_public_spending amounts are hryvnias', () => {
+  it('returns amount as stored, with no kopeck-divided duplicate', async () => {
+    const db = makeDb(async () => ({
+      rows: [{ id: '1', edrpou: '42633385', sign_date: '2026-03-23', amount: '195', pdv_include: true, pdv_amount: '32.5', contractors: [] }],
+    }));
+    const tools = new SpendingTools(db);
+
+    const out = parse(await tools.executeTool('search_public_spending', { contractor_name: 'Нова Пошта', doc_type: 'acts' }));
+
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0].amount).toBe('195');
+    expect(out.results[0].pdv_amount).toBe('32.5');
+    expect(out.results[0]).not.toHaveProperty('amount_uah');
+  });
+
+  it('passes min/max_amount through in UAH, cast to numeric for fractional bounds', async () => {
+    const db = makeDb(async () => ({ rows: [] }));
+    const tools = new SpendingTools(db);
+
+    await tools.executeTool('search_public_spending', { edrpou: '42633385', min_amount: 100.5, max_amount: 200, doc_type: 'acts' });
+
+    const { sql, values } = db.calls[0];
+    expect(sql).toContain('amount >= $2::numeric');
+    expect(sql).toContain('amount <= $3::numeric');
+    // Not multiplied into kopecks.
+    expect(values).toEqual(['42633385', 100.5, 200]);
+  });
+
+  it('describes the amount filters in hryvnias, not kopecks', () => {
+    const [def] = new SpendingTools(makeDb(async () => ({ rows: [] }))).getToolDefinitions();
+    const props = (def.inputSchema as any).properties;
+    expect(props.min_amount.description).toContain('грн');
+    expect(props.max_amount.description).toContain('грн');
+    expect(props.min_amount.description).not.toMatch(/копійк/);
+    expect(props.max_amount.description).not.toMatch(/копійк/);
+  });
+});
