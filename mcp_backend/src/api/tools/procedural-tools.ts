@@ -133,26 +133,40 @@ function parseClassifications(content: string | undefined | null): any[] {
  * («Учасник справи, якому повне рішення не було вручене…, має право на поновлення строку…»),
  * and the classifier counted a custody case as practice FOR "late receipt of the full text is
  * a good reason" (24.10.2026: all four "pro" results were that paragraph).
+ *
+ * The markers match anywhere in a sentence, not at its start: Qdrant chunks are cut
+ * mid-sentence, and the chunk that ranked top began « повне рішення не було вручене…» with
+ * «Учасник справи, якому» left in the previous chunk, so start-anchored patterns missed it.
  */
-const APPEAL_BOILERPLATE: RegExp[] = [
-  // The closing formula only («…може бути оскаржене до/в/шляхом/протягом…»), so reasoning
-  // such as «ухвала може бути оскаржена окремо від рішення» survives.
-  /(?:Рішення|Ухвала|Постанова|Вирок)(?:[^.]|\.(?=\d)){0,100}може бути оскаржен[а-яіїє]* (?:до |в |у |шляхом |протягом |безпосередньо )(?:[^.]|\.(?=\d))*\./gi,
-  /(?:Рішення|Ухвала|Постанова)(?:[^.]|\.(?=\d)){0,60}оскарженню не підляга(?:[^.]|\.(?=\d))*\./gi,
-  /Учасник(?:и)? справи,? як(?:ому|им) повн(?:[^.]|\.(?=\d))*\./gi,
-  /(?:Апеляційна|Касаційна) скарга (?:на (?:[^.]|\.(?=\d)){0,60})?подається(?:[^.]|\.(?=\d))*\./gi,
-  /(?:Рішення|Ухвала|Постанова)(?: суду)? набира(?:є|ють) законної сили (?:з моменту|після закінчення|з дня|негайно)(?:[^.]|\.(?=\d))*\./gi,
-  /Повний текст(?:[^.]|\.(?=\d)){0,80}(?:складен|виготовлен|проголошен)(?:[^.]|\.(?=\d))*\./gi,
+const APPEAL_BOILERPLATE_MARKERS: RegExp[] = [
+  // «…має право на поновлення (пропущеного) строку… з дня вручення йому…»
+  /право на поновлення (?:пропущеного )?строку[\s\S]*з дня вручення (?:йому|їй|їм)/i,
+  // «Рішення … може бути оскаржене до / протягом / шляхом…» — the closing formula only, so
+  // «ухвала може бути оскаржена окремо від рішення» (reasoning about appealability) survives.
+  // Must name the appeal route or a deadline, so «акт Кабінету Міністрів може бути оскаржений
+  // до суду…» (a norm about what can be challenged) is not mistaken for the notice.
+  /може бути оскаржен[а-яіїє]* (?:до |протягом |шляхом |безпосередньо |в апеляційному порядку (?!окремо))(?=[\s\S]*(?:апеляційн|касаційн|Верховн|протягом))/i,
+  /(?:апеляційн|касаційн)[а-яіїє]* скарг[а-яіїє]* (?:на (?:[^.]|\.(?=\d)){0,60})?(?:подається|може бути подан)/i,
+  /набира[а-яіїє]* законної сили (?:з моменту|після закінчення|з дня|негайно)/i,
+  /повний текст[\s\S]{0,80}(?:буде |було )?(?:складен|виготовлен|проголошен)/i,
 ];
 
-/** Remove appeal/entry-into-force boilerplate; `removed` tells whether any was found. */
+/**
+ * Remove the closing appeal / entry-into-force / full-text-date sentences; `removed` tells
+ * whether any were found. A dot followed by a digit (dates, «ст. 12.1») does not end a sentence.
+ */
 export function stripAppealBoilerplate(text: string): { text: string; removed: boolean } {
-  let out = text || '';
+  // Historical RTF imports keep `\~` (non-breaking space) and the dispositive comes from the
+  // raw full_text, so normalise spacing before matching phrases written with plain spaces.
+  const normalised = (text || '').replace(/\\~/g, ' ').replace(/[\u00a0\u202f]/g, ' ');
+  const sentences = normalised.split(/(?<=[.!?;])\s+|\n+/);
   let removed = false;
-  for (const re of APPEAL_BOILERPLATE) {
-    out = out.replace(re, () => { removed = true; return ' '; });
-  }
-  return { text: out.replace(/\s+/g, ' ').trim(), removed };
+  const kept = sentences.filter((sentence) => {
+    const hit = APPEAL_BOILERPLATE_MARKERS.some((re) => re.test(sentence));
+    if (hit) removed = true;
+    return !hit;
+  });
+  return { text: kept.join(' ').replace(/\s+/g, ' ').trim(), removed };
 }
 
 // A semantic hit that was mostly boilerplate: what is left is too short to carry a position.

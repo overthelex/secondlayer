@@ -202,6 +202,9 @@ describe('appeal boilerplate (24.10.2026: a custody case counted as "pro" on an 
     const r = stripAppealBoilerplate(`Визначити місце проживання дитини з матір'ю. ${tail}`);
     expect(r.removed).toBe(true);
     expect(r.text).toBe("Визначити місце проживання дитини з матір'ю.");
+    // A Qdrant chunk cut mid-sentence: «Учасник справи, якому» is in the previous chunk.
+    const chunk = ' повне рішення не було вручене у день його складання, має право на поновлення строку на апеляційне оскарження шляхом подання апеляційної скарги протягом тридцяти днів з дня вручення йому повного рішення суду.\n\nПовний текст судового рішення буде складений 18.02.2022 року.\n\nСУДДЯ';
+    expect(stripAppealBoilerplate(chunk)).toEqual({ text: 'СУДДЯ', removed: true });
     const reasoning = 'Ухвала про забезпечення позову може бути оскаржена окремо від рішення суду.';
     expect(stripAppealBoilerplate(reasoning)).toEqual({ text: reasoning, removed: false });
   });
