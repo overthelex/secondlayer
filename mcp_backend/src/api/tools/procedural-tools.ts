@@ -140,10 +140,16 @@ function parseClassifications(content: string | undefined | null): any[] {
  */
 const APPEAL_BOILERPLATE_MARKERS: RegExp[] = [
   // «…має право на поновлення (пропущеного) строку… з дня вручення йому…»
-  /право на поновлення (?:пропущеного )?строку[\s\S]*з дня вручення (?:(?:йому|їй|їм) )?повн/i,
+  // No «право на» in front: a chunk may start at « на поновлення…» or « поновлення…».
+  // «пропущен\S*» also covers the «пропущенного» typo seen in the registry.
+  /поновлення (?:пропущен[а-яіїє]* )?строку[\s\S]*з дня вручення (?:(?:йому|їй|їм) )?повн/i,
   // «Строк на апеляційне оскарження може бути також поновлений в разі пропуску з інших
   // поважних причин…» — the next sentence of the same notice; «також» marks the notice form.
   /може бути також поновлен/i,
+  // The default-judgment version of the same notice.
+  /Заочне рішення може бути переглянут/i,
+  // The notice's opening clause, for a chunk cut before «з дня вручення…».
+  /як(?:ому|ій|им) повн[а-яіїє]* [\s\S]{0,40}рішення[\s\S]{0,40}не було вручен/i,
   // «Рішення … може бути оскаржене до / протягом / шляхом…» — the closing formula only, so
   // «ухвала може бути оскаржена окремо від рішення» (reasoning about appealability) survives.
   // Must name the appeal route or a deadline, so «акт Кабінету Міністрів може бути оскаржений
@@ -151,18 +157,19 @@ const APPEAL_BOILERPLATE_MARKERS: RegExp[] = [
   /може бути оскаржен[а-яіїє]* (?:до |протягом |шляхом |безпосередньо |в апеляційному порядку (?!окремо))(?=[\s\S]*(?:апеляційн|касаційн|Верховн|протягом))/i,
   /(?:апеляційн|касаційн)[а-яіїє]* скарг[а-яіїє]* (?:на (?:[^.]|\.(?=\d)){0,60})?(?:подається|може бути подан)/i,
   /набира[а-яіїє]* законної сили (?:з моменту|після закінчення|з дня|негайно)/i,
-  /повний текст[\s\S]{0,80}(?:буде |було )?(?:складен|виготовлен|проголошен)/i,
+  /повн(?:ий текст|е (?:судове )?рішення)[\s\S]{0,80}(?:буде |було )?(?:складен|виготовлен|проголошен)/i,
 ];
 
 /**
  * Remove the closing appeal / entry-into-force / full-text-date sentences; `removed` tells
- * whether any were found. A dot followed by a digit (dates, «ст. 12.1») does not end a sentence.
+ * whether any were found.
  */
 export function stripAppealBoilerplate(text: string): { text: string; removed: boolean } {
   // Historical RTF imports keep `\~` (non-breaking space) and the dispositive comes from the
   // raw full_text, so normalise spacing before matching phrases written with plain spaces.
   const normalised = (text || '').replace(/\\~/g, ' ').replace(/[\u00a0\u202f]/g, ' ');
-  const sentences = normalised.split(/(?<=[.!?;])\s+|\n+/);
+  // Not on ';': the notice enumerates «1) на рішення суду…; 2) на ухвали суду…» in one sentence.
+  const sentences = normalised.split(/(?<=[.!?])\s+|\n+/);
   let removed = false;
   const kept = sentences.filter((sentence) => {
     const hit = APPEAL_BOILERPLATE_MARKERS.some((re) => re.test(sentence));
