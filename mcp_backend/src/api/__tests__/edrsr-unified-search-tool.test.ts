@@ -240,6 +240,32 @@ describe('EdsrUnifiedSearchTool', () => {
       expect(parsed.results[0].justice_kind_name).toBe('Цивільне');
     });
 
+    // LEXAI-2109: without a metadata filter searchFulltext returns bare doc_id/rank/headline
+    // rows, and fulltext mode showed court_name/justice_kind_name/judgment_form as null.
+    it('fills court, justice kind and form for bare FTS rows from edrsr_documents', async () => {
+      mockFtsService.searchFulltext = jest.fn(() => Promise.resolve({
+        query: 'тест', total: 1, results: [{ doc_id: '12345', headline: 'тест', rank: 0.5 }],
+      }));
+      db = makeDb((sql) => {
+        if (sql.includes('FROM edrsr_documents')) {
+          return { rows: [{ doc_id: '12345', court_code: 2605, cause_num: '756/1234/23', judge: 'Іванов І.І.', justice_kind: 1, judgment_code: 3, adjudication_date: '2024-06-14T21:00:00.000Z' }] };
+        }
+        if (sql.includes('edrsr_courts')) return { rows: [{ court_code: 2605, name: 'Оболонський' }] };
+        if (sql.includes('edrsr_justice_kinds')) return { rows: [{ justice_kind: 1, name: 'Цивільне' }] };
+        if (sql.includes('edrsr_judgment_forms')) return { rows: [{ judgment_code: 3, name: 'Рішення' }] };
+        return { rows: [] };
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+
+      const result = await tool.executeTool('search_court_decisions', { mode: 'fulltext', query: 'тест' });
+      const r = JSON.parse(result?.content[0].text || '{}').results[0];
+      expect(r.cause_num).toBe('756/1234/23');
+      expect(r.court_name).toBe('Оболонський');
+      expect(r.justice_kind_name).toBe('Цивільне');
+      expect(r.judgment_form).toBe('Рішення');
+      expect(r.adjudication_date).toBeTruthy();
+    });
+
     it('truncates an over-long fulltext query to the leading tokens', async () => {
       db = makeDb(() => ({ rows: [] }));
       tool = new EdsrUnifiedSearchTool(db, mockFtsService);

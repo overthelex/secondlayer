@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { EdsrFtsService, buildPartyRoleRegex, buildNewestFirstYearLegs, buildPartyYearLegs, partyNameTokenCount } from '../edrsr-fts-service';
+import { EdsrFtsService, buildPartyRoleRegex, buildYearLegs, yearLegPredicate, kyivDayBoundsSql, partyNameTokenCount } from '../edrsr-fts-service';
 
 const findRegexParam = (params: any[]): string | undefined =>
   params.find((p) => typeof p === 'string' && (p.includes('(?:до|проти)') || p.includes('за[[:space:]]+позов')));
@@ -232,8 +232,8 @@ describe('EdsrFtsService.searchFulltext candidate cap + timeout (LEXAI-2087)', (
     };
     await svc.searchFulltext('x', makeDbWithRows(1, 1) as any, {}, 20, 0, undefined, 'морал:*');
     await svc.searchFulltext('x', makeDbWithRows(1, 1) as any, {}, 20, 0, undefined, 'морал:*', { candidateCap: 100 });
-    expect(keys[0]).toBe('tsq:морал:*');
-    expect(keys[1]).toBe('tsq:морал:*|cap:100');
+    expect(keys[0]).toBe('y1|tsq:морал:*');
+    expect(keys[1]).toBe('y1|tsq:морал:*|cap:100');
   });
 });
 
@@ -283,12 +283,12 @@ describe('EdsrFtsService.filterDocIdsByConstraints', () => {
   });
 });
 
-describe('buildPartyYearLegs', () => {
+describe('buildYearLegs', () => {
   it('scans exactly the requested years, newest first — never the current year by default', () => {
     // LEXAI-2086: with the newest leg pinned to the current year, the 2026 partition filled
     // the cap for a Q1-2025 query and the date filter then dropped every candidate.
-    expect(buildPartyYearLegs('2025-01-01', '2025-03-31', 2026)).toEqual([{ minYear: 2025, maxYear: 2025 }]);
-    expect(buildPartyYearLegs('2023-06-01', '2025-03-31', 2026)).toEqual([
+    expect(buildYearLegs('2025-01-01', '2025-03-31', 2026)).toEqual([{ minYear: 2025, maxYear: 2025 }]);
+    expect(buildYearLegs('2023-06-01', '2025-03-31', 2026)).toEqual([
       { minYear: 2025, maxYear: 2025 },
       { minYear: 2024, maxYear: 2024 },
       { minYear: 2023, maxYear: 2023 },
@@ -296,11 +296,11 @@ describe('buildPartyYearLegs', () => {
   });
 
   it('opens the newest leg upward without date_to and the oldest downward without date_from', () => {
-    const legs = buildPartyYearLegs(undefined, undefined, 2026);
+    const legs = buildYearLegs(undefined, undefined, 2026);
     expect(legs[0]).toEqual({ minYear: 2026, maxYear: null }); // takes p_future too
     expect(legs[legs.length - 1]).toEqual({ minYear: null, maxYear: 2005 }); // takes pre-2005
     expect(legs).toHaveLength(2026 - 2005 + 1);
-    expect(buildPartyYearLegs('2024-01-01', undefined, 2026)).toEqual([
+    expect(buildYearLegs('2024-01-01', undefined, 2026)).toEqual([
       { minYear: 2026, maxYear: null },
       { minYear: 2025, maxYear: 2025 },
       { minYear: 2024, maxYear: 2024 },
@@ -308,15 +308,15 @@ describe('buildPartyYearLegs', () => {
   });
 
   it('folds years below the floor into one leg', () => {
-    expect(buildPartyYearLegs('1999-01-01', '2006-12-31', 2026)).toEqual([
+    expect(buildYearLegs('1999-01-01', '2006-12-31', 2026)).toEqual([
       { minYear: 2006, maxYear: 2006 },
       { minYear: 1999, maxYear: 2005 },
     ]);
-    expect(buildPartyYearLegs('1999-01-01', '2002-12-31', 2026)).toEqual([{ minYear: 1999, maxYear: 2002 }]);
+    expect(buildYearLegs('1999-01-01', '2002-12-31', 2026)).toEqual([{ minYear: 1999, maxYear: 2002 }]);
   });
 
   it('returns no legs for an inverted range', () => {
-    expect(buildPartyYearLegs('2025-01-01', '2024-12-31', 2026)).toEqual([]);
+    expect(buildYearLegs('2025-01-01', '2024-12-31', 2026)).toEqual([]);
   });
 });
 
@@ -441,7 +441,7 @@ describe('EdsrFtsService.countByParty', () => {
 
     const { sql, params } = ftsCall(db);
     // Only the requested year is scanned — no 2026 leg, no ±1 widening.
-    expect(sql).toContain('f.adj_year >= 2025 AND f.adj_year <= 2025');
+    expect(sql).toContain('f.adj_year = 2025');
     expect(sql).not.toMatch(/adj_year [<>]=? 202[46]/);
     expect(sql).not.toContain('l1 AS');
     // The date filter sits inside the leg, and no LIMIT truncates a leg.
@@ -677,7 +677,7 @@ describe('EdsrFtsService.searchFulltext party leg (LEXAI-2085)', () => {
     const sql = db.calls[0].sql;
     const thisYear = new Date().getFullYear();
     expect(sql).toContain('UNION ALL');
-    const iNow = sql.indexOf(`f.adj_year = ${thisYear}`);
+    const iNow = sql.indexOf(`f.adj_year >= ${thisYear}`); // open upward: takes p_future too
     const iPrev = sql.indexOf(`f.adj_year = ${thisYear - 1}`);
     const iOld = sql.indexOf('f.adj_year = 2006');
     expect(iNow).toBeGreaterThan(-1);
@@ -698,13 +698,50 @@ describe('EdsrFtsService.searchFulltext party leg (LEXAI-2085)', () => {
     expect(high.calls[0].sql).toMatch(/\) legs\s+LIMIT 100\s/);
   });
 
-  it('keeps the single capped scan for topical-only queries', async () => {
+  // LEXAI-2109: the topical candidate step was one capped scan of the parent, read in
+  // partition-bound order, so with a 100-500 cap every candidate came from 2006 and hybrid
+  // search put 2006 appeal verdicts first for a wage-arrears query.
+  it('fills the topical candidate cap newest year first, too', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDb();
+    await svc.searchFulltext('оренда землі', db, {}, 10, 0, undefined, undefined, { candidateCap: 300 });
+
+    const sql = db.calls[0].sql;
+    const thisYear = new Date().getFullYear();
+    const iNow = sql.indexOf(`f.adj_year >= ${thisYear}`);
+    const iPrev = sql.indexOf(`f.adj_year = ${thisYear - 1}`);
+    const iOld = sql.indexOf('f.adj_year = 2006');
+    const iPre = sql.indexOf('f.adj_year <= 2005');
+    expect(iNow).toBeGreaterThan(-1);
+    expect(iNow).toBeLessThan(iPrev);
+    expect(iPrev).toBeLessThan(iOld);
+    expect(iOld).toBeLessThan(iPre);
+    expect(sql).toMatch(/\) legs\s+LIMIT 300\s/);
+    // The ranked re-fetch is pinned to the candidate's own partition.
+    expect(sql).toContain('cand.adj_year = f.adj_year');
+  });
+
+  it('keeps the default topical cap when the caller gives none', async () => {
     const svc = new EdsrFtsService();
     const db = makeDb();
     await svc.searchFulltext('оренда землі', db);
+    expect(db.calls[0].sql).toMatch(/\) legs\s+LIMIT 2000\s/);
+  });
 
-    expect(db.calls[0].sql).not.toContain('UNION ALL');
-    expect(db.calls[0].sql).toContain('LIMIT 2000');
+  it("scans only the period's years for a dated topical query, and nothing for an inverted one", async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDb();
+    await svc.searchFulltext('оренда землі', db, { date_from: '2023-03-01', date_to: '2024-09-30' });
+    const sql = db.calls[0].sql;
+    expect(sql).toContain('f.adj_year = 2024');
+    expect(sql).toContain('f.adj_year = 2023');
+    expect(sql).not.toMatch(/f\.adj_year (=|>=|<=) (2022|2025)/);
+    // Each leg also bounds edrsr_documents to its year (partition pruning on the join).
+    expect(sql).toContain("d.adjudication_date >= '2024-01-01'::timestamp AT TIME ZONE 'Europe/Kyiv'");
+
+    const inv = makeDb();
+    await svc.searchFulltext('оренда землі', inv, { date_from: '2025-01-01', date_to: '2024-12-31' });
+    expect(inv.calls[0].sql).toContain('WHERE FALSE');
   });
 
   it('flags a party total that fills the smaller cap as a floor', async () => {
@@ -748,25 +785,58 @@ describe('EdsrFtsService.searchFulltext party leg (LEXAI-2085)', () => {
   });
 });
 
-describe('buildNewestFirstYearLegs', () => {
-  it('covers every partition newest first when no period is given', () => {
-    const legs = buildNewestFirstYearLegs(2026);
-    expect(legs[0]).toBe('f.adj_year > 2026');
-    expect(legs[1]).toBe('f.adj_year = 2026');
-    expect(legs[legs.length - 2]).toBe('f.adj_year = 2005');
-    expect(legs[legs.length - 1]).toBe('f.adj_year < 2005');
-    expect(legs).toHaveLength(1 + 22 + 1);
+describe('yearLegPredicate', () => {
+  it('pins a one-year leg to its partition and leaves open sides open', () => {
+    expect(yearLegPredicate({ minYear: 2025, maxYear: 2025 })).toBe('f.adj_year = 2025');
+    expect(yearLegPredicate({ minYear: 2026, maxYear: null })).toBe('f.adj_year >= 2026');
+    expect(yearLegPredicate({ minYear: null, maxYear: 2005 })).toBe('f.adj_year <= 2005');
+    expect(yearLegPredicate({ minYear: 1999, maxYear: 2002 })).toBe('f.adj_year >= 1999 AND f.adj_year <= 2002');
+    expect(yearLegPredicate({ minYear: null, maxYear: null })).toBe('TRUE');
+  });
+});
+
+// LEXAI-2110: adjudication_date holds Kyiv-local midnight. A decision of 1 January 2025 is
+// stored as 2024-12-31 22:00 UTC, so `>= '2025-01-01'` (UTC midnight) dropped it.
+describe('Kyiv-local date bounds (LEXAI-2110)', () => {
+  it('builds whole-day Kyiv bounds, the upper one exclusive of the next day', () => {
+    expect(kyivDayBoundsSql('d.adjudication_date', '$3', '$4')).toEqual([
+      "d.adjudication_date >= ($3::date)::timestamp AT TIME ZONE 'Europe/Kyiv'",
+      "d.adjudication_date < ($4::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'",
+    ]);
   });
 
-  it('narrows to the period widened by a year on each side', () => {
-    expect(buildNewestFirstYearLegs(2026, '2023-03-01', '2023-09-30'))
-      .toEqual(['f.adj_year = 2024', 'f.adj_year = 2023', 'f.adj_year = 2022']);
+  it('searchFulltext compares date_from/date_to as Kyiv calendar days', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDb();
+    await svc.searchFulltext('оренда землі', db, { date_from: '2025-01-01', date_to: '2025-01-31' });
+    const { sql, params } = db.calls[0];
+    const iFrom = params.indexOf('2025-01-01') + 1;
+    const iTo = params.indexOf('2025-01-31') + 1;
+    expect(sql).toContain(`d.adjudication_date >= ($${iFrom}::date)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+    expect(sql).toContain(`d.adjudication_date < ($${iTo}::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+    // No bare UTC comparison against a date parameter is left.
+    expect(sql).not.toMatch(/adjudication_date (>=|<=) \$\d+(?!::)/);
   });
 
-  it('keeps the pre-2005 and future buckets only when the period reaches them', () => {
-    expect(buildNewestFirstYearLegs(2026, '2003-01-01', '2005-12-31'))
-      .toEqual(['f.adj_year = 2006', 'f.adj_year = 2005', 'f.adj_year < 2005']);
-    expect(buildNewestFirstYearLegs(2026, '2026-01-01'))
-      .toEqual(['f.adj_year > 2026', 'f.adj_year = 2026', 'f.adj_year = 2025']);
+  it('countByPartyFast compares date_from/date_to as Kyiv calendar days', async () => {
+    const svc = new EdsrFtsService();
+    const calls: { sql: string; params: any[] }[] = [];
+    const db = {
+      query: jest.fn((sql: string, params: any[]) => {
+        calls.push({ sql, params });
+        if (sql.includes('edrsr_parties_coverage')) return Promise.resolve({ rows: [{ adj_year: 2025 }] });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    await svc.countByParty('Нова Пошта', 'defendant', db, { date_from: '2025-01-01', date_to: '2025-03-31' });
+    const count = calls.find((c) => c.sql.includes('FROM edrsr_parties') && c.sql.includes('GROUP BY court_code'))!;
+    expect(count).toBeDefined();
+    const iFrom = count.params.indexOf('2025-01-01') + 1;
+    const iTo = count.params.indexOf('2025-03-31') + 1;
+    expect(count.sql).toContain(`adjudication_date >= ($${iFrom}::date)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+    expect(count.sql).toContain(`adjudication_date < ($${iTo}::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+    // The joined statements qualify the same bound with the parties alias.
+    const cases = calls.find((c) => c.sql.includes('distinct_cases'))!;
+    expect(cases.sql).toContain(`p.adjudication_date >= ($${iFrom}::date)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
   });
 });

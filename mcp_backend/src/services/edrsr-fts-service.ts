@@ -98,39 +98,6 @@ export function buildPartyRoleRegex(partyName: string, role: Exclude<PartyRole, 
     : `за[[:space:]]+позов[а-яіїєґ]*[[:space:]]+${anchoredName}`;
 }
 
-/**
- * adj_year predicates, newest first, one per edrsr_fulltext partition (LEXAI-2085). Each
- * becomes its own UNION ALL leg under the candidate LIMIT; Postgres runs Append children in
- * order and stops pulling once the LIMIT is met, so a party probe touches only as many
- * recent partitions as it needs (verified: 3 of 24 for "Нова Пошта" as defendant) instead of
- * scanning all of them oldest first. A single `ORDER BY doc_id DESC` cannot do this — it
- * walks idx_ef_p_*_docid probing tsv row by row — and a LATERAL over generate_series was
- * planned as one hashed Append over every partition (39.8 s measured).
- *
- * The period, when given, is widened by a year per side (as countByParty does): the exact
- * d.adjudication_date bounds enforce it, the band only needs to be a superset. Values are
- * computed integers, never user text, so they are inlined as literals — literal bounds let
- * the planner prune each leg to a single partition at plan time.
- */
-export function buildNewestFirstYearLegs(currentYear: number, dateFrom?: string, dateTo?: string): string[] {
-  const year = (iso?: string): number | null => {
-    const y = Number(String(iso ?? '').slice(0, 4));
-    return Number.isInteger(y) && y > 1900 ? y : null;
-  };
-  const yFrom = year(dateFrom);
-  const yTo = year(dateTo);
-  const lo = yFrom !== null ? yFrom - 1 : null;
-  const hi = yTo !== null ? yTo + 1 : null;
-  const legs: string[] = [];
-  if (hi === null || hi > currentYear) legs.push(`f.adj_year > ${currentYear}`);
-  const top = Math.min(currentYear, hi ?? currentYear);
-  const bottom = Math.max(FTS_FIRST_YEAR_PARTITION, lo ?? FTS_FIRST_YEAR_PARTITION);
-  for (let y = top; y >= bottom; y--) legs.push(`f.adj_year = ${y}`);
-  if (lo === null || lo < FTS_FIRST_YEAR_PARTITION) legs.push(`f.adj_year < ${FTS_FIRST_YEAR_PARTITION}`);
-  // A band entirely outside [FIRST_YEAR, currentYear] can leave no legs; keep the SQL valid.
-  return legs.length > 0 ? legs : ['FALSE'];
-}
-
 export interface EdsrFtsResult {
   doc_id: number;
   headline: string | null;
@@ -239,14 +206,100 @@ export interface PartyCaseCount {
 // planner picks.
 const PARTY_COUNT_CAND_CAP = 25_000;
 
-// adj_year partitions before this year are folded into one leg: edrsr_fulltext_p_pre2005
-// holds them all, so per-year legs there would rescan the same partition.
-const PARTY_LEG_FLOOR_YEAR = 2005;
-
 // adjudication_date stores Kyiv-local midnight and adj_year is the Kyiv-local year
 // (verified: documents adjudicated on 2025-01-01, stored as 2024-12-31 22:00 UTC, carry
-// adj_year 2025). Date bounds are compared in the same zone.
+// adj_year 2025). Date bounds are compared in the same zone — see kyivDayBoundsSql.
 const KYIV_TZ = 'Europe/Kyiv';
+
+// adj_year partitions before this year are folded into one leg: edrsr_fulltext_p_pre2005
+// holds them all, so per-year legs there would rescan the same partition.
+const YEAR_LEG_FLOOR = 2005;
+
+/**
+ * SQL bounds for a date_from/date_to period on a timestamptz column holding Kyiv-local
+ * midnight (LEXAI-2110). A bare '2025-01-01' compared with it is read as UTC midnight, which
+ * is 02:00 Kyiv — so the documents of 1 January (stored as 2024-12-31 22:00 UTC) fell outside
+ * a period starting that day. Both bounds are whole Kyiv calendar days, the upper one
+ * exclusive of the next day. `fromParam`/`toParam` are placeholders such as '$3'.
+ */
+export function kyivDayBoundsSql(column: string, fromParam?: string, toParam?: string): string[] {
+  const out: string[] = [];
+  if (fromParam) out.push(`${column} >= (${fromParam}::date)::timestamp AT TIME ZONE '${KYIV_TZ}'`);
+  if (toParam) out.push(`${column} < (${toParam}::date + 1)::timestamp AT TIME ZONE '${KYIV_TZ}'`);
+  return out;
+}
+
+/** One adj_year band of a newest-first scan; null = open on that side. */
+export interface YearLeg {
+  minYear: number | null;
+  maxYear: number | null;
+}
+
+/**
+ * The adj_year legs of a newest-first scan of edrsr_fulltext, one per year partition
+ * (LEXAI-2085/2086/2109). Each leg becomes its own UNION ALL child (searchFulltext) or CTE
+ * (countByParty); Postgres runs them in order and stops once the cap is met, so a probe
+ * touches only as many recent partitions as it needs. A single Append over the parent
+ * scans partitions in bound order — oldest first — which is how a capped topical search
+ * came back with 2006 verdicts. `ORDER BY doc_id DESC` cannot replace this (it walks the
+ * doc_id index probing tsv row by row), and a LATERAL over generate_series was planned as
+ * one hashed Append over every partition (39.8 s measured).
+ *
+ * Years come from date_from/date_to as Kyiv-local calendar years, which is what adj_year
+ * holds, so no widening is needed. Without date_to the newest leg is open upward from
+ * `thisYear` (it also takes p_future); without date_from — or below YEAR_LEG_FLOOR — the
+ * oldest leg is open downward / folded into p_pre2005. Returns [] when date_from's year is
+ * after date_to's: nothing can match.
+ */
+export function buildYearLegs(dateFrom: string | undefined, dateTo: string | undefined, thisYear: number): YearLeg[] {
+  const yearOf = (iso?: string): number | null => {
+    const y = Number(String(iso ?? '').slice(0, 4));
+    return Number.isInteger(y) && y > 1900 ? y : null;
+  };
+  const lo = yearOf(dateFrom);
+  const toYear = yearOf(dateTo);
+  const hi = toYear ?? Math.max(thisYear, lo ?? thisYear);
+  if (lo !== null && lo > hi) return [];
+
+  const legs: YearLeg[] = [];
+  const bottom = Math.max(lo ?? YEAR_LEG_FLOOR, YEAR_LEG_FLOOR);
+  if (hi < bottom) {
+    // The whole range lies below the floor: one leg over the pre-2005 partition.
+    legs.push({ minYear: lo, maxYear: hi });
+  } else {
+    for (let y = hi; y >= bottom; y--) legs.push({ minYear: y, maxYear: y });
+    // Below the floor (or with no date_from at all) the last leg reaches down to lo.
+    if (lo === null || lo < YEAR_LEG_FLOOR) legs[legs.length - 1].minYear = lo;
+  }
+  if (toYear === null) legs[0].maxYear = null;
+  return legs;
+}
+
+/**
+ * adj_year predicate for one leg on `alias`.adj_year. Values are computed integers, never
+ * user text, so they are inlined: literal bounds let the planner prune each leg to its
+ * partition(s) at plan time.
+ */
+export function yearLegPredicate(leg: YearLeg, alias = 'f'): string {
+  const col = `${alias}.adj_year`;
+  if (leg.minYear !== null && leg.minYear === leg.maxYear) return `${col} = ${leg.minYear}`;
+  const parts: string[] = [];
+  if (leg.minYear !== null) parts.push(`${col} >= ${leg.minYear}`);
+  if (leg.maxYear !== null) parts.push(`${col} <= ${leg.maxYear}`);
+  return parts.length ? parts.join(' AND ') : 'TRUE';
+}
+
+/**
+ * The same band on d.adjudication_date (Kyiv-local year boundaries), so a leg that joins
+ * edrsr_documents prunes it to the matching partition(s) whichever join the planner picks.
+ */
+export function yearLegDocPredicate(leg: YearLeg, alias = 'd'): string[] {
+  const yearStart = (y: number) => `'${y}-01-01'::timestamp AT TIME ZONE '${KYIV_TZ}'`;
+  const out: string[] = [];
+  if (leg.minYear !== null) out.push(`${alias}.adjudication_date >= ${yearStart(leg.minYear)}`);
+  if (leg.maxYear !== null) out.push(`${alias}.adjudication_date < ${yearStart(leg.maxYear + 1)}`);
+  return out;
+}
 
 // Server-side budgets for the countByParty statements. They must sum to less than the 60 s
 // tool timeout: without them a call the tool layer had already abandoned kept running in
@@ -258,43 +311,6 @@ const PARTY_SAMPLE_TIMEOUT_MS = 15_000;
 // The FTS fallback answers count, breakdown and sample in ONE statement, so it gets the
 // whole budget the fast path splits between its count and sample statements.
 const PARTY_FTS_COUNT_TIMEOUT_MS = 50_000;
-
-/** One adj_year band of the countByParty candidate scan; null = open on that side. */
-export interface PartyYearLeg {
-  minYear: number | null;
-  maxYear: number | null;
-}
-
-/**
- * The adj_year legs countByParty scans, newest first. Years come from date_from/date_to
- * (Kyiv-local, so the calendar year of the ISO date is the partition year); without
- * date_to the newest leg is open-ended upward from `thisYear` (it also takes the
- * p_future partition), without date_from the oldest leg is open-ended downward. Returns
- * [] when date_from's year is after date_to's.
- */
-export function buildPartyYearLegs(dateFrom: string | undefined, dateTo: string | undefined, thisYear: number): PartyYearLeg[] {
-  const yearOf = (iso?: string): number | null => {
-    const y = Number(String(iso ?? '').slice(0, 4));
-    return Number.isInteger(y) && y > 1900 ? y : null;
-  };
-  const lo = yearOf(dateFrom);
-  const toYear = yearOf(dateTo);
-  const hi = toYear ?? Math.max(thisYear, lo ?? thisYear);
-  if (lo !== null && lo > hi) return [];
-
-  const legs: PartyYearLeg[] = [];
-  const bottom = Math.max(lo ?? PARTY_LEG_FLOOR_YEAR, PARTY_LEG_FLOOR_YEAR);
-  if (hi < bottom) {
-    // The whole range lies below the floor: one leg over the pre-2005 partition.
-    legs.push({ minYear: lo, maxYear: hi });
-  } else {
-    for (let y = hi; y >= bottom; y--) legs.push({ minYear: y, maxYear: y });
-    // Below the floor (or with no date_from at all) the last leg reaches down to lo.
-    if (lo === null || lo < PARTY_LEG_FLOOR_YEAR) legs[legs.length - 1].minYear = lo;
-  }
-  if (toYear === null) legs[0].maxYear = null;
-  return legs;
-}
 
 /**
  * Number of word tokens the 'simple' parser will see in a party name. Above one,
@@ -481,8 +497,6 @@ const PARTY_FTS_CANDIDATE_CAP = 100;
 // The party leg gets a longer budget than the topical one: a cold partition can need
 // ~20 s of TOAST reads, and the callers no longer re-probe after a timeout (timed_out).
 const PARTY_FTS_STATEMENT_TIMEOUT_MS = 20_000;
-// First year with its own edrsr_fulltext partition; earlier years share p_pre2005.
-const FTS_FIRST_YEAR_PARTITION = 2005;
 // filterDocIdsByConstraints is a doc_id-index lookup (~0.2 s for 50 ids) but re-reads
 // full_text for the role regex; bound it like every other statement on this table.
 const PARTY_FILTER_TIMEOUT_MS = 10_000;
@@ -628,8 +642,9 @@ export class EdsrFtsService {
     }
     // Day-precision bounds inside the boundary years (the year span is coarse): re-check the
     // exact adjudication_date so e.g. 2023-03-01..2023-09-30 is honoured, not the whole year.
-    conditions.push(`adjudication_date >= $${p}`); params.push(date_from); p++;
-    conditions.push(`adjudication_date <= $${p}`); params.push(date_to); p++;
+    // Whole Kyiv-local days, as in countByParty (LEXAI-2110).
+    conditions.push(...kyivDayBoundsSql('adjudication_date', `$${p}`)); params.push(date_from); p++;
+    conditions.push(...kyivDayBoundsSql('adjudication_date', undefined, `$${p}`)); params.push(date_to); p++;
     if (filters.justice_kind) { conditions.push(`justice_kind = $${p}`); params.push(filters.justice_kind); p++; }
     const whereClause = conditions.join(' AND ');
 
@@ -909,7 +924,8 @@ export class EdsrFtsService {
     const topicalExpr = useTsq ? `to_tsquery('simple', $1)` : `plainto_tsquery('simple', $1)`;
     // Distinct cache key per actual tsquery so prefix and plainto results never collide.
     // A non-default candidate cap changes `total`, so it is part of the key as well.
-    const baseCacheKey = useTsq ? `tsq:${topicalArg}` : query;
+    // The `y1|` tag retires results cached before the newest-first candidate order (LEXAI-2109).
+    const baseCacheKey = useTsq ? `y1|tsq:${topicalArg}` : `y1|${query}`;
     const cacheKey = candidateCap === FTS_CANDIDATE_CAP ? baseCacheKey : `${baseCacheKey}|cap:${candidateCap}`;
 
     // Check cache first
@@ -1000,13 +1016,14 @@ export class EdsrFtsService {
         paramIdx++;
       }
     }
+    // Whole Kyiv-local days (LEXAI-2110): a bare '2025-01-01' read as UTC dropped 1 January.
     if (filters.date_from) {
-      conditions.push(`d.adjudication_date >= $${paramIdx}`);
+      conditions.push(...kyivDayBoundsSql('d.adjudication_date', `$${paramIdx}`));
       params.push(filters.date_from);
       paramIdx++;
     }
     if (filters.date_to) {
-      conditions.push(`d.adjudication_date <= $${paramIdx}`);
+      conditions.push(...kyivDayBoundsSql('d.adjudication_date', undefined, `$${paramIdx}`));
       params.push(filters.date_to);
       paramIdx++;
     }
@@ -1083,22 +1100,27 @@ export class EdsrFtsService {
     const queryWithTimeout = (sql: string, args: any[]) =>
       this.queryWithTimeout(dbPool, sql, args, statementTimeoutMs);
 
-    // Candidate selection. Topical-only: one capped GIN scan (cap-before-rank) at the caller's
-    // candidateCap (LEXAI-2087). Party leg: newest year first under the smaller party cap, see
-    // PARTY_FTS_CANDIDATE_CAP / buildNewestFirstYearLegs; a caller cap can only lower it.
+    // Candidate selection, newest adj_year partition first (LEXAI-2085 party leg, LEXAI-2109
+    // topical leg): one UNION ALL leg per year partition under the cap, so the cap is filled
+    // from the most recent matches and the older partitions are never opened once it is met.
+    // The topical leg used to be one capped scan of the parent, which Postgres reads in
+    // partition-bound order — oldest first — so a 100-500 candidate cap held nothing newer
+    // than 2006. A party probe uses the smaller party cap (PARTY_FTS_CANDIDATE_CAP); a caller
+    // cap can only lower it. Each leg carries adj_year so the outer re-fetch of the ranked
+    // rows prunes to the candidate's own partition at run time instead of probing all 24.
     const candCap = partyName
       ? Math.min(candidateCap, Math.max(PARTY_FTS_CANDIDATE_CAP, safeOffset + safeLimit + 1))
       : candidateCap;
-    const candBody = partyName
-      ? `SELECT legs.doc_id FROM (
-            ${buildNewestFirstYearLegs(new Date().getFullYear(), filters.date_from, filters.date_to)
-              .map(yearCond => `(SELECT f.doc_id FROM ${fromClause}${extraJoin} WHERE ${whereClause} AND ${yearCond})`)
-              .join('\n            UNION ALL\n            ')}
+    const yearLegs = buildYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
+    const legSql = yearLegs.length === 0
+      ? ['(SELECT f.doc_id, f.adj_year FROM edrsr_fulltext f WHERE FALSE)']
+      : yearLegs.map(leg => {
+          const legConds = [whereClause, yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
+          return `(SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${legConds.join(' AND ')})`;
+        });
+    const candBody = `SELECT legs.doc_id, legs.adj_year FROM (
+            ${legSql.join('\n            UNION ALL\n            ')}
           ) legs
-          LIMIT ${candCap}`
-      : `SELECT f.doc_id
-          FROM ${fromClause}${extraJoin}
-          WHERE ${whereClause}
           LIMIT ${candCap}`;
 
     const executeQuery = async (withHeadline: boolean) => {
@@ -1111,10 +1133,10 @@ export class EdsrFtsService {
       // candidates; the outer JOIN re-fetches d.* for the returned rows only.
       const outerFrom = hasMetadataFilter
         ? `edrsr_fulltext f
-           JOIN cand ON cand.doc_id = f.doc_id
+           JOIN cand ON cand.doc_id = f.doc_id AND cand.adj_year = f.adj_year
            JOIN edrsr_documents d ON d.doc_id = f.doc_id`
         : `edrsr_fulltext f
-           JOIN cand ON cand.doc_id = f.doc_id`;
+           JOIN cand ON cand.doc_id = f.doc_id AND cand.adj_year = f.adj_year`;
 
       // A COUNT(*) over the base table is what the cap-before-rank shape exists to avoid,
       // but counting `cand` is free: it is already materialized and holds at most
@@ -1276,7 +1298,7 @@ export class EdsrFtsService {
     const fast = await this.countByPartyFast(partyName, partyRole, dbPool, filters, sampleLimit);
     if (fast) return fast;
 
-    const legs = buildPartyYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
+    const legs = buildYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
     if (legs.length === 0) {
       // date_from later than date_to: nothing can match, and saying so needs no scan.
       return { total: 0, distinct_cases: 0, by_court: [], ...(sampleLimit > 0 ? { sample: [] } : {}) };
@@ -1318,26 +1340,23 @@ export class EdsrFtsService {
     // '2025-01-01' — read as UTC midnight — silently dropped the first day of the range.
     const docConditions: string[] = [];
     if (filters.date_from) {
-      docConditions.push(`d.adjudication_date >= ($${p}::date)::timestamp AT TIME ZONE '${KYIV_TZ}'`);
+      docConditions.push(...kyivDayBoundsSql('d.adjudication_date', `$${p}`));
       params.push(filters.date_from); p++;
     }
     if (filters.date_to) {
-      docConditions.push(`d.adjudication_date < ($${p}::date + 1)::timestamp AT TIME ZONE '${KYIV_TZ}'`);
+      docConditions.push(...kyivDayBoundsSql('d.adjudication_date', undefined, `$${p}`));
       params.push(filters.date_to); p++;
     }
     if (filters.justice_kind) { docConditions.push(`d.justice_kind = $${p}`); params.push(filters.justice_kind); p++; }
 
-    const yearStart = (y: number) => `'${y}-01-01'::timestamp AT TIME ZONE '${KYIV_TZ}'`;
     const cols = 'd.doc_id, d.court_code, d.cause_num, d.justice_kind, d.adjudication_date';
     const cap = PARTY_COUNT_CAND_CAP;
 
     // One leg per year, newest first, each counted IN FULL — see PARTY_COUNT_CAND_CAP.
     const ctes: string[] = [];
     legs.forEach((leg, i) => {
-      const ftsYear: string[] = [];
-      const docYear: string[] = [];
-      if (leg.minYear !== null) { ftsYear.push(`f.adj_year >= ${leg.minYear}`); docYear.push(`d.adjudication_date >= ${yearStart(leg.minYear)}`); }
-      if (leg.maxYear !== null) { ftsYear.push(`f.adj_year <= ${leg.maxYear}`); docYear.push(`d.adjudication_date < ${yearStart(leg.maxYear + 1)}`); }
+      const ftsYear = [yearLegPredicate(leg)];
+      const docYear = yearLegDocPredicate(leg);
       // Gate: once the newer legs have counted `cap` documents, this one-time filter is false
       // and Postgres never starts the leg's scan.
       const gate = i === 0 ? [] : [`(SELECT n FROM c${i - 1}) < ${cap}`];

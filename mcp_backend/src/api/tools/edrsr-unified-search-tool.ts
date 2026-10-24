@@ -1114,6 +1114,21 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
 
   private async enrichResults(rows: any[]): Promise<any[]> {
     if (rows.length === 0) return [];
+    // searchFulltext joins edrsr_documents only when a metadata filter needs it, so a plain
+    // topical page came back with court/justice kind/form/date all null (LEXAI-2109). Fill
+    // the page's rows from edrsr_documents the way enrichFusedHits does for hybrid — one
+    // doc_id lookup for at most a page of rows, not part of the ranked statement.
+    const missing = rows.filter(r => r.court_code == null && r.cause_num == null).map(r => Number(r.doc_id));
+    if (missing.length > 0) {
+      const metaMap = await this.fetchDocumentMetadata(missing);
+      rows = rows.map(r => {
+        const meta = metaMap.get(Number(r.doc_id));
+        if (!meta) return r;
+        const filled = { ...r };
+        for (const [k, v] of Object.entries(meta)) if (v != null && filled[k] == null) filled[k] = v;
+        return filled;
+      });
+    }
     const courtCodes = new Set<number>();
     const justiceKinds = new Set<number>();
     const judgmentCodes = new Set<number>();
