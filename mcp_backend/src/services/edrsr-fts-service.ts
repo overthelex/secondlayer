@@ -148,39 +148,53 @@ export interface PartyCaseCount {
   distinct_cases: number;
   by_court: Array<{ court_code: number; count: number }>;
   sample?: Array<{ doc_id: number; cause_num: string | null; court_code: number | null; justice_kind: number | null; adjudication_date: string | null }>;
-  /** True when the FTS fallback hit PARTY_COUNT_CAND_CAP — `total` is then a floor, not an exact count. */
+  /**
+   * True when the FTS fallback stopped before the oldest requested year because the newer
+   * years had already yielded PARTY_COUNT_CAND_CAP documents — `total` is then a floor
+   * overall (exact from `counted_from_year` onward). Never set when nothing was skipped.
+   */
   capped?: boolean;
-  /** The cap that was applied, present only alongside `capped`. */
+  /** The stop threshold that was reached, present only alongside `capped`. */
   candidate_cap?: number;
+  /** Oldest adj_year fully counted, present only alongside `capped`. */
+  counted_from_year?: number;
 }
 
-// Candidate cap for the countByParty FTS fallback (the path taken whenever the structured
+// Stop threshold for the countByParty FTS fallback (the path taken whenever the structured
 // parties table does not cover the requested years — i.e. always, while edrsr_parties is
 // empty on prod).
 //
-// The old query joined edrsr_fulltext to edrsr_documents directly and let the planner
-// choose. For a rare single-lexeme name the GIN row estimate is off by four orders of
-// magnitude (22.6M estimated vs 684 actual), so it hash-joined a full parallel seq scan of
-// all 136M edrsr_documents rows: 59.4s measured on prod, straddling the 60s tool timeout —
-// count_cases_by_party for "ЕВЕРЛІҐАЛ" failed 3 times out of 3. A multi-token phrase got a
-// different estimate and a nested-loop plan, which is why the same tool answered
-// "ЛУЇ ДРЕЙФУС КОМПАНІ УКРАЇНА" in 1.1s. Resolving the FTS side first (MATERIALIZED) makes
-// the join doc_id index lookups in every case: 59.4s → 1.4s for the same rare name.
+// Candidates are resolved in one leg per adj_year partition, newest year first, and every
+// leg that runs is counted IN FULL, with the requested period and justice_kind already
+// applied (see countByParty). Once the legs run so far have counted this many matching
+// documents, the older legs are skipped and the result is flagged `capped`: the total is
+// then exact for the years it covers (`counted_from_year` onward) and a floor overall.
 //
-// The cap bounds the high-volume tail (НАФТОГАЗ matches 343,089 documents, ПРИВАТБАНК more
-// than 400,000, where even the materialized join runs into minutes). The capped subset is
-// always the NEWEST `cap` documents — candCte assembles it from per-year legs precisely so
-// that stays true without a corpus-wide sort. A truncated run sets `capped`, so a floor is
-// never reported as an exact count; note that by_court is then a distribution over those
-// newest documents, not over the party's whole history.
+// LEXAI-2086: this used to be a LIMIT on raw fulltext matches, taken newest-first by
+// doc_id and BEFORE the date filter, with the newest leg pinned to the current calendar
+// year. For ПРИВАТБАНК, 2025-01-01..2025-03-31 the 2026 partition alone supplied all 25,000
+// candidates, the date filter then removed every one of them, and the tool answered
+// "0 cases, capped" — 16 s to report an impossible number (the real figure is 50,553
+// documents). A cap applied before the filter can truncate a count to anything, including
+// zero, so the cap now only decides whether to look at OLDER years, never which matches in
+// a year get counted.
 //
-// The same cap is used for the sample path, and it must NOT be lowered "because the sample
-// only needs ten rows". Measured on prod, sample latency for the same rare name:
-// LIMIT 2000 → >90s (timeout), LIMIT 5000 → >90s (timeout), LIMIT 25000 → 1.57s. A small
-// LIMIT makes the planner walk idx_ef_p_*_docid backwards probing tsv for matches instead of
-// running the GIN bitmap scan and sorting the top N — the bigger cap is what keeps it on the
-// index-driven plan. Same shape on a common name: 5000 → timeout, 25000 → 2.93s.
+// The legs stay MATERIALIZED and the fulltext scan stays fenced (OFFSET 0) from the join:
+// for a rare single-lexeme name the GIN row estimate is off by four orders of magnitude
+// (22.6M estimated vs 684 actual) and an unfenced join hash-joined a full parallel seq scan
+// of all 136M edrsr_documents rows (59.4 s measured). Each leg also bounds d.adjudication_date
+// to its own year, which prunes edrsr_documents to one partition whichever join the
+// planner picks.
 const PARTY_COUNT_CAND_CAP = 25_000;
+
+// adj_year partitions before this year are folded into one leg: edrsr_fulltext_p_pre2005
+// holds them all, so per-year legs there would rescan the same partition.
+const PARTY_LEG_FLOOR_YEAR = 2005;
+
+// adjudication_date stores Kyiv-local midnight and adj_year is the Kyiv-local year
+// (verified: documents adjudicated on 2025-01-01, stored as 2024-12-31 22:00 UTC, carry
+// adj_year 2025). Date bounds are compared in the same zone.
+const KYIV_TZ = 'Europe/Kyiv';
 
 // Server-side budgets for the countByParty statements. They must sum to less than the 60 s
 // tool timeout: without them a call the tool layer had already abandoned kept running in
@@ -189,6 +203,57 @@ const PARTY_COUNT_CAND_CAP = 25_000;
 // role filter re-checks full_text with a regex, which is the expensive part.
 const PARTY_COUNT_TIMEOUT_MS = 40_000;
 const PARTY_SAMPLE_TIMEOUT_MS = 15_000;
+// The FTS fallback answers count, breakdown and sample in ONE statement, so it gets the
+// whole budget the fast path splits between its count and sample statements.
+const PARTY_FTS_COUNT_TIMEOUT_MS = 50_000;
+
+/** One adj_year band of the countByParty candidate scan; null = open on that side. */
+export interface PartyYearLeg {
+  minYear: number | null;
+  maxYear: number | null;
+}
+
+/**
+ * The adj_year legs countByParty scans, newest first. Years come from date_from/date_to
+ * (Kyiv-local, so the calendar year of the ISO date is the partition year); without
+ * date_to the newest leg is open-ended upward from `thisYear` (it also takes the
+ * p_future partition), without date_from the oldest leg is open-ended downward. Returns
+ * [] when date_from's year is after date_to's.
+ */
+export function buildPartyYearLegs(dateFrom: string | undefined, dateTo: string | undefined, thisYear: number): PartyYearLeg[] {
+  const yearOf = (iso?: string): number | null => {
+    const y = Number(String(iso ?? '').slice(0, 4));
+    return Number.isInteger(y) && y > 1900 ? y : null;
+  };
+  const lo = yearOf(dateFrom);
+  const toYear = yearOf(dateTo);
+  const hi = toYear ?? Math.max(thisYear, lo ?? thisYear);
+  if (lo !== null && lo > hi) return [];
+
+  const legs: PartyYearLeg[] = [];
+  const bottom = Math.max(lo ?? PARTY_LEG_FLOOR_YEAR, PARTY_LEG_FLOOR_YEAR);
+  if (hi < bottom) {
+    // The whole range lies below the floor: one leg over the pre-2005 partition.
+    legs.push({ minYear: lo, maxYear: hi });
+  } else {
+    for (let y = hi; y >= bottom; y--) legs.push({ minYear: y, maxYear: y });
+    // Below the floor (or with no date_from at all) the last leg reaches down to lo.
+    if (lo === null || lo < PARTY_LEG_FLOOR_YEAR) legs[legs.length - 1].minYear = lo;
+  }
+  if (toYear === null) legs[0].maxYear = null;
+  return legs;
+}
+
+/**
+ * Number of word tokens the 'simple' parser will see in a party name. Above one,
+ * phraseto_tsquery adds word-adjacency that the AND form used for GIN selection lacks, so
+ * a phrase recheck is needed; at one the two are the same query. Splitting on anything
+ * that is not a letter or digit can only over-count against the parser (an apostrophe,
+ * hyphen or combining mark), which costs a redundant recheck, never a missed one.
+ */
+export function partyNameTokenCount(partyName: string): number {
+  return (partyName.match(/[\p{L}\p{N}]+/gu) ?? []).length;
+}
 
 export interface EdsrIndexProgress {
   total: number;
@@ -1083,10 +1148,10 @@ export class EdsrFtsService {
    * tsvector match, so the GIN index does the selection and only the matched rows are
    * counted/grouped.
    *
-   * The FTS fallback resolves candidates in a MATERIALIZED CTE capped at
-   * PARTY_COUNT_CAND_CAP before joining edrsr_documents — see that constant for the plan
-   * collapse this avoids. Below the cap the count is exact; at the cap it is a floor and
-   * `capped` is set.
+   * The FTS fallback scans one adj_year leg at a time, newest first, applying the period
+   * and justice_kind inside each leg, and counts every leg it runs in full. It stops going
+   * back in time once PARTY_COUNT_CAND_CAP documents are counted; only then is `capped`
+   * set, with `counted_from_year` saying which years the (exact) total covers.
    */
   async countByParty(
     partyName: string,
@@ -1102,185 +1167,129 @@ export class EdsrFtsService {
     const fast = await this.countByPartyFast(partyName, partyRole, dbPool, filters, sampleLimit);
     if (fast) return fast;
 
-    const params: any[] = [];
-    let p = 1;
+    const legs = buildPartyYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
+    if (legs.length === 0) {
+      // date_from later than date_to: nothing can match, and saying so needs no scan.
+      return { total: 0, distinct_cases: 0, by_court: [], ...(sampleLimit > 0 ? { sample: [] } : {}) };
+    }
 
-    const tsqueryParts: string[] = [`phraseto_tsquery('simple', $${p})`];
-    params.push(partyName);
-    p++;
+    const params: any[] = [partyName];
+    let p = 2;
+    // GIN selection uses the AND form of the name (plainto_tsquery): for those lexemes the
+    // GIN index is exact, so the bitmap scan never opens the TOASTed tsv. The phrase form
+    // (phraseto_tsquery) needs word positions, which means detoasting tsv for every
+    // candidate — ~20 KB each on a 133 GB TOAST relation. "Нова Пошта" has 13,880 AND-matches
+    // in 2025 alone and the old in-scan phrase recheck timed out on them; applied after the
+    // date filter, only 3,991 are left to recheck (11 s). A one-token name has no phrase to
+    // check, so it skips the recheck — and the detoast — entirely.
+    const ginParts = [`plainto_tsquery('simple', $1)`];
     const roleTsquery = partyRole && partyRole !== 'any' ? ROLE_TSQUERY[partyRole] : null;
     if (roleTsquery) {
       // roleTsquery is a hardcoded constant — safe to inline, no user input.
-      tsqueryParts.push(`to_tsquery('simple', '${roleTsquery}')`);
+      ginParts.push(`to_tsquery('simple', '${roleTsquery}')`);
     }
-
-    // Conditions are split by the table they touch: the `f` (edrsr_fulltext) ones select
-    // candidates inside the MATERIALIZED CTE, the `d` (edrsr_documents) ones filter after
-    // the join. Both share one params array, so the $-numbering stays global to the
-    // statement and must be built in this order.
-    const ftsConditions = [`f.tsv @@ (${tsqueryParts.join(' && ')})`];
+    const recheck: string[] = [];
+    if (partyNameTokenCount(partyName) > 1) recheck.push(`j.tsv @@ phraseto_tsquery('simple', $1)`);
     // Claim-clause role post-filter (see buildPartyRoleRegex) — keeps the count honest by
     // dropping decisions that only mention the party as a courier or in the opposite role.
+    // Like the phrase recheck it reads a TOASTed column, so it too runs after the date filter.
     if (partyRole && partyRole !== 'any') {
-      ftsConditions.push(`f.full_text ~* $${p}`);
+      recheck.push(`j.full_text ~* $${p}`);
       params.push(buildPartyRoleRegex(partyName, partyRole));
       p++;
     }
-    // Push the requested period into the CTE as an adj_year band. edrsr_fulltext is
-    // LIST-partitioned by adj_year, so this prunes partitions and shrinks the GIN scan
-    // itself — the only lever that actually helps a high-volume party. Measured on prod:
-    // НАФТОГАЗ 50.5s → 5.0s, ПРИВАТБАНК >90s → 1.8s for a single year. Without it the
-    // date filter only runs after the CTE and the "narrow the period" advice is a lie.
-    //
-    // The band is widened by a year on each side deliberately: adj_year agrees with
-    // extract(year from adjudication_date) on prod (verified, and no NULLs), but the
-    // exact d.adjudication_date bounds below are what enforce the period, so the band
-    // only ever needs to be a superset. One spare partition per side costs little and
-    // removes any timezone-boundary risk.
-    const yearBand = (iso?: string, delta = 0): number | null => {
-      const y = Number(String(iso ?? '').slice(0, 4));
-      return Number.isInteger(y) && y > 1900 ? y + delta : null;
-    };
-    const yFrom = yearBand(filters.date_from, -1);
-    const yTo = yearBand(filters.date_to, +1);
-    if (yFrom !== null) { ftsConditions.push(`f.adj_year >= $${p}`); params.push(yFrom); p++; }
-    if (yTo !== null) { ftsConditions.push(`f.adj_year <= $${p}`); params.push(yTo); p++; }
+    const carry = [
+      ...(recheck.some(r => r.startsWith('j.tsv')) ? ['f.tsv'] : []),
+      ...(partyRole && partyRole !== 'any' ? ['f.full_text'] : []),
+    ];
+    const carryOut = carry.map(c => c.replace(/^f\./, 'm.'));
 
+    // The requested period, as Kyiv-local calendar days. adjudication_date holds local
+    // midnight (2025-01-02 is stored as 2025-01-01 22:00 UTC), so comparing it with a bare
+    // '2025-01-01' — read as UTC midnight — silently dropped the first day of the range.
     const docConditions: string[] = [];
-    if (filters.date_from) { docConditions.push(`d.adjudication_date >= $${p}`); params.push(filters.date_from); p++; }
-    if (filters.date_to) { docConditions.push(`d.adjudication_date <= $${p}`); params.push(filters.date_to); p++; }
+    if (filters.date_from) {
+      docConditions.push(`d.adjudication_date >= ($${p}::date)::timestamp AT TIME ZONE '${KYIV_TZ}'`);
+      params.push(filters.date_from); p++;
+    }
+    if (filters.date_to) {
+      docConditions.push(`d.adjudication_date < ($${p}::date + 1)::timestamp AT TIME ZONE '${KYIV_TZ}'`);
+      params.push(filters.date_to); p++;
+    }
     if (filters.justice_kind) { docConditions.push(`d.justice_kind = $${p}`); params.push(filters.justice_kind); p++; }
-    const ftsWhere = ftsConditions.join(' AND ');
-    const docWhere = docConditions.length ? `WHERE ${docConditions.join(' AND ')}` : '';
 
-    // Year boundaries between the three candidate legs (see candCte). Two single-year legs
-    // ahead of the remainder, rather than one two-year band: each is pruned to a single
-    // partition, which is what keeps its sort cheap, and the second one carries a
-    // high-volume party through January, when the current-year partition is still too thin
-    // to fill the cap on its own.
-    const thisYear = new Date().getFullYear();
-    const y0Param = p; params.push(thisYear); p++;
-    const y1Param = p; params.push(thisYear - 1); p++;
+    const yearStart = (y: number) => `'${y}-01-01'::timestamp AT TIME ZONE '${KYIV_TZ}'`;
+    const cols = 'd.doc_id, d.court_code, d.cause_num, d.justice_kind, d.adjudication_date';
+    const cap = PARTY_COUNT_CAND_CAP;
 
-    // Candidates, in three disjoint legs taken newest year first. MATERIALIZED is
-    // load-bearing throughout: see PARTY_COUNT_CAND_CAP for why the un-materialized join
-    // collapses.
-    //
-    // The problem this shape solves is that "the newest 25000" as ONE global top-N forces
-    // the GIN scan to read every match before it can answer, so a party with hundreds of
-    // thousands of documents was unanswerable: ПРИВАТБАНК (400k+) ran past 90s and blew
-    // the 60s tool timeout. Splitting by year fixes it without giving up the ordering,
-    // because each leg is pruned to a single partition and sorts only that partition:
-    // `r0` alone satisfies a high-volume party and the rest are skipped.
-    //
-    // Every leg after the first is limited to whatever its predecessors left unfilled.
-    // When the cap is already full that expression is 0 and Postgres returns from the leg
-    // without scanning it, which is what makes the skip free. Because the legs are
-    // disjoint and consumed in descending year order, the union is EXACTLY the newest
-    // `cap` documents — the same answer a global ORDER BY would give, assembled from
-    // partition-local sorts instead of one corpus-wide one.
-    //
-    // Measured on prod, paired and cache-fair. High-volume parties become answerable:
-    // ПРИВАТБАНК >90s timeout -> 2.41s count / 2.72s sample, НАФТОГАЗ 50.5s -> 2.50s, and
-    // both sample the true corpus maximum (2026-07-13). The price is one extra leg scan
-    // for a rare name (ЕВЕРЛІҐАЛ 1.18s -> 1.66s) and nothing for a mid-volume one
-    // (ЛУЇ ДРЕЙФУС 0.26s either way).
-    //
-    // Two single-year legs rather than one two-year band, for two independent reasons.
-    // Cost: ordering a two-year band costs 44s cold for ПРИВАТБАНК versus 2.4s for a
-    // single year. Calendar: a lone current-year leg is too thin every January to fill the
-    // cap, which would drop high-volume parties back onto the corpus-wide ordered leg for
-    // weeks — verified by running the split a year ahead (2.44s, still fine).
-    const candCte = (cap: number) => `
-        r0 AS MATERIALIZED (
-          SELECT f.doc_id
-          FROM edrsr_fulltext f
-          WHERE ${ftsWhere} AND f.adj_year >= $${y0Param}
-          ORDER BY f.doc_id DESC
-          LIMIT ${cap}
+    // One leg per year, newest first, each counted IN FULL — see PARTY_COUNT_CAND_CAP.
+    const ctes: string[] = [];
+    legs.forEach((leg, i) => {
+      const ftsYear: string[] = [];
+      const docYear: string[] = [];
+      if (leg.minYear !== null) { ftsYear.push(`f.adj_year >= ${leg.minYear}`); docYear.push(`d.adjudication_date >= ${yearStart(leg.minYear)}`); }
+      if (leg.maxYear !== null) { ftsYear.push(`f.adj_year <= ${leg.maxYear}`); docYear.push(`d.adjudication_date < ${yearStart(leg.maxYear + 1)}`); }
+      // Gate: once the newer legs have counted `cap` documents, this one-time filter is false
+      // and Postgres never starts the leg's scan.
+      const gate = i === 0 ? [] : [`(SELECT n FROM c${i - 1}) < ${cap}`];
+      ctes.push(`
+        l${i} AS MATERIALIZED (
+          SELECT j.doc_id, j.court_code, j.cause_num, j.justice_kind, j.adjudication_date
+          FROM (
+            SELECT ${[cols, ...carryOut].join(', ')}
+            FROM (
+              SELECT ${['f.doc_id', ...carry].join(', ')}
+              FROM edrsr_fulltext f
+              WHERE ${[`f.tsv @@ (${ginParts.join(' && ')})`, ...ftsYear, ...gate].join(' AND ')}
+              OFFSET 0
+            ) m
+            JOIN edrsr_documents d ON d.doc_id = m.doc_id
+            WHERE ${[...docYear, ...docConditions].join(' AND ')}
+            OFFSET 0
+          ) j${recheck.length ? `
+          WHERE ${recheck.join(' AND ')}` : ''}
         ),
-        r1 AS MATERIALIZED (
-          SELECT f.doc_id
-          FROM edrsr_fulltext f
-          WHERE ${ftsWhere} AND f.adj_year >= $${y1Param} AND f.adj_year < $${y0Param}
-          ORDER BY f.doc_id DESC
-          LIMIT GREATEST(0, ${cap} - (SELECT count(*) FROM r0))
-        ),
-        older AS MATERIALIZED (
-          SELECT f.doc_id
-          FROM edrsr_fulltext f
-          WHERE ${ftsWhere} AND f.adj_year < $${y1Param}
-          ORDER BY f.doc_id DESC
-          LIMIT GREATEST(0, ${cap} - (SELECT count(*) FROM r0) - (SELECT count(*) FROM r1))
-        ),
-        cand AS MATERIALIZED (
-          SELECT doc_id FROM r0
-          UNION ALL
-          SELECT doc_id FROM r1
-          UNION ALL
-          SELECT doc_id FROM older
-        )`;
+        c${i} AS (
+          SELECT ${i === 0 ? '' : `(SELECT n FROM c${i - 1}) + `}count(*)::int AS n FROM l${i}
+        )`);
+    });
+    const last = legs.length - 1;
 
     try {
-      const countSql = `
-        WITH ${candCte(PARTY_COUNT_CAND_CAP)},
-        agg AS (
-          SELECT d.court_code, count(*)::int AS n
-          FROM cand JOIN edrsr_documents d ON d.doc_id = cand.doc_id
-          ${docWhere}
-          GROUP BY d.court_code
-        ),
-        tot AS (
-          SELECT count(DISTINCT d.cause_num)::int AS distinct_cases
-          FROM cand JOIN edrsr_documents d ON d.doc_id = cand.doc_id
-          ${docWhere}
+      const safeSample = Math.min(Math.max(sampleLimit, 1), 1000);
+      // One statement for count, breakdown and sample: the legs are the expensive part and
+      // there is no reason to pay for them twice.
+      const sql = `
+        WITH ${ctes.join(',')},
+        cand AS MATERIALIZED (
+          ${legs.map((_, i) => `SELECT * FROM l${i}`).join('\n          UNION ALL ')}
         )
-        SELECT c.candidates, t.distinct_cases, a.court_code, a.n
-        FROM (SELECT count(*)::int AS candidates FROM cand) c
-        CROSS JOIN tot t
-        LEFT JOIN agg a ON TRUE
-        ORDER BY a.n DESC NULLS LAST`;
-      const countResult = await this.queryWithTimeout(dbPool, countSql, params, PARTY_COUNT_TIMEOUT_MS);
-      // LEFT JOIN, not `FROM agg`: the candidate count must survive an empty aggregate.
-      // A doc-side filter with no CTE counterpart (justice_kind) can drop every one of the
-      // newest candidates, and `FROM agg` would then return zero rows — losing `candidates`
-      // with them, so a capped search reported total 0 as an exact answer while older
-      // matching documents existed. That is the precise failure this method exists to stop.
-      // The synthetic row carries a null court_code and is dropped below.
-      const by_court = countResult.rows
-        .filter((r: any) => r.court_code !== null && r.court_code !== undefined)
-        .map((r: any) => ({ court_code: r.court_code, count: r.n }));
-      const total = by_court.reduce((s: number, r: any) => s + r.count, 0);
-      const candidates = Number(countResult.rows[0]?.candidates ?? 0);
-      const distinct_cases = Number(countResult.rows[0]?.distinct_cases ?? 0);
-      // `cand` is LIMIT-ed to the cap, so count(*) over it tops out AT the cap and this is
-      // effectively `=== cap`. A party matching exactly PARTY_COUNT_CAND_CAP documents is
-      // therefore flagged capped even though its count is complete. Accepted: reading
-      // `LIMIT cap + 1` to disambiguate would perturb a planner-verified constant for one
-      // exact value, and the mislabel errs toward warning when it need not — never toward
-      // presenting a truncated count as exact, which is the direction that matters.
-      const capped = candidates >= PARTY_COUNT_CAND_CAP;
+        SELECT
+          ARRAY[${legs.map((_, i) => `(SELECT n FROM c${i})`).join(', ')}]::int[] AS cum,
+          (SELECT count(DISTINCT cause_num) FROM cand)::int AS distinct_cases,
+          (SELECT coalesce(json_agg(json_build_object('court_code', court_code, 'count', n) ORDER BY n DESC), '[]'::json)
+             FROM (SELECT court_code, count(*)::int AS n FROM cand WHERE court_code IS NOT NULL GROUP BY court_code) b) AS by_court${sampleLimit > 0 ? `,
+          (SELECT coalesce(json_agg(s), '[]'::json) FROM (
+             SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM cand
+             ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
+      const res = await this.queryWithTimeout(dbPool, sql, params, PARTY_FTS_COUNT_TIMEOUT_MS);
+      const row = res.rows[0] ?? {};
+
+      const cum: number[] = Array.isArray(row.cum) ? row.cum.map(Number) : [];
+      const total = cum.length ? cum[cum.length - 1] : 0;
+      const distinct_cases = Number(row.distinct_cases ?? 0);
+      const by_court = (Array.isArray(row.by_court) ? row.by_court : [])
+        .map((r: any) => ({ court_code: Number(r.court_code), count: Number(r.count) }));
+      // Leg i was skipped iff the legs before it had already counted `cap` documents. Only
+      // then is anything left uncounted, so only then is the total a floor — a party that
+      // simply has few matches is never flagged, and a flagged one always has total >= cap.
+      const firstSkipped = legs.findIndex((_, i) => i > 0 && cum[i - 1] >= cap);
+      const capped = firstSkipped > 0;
+      const countedFromYear = capped ? legs[firstSkipped - 1].minYear : null;
 
       let sample: PartyCaseCount['sample'];
       if (sampleLimit > 0) {
-        const safeSample = Math.min(Math.max(sampleLimit, 1), 1000);
-        // The sample only needs the newest few, so it walks a much shorter slice of the
-        // same doc_id-ordered stream. The second MATERIALIZED is also load-bearing: with
-        // a plain join the `ORDER BY adjudication_date DESC LIMIT n` lets the planner walk
-        // idx_ed_p_*_adj_date backwards probing for matches, which on a rare name means
-        // scanning millions of rows before it finds n (111s measured on prod).
-        const sampleSql = `
-          WITH ${candCte(PARTY_COUNT_CAND_CAP)},
-          joined AS MATERIALIZED (
-            SELECT d.doc_id, d.cause_num, d.court_code, d.justice_kind, d.adjudication_date
-            FROM cand JOIN edrsr_documents d ON d.doc_id = cand.doc_id
-            ${docWhere}
-          )
-          SELECT * FROM joined
-          ORDER BY adjudication_date DESC NULLS LAST
-          LIMIT ${safeSample}`;
-        const sampleResult = await this.queryWithTimeout(dbPool, sampleSql, params, PARTY_SAMPLE_TIMEOUT_MS);
-        sample = sampleResult.rows.map((r: any) => ({
+        sample = (Array.isArray(row.sample) ? row.sample : []).map((r: any) => ({
           doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
           justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
         }));
@@ -1289,7 +1298,7 @@ export class EdsrFtsService {
       logger.info('[EdsrFtsService] countByParty', {
         party_name: partyName, party_role: partyRole ?? 'any',
         filters: Object.keys(filters).filter(k => (filters as any)[k] !== undefined),
-        total, distinct_cases, courts: by_court.length, candidates, capped,
+        total, distinct_cases, courts: by_court.length, legs: legs.length, cum, capped,
       });
 
       return {
@@ -1297,7 +1306,7 @@ export class EdsrFtsService {
         distinct_cases,
         by_court,
         ...(sample ? { sample } : {}),
-        ...(capped ? { capped: true, candidate_cap: PARTY_COUNT_CAND_CAP } : {}),
+        ...(capped ? { capped: true, candidate_cap: cap, ...(countedFromYear !== null ? { counted_from_year: countedFromYear } : {}) } : {}),
       };
     } catch (err: any) {
       if (err.code === '57014') {
