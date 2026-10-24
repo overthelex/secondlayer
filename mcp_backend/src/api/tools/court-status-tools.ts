@@ -10,6 +10,55 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 
+/**
+ * Index expression for case-number lookups (LEXAI-2104). MUST stay byte-identical to the
+ * expression in migration 230_court_case_status_number_norm.sql, otherwise the planner
+ * cannot use idx_case_status_case_norm and every lookup seq-scans 1.25M rows.
+ * Whitespace is stripped (the source has numbers like " 201/14253/25" and "16- ц") and the
+ * case folded ("-Ц" and "-ц" are the same proceeding suffix).
+ */
+export const CASE_NUMBER_NORM_SQL = `lower(regexp_replace(case_number, '\\s+', '', 'g'))`;
+
+/** Same normalisation as CASE_NUMBER_NORM_SQL, applied to user input. */
+export function normalizeCaseNumber(raw: string): string {
+  return String(raw || '').replace(/\s+/g, '').toLowerCase();
+}
+
+/**
+ * A case number "has a suffix" when it ends in -<letters> after the last digit group:
+ * 522/9583/16-ц, 761/1/19-к, 9901/5/20-а. Anything ending in a digit (522/9583/16,
+ * old-style 2-123/2010) has none.
+ */
+export function hasProceedingSuffix(normalized: string): boolean {
+  return /\d-[^\d/-]+$/u.test(normalized);
+}
+
+/** Escape LIKE metacharacters so a user-typed % or _ is matched literally. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => '\\' + c);
+}
+
+/**
+ * Build the WHERE fragment for a case number. Users rarely type the proceeding suffix,
+ * and the registry stores the same case both bare (522/9583/16) and suffixed
+ * (522/9583/16-ц), so a bare number also matches "<number>-<anything>". The "-" anchor
+ * keeps 522/9583/16 from matching 522/9583/161. Both branches are served by the
+ * text_pattern_ops expression index (equality + left-anchored LIKE).
+ */
+export function buildCaseNumberCondition(
+  raw: string,
+  paramIndex: number,
+): { sql: string; values: string[] } {
+  const norm = normalizeCaseNumber(raw);
+  if (hasProceedingSuffix(norm)) {
+    return { sql: `${CASE_NUMBER_NORM_SQL} = $${paramIndex}`, values: [norm] };
+  }
+  return {
+    sql: `(${CASE_NUMBER_NORM_SQL} = $${paramIndex} OR ${CASE_NUMBER_NORM_SQL} LIKE $${paramIndex + 1})`,
+    values: [norm, `${escapeLike(norm)}-%`],
+  };
+}
+
 export class CourtStatusTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -72,9 +121,10 @@ export class CourtStatusTools extends BaseToolHandler {
     let pi = 1;
 
     if (case_number) {
-      conditions.push(`case_number = $${pi}`);
-      values.push(case_number);
-      pi++;
+      const cond = buildCaseNumberCondition(String(case_number), pi);
+      conditions.push(cond.sql);
+      values.push(...cond.values);
+      pi += cond.values.length;
     }
     if (judge) {
       conditions.push(`(judge ILIKE $${pi} OR judges ILIKE $${pi})`);
@@ -98,10 +148,22 @@ export class CourtStatusTools extends BaseToolHandler {
 
     values.push(Math.min(Number(limit) || 50, 100));
 
-    const sql = `SELECT court_name, case_number, case_type, registration_date, judge, judges, stage_date, stage_name, cause_result, description
+    // stage_date is DD.MM.YYYY text, so ordering the raw string sorted by day of month
+    // (30.06.2021 above 13.07.2022); order by YYYYMMDD so the latest step is first. String
+    // rearrangement rather than to_date(), which raises on an impossible date like 31.02.
+    // stage_name is a single space in 1.03M of 1.25M rows: the cassation courts' feed leaves
+    // it blank and carries the procedural step in cause_result instead (every row has one of
+    // the two). Surface the step as stage_name, trimmed, and turn blank strings into null.
+    const sql = `SELECT court_name, case_number, NULLIF(btrim(case_proc), '') AS case_proc,
+        NULLIF(btrim(case_type), '') AS case_type, registration_date, judge, NULLIF(btrim(judges), '') AS judges,
+        stage_date,
+        COALESCE(NULLIF(btrim(stage_name), ''), NULLIF(btrim(cause_result), '')) AS stage_name,
+        NULLIF(btrim(cause_result), '') AS cause_result,
+        NULLIF(btrim(description), '') AS description
       FROM opendata_court_case_status
       WHERE ${conditions.join(' AND ')}
-      ORDER BY stage_date DESC NULLS LAST
+      ORDER BY CASE WHEN stage_date ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$'
+        THEN substr(stage_date, 7, 4) || substr(stage_date, 4, 2) || substr(stage_date, 1, 2) END DESC NULLS LAST
       LIMIT $${pi}`;
 
     try {

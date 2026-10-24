@@ -10,6 +10,51 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 
+const UK_UPPER = 'А-ЯІЇЄҐ';
+const UK_LOWER = "а-яіїєґ'’ʼ";
+// «Арестової Л.В.», «Князєва В.С.», «Гордієнко-Петрова О. О.» — surname + two initials.
+const SURNAME_INITIALS = new RegExp(
+  `([${UK_UPPER}][${UK_LOWER}]+(?:-[${UK_UPPER}][${UK_LOWER}]+)?)\\s+([${UK_UPPER}])\\.\\s?([${UK_UPPER}])\\.`,
+  'u',
+);
+
+/**
+ * Pull the judge's name out of a VRP decision title. The name is the first
+ * "Surname I.I." after the word «судді» — names before it are complainants or
+ * prosecutors («клопотання … Войтенка А.Б. про відсторонення судді … Бондарєва Е.М.»).
+ * Returned as written in the title (genitive case); null when there is no such pattern.
+ */
+export function extractJudgeNameFromDecisionTitle(title: string | null | undefined): string | null {
+  if (!title) return null;
+  const at = title.search(/судді\s/u);
+  if (at < 0) return null;
+  const m = SURNAME_INITIALS.exec(title.slice(at + 6));
+  return m ? `${m[1]} ${m[2]}.${m[3]}.` : null;
+}
+
+/** Surname stem for matching a nominative query against a genitive title (Арестова → Арестов). */
+export function judgeSurnameStem(query: string): string | null {
+  const surname = (query || '').trim().split(/\s+/)[0] || '';
+  const stem = surname.replace(/[аяиіоуєїйь]+$/iu, '');
+  return stem.length >= 3 ? stem : null;
+}
+
+/** Fill a blank judge_name from the linked decision title and say where it came from. */
+export function fillJudgeNameFromDecision(row: Record<string, any>): Record<string, any> {
+  const own = typeof row.judge_name === 'string' ? row.judge_name.trim() : '';
+  const out: Record<string, any> = { ...row, judge_name: own || null };
+  if (!own) {
+    const parsed = extractJudgeNameFromDecisionTitle(row.vrp_decision_title);
+    if (parsed) {
+      out.judge_name = parsed;
+      out.judge_name_source = 'vrp_decision_title';
+      out.judge_name_note = 'ПІБ узято з назви рішення ВРП (родовий відмінок)';
+    }
+  }
+  if (out.vrp_decision_title == null) delete out.vrp_decision_title;
+  return out;
+}
+
 export class OpenDataTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -154,38 +199,73 @@ export class OpenDataTools extends BaseToolHandler {
 
     const types = type ? [type] : ['dismissed', 'suspended', 'interference'];
 
+    // LEXAI-2108: judge_name is empty in all 738 rows of the three VRP registers (the
+    // import never filled it). The name survives only in the title of the linked VRP
+    // decision («Про притягнення … судді <суду> Арестової Л.В.»), reachable by decision
+    // number through vrp_decisions (idx_vrp_decisions_decision_num). That table starts in
+    // 2023-11, so suspensions from 2024 resolve and the 2018–2020 dismissals do not —
+    // those keep judge_name null rather than a guess.
+    const decisionJoin = (numExpr: string) => `LEFT JOIN LATERAL (
+          SELECT vd.title FROM vrp_decisions vd
+          WHERE vd.decision_num = ${numExpr}
+          ORDER BY vd.date_time DESC NULLS LAST LIMIT 1) d ON true`;
+    const dismissedNum = `NULLIF(btrim(substring(t.vrp_decision_date_num from '№\\s*(\\S+)')), '')`;
+    const panelNum = (col: string) => `NULLIF(btrim(regexp_replace(${col}, '^№\\s*', '')), '')`;
+
     for (const t of types) {
       const conditions: string[] = [];
       const values: any[] = [];
       let pi = 1;
 
-      if (judge_name) { conditions.push(`judge_name ILIKE $${pi}`); values.push(`%${judge_name}%`); pi++; }
-      if (court_name) { conditions.push(`court_name ILIKE $${pi}`); values.push(`%${court_name}%`); pi++; }
+      const hasDecision = t === 'dismissed' || t === 'suspended';
+      if (judge_name) {
+        // Decision titles carry the name in the genitive (Арестова → Арестової), so the
+        // title is matched on the surname stem.
+        const stem = judgeSurnameStem(String(judge_name));
+        if (hasDecision && stem) {
+          conditions.push(`(t.judge_name ILIKE $${pi} OR d.title ILIKE $${pi + 1})`);
+          values.push(`%${judge_name}%`, `%судді%${stem}%`);
+          pi += 2;
+        } else {
+          conditions.push(`t.judge_name ILIKE $${pi}`); values.push(`%${judge_name}%`); pi++;
+        }
+      }
+      if (court_name) { conditions.push(`t.court_name ILIKE $${pi}`); values.push(`%${court_name}%`); pi++; }
 
       const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
       values.push(maxRows);
 
       if (t === 'dismissed') {
-        queries.push(`SELECT 'dismissed' AS type, judge_name, court_name, applicant, reporter,
-            panel_decision_date, panel_decision_num, vrp_decision_date_num, NULL AS suspension_reason,
+        queries.push(`SELECT 'dismissed' AS type, t.judge_name, t.court_name, t.applicant, t.reporter,
+            t.panel_decision_date, t.panel_decision_num, t.vrp_decision_date_num, NULL AS suspension_reason,
             NULL AS suspension_deadline, NULL AS suspension_body, NULL AS received_date,
-            NULL AS case_num, NULL AS check_result, NULL AS reaction
-          FROM vrp_dismissed_judges ${where}
-          ORDER BY panel_decision_date DESC NULLS LAST LIMIT $${pi}`);
+            NULL AS case_num, NULL AS check_result, NULL AS reaction,
+            COALESCE(d.title, dp.title) AS vrp_decision_title
+          FROM vrp_dismissed_judges t
+          ${decisionJoin(dismissedNum)}
+          LEFT JOIN LATERAL (
+            SELECT vd.title FROM vrp_decisions vd
+            WHERE vd.decision_num = ${panelNum('t.panel_decision_num')}
+            ORDER BY vd.date_time DESC NULLS LAST LIMIT 1) dp ON true
+          ${where}
+          ORDER BY t.panel_decision_date DESC NULLS LAST LIMIT $${pi}`);
       } else if (t === 'suspended') {
-        queries.push(`SELECT 'suspended' AS type, judge_name, court_name, applicant, reporter,
-            decision_date AS panel_decision_date, decision_num AS panel_decision_num,
-            NULL AS vrp_decision_date_num, suspension_reason, suspension_deadline, suspension_body,
-            NULL AS received_date, NULL AS case_num, NULL AS check_result, NULL AS reaction
-          FROM vrp_suspended_judges ${where}
-          ORDER BY decision_date DESC NULLS LAST LIMIT $${pi}`);
+        queries.push(`SELECT 'suspended' AS type, t.judge_name, t.court_name, t.applicant, t.reporter,
+            t.decision_date AS panel_decision_date, t.decision_num AS panel_decision_num,
+            NULL AS vrp_decision_date_num, t.suspension_reason, t.suspension_deadline, t.suspension_body,
+            NULL AS received_date, NULL AS case_num, NULL AS check_result, NULL AS reaction,
+            d.title AS vrp_decision_title
+          FROM vrp_suspended_judges t
+          ${decisionJoin(panelNum('t.decision_num'))}
+          ${where}
+          ORDER BY t.decision_date DESC NULLS LAST LIMIT $${pi}`);
       } else if (t === 'interference') {
-        queries.push(`SELECT 'interference' AS type, judge_name, court_name, applicant, reporter,
+        queries.push(`SELECT 'interference' AS type, t.judge_name, t.court_name, t.applicant, t.reporter,
             NULL AS panel_decision_date, NULL AS panel_decision_num, NULL AS vrp_decision_date_num,
             NULL AS suspension_reason, NULL AS suspension_deadline, NULL AS suspension_body,
-            received_date, case_num, check_result, reaction
-          FROM vrp_interference_reports ${where}
-          ORDER BY received_date DESC NULLS LAST LIMIT $${pi}`);
+            t.received_date, t.case_num, t.check_result, t.reaction, NULL AS vrp_decision_title
+          FROM vrp_interference_reports t ${where}
+          ORDER BY t.received_date DESC NULLS LAST LIMIT $${pi}`);
       }
       allValues.push(values);
     }
@@ -200,7 +280,7 @@ export class OpenDataTools extends BaseToolHandler {
       }
 
       if (allRows.length === 0) return this.wrapResponse('Дисциплінарних записів не знайдено');
-      const sliced = allRows.slice(0, maxRows);
+      const sliced = allRows.slice(0, maxRows).map(fillJudgeNameFromDecision);
       return this.wrapResponse({
         results: sliced,
         total_count: allRows.length,
