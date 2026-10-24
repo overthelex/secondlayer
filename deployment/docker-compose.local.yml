@@ -35,6 +35,17 @@ x-app-local-base: &app_local_base
     QDRANT_EDRSR_COLLECTION: ${QDRANT_EDRSR_COLLECTION:-edrsr_2016_c3}
     QDRANT_EDRSR_API_KEY: ${QDRANT_EDRSR_API_KEY:-}
     QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
+    # edrsr_2016_c3 keeps binary codes in RAM and f32 originals on disk. Without
+    # rescore, ranking runs on the 1-bit codes alone: measured 2026-10-24 on this
+    # host, 10 queries, top-10 vs full-precision HNSW — rescore off 1.0/10 overlap
+    # and 0/10 top-1; on with oversampling 4: 6.5/10 and 4/10, ~4 ms per query.
+    QDRANT_EDRSR_RESCORE: ${QDRANT_EDRSR_RESCORE:-true}
+    QDRANT_EDRSR_OVERSAMPLING: ${QDRANT_EDRSR_OVERSAMPLING:-4}
+    # Legislation vectors: bge-m3 (TEI) over the in-force article slice in
+    # qdrant-local. Unset, the backend fell back to Voyage over legal_sections
+    # (2 056 points), which answered housing-damage questions with the Tax Code.
+    LEGISLATION_VECTOR_BACKEND: ${LEGISLATION_VECTOR_BACKEND:-bge}
+    LEG_BGE_COLLECTION: ${LEG_BGE_COLLECTION:-legislation_current_articles}
     NEO4J_URI: ${NEO4J_URI:-bolt://neo4j-citation:7687}
     NEO4J_USER: ${NEO4J_USER:-neo4j}
     NEO4J_PASSWORD: ${NEO4J_PASSWORD:-local_neo4j_pass}
