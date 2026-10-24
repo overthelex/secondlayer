@@ -182,6 +182,14 @@ export interface PartyCaseCount {
 // index-driven plan. Same shape on a common name: 5000 → timeout, 25000 → 2.93s.
 const PARTY_COUNT_CAND_CAP = 25_000;
 
+// Server-side budgets for the countByParty statements. They must sum to less than the 60 s
+// tool timeout: without them a call the tool layer had already abandoned kept running in
+// Postgres up to the 5 min role default, reading the GIN index on an IO-bound disk and
+// slowing every other query (24.10.2026: two such orphans at 2 and 4 min). A party with a
+// role filter re-checks full_text with a regex, which is the expensive part.
+const PARTY_COUNT_TIMEOUT_MS = 40_000;
+const PARTY_SAMPLE_TIMEOUT_MS = 15_000;
+
 export interface EdsrIndexProgress {
   total: number;
   indexed: number;
@@ -494,7 +502,7 @@ export class EdsrFtsService {
         WHERE ${whereClause}
         GROUP BY court_code
         ORDER BY n DESC`;
-      const countResult = await dbPool.query(countSql, params);
+      const countResult = await this.queryWithTimeout(dbPool, countSql, params, PARTY_COUNT_TIMEOUT_MS);
       const by_court = countResult.rows
         .filter((r: any) => r.court_code !== null)
         .map((r: any) => ({ court_code: r.court_code, count: r.n }));
@@ -529,7 +537,7 @@ export class EdsrFtsService {
                               .replace(/\bjustice_kind\b/g, 'p.justice_kind')}
           ORDER BY p.doc_id, p.adjudication_date DESC NULLS LAST
           LIMIT ${safeSample}`;
-        const sampleResult = await dbPool.query(sampleSql, params);
+        const sampleResult = await this.queryWithTimeout(dbPool, sampleSql, params, PARTY_SAMPLE_TIMEOUT_MS);
         sample = sampleResult.rows.map((r: any) => ({
           doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
           justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
@@ -917,36 +925,9 @@ export class EdsrFtsService {
            ${headlineExpr}`;
     };
 
-    // Run the data query under a per-statement timeout (B). SET LOCAL needs a transaction,
-    // so use a dedicated client when the pool exposes connect(); otherwise fall back to a
-    // plain pooled query (timeout-less) so non-pg pool wrappers still work.
-    const queryWithTimeout = async (sql: string, args: any[]) => {
-      // A pooled client lets us scope SET LOCAL statement_timeout to one transaction. Only the
-      // raw pg Pool yields a client with query()/release(); sharded/wrapper pools may expose a
-      // connect() that returns undefined or a non-pg object (this broke compare_practice_pro_contra,
-      // which passes such a wrapper). Probe the client and fall back to a plain pooled query —
-      // which still runs the cap-before-rank SQL, just without the per-statement timeout.
-      let client: any;
-      if (typeof dbPool.connect === 'function') {
-        try { client = await dbPool.connect(); } catch { client = undefined; }
-      }
-      if (!client || typeof client.query !== 'function' || typeof client.release !== 'function') {
-        if (client && typeof client.release === 'function') client.release();
-        return dbPool.query(sql, args);
-      }
-      try {
-        await client.query('BEGIN');
-        await client.query(`SET LOCAL statement_timeout = ${FTS_STATEMENT_TIMEOUT_MS}`);
-        const res = await client.query(sql, args);
-        await client.query('COMMIT');
-        return res;
-      } catch (e) {
-        try { await client.query('ROLLBACK'); } catch { /* ignore rollback failure */ }
-        throw e;
-      } finally {
-        client.release();
-      }
-    };
+    // Run the data query under a per-statement timeout (B); see queryWithTimeout.
+    const queryWithTimeout = (sql: string, args: any[]) =>
+      this.queryWithTimeout(dbPool, sql, args, FTS_STATEMENT_TIMEOUT_MS);
 
     const executeQuery = async (withHeadline: boolean) => {
       const selectFields = buildSelectFields(withHeadline);
@@ -1053,6 +1034,37 @@ export class EdsrFtsService {
     } catch (err: any) {
       logger.error('[EdsrFtsService] searchFulltext failed', { error: err.message, query });
       throw new Error(`FTS search failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Run one statement under SET LOCAL statement_timeout. SET LOCAL needs a transaction, so
+   * this takes a dedicated client when the pool exposes connect(). Only the raw pg Pool
+   * yields a client with query()/release(); sharded/wrapper pools may expose a connect()
+   * that returns undefined or a non-pg object (this broke compare_practice_pro_contra,
+   * which passes such a wrapper). Those fall back to a plain pooled query, without the
+   * timeout. A timeout surfaces as the pg error with code 57014.
+   */
+  private async queryWithTimeout(dbPool: any, sql: string, args: any[], timeoutMs: number): Promise<any> {
+    let client: any;
+    if (typeof dbPool.connect === 'function') {
+      try { client = await dbPool.connect(); } catch { client = undefined; }
+    }
+    if (!client || typeof client.query !== 'function' || typeof client.release !== 'function') {
+      if (client && typeof client.release === 'function') client.release();
+      return dbPool.query(sql, args);
+    }
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL statement_timeout = ${Math.floor(timeoutMs)}`);
+      const res = await client.query(sql, args);
+      await client.query('COMMIT');
+      return res;
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch { /* ignore rollback failure */ }
+      throw e;
+    } finally {
+      client.release();
     }
   }
 
@@ -1223,7 +1235,7 @@ export class EdsrFtsService {
         CROSS JOIN tot t
         LEFT JOIN agg a ON TRUE
         ORDER BY a.n DESC NULLS LAST`;
-      const countResult = await dbPool.query(countSql, params);
+      const countResult = await this.queryWithTimeout(dbPool, countSql, params, PARTY_COUNT_TIMEOUT_MS);
       // LEFT JOIN, not `FROM agg`: the candidate count must survive an empty aggregate.
       // A doc-side filter with no CTE counterpart (justice_kind) can drop every one of the
       // newest candidates, and `FROM agg` would then return zero rows — losing `candidates`
@@ -1262,7 +1274,7 @@ export class EdsrFtsService {
           SELECT * FROM joined
           ORDER BY adjudication_date DESC NULLS LAST
           LIMIT ${safeSample}`;
-        const sampleResult = await dbPool.query(sampleSql, params);
+        const sampleResult = await this.queryWithTimeout(dbPool, sampleSql, params, PARTY_SAMPLE_TIMEOUT_MS);
         sample = sampleResult.rows.map((r: any) => ({
           doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
           justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
@@ -1283,6 +1295,10 @@ export class EdsrFtsService {
         ...(capped ? { capped: true, candidate_cap: PARTY_COUNT_CAND_CAP } : {}),
       };
     } catch (err: any) {
+      if (err.code === '57014') {
+        logger.warn('[EdsrFtsService] countByParty statement timeout', { party_name: partyName, party_role: partyRole ?? 'any' });
+        throw new Error('підрахунок не вклався в ліміт часу. Звузьте період (date_from/date_to) або приберіть фільтр ролі сторони і повторіть запит.');
+      }
       logger.error('[EdsrFtsService] countByParty failed', { error: err.message, party_name: partyName });
       throw new Error(`Party count failed: ${err.message}`);
     }

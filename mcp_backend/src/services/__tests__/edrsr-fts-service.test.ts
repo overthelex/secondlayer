@@ -210,6 +210,29 @@ describe('EdsrFtsService.filterDocIdsByConstraints', () => {
 });
 
 describe('EdsrFtsService.countByParty', () => {
+  it('runs the count under a statement_timeout and turns a timeout into advice', async () => {
+    const svc = new EdsrFtsService();
+    const clientCalls: string[] = [];
+    const client = {
+      query: jest.fn((sql: string) => {
+        clientCalls.push(sql);
+        if (sql.includes('phraseto_tsquery')) {
+          return Promise.reject(Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }));
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: jest.fn(),
+    };
+    const db = { query: jest.fn(), connect: jest.fn(() => Promise.resolve(client)) };
+
+    await expect(svc.countByParty('Нова Пошта', 'defendant', db)).rejects.toThrow(/Звузьте період/);
+    expect(clientCalls[1]).toMatch(/^SET LOCAL statement_timeout = \d+$/);
+    expect(Number(clientCalls[1].split('= ')[1])).toBeLessThan(60_000);
+    expect(clientCalls).toContain('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it('counts + groups by court with phrase + role anchor', async () => {
     const svc = new EdsrFtsService();
     const db = {

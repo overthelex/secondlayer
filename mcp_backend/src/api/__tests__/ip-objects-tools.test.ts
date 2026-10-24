@@ -210,4 +210,29 @@ describe('IpObjectsTools', () => {
     const called = registry.executeTool.mock.calls.map((c: any[]) => c[0]);
     expect(called).toEqual(expect.arrayContaining(['search_court_decisions', 'get_legislation_section']));
   });
+
+  it('get_trademark_dossier returns the card when a sub-tool hangs past its deadline', async () => {
+    jest.useFakeTimers();
+    try {
+      const db = makeDb((sql) => {
+        if (sql.includes('ip_object_events') || sql.includes('similarity(title_ua')) return { rows: [] };
+        if (sql.includes('obj_type = 4 ORDER BY obj_state')) return { rows: [{ ...tmRow, obj_state: 2, raw_data: {} }] };
+        return { rows: [{ obj_type: 4, app_number: 'm202400890', registration_number: '67482' }] };
+      });
+      const registry = {
+        executeTool: jest.fn((name: string) => name === 'search_court_decisions'
+          ? new Promise(() => { /* never settles */ })
+          : Promise.resolve({ content: [{ type: 'text', text: '{"ok":true}' }] })),
+      };
+      const tool = new IpObjectsTools(db, registry);
+      const pending = tool.executeTool('get_trademark_dossier', { number: '67482' });
+      await jest.advanceTimersByTimeAsync(30_000);
+      const p = parse(await pending);
+      expect(p.trademark.app_number).toBe('m202400890');
+      expect(p.court_practice).toBeNull();
+      expect(p.owner_check).toEqual({ ok: true });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
