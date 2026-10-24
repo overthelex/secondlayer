@@ -137,6 +137,11 @@ function isCourtLevelMatch(courtCode: any, filter?: 'SC' | 'GrandChamber'): bool
 // the whole tool at 120s (tool-registry.ts); these keep each external leg bounded so a slow
 // qdrant or an overloaded LLM degrades to a useful partial answer instead of a hard timeout.
 const PRO_CONTRA_GATHER_BUDGET_MS = 15_000;
+// The contra-seed FTS leg inside gather gets its own, smaller share. Without it a slow seed
+// ran the whole gather into its 15 s soft timeout, which threw away the semantic candidates
+// already in hand and dropped the tool onto the slow keyword-FTS fallback — past 120 s on
+// 24.10.2026. A late seed is skipped; the semantic pool is returned as is.
+const PRO_CONTRA_SEED_BUDGET_MS = 7_000;
 // Batched DB fetch of each candidate's dispositive (резолютивна частина) before classification,
 // so the LLM anchors the pro/contra stance to the operative outcome instead of a snippet that
 // merely restates the norm. One ANY($1) query over the candidate doc_ids — fast; the budget is
@@ -819,12 +824,19 @@ export class ProceduralTools extends BaseToolHandler {
         const bareQuery = trimFtsQuery(query, 3);
         const instances = courtLevelFilter ? [1] : [1, 2, 3];
         let seeded = 0;
+        const seedDeadline = Date.now() + PRO_CONTRA_SEED_BUDGET_MS;
         for (const code of instances) {
           if (seeded >= seedReserve || byDoc.size >= maxN) break;
-          const resp = await this.ftsService!.searchFulltext(
-            `${bareQuery} відмовити у задоволенні позову`, this.db,
-            { ...seedFilters, instance_code: code }, seedReserve, 0, bareQuery,
+          const remaining = seedDeadline - Date.now();
+          if (remaining <= 0) break;
+          const resp = await withSoftTimeout(
+            this.ftsService!.searchFulltext(
+              `${bareQuery} відмовити у задоволенні позову`, this.db,
+              { ...seedFilters, instance_code: code }, seedReserve, 0, bareQuery,
+            ),
+            remaining, 'gatherProContraCandidates.contraSeed',
           );
+          if (!resp) break;
           for (const d of resp.results) {
             if (byDoc.has(d.doc_id)) continue;
             if (!isCourtLevelMatch(d.court_code, courtLevelFilter)) continue;

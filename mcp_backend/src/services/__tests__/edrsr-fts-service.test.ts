@@ -210,6 +210,22 @@ describe('EdsrFtsService.filterDocIdsByConstraints', () => {
 });
 
 describe('EdsrFtsService.countByParty', () => {
+  it('unwraps a Database wrapper to its pg Pool for the statement_timeout', async () => {
+    const svc = new EdsrFtsService();
+    const clientCalls: string[] = [];
+    const client = {
+      query: jest.fn((sql: string) => { clientCalls.push(sql); return Promise.resolve({ rows: [] }); }),
+      release: jest.fn(),
+    };
+    const pool = { connect: jest.fn(() => Promise.resolve(client)) };
+    // BaseDatabase: connect() pings and resolves to nothing; getPool() is the real pool.
+    const wrapper = { query: jest.fn(), connect: jest.fn(() => Promise.resolve(undefined)), getPool: () => pool };
+
+    await svc.countByParty('Нова Пошта', 'defendant', wrapper);
+    expect(clientCalls.some((q) => /^SET LOCAL statement_timeout = \d+$/.test(q))).toBe(true);
+    expect(wrapper.query).not.toHaveBeenCalled();
+  });
+
   it('runs the count under a statement_timeout and turns a timeout into advice', async () => {
     const svc = new EdsrFtsService();
     const clientCalls: string[] = [];
