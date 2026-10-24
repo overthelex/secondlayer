@@ -19,6 +19,7 @@
     "sync:registry": "npm run build && node dist/scripts/sync-all-registries.js --only=",
     "sync:weekly": "npm run build && node dist/scripts/sync-all-registries.js --weekly",
     "sync:edrpou": "npm run build && node dist/scripts/sync-edrpou.js",
+    "import:prozorro": "npm run build && node dist/scripts/import-prozorro.js",
     "import:street-renamings": "npm run build && node dist/scripts/import-street-renamings.js",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
