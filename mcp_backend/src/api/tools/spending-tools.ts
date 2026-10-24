@@ -41,7 +41,8 @@ export class SpendingTools extends BaseToolHandler {
         description: `Пошук у реєстрі публічних витрат (spending.gov.ua)
 
 12.6M+ записів: акти виконаних робіт (9.45M), додаткові угоди (2.11M), пеня (40K), договори (2.8K).
-Пошук за ЄДРПОУ розпорядника, назвою контрагента, сумою, датою, типом документа.`,
+Пошук за ЄДРПОУ розпорядника, назвою контрагента, сумою, датою, типом документа.
+Суми (amount, pdv_amount, min_amount, max_amount) — у гривнях, не в копійках; amount зберігається цілими гривнями.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -50,8 +51,8 @@ export class SpendingTools extends BaseToolHandler {
             contractor_edrpou: { type: 'string', description: 'ЄДРПОУ контрагента' },
             date_from: { type: 'string', description: 'Дата підписання від (YYYY-MM-DD)' },
             date_to: { type: 'string', description: 'Дата підписання до (YYYY-MM-DD)' },
-            min_amount: { type: 'number', description: 'Мін. сума (копійки)' },
-            max_amount: { type: 'number', description: 'Макс. сума (копійки)' },
+            min_amount: { type: 'number', description: 'Мін. сума документа, грн' },
+            max_amount: { type: 'number', description: 'Макс. сума документа, грн' },
             doc_type: {
               type: 'string',
               enum: ['acts', 'addendums', 'peny', 'contracts', 'all'],
@@ -97,13 +98,19 @@ export class SpendingTools extends BaseToolHandler {
       values.push(date_to);
       pi++;
     }
+    // `amount` is whole hryvnias, not kopecks: spending.gov.ua sends it in UAH and the
+    // importer stores it as is (bigint). Checked against VAT on live rows: with
+    // pdv_include, pdv_amount is 1/6 of amount in UAH (195 -> 32.5) for ~95% of sampled
+    // acts, addendums and contracts, and the kopeck reading fits next to none.
+    // The ::numeric cast lets a fractional bound (1000.5) through: against a bigint
+    // column the parameter would otherwise be typed bigint and rejected.
     if (min_amount != null) {
-      conditions.push(`amount >= $${pi}`);
+      conditions.push(`amount >= $${pi}::numeric`);
       values.push(min_amount);
       pi++;
     }
     if (max_amount != null) {
-      conditions.push(`amount <= $${pi}`);
+      conditions.push(`amount <= $${pi}::numeric`);
       values.push(max_amount);
       pi++;
     }
@@ -191,7 +198,6 @@ export class SpendingTools extends BaseToolHandler {
             ...row,
             doc_type: dtype,
             doc_type_label: DOC_TYPE_LABELS[dtype] || dtype,
-            amount_uah: row.amount ? (Number(row.amount) / 100).toFixed(2) : null,
           });
         }
       } catch (err: any) {
