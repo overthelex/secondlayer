@@ -26,6 +26,40 @@ export interface EntityDetails {
   terminationStarted?: any;
   bankruptcyInfo?: any;
   exchangeData?: any[];
+  /** Address / КВЕД from the ДССУ financial-statement extract (not part of the ЄДР dump). */
+  addressAndActivity?: {
+    address: string | null;
+    region: string | null;
+    kved: string | null;
+    kvedName: string | null;
+    reportYear: number | null;
+    source: 'dssu_financial_reports';
+  };
+  dataNotes?: string[];
+}
+
+const EXCHANGE_FIELDS = ['tax_payer_type', 'start_date', 'start_num', 'end_date', 'end_num'];
+
+/** An exchange_data row is noise when every data field is null/blank. */
+export function isMeaningfulExchangeRow(row: any): boolean {
+  return EXCHANGE_FIELDS.some(f => row?.[f] != null && String(row[f]).trim() !== '');
+}
+
+/** ДССУ row → addressAndActivity, or undefined when it has neither address nor КВЕД. */
+export function formatDssuActivity(row: any): EntityDetails['addressAndActivity'] | undefined {
+  if (!row) return undefined;
+  const t = (v: unknown) => (v == null || String(v).trim() === '' ? null : String(v).trim());
+  const address = t(row.firm_address);
+  const kved = t(row.firm_kved);
+  if (!address && !kved) return undefined;
+  return {
+    address,
+    region: t(row.firm_region),
+    kved,
+    kvedName: t(row.firm_kved_name),
+    reportYear: row.report_year ?? null,
+    source: 'dssu_financial_reports',
+  };
 }
 
 /** Escape LIKE/ILIKE wildcards so user input matches literally. */
@@ -39,6 +73,76 @@ export function escapeLike(s: string): string {
  */
 export function normNameSql(expr: string): string {
   return `upper(btrim(regexp_replace(translate(${expr}, '«»“”„‟″', '"""""""'), '[[:space:]]+', ' ', 'g')))`;
+}
+
+/**
+ * Abbreviated ОПФ tokens that precede the quoted name in short names
+ * (ТОВ "НОВА ПОШТА", АТ КБ "ПРИВАТБАНК", ПРАТ "КИЇВСТАР").
+ */
+const OPF_ABBR = [
+  'ТОВ', 'ТДВ', 'ПП', 'ПАТ', 'ПРАТ', 'АТ', 'ВАТ', 'ЗАТ', 'КБ', 'АКБ', 'ДП', 'КП', 'ДАК', 'НАК',
+  'СП', 'ФГ', 'ПТ', 'КТ', 'ОСББ', 'ГО', 'БО', 'МПП', 'ПФ', 'ВКФ', 'ПВКФ', 'ТЗОВ', 'LLC',
+];
+
+/** Spelled-out ОПФ phrases a user may type before or after the name (longest first). */
+const OPF_PHRASES = [
+  'ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ',
+  'ТОВАРИСТВО З ДОДАТКОВОЮ ВІДПОВІДАЛЬНІСТЮ',
+  'ПРИВАТНЕ АКЦІОНЕРНЕ ТОВАРИСТВО',
+  'ПУБЛІЧНЕ АКЦІОНЕРНЕ ТОВАРИСТВО',
+  'ВІДКРИТЕ АКЦІОНЕРНЕ ТОВАРИСТВО',
+  'ЗАКРИТЕ АКЦІОНЕРНЕ ТОВАРИСТВО',
+  'АКЦІОНЕРНЕ ТОВАРИСТВО',
+  'КОМЕРЦІЙНИЙ БАНК',
+  'ПРИВАТНЕ ПІДПРИЄМСТВО',
+  'ДЕРЖАВНЕ ПІДПРИЄМСТВО',
+  'КОМУНАЛЬНЕ ПІДПРИЄМСТВО',
+  'ФЕРМЕРСЬКЕ ГОСПОДАРСТВО',
+];
+
+const OPF_ABBR_RE = OPF_ABBR.join('|');
+
+/**
+ * Normalised name core of a user query: upper-cased, ОПФ phrases/abbreviations at
+ * the start or end removed, quotes and apostrophes dropped, punctuation → one space.
+ * «ТОВ "Нова Пошта"» → «НОВА ПОШТА»; «Розетка.уа» → «РОЗЕТКА УА».
+ * Mirrors nameCoreSql so the two compare equal for the same organisation.
+ */
+export function normalizeNameCore(input: string): string {
+  let s = (input || '').toUpperCase().replace(/[ʼ’‘`']/g, '');
+  s = s.replace(/[^0-9A-ZА-ЯЁІЇЄҐ]+/g, ' ').trim();
+  const abbr = new RegExp(`^(?:${OPF_ABBR_RE})(?: |$)|(?: |^)(?:${OPF_ABBR_RE})$`);
+  for (let changed = true; changed && s; ) {
+    changed = false;
+    for (const p of OPF_PHRASES) {
+      if (s === p) { s = ''; changed = true; break; }
+      if (s.startsWith(p + ' ')) { s = s.slice(p.length + 1); changed = true; break; }
+      if (s.endsWith(' ' + p)) { s = s.slice(0, -(p.length + 1)); changed = true; break; }
+    }
+    if (!changed && abbr.test(s)) { s = s.replace(abbr, '').trim(); changed = true; }
+  }
+  return s;
+}
+
+/**
+ * SQL expression for the normalised name core of a registry name:
+ *  - the full ОПФ (opfExpr) is cut off the front when the name starts with it;
+ *  - leading ОПФ abbreviations are cut only when a quoted name follows
+ *    (ТОВ "X" → X, but НППП ТОВ "X" — a trade union — keeps its prefix);
+ *  - then quotes/apostrophes are dropped and punctuation collapsed to one space
+ *    exactly as normalizeNameCore does.
+ */
+export function nameCoreSql(expr: string, opfExpr?: string): string {
+  let s = `upper(coalesce(${expr}, ''))`;
+  if (opfExpr) {
+    s = `CASE WHEN coalesce(${opfExpr}, '') <> '' AND left(${s}, length(${opfExpr}) + 1) = upper(${opfExpr}) || ' '
+              THEN substr(${s}, length(${opfExpr}) + 2) ELSE ${s} END`;
+  }
+  // unify quotes: typographic and doubled apostrophes → "
+  s = `regexp_replace(translate(${s}, '«»“”„‟″', '"""""""'), '''''', '"', 'g')`;
+  s = `regexp_replace(btrim(${s}), '^((${OPF_ABBR_RE})[[:space:]]+)+(?=")', '')`;
+  s = `regexp_replace(${s}, '[ʼ’‘\`'']', '', 'g')`;
+  return `btrim(regexp_replace(${s}, '[^0-9A-ZА-ЯЁІЇЄҐ]+', ' ', 'g'))`;
 }
 
 /** 'DD.MM.YYYY' → 'YYYY-MM-DD'; anything else is returned trimmed, empty → null. */
@@ -120,146 +224,27 @@ export class OpenReyestrTools {
     } = params;
 
     const results: any[] = [];
+    const common = { query, edrpou, record, stan, limit, offset };
 
-    // Search legal entities (UO)
     if (entityType === 'UO' || entityType === 'ALL') {
-      const conditions: string[] = [];
-      const values: any[] = [];
-      let paramIndex = 1;
-
-      if (query) {
-        conditions.push(`to_tsvector('simple', name) @@ plainto_tsquery('simple', $${paramIndex})`);
-        values.push(query);
-        paramIndex++;
-      }
-
-      if (edrpou) {
-        conditions.push(`edrpou = $${paramIndex}`);
-        values.push(edrpou);
-        paramIndex++;
-      }
-
-      if (record) {
-        conditions.push(`record = $${paramIndex}`);
-        values.push(record);
-        paramIndex++;
-      }
-
-      if (stan) {
-        conditions.push(`stan = $${paramIndex}`);
-        values.push(stan);
-        paramIndex++;
-      }
-
-      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-      const orderBy = query
-        ? `ORDER BY ts_rank(to_tsvector('simple', name), plainto_tsquery('simple', $1)) DESC`
-        : `ORDER BY id DESC`;
-
-      values.push(limit, offset);
-      const result = await this.pool.query(
-        `SELECT id, record, edrpou, name, short_name, opf, stan, registration, 'UO' as entity_type
-         FROM legal_entities
-         ${whereClause}
-         ${orderBy}
-         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-        values
-      );
-
-      results.push(...result.rows);
+      results.push(...await this.searchEntityTable({
+        table: 'legal_entities', entityType: 'UO', hasEdrpou: true, hasShortName: true, opfColumn: 'opf',
+        columns: 'id, record, edrpou, name, short_name, opf, stan, registration',
+      }, common));
     }
 
-    // Search individual entrepreneurs (FOP)
     if (entityType === 'FOP' || entityType === 'ALL') {
-      const conditions: string[] = [];
-      const values: any[] = [];
-      let paramIndex = 1;
-
-      if (query) {
-        conditions.push(`to_tsvector('simple', name) @@ plainto_tsquery('simple', $${paramIndex})`);
-        values.push(query);
-        paramIndex++;
-      }
-
-      if (record) {
-        conditions.push(`record = $${paramIndex}`);
-        values.push(record);
-        paramIndex++;
-      }
-
-      if (stan) {
-        conditions.push(`stan = $${paramIndex}`);
-        values.push(stan);
-        paramIndex++;
-      }
-
-      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-      const orderBy = query
-        ? `ORDER BY ts_rank(to_tsvector('simple', name), plainto_tsquery('simple', $1)) DESC`
-        : `ORDER BY id DESC`;
-
-      values.push(limit, offset);
-      const result = await this.pool.query(
-        `SELECT id, record, name, stan, registration, 'FOP' as entity_type
-         FROM individual_entrepreneurs
-         ${whereClause}
-         ${orderBy}
-         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-        values
-      );
-
-      results.push(...result.rows);
+      results.push(...await this.searchEntityTable({
+        table: 'individual_entrepreneurs', entityType: 'FOP', hasEdrpou: false, hasShortName: false,
+        columns: 'id, record, name, stan, registration',
+      }, common));
     }
 
-    // Search public associations (FSU)
     if (entityType === 'FSU' || entityType === 'ALL') {
-      const conditions: string[] = [];
-      const values: any[] = [];
-      let paramIndex = 1;
-
-      if (query) {
-        conditions.push(`to_tsvector('simple', name) @@ plainto_tsquery('simple', $${paramIndex})`);
-        values.push(query);
-        paramIndex++;
-      }
-
-      if (edrpou) {
-        conditions.push(`edrpou = $${paramIndex}`);
-        values.push(edrpou);
-        paramIndex++;
-      }
-
-      if (record) {
-        conditions.push(`record = $${paramIndex}`);
-        values.push(record);
-        paramIndex++;
-      }
-
-      if (stan) {
-        conditions.push(`stan = $${paramIndex}`);
-        values.push(stan);
-        paramIndex++;
-      }
-
-      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-      const orderBy = query
-        ? `ORDER BY ts_rank(to_tsvector('simple', name), plainto_tsquery('simple', $1)) DESC`
-        : `ORDER BY id DESC`;
-
-      values.push(limit, offset);
-      const result = await this.pool.query(
-        `SELECT id, record, edrpou, name, short_name, type_subject, type_branch, stan, registration, 'FSU' as entity_type
-         FROM public_associations
-         ${whereClause}
-         ${orderBy}
-         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-        values
-      );
-
-      results.push(...result.rows);
+      results.push(...await this.searchEntityTable({
+        table: 'public_associations', entityType: 'FSU', hasEdrpou: true, hasShortName: true,
+        columns: 'id, record, edrpou, name, short_name, type_subject, type_branch, stan, registration',
+      }, common));
     }
 
     const sliced = results.slice(0, limit);
@@ -280,6 +265,97 @@ export class OpenReyestrTools {
     }
 
     return sliced;
+  }
+
+  /**
+   * One registry table of search_entities. A name query is ranked (LEXAI-2098):
+   *   0 — the normalised name core (ОПФ and quotes stripped) of name or short_name
+   *       equals the query core («Нова Пошта» → ТОВ "НОВА ПОШТА");
+   *   1 — the core starts with the query; 2 — the core contains it; 3 — other FTS hits
+   *       (trade unions «ПРОФСПІЛКА … ТОВ "НОВА ПОШТА"» land here);
+   * then registered (stan = 'зареєстровано') before others, trigram similarity of the
+   * core, ts_rank, shorter name. Candidates are FTS hits on name or short_name.
+   */
+  private async searchEntityTable(
+    cfg: {
+      table: string;
+      entityType: 'UO' | 'FOP' | 'FSU';
+      columns: string;
+      hasEdrpou: boolean;
+      hasShortName: boolean;
+      opfColumn?: string;
+    },
+    p: { query?: string; edrpou?: string; record?: string; stan?: string; limit: number; offset: number }
+  ): Promise<any[]> {
+    const conditions: string[] = [];
+    const values: any[] = [];
+    const q = p.query?.trim();
+    let core = '';
+
+    if (q) {
+      core = normalizeNameCore(q) || q.toUpperCase().replace(/[^0-9A-ZА-ЯЁІЇЄҐ]+/g, ' ').trim();
+      values.push(q, core);
+      const tsq = `(plainto_tsquery('simple', $1) || plainto_tsquery('simple', $2))`;
+      conditions.push(cfg.hasShortName
+        ? `(to_tsvector('simple', name) @@ ${tsq} OR to_tsvector('simple', coalesce(short_name, '')) @@ ${tsq})`
+        : `to_tsvector('simple', name) @@ ${tsq}`);
+    }
+    if (p.edrpou && cfg.hasEdrpou) {
+      values.push(p.edrpou);
+      conditions.push(`edrpou = $${values.length}`);
+    }
+    if (p.record) {
+      values.push(p.record);
+      conditions.push(`record = $${values.length}`);
+    }
+    if (p.stan) {
+      values.push(p.stan);
+      conditions.push(`stan = $${values.length}`);
+    }
+    // An EDRPOU filter cannot match a table without the column (ФОП).
+    if (p.edrpou && !cfg.hasEdrpou) return [];
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    values.push(p.limit, p.offset);
+    const limitSql = `LIMIT $${values.length - 1} OFFSET $${values.length}`;
+
+    if (!q) {
+      const result = await this.pool.query(
+        `SELECT ${cfg.columns}, '${cfg.entityType}' as entity_type
+         FROM ${cfg.table}
+         ${whereClause}
+         ORDER BY id DESC
+         ${limitSql}`,
+        values
+      );
+      return result.rows;
+    }
+
+    const nc = nameCoreSql('name', cfg.opfColumn);
+    const sc = cfg.hasShortName ? nameCoreSql('short_name') : `NULL::text`;
+    const result = await this.pool.query(
+      `WITH c AS (
+         SELECT ${cfg.columns}, '${cfg.entityType}' as entity_type,
+                ${nc} AS _nc, ${sc} AS _sc,
+                ts_rank(to_tsvector('simple', name), (plainto_tsquery('simple', $1) || plainto_tsquery('simple', $2))) AS _fts
+         FROM ${cfg.table}
+         ${whereClause}
+       )
+       SELECT ${cfg.columns.split(',').map(c => c.trim()).join(', ')}, entity_type
+       FROM c
+       ORDER BY CASE WHEN _nc = $2 OR _sc = $2 THEN 0
+                     WHEN _nc LIKE $2 || '%' OR _sc LIKE $2 || '%' THEN 1
+                     WHEN _nc LIKE '%' || $2 || '%' OR _sc LIKE '%' || $2 || '%' THEN 2
+                     ELSE 3 END,
+                CASE WHEN stan = 'зареєстровано' THEN 0 ELSE 1 END,
+                greatest(similarity(_nc, $2), similarity(coalesce(_sc, ''), $2)) DESC,
+                _fts DESC,
+                length(name),
+                id
+       ${limitSql}`,
+      values
+    );
+    return result.rows;
   }
 
   /**
@@ -416,8 +492,35 @@ export class OpenReyestrTools {
       'SELECT * FROM exchange_data WHERE entity_type = $1 AND entity_record = $2',
       [entityType, record]
     );
-    if (exchangeDataResult.rows.length > 0) {
-      details.exchangeData = exchangeDataResult.rows;
+    // LEXAI-2107: the importer leaves most EXCHANGE_ANSWER rows with every field
+    // empty; they carry no information, so only rows with data are returned.
+    const exchangeRows = exchangeDataResult.rows.filter(isMeaningfulExchangeRow);
+    if (exchangeRows.length > 0) {
+      details.exchangeData = exchangeRows;
+    }
+
+    // The ЄДР open-data dump (UO_FULL/FSU_FULL) has no address or КВЕД fields at all.
+    // The only stored source is the ДССУ financial-statement extract (by ЄДРПОУ).
+    const edrpou = entityType === 'FOP' ? null : cleanNais(mainInfo?.edrpou);
+    let activity: EntityDetails['addressAndActivity'] | undefined;
+    if (edrpou) {
+      const dssu = await this.pool.query(
+        `SELECT firm_address, firm_region, firm_kved, firm_kved_name, report_year
+         FROM dssu_financial_reports
+         WHERE firm_edrpou = $1 AND (firm_address IS NOT NULL OR firm_kved IS NOT NULL)
+         ORDER BY report_year DESC NULLS LAST, id DESC
+         LIMIT 1`,
+        [edrpou]
+      );
+      activity = formatDssuActivity(dssu.rows[0]);
+    }
+    if (activity) {
+      details.addressAndActivity = activity;
+    } else {
+      details.dataNotes = [
+        'Адреса та КВЕД відсутні: відкритий набір ЄДР (НАІС) цих полів не містить, ' +
+        'а у фінансовій звітності ДССУ записів для цього ЄДРПОУ немає.',
+      ];
     }
 
     return details;
