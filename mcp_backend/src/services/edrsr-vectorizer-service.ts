@@ -77,6 +77,8 @@ export interface EdrsrSearchResult {
   text: string;
   doc_id: number;
   chunk_index: number;
+  // Chunks in the decision; the last one (chunk_index = total_chunks - 1) is the closing part.
+  total_chunks?: number;
   metadata: EdrsrDocMetadata;
 }
 
@@ -520,6 +522,7 @@ export class EdsrVectorizerService {
         text: (r.payload?.text as string) || '',
         doc_id: (r.payload?.edrsr_doc_id as number) || 0,
         chunk_index: (r.payload?.chunk_index as number) || 0,
+        total_chunks: r.payload?.total_chunks as number | undefined,
         metadata: {
           court_code: r.payload?.court_code as number | undefined,
           judge: r.payload?.judge as string | undefined,

@@ -181,6 +181,24 @@ export function stripAppealBoilerplate(text: string): { text: string; removed: b
 
 // A semantic hit that was mostly boilerplate: what is left is too short to carry a position.
 const PRO_CONTRA_MIN_FRAGMENT_CHARS = 80;
+// Fewer usable semantic decisions than this and the thesis is one the vector index answers
+// with closing paragraphs (24.10.2026, appeal-deadline thesis: 9 of the top 1000 chunks
+// survived the filter, all still notices). The pool is then filled from keyword FTS.
+const PRO_CONTRA_MIN_SEMANTIC_DOCS = 3;
+const PRO_CONTRA_FTS_BACKFILL_BUDGET_MS = 6_000;
+
+/**
+ * Default lower date bound for the keyword legs when the caller set no time range: the date
+ * the current procedural code took effect. Without it FTS ranks 2009–2013 decisions under the
+ * old ЦПК first, which say nothing about the norm the thesis is about.
+ */
+function currentCodeDateFrom(justiceKind: number | null): string | undefined {
+  switch (justiceKind) {
+    case 1: case 3: case 4: return '2017-12-15'; // ЦПК, ГПК, КАС in the 03.10.2017 edition
+    case 2: return '2012-11-20';                  // КПК 2012
+    default: return undefined;                    // КУпАП: no single cut-over date
+  }
+}
 
 function isCourtLevelMatch(courtCode: any, filter?: 'SC' | 'GrandChamber'): boolean {
   if (!filter) return true;
@@ -825,6 +843,32 @@ export class ProceduralTools extends BaseToolHandler {
     // decisions can't crowd out refusal practice. Only meaningful when FTS is available.
     const canSeed = !!(this.ftsService && this.db);
     const seedReserve = canSeed ? Math.min(8, Math.floor(maxN / 3)) : 0;
+    const noTimeRange = !timeRangeParsed.date_from && !timeRangeParsed.date_to;
+    const defaultFrom = noTimeRange ? currentCodeDateFrom(justiceKind) : undefined;
+    const ftsFilters: EdsrFtsFilters = {
+      ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
+      ...(timeRangeParsed.date_from || defaultFrom ? { date_from: timeRangeParsed.date_from || defaultFrom } : {}),
+      ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+    };
+    const ftsCandidates = async (instanceCode: number, n: number): Promise<Candidate[]> => {
+      const resp = await this.ftsService!.searchFulltext(
+        trimFtsQuery(query), this.db, { ...ftsFilters, instance_code: instanceCode }, n,
+      );
+      const out: Candidate[] = [];
+      for (const d of resp.results) {
+        const docId = Number(d.doc_id); // pg bigint arrives as a string
+        if (out.some((c) => c.doc_id === docId)) continue;
+        if (!isCourtLevelMatch(d.court_code, courtLevelFilter)) continue;
+        out.push({
+          doc_id: docId,
+          court_code: d.court_code,
+          date: d.adjudication_date,
+          case_number: d.cause_num,
+          fragment: d.headline || '',
+        });
+      }
+      return out;
+    };
 
     // Leg A — semantic on the thesis. BGE-M3 retrieves topically-similar chunks regardless of
     // stance, so a wide net surfaces opposing holdings on the same point. When a court level
@@ -846,7 +890,10 @@ export class ProceduralTools extends BaseToolHandler {
           const cleaned = stripAppealBoilerplate(h.text || '');
           // Matched on the closing appeal paragraph alone: not evidence of a position. A
           // later chunk of the same decision may still qualify, so don't mark it seen.
-          if (cleaned.removed && cleaned.text.length < PRO_CONTRA_MIN_FRAGMENT_CHARS) continue;
+          // The decision's last chunk with any part of the notice in it is the closing part
+          // whatever is left: the notice has more wordings than the markers know.
+          const isLastChunk = h.total_chunks != null && h.chunk_index >= h.total_chunks - 1;
+          if (cleaned.removed && (isLastChunk || cleaned.text.length < PRO_CONTRA_MIN_FRAGMENT_CHARS)) continue;
           seen.add(h.doc_id);
           semanticHits.push({
             doc_id: h.doc_id,
@@ -876,11 +923,7 @@ export class ProceduralTools extends BaseToolHandler {
     // which is the LLM's job. Best-effort; the outer gather soft-timeout bounds it.
     if (canSeed && seedReserve > 0 && byDoc.size < maxN) {
       try {
-        const seedFilters: EdsrFtsFilters = {
-          ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
-          ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
-          ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
-        };
+        const seedFilters = ftsFilters;
         const bareQuery = trimFtsQuery(query, 3);
         const instances = courtLevelFilter ? [1] : [1, 2, 3];
         let seeded = 0;
@@ -923,40 +966,37 @@ export class ProceduralTools extends BaseToolHandler {
       if (!byDoc.has(c.doc_id)) byDoc.set(c.doc_id, c);
     }
 
-    if (byDoc.size > 0) {
-      return { candidates: [...byDoc.values()], method: methods.join('+') || 'semantic_hnsw' };
-    }
-
-    // Pure FTS fallback (semantic unavailable/empty) — court-level aware, headline as fragment.
-    if (this.ftsService && this.db) {
-      const baseFilters: EdsrFtsFilters = {
-        ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
-        ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
-        ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
-      };
-      const instances = courtLevelFilter ? [{ code: 1 }] : [{ code: 1 }, { code: 2 }, { code: 3 }];
-      for (const inst of instances) {
-        const resp = await this.ftsService.searchFulltext(
-          trimFtsQuery(query), this.db, { ...baseFilters, instance_code: inst.code }, maxN,
-        );
-        if (resp.results.length > 0) {
-          const seen = new Set<number>();
-          const out: Candidate[] = [];
-          for (const d of resp.results) {
-            if (seen.has(d.doc_id)) continue;
-            if (!isCourtLevelMatch(d.court_code, courtLevelFilter)) continue;
-            seen.add(d.doc_id);
-            out.push({
-              doc_id: Number(d.doc_id), // pg bigint arrives as a string
-              court_code: d.court_code,
-              date: d.adjudication_date,
-              case_number: d.cause_num,
-              fragment: d.headline || '',
-            });
-          }
-          if (out.length > 0) return { candidates: out, method: 'fts' };
+    // Leg C — keyword backfill when the semantic leg came back with (almost) nothing usable,
+    // including when it is unavailable: the thesis matches the closing paragraphs the filter
+    // above drops, so practice has to come from FTS. This replaces the old unbounded FTS
+    // fallback. Instances in turn, within one budget; a late leg is skipped.
+    if (canSeed && semanticHits.length < PRO_CONTRA_MIN_SEMANTIC_DOCS && byDoc.size < maxN) {
+      const deadline = Date.now() + PRO_CONTRA_FTS_BACKFILL_BUDGET_MS;
+      let added = 0;
+      for (const code of courtLevelFilter ? [1] : [1, 2, 3]) {
+        if (byDoc.size >= maxN) break;
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) break;
+        let found: Candidate[] | null;
+        try {
+          found = await withSoftTimeout(ftsCandidates(code, maxN), remaining, 'gatherProContraCandidates.ftsBackfill');
+        } catch (err: any) {
+          logger.warn('[gatherProContraCandidates] FTS backfill failed', { error: err?.message });
+          break;
+        }
+        if (!found) break;
+        for (const c of found) {
+          if (byDoc.size >= maxN) break;
+          if (byDoc.has(c.doc_id)) continue;
+          byDoc.set(c.doc_id, c);
+          added++;
         }
       }
+      if (added > 0) methods.push('fts_backfill');
+    }
+
+    if (byDoc.size > 0) {
+      return { candidates: [...byDoc.values()], method: methods.join('+') || 'semantic_hnsw' };
     }
 
     return { candidates: [], method: '' };
