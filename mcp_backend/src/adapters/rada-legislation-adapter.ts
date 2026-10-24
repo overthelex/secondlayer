@@ -1189,8 +1189,14 @@ export class RadaLegislationAdapter {
     }
 
     // Rank by lexical relevance when we have a tsquery; otherwise fall back to a stable order.
+    // ts_rank_cd with normalisation 1|4 (log of length, mean distance between covers): plain
+    // ts_rank grows with length, so the 216K-char ПКУ ст. 14 «визначення понять» led every
+    // OR-of-prefixes query. Measured 2026-10-24 on 5 queries with known answers: ЦК ст. 257
+    // for «загальний строк позовної давності» moved 831 → 1; «залишення позову без розгляду»
+    // ЦПК 257 / КАС 240 / ГПК 226 9,10,11 → 1,4,6. Length-only normalisation (2) overshoots
+    // to one-line articles that match a single stem.
     if (tsq) {
-      sql += ` ORDER BY ts_rank(to_tsvector('simple', la.full_text), to_tsquery('simple', $1)) DESC`;
+      sql += ` ORDER BY ts_rank_cd(to_tsvector('simple', la.full_text), to_tsquery('simple', $1), 5) DESC`;
     } else {
       sql += ` ORDER BY la.id ASC`;
     }

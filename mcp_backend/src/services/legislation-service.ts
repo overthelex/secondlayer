@@ -1342,6 +1342,33 @@ export class LegislationService {
   }
 
   /**
+   * Articles from the full НПА corpus (npa.article), latest edition, shaped like a
+   * legislation_articles row. Empty when the npa schema is absent (deployments without it).
+   */
+  private async fetchNpaArticles(
+    pairs: Array<{ radaId: string; articleNumber: string }>
+  ): Promise<any[]> {
+    try {
+      const res = await this.db.query(
+        `SELECT DISTINCT ON (a.nreg, a.art_no)
+                a.nreg AS rada_id, a.art_no AS article_number,
+                -- npa.article.title runs on past the heading into the text; body already
+                -- starts with «Стаття N. <heading>».
+                split_part(a.title, E'\\n', 1) AS title, a.body AS full_text, act.title AS npa_title
+           FROM unnest($1::text[], $2::text[]) AS p(nreg, art_no)
+           JOIN npa.article a ON a.nreg = p.nreg AND a.art_no = p.art_no
+           LEFT JOIN npa.act act ON act.nreg = a.nreg
+          ORDER BY a.nreg, a.art_no, a.ed_date DESC`,
+        [pairs.map((p) => p.radaId), pairs.map((p) => String(p.articleNumber))]
+      );
+      return res.rows;
+    } catch (e: any) {
+      logger.warn('[LegislationService] npa.article lookup failed', { error: e?.message });
+      return [];
+    }
+  }
+
+  /**
    * Hybrid (FTS + vector) discovery of the most relevant articles for a free-text query,
    * used by get_legislation_section query-mode and search_legislation (LEXAI-1806).
    *
@@ -1469,6 +1496,19 @@ export class LegislationService {
       }
       for (const qr of await Promise.all(fetchQueries)) {
         for (const row of qr.rows) {
+          fetchedByKey.set(legislationKey(row.rada_id, row.article_number), row);
+        }
+      }
+
+      // The bge slice is built from the full НПА corpus (npa.article, ~293K acts), while
+      // legislation_articles holds ~660 acts, so many vector winners have no row there and
+      // used to drop out silently. Resolve those from the latest edition in npa.article.
+      const unresolved = pool
+        .map(([key]) => key)
+        .filter((key) => !ftsRowByKey.has(key) && !fetchedByKey.has(key) && vectorBest.has(key))
+        .map((key) => vectorBest.get(key)!);
+      if (unresolved.length > 0) {
+        for (const row of await this.fetchNpaArticles(unresolved)) {
           fetchedByKey.set(legislationKey(row.rada_id, row.article_number), row);
         }
       }

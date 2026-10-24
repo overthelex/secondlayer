@@ -599,6 +599,30 @@ describe('LegislationService', () => {
       expect(result[0].article_number).toBe('266');
     });
 
+    it('resolves a vector winner absent from legislation_articles via npa.article', async () => {
+      // КТМ ст. 391 is in the bge slice (full НПА corpus) but not in legislation_articles.
+      mockEmbedding.searchVectors.mockResolvedValueOnce([
+        { id: 'v1', score: 0.66, payload: { rada_id: '176/95-вр', article_number: '391' } },
+      ]);
+      mockAdapter.searchArticlesHybrid.mockResolvedValueOnce([]);
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // legislation_articles lookup
+        .mockResolvedValueOnce({
+          rows: [{
+            rada_id: '176/95-вр', article_number: '391', title: 'Застосування загальних строків',
+            full_text: 'Стаття 391. Застосування загальних строків\nДо вимог...', npa_title: 'КТМ',
+          }],
+          rowCount: 1,
+        });
+
+      const result = await service.findRelevantArticles('строки позовної давності', undefined, 5);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ rada_id: '176/95-вр', article_number: '391', npa_title: 'КТМ' });
+      expect(mockDb.query.mock.calls[1][0]).toContain('npa.article');
+      expect(mockDb.query.mock.calls[1][1]).toEqual([['176/95-вр'], ['391']]);
+    });
+
     it('falls back to text search when both legs return nothing', async () => {
       mockEmbedding.searchVectors.mockResolvedValueOnce([]);
       mockAdapter.searchArticlesHybrid.mockResolvedValueOnce([]);
