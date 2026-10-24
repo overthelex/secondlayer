@@ -98,6 +98,39 @@ export function buildPartyRoleRegex(partyName: string, role: Exclude<PartyRole, 
     : `за[[:space:]]+позов[а-яіїєґ]*[[:space:]]+${anchoredName}`;
 }
 
+/**
+ * adj_year predicates, newest first, one per edrsr_fulltext partition (LEXAI-2085). Each
+ * becomes its own UNION ALL leg under the candidate LIMIT; Postgres runs Append children in
+ * order and stops pulling once the LIMIT is met, so a party probe touches only as many
+ * recent partitions as it needs (verified: 3 of 24 for "Нова Пошта" as defendant) instead of
+ * scanning all of them oldest first. A single `ORDER BY doc_id DESC` cannot do this — it
+ * walks idx_ef_p_*_docid probing tsv row by row — and a LATERAL over generate_series was
+ * planned as one hashed Append over every partition (39.8 s measured).
+ *
+ * The period, when given, is widened by a year per side (as countByParty does): the exact
+ * d.adjudication_date bounds enforce it, the band only needs to be a superset. Values are
+ * computed integers, never user text, so they are inlined as literals — literal bounds let
+ * the planner prune each leg to a single partition at plan time.
+ */
+export function buildNewestFirstYearLegs(currentYear: number, dateFrom?: string, dateTo?: string): string[] {
+  const year = (iso?: string): number | null => {
+    const y = Number(String(iso ?? '').slice(0, 4));
+    return Number.isInteger(y) && y > 1900 ? y : null;
+  };
+  const yFrom = year(dateFrom);
+  const yTo = year(dateTo);
+  const lo = yFrom !== null ? yFrom - 1 : null;
+  const hi = yTo !== null ? yTo + 1 : null;
+  const legs: string[] = [];
+  if (hi === null || hi > currentYear) legs.push(`f.adj_year > ${currentYear}`);
+  const top = Math.min(currentYear, hi ?? currentYear);
+  const bottom = Math.max(FTS_FIRST_YEAR_PARTITION, lo ?? FTS_FIRST_YEAR_PARTITION);
+  for (let y = top; y >= bottom; y--) legs.push(`f.adj_year = ${y}`);
+  if (lo === null || lo < FTS_FIRST_YEAR_PARTITION) legs.push(`f.adj_year < ${FTS_FIRST_YEAR_PARTITION}`);
+  // A band entirely outside [FIRST_YEAR, currentYear] can leave no legs; keep the SQL valid.
+  return legs.length > 0 ? legs : ['FALSE'];
+}
+
 export interface EdsrFtsResult {
   doc_id: number;
   headline: string | null;
@@ -127,10 +160,11 @@ export interface EdsrFtsSearchResponse {
   /** The cap that produced the floor, present only alongside `total_is_floor`. */
   candidate_cap?: number;
   /**
-   * True when the statement hit FTS_STATEMENT_TIMEOUT_MS. The response is then empty, but
-   * that is NOT "nothing matches": the query was too costly to rank in budget. Callers must
-   * not treat it as a narrow conjunction (dropping AND terms only broadens it and costs
-   * another full timeout) — see ftsWithRelaxation (LEXAI-2087).
+   * True when the statement hit its statement timeout (FTS_STATEMENT_TIMEOUT_MS, or
+   * PARTY_FTS_STATEMENT_TIMEOUT_MS for a party probe). The response is then empty, but that
+   * is NOT "nothing matches": the query was too costly in budget. Callers must not treat it
+   * as a narrow conjunction (dropping AND terms only broadens it and costs another full
+   * timeout) — see ftsWithRelaxation (LEXAI-2087, LEXAI-2085).
    */
   timed_out?: boolean;
   returned: number;
@@ -431,6 +465,27 @@ const FTS_CANDIDATE_CAP = 2000;
 // takes over instead of surfacing an error (the FTS leg returning 0 → hybrid is an
 // already-supported path). Must comfortably clear the capped query (sub-second on prod).
 const FTS_STATEMENT_TIMEOUT_MS = 8000;
+
+// Party leg (LEXAI-2085). A party_name/party_role probe pays a TOAST read per GIN candidate:
+// the phrase operator forces a heap recheck of tsv, and the claim-clause regex reads
+// full_text. On the IO-bound disk that is ~60 ms a row cold, so the old single Append over
+// all 24 year partitions (oldest first, LIMIT 2000 that a party never fills) ran >60 s for
+// "Нова Пошта" as defendant + "втрата посилки відшкодування" — measured on local.lex
+// 24.10.2026. The 8 s timeout then cancelled it, the empty result read as "no match", and
+// relaxation / role-relaxation / the hybrid fallback each re-ran an equally slow probe until
+// the 120 s tool cap. Now the party leg is scanned newest year first, one partition per
+// UNION ALL leg, and stops at a small cap: 1.7 s for the same probe (3 partitions touched
+// instead of 24). Ranking within the newest PARTY_FTS_CANDIDATE_CAP matches favours
+// current practice, which is what a party search is for.
+const PARTY_FTS_CANDIDATE_CAP = 100;
+// The party leg gets a longer budget than the topical one: a cold partition can need
+// ~20 s of TOAST reads, and the callers no longer re-probe after a timeout (timed_out).
+const PARTY_FTS_STATEMENT_TIMEOUT_MS = 20_000;
+// First year with its own edrsr_fulltext partition; earlier years share p_pre2005.
+const FTS_FIRST_YEAR_PARTITION = 2005;
+// filterDocIdsByConstraints is a doc_id-index lookup (~0.2 s for 50 ids) but re-reads
+// full_text for the role regex; bound it like every other statement on this table.
+const PARTY_FILTER_TIMEOUT_MS = 10_000;
 
 /**
  * Historical RTF imports (2007-2025) left the RTF control word `\~` (non-breaking
@@ -881,8 +936,16 @@ export class EdsrFtsService {
     paramIdx++;
 
     const partyName = filters.party_name?.trim();
+    const roleRegexApplies = !!(partyName && filters.party_role && filters.party_role !== 'any');
     if (partyName) {
-      tsqueryParts.push(`phraseto_tsquery('simple', $${paramIdx})`);
+      // With a role, the claim-clause regex below already requires the name tokens to be
+      // adjacent, so the phrase operator is redundant there — and it is the costly part:
+      // `<->` makes every GIN hit recheck tsv from the heap (a TOAST read per row), on top
+      // of the regex's own read of full_text. The plain AND of the name's lexemes is
+      // answered from the GIN index alone. Without a role the phrase is the only adjacency
+      // check, so it stays.
+      const partyTsq = roleRegexApplies ? 'plainto_tsquery' : 'phraseto_tsquery';
+      tsqueryParts.push(`${partyTsq}('simple', $${paramIdx})`);
       params.push(partyName);
       paramIdx++;
     }
@@ -899,9 +962,9 @@ export class EdsrFtsService {
     // Precise role enforcement: the party must stand in the claim clause's role slot, not
     // merely co-occur with the role noun anywhere in the text. Applied as a regex post-filter
     // on full_text — the tsv match above narrows the candidate rows the regex has to scan.
-    if (partyName && filters.party_role && filters.party_role !== 'any') {
+    if (roleRegexApplies) {
       conditions.push(`f.full_text ~* $${paramIdx}`);
-      params.push(buildPartyRoleRegex(partyName, filters.party_role));
+      params.push(buildPartyRoleRegex(partyName!, filters.party_role as Exclude<PartyRole, 'any'>));
       paramIdx++;
     }
 
@@ -1016,8 +1079,27 @@ export class EdsrFtsService {
     };
 
     // Run the data query under a per-statement timeout (B); see queryWithTimeout.
+    const statementTimeoutMs = partyName ? PARTY_FTS_STATEMENT_TIMEOUT_MS : FTS_STATEMENT_TIMEOUT_MS;
     const queryWithTimeout = (sql: string, args: any[]) =>
-      this.queryWithTimeout(dbPool, sql, args, FTS_STATEMENT_TIMEOUT_MS);
+      this.queryWithTimeout(dbPool, sql, args, statementTimeoutMs);
+
+    // Candidate selection. Topical-only: one capped GIN scan (cap-before-rank) at the caller's
+    // candidateCap (LEXAI-2087). Party leg: newest year first under the smaller party cap, see
+    // PARTY_FTS_CANDIDATE_CAP / buildNewestFirstYearLegs; a caller cap can only lower it.
+    const candCap = partyName
+      ? Math.min(candidateCap, Math.max(PARTY_FTS_CANDIDATE_CAP, safeOffset + safeLimit + 1))
+      : candidateCap;
+    const candBody = partyName
+      ? `SELECT legs.doc_id FROM (
+            ${buildNewestFirstYearLegs(new Date().getFullYear(), filters.date_from, filters.date_to)
+              .map(yearCond => `(SELECT f.doc_id FROM ${fromClause}${extraJoin} WHERE ${whereClause} AND ${yearCond})`)
+              .join('\n            UNION ALL\n            ')}
+          ) legs
+          LIMIT ${candCap}`
+      : `SELECT f.doc_id
+          FROM ${fromClause}${extraJoin}
+          WHERE ${whereClause}
+          LIMIT ${candCap}`;
 
     const executeQuery = async (withHeadline: boolean) => {
       const selectFields = buildSelectFields(withHeadline);
@@ -1041,10 +1123,7 @@ export class EdsrFtsService {
       // `total` a function of the caller's own limit.
       const dataSql = `
         WITH cand AS MATERIALIZED (
-          SELECT f.doc_id
-          FROM ${fromClause}${extraJoin}
-          WHERE ${whereClause}
-          LIMIT ${candidateCap}
+          ${candBody}
         )
         SELECT ${selectFields}, (SELECT count(*)::int FROM cand) AS cand_total
         FROM ${outerFrom}
@@ -1077,10 +1156,10 @@ export class EdsrFtsService {
           ({ total, dataResult } = await executeQuery(false));
         } else if (headlineErr.code === '57014') {
           // Statement timeout (B): even the candidate-capped rank blew the budget. Return
-          // empty so the caller's relax/hybrid fallback (FTS-0 → hybrid) takes over instead
-          // of erroring out to the user.
-          logger.warn('[EdsrFtsService] FTS statement timeout; returning empty for fallback', {
-            query: cacheKey, timeoutMs: FTS_STATEMENT_TIMEOUT_MS, candidateCap,
+          // empty, flagged timed_out, so the caller can tell it from a genuine no-match
+          // (LEXAI-2087/2085): relaxing a timed-out probe only issues broader, slower ones.
+          logger.warn('[EdsrFtsService] FTS statement timeout; returning empty (timed_out)', {
+            query: cacheKey, timeoutMs: statementTimeoutMs, candidateCap: candCap, party_name: partyName,
           });
           timedOut = true;
           total = 0;
@@ -1100,7 +1179,7 @@ export class EdsrFtsService {
       const response = {
         query,
         total,
-        ...(total >= candidateCap ? { total_is_floor: true, candidate_cap: candidateCap } : {}),
+        ...(total >= candCap ? { total_is_floor: true, candidate_cap: candCap } : {}),
         ...(timedOut ? { timed_out: true } : {}),
         returned: dataResult.rows.length,
         offset: safeOffset,
@@ -1380,7 +1459,10 @@ export class EdsrFtsService {
     const conditions: string[] = [`f.doc_id = ANY($1)`];
 
     if (partyName) {
-      const tsqueryParts: string[] = [`phraseto_tsquery('simple', $${p})`];
+      // Same as searchFulltext: with a role the claim-clause regex enforces adjacency, so the
+      // name is AND-ed (no tsv heap recheck); without one the phrase is the adjacency check.
+      const roleRegexApplies = !!(constraints.party_role && constraints.party_role !== 'any');
+      const tsqueryParts: string[] = [`${roleRegexApplies ? 'plainto_tsquery' : 'phraseto_tsquery'}('simple', $${p})`];
       params.push(partyName);
       p++;
       const roleTsquery = constraints.party_role && constraints.party_role !== 'any'
@@ -1417,7 +1499,7 @@ export class EdsrFtsService {
 
     try {
       const sql = `SELECT f.doc_id FROM ${fromClause} WHERE ${conditions.join(' AND ')}`;
-      const res = await dbPool.query(sql, params);
+      const res = await this.queryWithTimeout(dbPool, sql, params, PARTY_FILTER_TIMEOUT_MS);
       for (const row of res.rows) matched.add(Number(row.doc_id));
       logger.info('[EdsrFtsService] filterDocIdsByConstraints', {
         candidates: docIds.length, matched: matched.size,

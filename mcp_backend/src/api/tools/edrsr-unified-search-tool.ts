@@ -63,6 +63,21 @@ export function hybridFtsCandidateCap(candidateLimit: number): number {
   return Math.min(HYBRID_FTS_MAX_CAP, Math.max(HYBRID_FTS_MIN_CAP, n * HYBRID_FTS_CAP_PER_HIT));
 }
 
+// Wall-clock budget for all FTS probes of one fulltext/hybrid call (LEXAI-2085). Relaxation,
+// role-relaxation and the hybrid fallback each re-probe; with a slow party leg every probe
+// could approach its statement timeout and together they ran past the 120 s tool cap. Past
+// this deadline no new probe starts — the remaining time belongs to the vector leg, the
+// relevance gate and enrichment.
+const FTS_PIPELINE_BUDGET_MS = 40_000;
+
+/** Ukrainian advice when the FTS leg timed out and nothing could stand in for it. */
+export function ftsTimeoutMessage(partyName?: string): string {
+  const who = partyName ? ` за стороною «${partyName}»` : '';
+  return `Повнотекстовий пошук${who} не вклався в ліміт часу. Звузьте запит: додайте період (date_from/date_to), ` +
+    `суд (court_code/court_name) або вид судочинства (justice_kind), скоротіть формулювання, ` +
+    `або спробуйте mode=semantic.`;
+}
+
 const KUPAP_PRESETS: Record<string, { category_codes: number[]; label: string }> = {
   'traffic_dui':        { category_codes: [41090, 5952], label: 'П\'яне водіння (ст. 130 КУпАП)' },
   'traffic_accident':   { category_codes: [41080, 5861], label: 'ДТП з пошкодженням (ст. 124 КУпАП)' },
@@ -444,6 +459,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     offset: number,
     noIdf: boolean = false,
     candidateCap?: number,
+    deadline?: number,
   ): Promise<{ result: EdsrFtsSearchResponse; usedQuery: string; startTokens: number; usedTokens: number; relaxedFromTokens?: number; timedOut?: boolean; candidateCap?: number }> {
     const rawTokens = String(topicalQuery).trim().split(/\s+/).filter(Boolean);
     // CORE-21 P1.5a: order tokens by IDF (discriminative first) so the probe keeps rare
@@ -511,9 +527,13 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     // (the idf-ranked tail) only widens the match set, so we keep broadening until the probe
     // clears the floor or we hit the bounds. A TIMED-OUT probe is not "near-empty" — see
     // FTS_TIMEOUT_RETRY_CAP: retry the same terms once with a small cap, never drop a term.
+    // No new probe starts once the call's FTS budget (deadline, LEXAI-2085) is spent. A party
+    // probe is not retried: it already runs newest-partition-first under PARTY_FTS_CANDIDATE_CAP
+    // (≤ FTS_TIMEOUT_RETRY_CAP), so the "smaller cap" retry would be the same 20 s statement.
     while (result.total < FTS_RELAX_MIN_RESULTS) {
+      if (deadline !== undefined && Date.now() >= deadline) break;
       if (result.timed_out) {
-        if (timedOut || (cap !== undefined && cap <= FTS_TIMEOUT_RETRY_CAP)) break; // retried already
+        if (timedOut || filters.party_name || (cap !== undefined && cap <= FTS_TIMEOUT_RETRY_CAP)) break;
         timedOut = true;
         cap = FTS_TIMEOUT_RETRY_CAP;
         logger.warn('[EdsrUnifiedSearch] FTS probe timed out — retrying same terms with a smaller candidate cap', {
@@ -631,28 +651,49 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       const ftsQuery = reformulated?.fts || originalQuery;
 
       // Term-budget search: cap to the leading tokens and relax downward on an empty hit.
+      const ftsDeadline = Date.now() + FTS_PIPELINE_BUDGET_MS;
       let fts = await this.ftsWithRelaxation(
         ftsQuery,
         { ...baseFilters, party_name: partyName || undefined, party_role: partyRole },
-        args.limit || 20, args.offset || 0,
+        args.limit || 20, args.offset || 0, false, undefined, ftsDeadline,
       );
       let result = fts.result;
+
+      // The FTS leg timed out (LEXAI-2085) — and, for a topical probe, so did 2087's
+      // smaller-cap retry, since the final result is still the timed-out one. Its empty page
+      // is not a "no match", so neither role relaxation nor another FTS probe in the hybrid
+      // fallback can help — both would only re-run the same slow scan. Hand over to hybrid with the FTS leg skipped (its
+      // vector leg + the post-fusion party re-check still honour party_name/party_role),
+      // or, without a vectorizer, answer with clear advice instead of hanging.
+      if (fts.result.timed_out) {
+        logger.warn('[EdsrUnifiedSearch] fulltext FTS leg timed out', {
+          query: originalQuery, fts_query: fts.usedQuery, party_name: partyName, party_role: partyRole,
+        });
+        if (this.vectorizer && !args._fallback_from) {
+          return this.searchHybrid({
+            ...args, query: originalQuery, _fallback_from: 'fulltext_timeout', _skip_fts_leg: true,
+          });
+        }
+        return this.wrapError(ftsTimeoutMessage(partyName || undefined));
+      }
 
       // Role-relaxation tier: the role keyword may simply not co-occur in the text even
       // when the party IS a party (court phrasing varies). Before the costlier hybrid
       // fallback, retry (with term relaxation) keeping the name phrase but dropping the role.
       let partyRoleRelaxed = false;
-      if (result.total === 0 && partyName && partyRole && partyRole !== 'any') {
+      if (result.total === 0 && partyName && partyRole && partyRole !== 'any' && Date.now() < ftsDeadline) {
         partyRoleRelaxed = true;
         logger.info('[EdsrUnifiedSearch] fulltext 0 with party_role, relaxing role', {
           party_name: partyName, party_role: partyRole,
         });
         fts = await this.ftsWithRelaxation(
           ftsQuery, { ...baseFilters, party_name: partyName },
-          args.limit || 20, args.offset || 0,
+          args.limit || 20, args.offset || 0, false, undefined, ftsDeadline,
         );
         result = fts.result;
       }
+
+      if (fts.result.timed_out && !this.vectorizer) return this.wrapError(ftsTimeoutMessage(partyName || undefined));
 
       // Genuine no-match (not merely relevance-filtered) → fall back to hybrid, whose
       // semantic leg doesn't require every token to co-occur. Uses the ORIGINAL query.
@@ -660,7 +701,12 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
         logger.info('[EdsrUnifiedSearch] fulltext 0 results, falling back to hybrid', {
           query: originalQuery, ftsQuery: fts.usedQuery, justice_kind: args.justice_kind,
         });
-        return this.searchHybrid({ ...args, query: originalQuery, _fallback_from: 'fulltext' });
+        // The fallback's FTS leg would re-run the probe that just came back empty (or timed
+        // out after role relaxation); skip it once the budget is spent.
+        return this.searchHybrid({
+          ...args, query: originalQuery, _fallback_from: 'fulltext',
+          ...(fts.result.timed_out || Date.now() >= ftsDeadline ? { _skip_fts_leg: true } : {}),
+        });
       }
 
       const enriched = await this.enrichResults(result.results);
@@ -738,11 +784,17 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     const evalBaseline = args._eval_baseline === true;
     // LEXAI-2087: rank only a few candidates per hit we need (see hybridFtsCandidateCap) —
     // the default 2000-candidate rank timed out on a cold cache for common topical queries.
-    let ftsTimedOut = false;
-    const ftsPromise = this
-      .ftsWithRelaxation(ftsQuery, filters, candidateLimit, 0, evalBaseline, hybridFtsCandidateCap(candidateLimit))
-      .then(r => { ftsTimedOut = !!r.timedOut; return r.result; })
-      .catch((err: any) => { logger.warn('[EdsrUnifiedSearch] FTS leg failed', { error: err.message }); return null; });
+    // LEXAI-2085 _skip_fts_leg: the fulltext mode that fell back here already saw this FTS leg
+    // time out (or spent its budget) — re-running it would just burn another statement timeout.
+    const skipFtsLeg = args._skip_fts_leg === true;
+    let ftsTimedOut = skipFtsLeg;
+    const ftsPromise: Promise<EdsrFtsSearchResponse | null> = skipFtsLeg
+      ? Promise.resolve(null)
+      : this
+        .ftsWithRelaxation(ftsQuery, filters, candidateLimit, 0, evalBaseline,
+          hybridFtsCandidateCap(candidateLimit), Date.now() + FTS_PIPELINE_BUDGET_MS)
+        .then(r => { if (r.timedOut) ftsTimedOut = true; return r.result; })
+        .catch((err: any) => { logger.warn('[EdsrUnifiedSearch] FTS leg failed', { error: err.message }); return null; });
 
     const justiceKind = args.justice_kind ? Number(args.justice_kind) : undefined;
     const hasVectors = justiceKind
@@ -779,7 +831,14 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
 
     const [ftsResponse, vectorResults] = await Promise.all([ftsPromise, vectorPromise]);
 
-    if (!ftsResponse && !vectorResults) return this.wrapError('Обидва джерела пошуку недоступні');
+    // A timed-out FTS leg carries no results, so with no vector leg either there is nothing
+    // to fuse: say why instead of returning an empty page.
+    // ftsTimedOut (2087) = some probe timed out, possibly rescued by the smaller-cap retry;
+    // ftsLegLost = the leg ended with nothing because of a timeout (or was skipped for one).
+    const ftsLegLost = skipFtsLeg || !!ftsResponse?.timed_out;
+    if (!vectorResults && (!ftsResponse || ftsLegLost)) {
+      return this.wrapError(ftsLegLost ? ftsTimeoutMessage(partyName) : 'Обидва джерела пошуку недоступні');
+    }
 
     const ftsResults = ftsResponse?.results || [];
     const vectorHits: EdrsrSearchResult[] = vectorResults || [];
@@ -839,6 +898,11 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     return this.wrapResponse({
       mode: 'hybrid', query, rrf_k: rrfK, oversample,
       ...(args._fallback_from ? { fallback_from: args._fallback_from } : {}),
+      ...(ftsLegLost ? {
+        _notice: 'Повнотекстовий пошук не вклався в ліміт часу, тому результати знайдено семантичним пошуком' +
+          (partyName ? ` з перевіркою сторони «${partyName}»` : '') +
+          '. Щоб отримати точні повнотекстові збіги, звузьте період (date_from/date_to) або суд.',
+      } : {}),
       ...(reformulated ? { reformulated: { fts: reformulated.fts, semantic: reformulated.semantic } } : {}),
       ...(partyName ? { party_filter: { party_name: partyName, party_role: partyRole || 'any' } } : {}),
       ...(instanceCode ? { instance_code: instanceCode } : {}),

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { EdsrFtsService, buildPartyRoleRegex, buildPartyYearLegs, partyNameTokenCount } from '../edrsr-fts-service';
+import { EdsrFtsService, buildPartyRoleRegex, buildNewestFirstYearLegs, buildPartyYearLegs, partyNameTokenCount } from '../edrsr-fts-service';
 
 const findRegexParam = (params: any[]): string | undefined =>
   params.find((p) => typeof p === 'string' && (p.includes('(?:до|проти)') || p.includes('за[[:space:]]+позов')));
@@ -265,7 +265,9 @@ describe('EdsrFtsService.filterDocIdsByConstraints', () => {
 
     const sql = db.calls[0].sql;
     expect(sql).toContain('f.doc_id = ANY($1)');
-    expect(sql).toContain('phraseto_tsquery');
+    // With a role the regex enforces adjacency, so the name is AND-ed (no tsv heap recheck).
+    expect(sql).toContain('plainto_tsquery');
+    expect(sql).not.toContain('phraseto_tsquery');
     expect(sql).toContain('f.full_text ~*');
     const rx = findRegexParam(db.calls[0].params);
     expect(rx).toContain('(?:до|проти)');
@@ -632,5 +634,139 @@ describe('EdsrFtsService.searchFulltext judge filter', () => {
     // slow, but correct — never unfiltered
     expect(search.sql).toContain('LOWER(d.judge) LIKE LOWER(');
     expect(search.params).toContain('%Писана%');
+  });
+});
+
+// LEXAI-2085: search_court_decisions(fulltext, party_name "Нова Пошта", party_role defendant)
+// ran past the 120 s tool cap. The party probe scanned all 24 year partitions oldest first,
+// paying a TOAST read per GIN hit; its 8 s timeout read as "no match" and every relaxation
+// step re-ran it.
+describe('EdsrFtsService.searchFulltext party leg (LEXAI-2085)', () => {
+  const timeoutClient = (failOn: (sql: string) => boolean) => {
+    const clientCalls: string[] = [];
+    const client = {
+      query: jest.fn((sql: string) => {
+        clientCalls.push(sql);
+        if (failOn(sql)) {
+          return Promise.reject(Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }));
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: jest.fn(),
+    };
+    return { client, clientCalls, db: { query: jest.fn(), connect: jest.fn(() => Promise.resolve(client)) } };
+  };
+
+  it('AND-s the name lexemes instead of a phrase when the role regex enforces adjacency', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDb();
+    await svc.searchFulltext('втрата посилки', db, { party_name: 'Нова Пошта', party_role: 'defendant' });
+
+    const { sql, params } = db.calls[0];
+    expect(sql).not.toContain('phraseto_tsquery');
+    expect(sql).toMatch(/plainto_tsquery\('simple', \$2\)/);
+    expect(params[1]).toBe('Нова Пошта');
+    expect(sql).toContain('f.full_text ~*');
+  });
+
+  it('scans the party leg newest year first, one partition per leg, under a small cap', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDb();
+    await svc.searchFulltext('втрата посилки', db, { party_name: 'Нова Пошта', party_role: 'defendant' }, 5, 0);
+
+    const sql = db.calls[0].sql;
+    const thisYear = new Date().getFullYear();
+    expect(sql).toContain('UNION ALL');
+    const iNow = sql.indexOf(`f.adj_year = ${thisYear}`);
+    const iPrev = sql.indexOf(`f.adj_year = ${thisYear - 1}`);
+    const iOld = sql.indexOf('f.adj_year = 2006');
+    expect(iNow).toBeGreaterThan(-1);
+    expect(iNow).toBeLessThan(iPrev);
+    expect(iPrev).toBeLessThan(iOld);
+    expect(sql).toMatch(/\) legs\s+LIMIT 100\s/);
+    expect(sql).not.toContain('LIMIT 2000');
+  });
+
+  it('lets a caller candidateCap (LEXAI-2087) lower, but never raise, the party cap', async () => {
+    const svc = new EdsrFtsService();
+    const low = makeDb();
+    await svc.searchFulltext('посилка', low, { party_name: 'Нова Пошта', party_role: 'defendant' }, 5, 0, undefined, undefined, { candidateCap: 50 });
+    expect(low.calls[0].sql).toMatch(/\) legs\s+LIMIT 50\s/);
+
+    const high = makeDb();
+    await svc.searchFulltext('посилка', high, { party_name: 'Нова Пошта', party_role: 'defendant' }, 5, 0, undefined, undefined, { candidateCap: 500 });
+    expect(high.calls[0].sql).toMatch(/\) legs\s+LIMIT 100\s/);
+  });
+
+  it('keeps the single capped scan for topical-only queries', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDb();
+    await svc.searchFulltext('оренда землі', db);
+
+    expect(db.calls[0].sql).not.toContain('UNION ALL');
+    expect(db.calls[0].sql).toContain('LIMIT 2000');
+  });
+
+  it('flags a party total that fills the smaller cap as a floor', async () => {
+    const svc = new EdsrFtsService();
+    const rows = Array.from({ length: 6 }, (_v, i) => ({ doc_id: i + 1, headline: 'x', rank: 0.5, cand_total: 100 }));
+    const db = { query: jest.fn(() => Promise.resolve({ rows })) };
+    const res = await svc.searchFulltext('посилка', db as any, { party_name: 'Нова Пошта', party_role: 'defendant' }, 5, 0);
+
+    expect(res.total_is_floor).toBe(true);
+    expect(res.candidate_cap).toBe(100);
+  });
+
+  it('reports a timeout as timed_out (not as a no-match) and never caches it', async () => {
+    const svc = new EdsrFtsService();
+    const cache = { getCachedFtsResults: jest.fn(() => Promise.resolve(null)), setCachedFtsResults: jest.fn(() => Promise.resolve()) };
+    svc.setEdsrCache(cache as any);
+    const { db, clientCalls, client } = timeoutClient((sql) => sql.includes('cand AS MATERIALIZED'));
+
+    const res = await svc.searchFulltext('втрата посилки', db, { party_name: 'Нова Пошта', party_role: 'defendant' }, 5, 0);
+
+    expect(res.timed_out).toBe(true);
+    expect(res.total).toBe(0);
+    expect(res.results).toEqual([]);
+    expect(cache.setCachedFtsResults).not.toHaveBeenCalled();
+    // The party leg runs under its own bounded statement_timeout, below the 120 s tool cap.
+    const timeoutStmt = clientCalls.find((q) => /^SET LOCAL statement_timeout = \d+$/.test(q))!;
+    const ms = Number(timeoutStmt.split('= ')[1]);
+    expect(ms).toBeGreaterThan(8000);
+    expect(ms).toBeLessThanOrEqual(20_000);
+    expect(clientCalls).toContain('ROLLBACK');
+    expect(client.release).toHaveBeenCalled();
+  });
+
+  it('bounds the post-fusion party re-check with a statement_timeout', async () => {
+    const svc = new EdsrFtsService();
+    const { db, clientCalls } = timeoutClient(() => false);
+    await svc.filterDocIdsByConstraints([1, 2], { party_name: 'Нова Пошта', party_role: 'defendant' }, db);
+
+    expect(clientCalls.some((q) => /^SET LOCAL statement_timeout = \d+$/.test(q))).toBe(true);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildNewestFirstYearLegs', () => {
+  it('covers every partition newest first when no period is given', () => {
+    const legs = buildNewestFirstYearLegs(2026);
+    expect(legs[0]).toBe('f.adj_year > 2026');
+    expect(legs[1]).toBe('f.adj_year = 2026');
+    expect(legs[legs.length - 2]).toBe('f.adj_year = 2005');
+    expect(legs[legs.length - 1]).toBe('f.adj_year < 2005');
+    expect(legs).toHaveLength(1 + 22 + 1);
+  });
+
+  it('narrows to the period widened by a year on each side', () => {
+    expect(buildNewestFirstYearLegs(2026, '2023-03-01', '2023-09-30'))
+      .toEqual(['f.adj_year = 2024', 'f.adj_year = 2023', 'f.adj_year = 2022']);
+  });
+
+  it('keeps the pre-2005 and future buckets only when the period reaches them', () => {
+    expect(buildNewestFirstYearLegs(2026, '2003-01-01', '2005-12-31'))
+      .toEqual(['f.adj_year = 2006', 'f.adj_year = 2005', 'f.adj_year < 2005']);
+    expect(buildNewestFirstYearLegs(2026, '2026-01-01'))
+      .toEqual(['f.adj_year > 2026', 'f.adj_year = 2026', 'f.adj_year = 2025']);
   });
 });
