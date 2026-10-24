@@ -31,11 +31,15 @@ export class OpenAIClientManager {
     const primaryKey = process.env.OPENAI_API_KEY;
     const secondaryKey = process.env.OPENAI_API_KEY2;
 
+    // OPENAI_BASE_URL points the client at any OpenAI-compatible endpoint, e.g. Azure
+    // Foundry's https://<resource>.openai.azure.com/openai/v1/ (model = deployment name).
+    const baseURL = process.env.OPENAI_BASE_URL || undefined;
+
     if (primaryKey) {
-      this.clients.push(new OpenAI({ apiKey: primaryKey }));
+      this.clients.push(new OpenAI({ apiKey: primaryKey, baseURL }));
     }
     if (secondaryKey) {
-      this.clients.push(new OpenAI({ apiKey: secondaryKey }));
+      this.clients.push(new OpenAI({ apiKey: secondaryKey, baseURL }));
     }
 
     if (this.clients.length === 0) {
