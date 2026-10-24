@@ -28,6 +28,76 @@ export interface EntityDetails {
   exchangeData?: any[];
 }
 
+/** Escape LIKE/ILIKE wildcards so user input matches literally. */
+export function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, '\\$&');
+}
+
+/**
+ * SQL expression normalising an organisation name for exact comparison:
+ * typographic quotes → ", whitespace runs → one space, trimmed, upper-cased.
+ */
+export function normNameSql(expr: string): string {
+  return `upper(btrim(regexp_replace(translate(${expr}, '«»“”„‟″', '"""""""'), '[[:space:]]+', ' ', 'g')))`;
+}
+
+/** 'DD.MM.YYYY' → 'YYYY-MM-DD'; anything else is returned trimmed, empty → null. */
+export function toIsoDate(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+}
+
+/** Trim the commas/whitespace NAIS pads fields with; '', '.', '-' and «(Не визначено)» mean nothing. */
+function cleanNais(v: unknown): string | null {
+  if (v == null || typeof v === 'object') return null;
+  const s = String(v).replace(/^[\s,]+|[\s,]+$/g, '');
+  if (!s || s === '.' || s === '-' || /^\(?не визначено\)?$/i.test(s)) return null;
+  return s;
+}
+
+/**
+ * Bankruptcy row → output. STAN_PROV is "<стан провадження>, <підстава закриття>"
+ * (the second part is a ст. 90 КУзПБ ground: звіт ліквідатора, мирова угода …);
+ * INIC_SPR is the case initiator, stored as {"CODEXARTICLE": "<name>"} or ''.
+ */
+export function formatBankruptcyRow(row: any): Record<string, unknown> {
+  const rawStatus = row.raw_status == null || typeof row.raw_status === 'object' ? '' : String(row.raw_status);
+  const comma = rawStatus.indexOf(',');
+  const statusPart = comma >= 0 ? rawStatus.slice(0, comma) : rawStatus;
+  const groundPart = comma >= 0 ? rawStatus.slice(comma + 1) : '';
+  const ini = row.raw_initiator;
+  const initiator = ini && typeof ini === 'object' ? ini.CODEXARTICLE : ini;
+  const ownEdrpou = cleanNais(row.debtor_edrpou);
+  const matched = cleanNais(row.matched_edrpou);
+  return {
+    id: row.id,
+    registration_number: row.registration_number,
+    registration_date: row.registration_date ?? null,
+    case_number: cleanNais(row.case_number),
+    court_decision_date: row.court_decision_date ?? null,
+    debtor_name: cleanNais(row.debtor_name),
+    debtor_edrpou: ownEdrpou ?? matched,
+    debtor_edrpou_source: ownEdrpou ? 'registry' : matched ? 'edr_exact_name_match' : null,
+    procedure: cleanNais(row.raw_procedure),
+    case_status: cleanNais(statusPart),
+    case_closure_ground: cleanNais(groundPart),
+    case_initiator: cleanNais(initiator),
+    proceeding_status: row.proceeding_status ?? null,
+  };
+}
+
+/** Termination row → output with ISO dates. */
+export function formatTerminationRow(row: any): Record<string, unknown> {
+  return {
+    ...row,
+    op_date: toIsoDate(row.op_date),
+    creditor_req_end_date: toIsoDate(row.creditor_req_end_date),
+  };
+}
+
 export class OpenReyestrTools {
   private pool: Pool;
 
@@ -682,50 +752,73 @@ export class OpenReyestrTools {
   }
 
   /**
-   * Search bankruptcy cases
+   * Search bankruptcy cases (НАІС, «Реєстр підприємств у справах про банкрутство»).
+   *
+   * The source file carries no debtor EDRPOU and no court (LEXAI-2091). debtor_edrpou
+   * is derived from ЄДР only when the debtor name equals exactly one legal entity's
+   * name (case, whitespace and quote style aside); otherwise it stays null. Raw tags
+   * are exposed under what they are: PROC_BORG_NAME → procedure, STAN_PROV →
+   * case_status + case_closure_ground, INIC_SPR → case_initiator.
    */
   async searchBankruptcyCases(params: { query?: string; debtor_edrpou?: string; case_number?: string; proceeding_status?: string; limit?: number; offset?: number }): Promise<any[]> {
     const { query, debtor_edrpou, case_number, proceeding_status, limit = 50, offset = 0 } = params;
     const conditions: string[] = [];
     const values: any[] = [];
-    let paramIndex = 1;
 
     if (query) {
-      conditions.push(`to_tsvector('simple', debtor_name) @@ plainto_tsquery('simple', $${paramIndex})`);
       values.push(query);
-      paramIndex++;
+      conditions.push(`to_tsvector('simple', debtor_name) @@ plainto_tsquery('simple', $${values.length})`);
     }
     if (debtor_edrpou) {
-      conditions.push(`debtor_edrpou = $${paramIndex}`);
-      values.push(debtor_edrpou);
-      paramIndex++;
+      values.push(debtor_edrpou.trim());
+      const n = values.length;
+      conditions.push(`(debtor_edrpou = $${n}
+        OR ${normNameSql('debtor_name')} IN (SELECT ${normNameSql('name')} FROM legal_entities WHERE edrpou = $${n} AND name IS NOT NULL))`);
     }
     if (case_number) {
-      conditions.push(`case_number ILIKE $${paramIndex}`);
-      values.push(`%${case_number}%`);
-      paramIndex++;
+      values.push(`%${escapeLike(case_number)}%`);
+      conditions.push(`case_number ILIKE $${values.length}`);
     }
     if (proceeding_status) {
-      conditions.push(`proceeding_status ILIKE $${paramIndex}`);
-      values.push(`%${proceeding_status}%`);
-      paramIndex++;
+      values.push(`%${escapeLike(proceeding_status)}%`);
+      conditions.push(`proceeding_status ILIKE $${values.length}`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     values.push(limit, offset);
 
+    // Page first, then resolve EDRPOU for the page only.
     const result = await this.pool.query(
-      `SELECT id, registration_number, registration_date, case_number, court_decision_date, debtor_name, debtor_edrpou, proceeding_status, court_name
-       FROM bankruptcy_cases ${whereClause}
-       ORDER BY registration_date DESC NULLS LAST
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      `SELECT b.id, b.registration_number,
+              to_char(b.registration_date, 'YYYY-MM-DD') AS registration_date,
+              b.case_number,
+              to_char(b.court_decision_date, 'YYYY-MM-DD') AS court_decision_date,
+              b.debtor_name, b.debtor_edrpou, m.edrpou AS matched_edrpou,
+              b.proceeding_status,
+              b.raw_data->'PROC_BORG_NAME' AS raw_procedure,
+              b.raw_data->'STAN_PROV' AS raw_status,
+              b.raw_data->'INIC_SPR' AS raw_initiator
+       FROM (
+         SELECT * FROM bankruptcy_cases ${whereClause}
+         ORDER BY registration_date DESC NULLS LAST, id DESC
+         LIMIT $${values.length - 1} OFFSET $${values.length}
+       ) b
+       LEFT JOIN LATERAL (
+         SELECT CASE WHEN count(*) = 1 THEN min(l.edrpou) END AS edrpou
+         FROM legal_entities l
+         WHERE b.debtor_edrpou IS NULL
+           AND NULLIF(btrim(b.debtor_name), '') IS NOT NULL
+           AND to_tsvector('simple', l.name) @@ plainto_tsquery('simple', b.debtor_name)
+           AND ${normNameSql('l.name')} = ${normNameSql('b.debtor_name')}
+       ) m ON true
+       ORDER BY b.registration_date DESC NULLS LAST, b.id DESC`,
       values
     );
 
     if (result.rows.length === 0) {
-      return [{ found: false, query: query || debtor_edrpou || '', message: 'Справ про банкрутство не знайдено за вашим запитом' }];
+      return [{ found: false, query: query || debtor_edrpou || case_number || '', message: 'Справ про банкрутство не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatBankruptcyRow);
   }
 
   /**
@@ -1321,54 +1414,71 @@ export class OpenReyestrTools {
   }
 
   /**
-   * Search for entities with termination started
+   * Search for entities with termination started.
+   *
+   * termination_started holds only (entity_type, entity_record) — no name and no
+   * EDRPOU — so the query is resolved through the registry the same way
+   * getEntityDetails does: UO → legal_entities.record, FSU → public_associations.record
+   * (LEXAI-2090). A digit-only query is an EDRPOU (or the registry record number);
+   * anything else is a substring of the full or short name.
    */
   async searchTerminationStarted(params: { query: string; entity_type?: string; signer_name?: string; reason?: string; limit?: number; offset?: number }): Promise<any[]> {
-    const { query, entity_type, signer_name, reason, limit = 50, offset = 0 } = params;
+    const { entity_type, signer_name, reason, limit = 50, offset = 0 } = params;
+    const query = (params.query || '').trim();
     const conditions: string[] = [];
     const values: any[] = [];
-    let paramIndex = 1;
 
     if (query) {
-      conditions.push(`entity_record ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
-      paramIndex++;
+      if (/^\d+$/.test(query)) {
+        values.push(query);
+        const n = values.length;
+        conditions.push(`(t.entity_record = $${n}
+          OR (t.entity_type = 'UO' AND t.entity_record IN (SELECT record FROM legal_entities WHERE edrpou = $${n}))
+          OR (t.entity_type = 'FSU' AND t.entity_record IN (SELECT record FROM public_associations WHERE edrpou = $${n})))`);
+      } else {
+        values.push(`%${escapeLike(query)}%`);
+        const n = values.length;
+        conditions.push(`(COALESCE(l.name, p.name) ILIKE $${n} OR COALESCE(l.short_name, p.short_name) ILIKE $${n})`);
+      }
     }
     if (entity_type) {
-      conditions.push(`entity_type = $${paramIndex}`);
       values.push(entity_type);
-      paramIndex++;
+      conditions.push(`t.entity_type = $${values.length}`);
     }
     if (signer_name) {
-      conditions.push(`signer_name ILIKE $${paramIndex}`);
-      values.push(`%${signer_name}%`);
-      paramIndex++;
+      values.push(`%${escapeLike(signer_name)}%`);
+      conditions.push(`t.signer_name ILIKE $${values.length}`);
     }
     if (reason) {
-      conditions.push(`reason ILIKE $${paramIndex}`);
-      values.push(`%${reason}%`);
-      paramIndex++;
+      values.push(`%${escapeLike(reason)}%`);
+      conditions.push(`t.reason ILIKE $${values.length}`);
     }
 
     if (conditions.length === 0) {
       return [{ found: false, message: 'Вкажіть параметри пошуку' }];
     }
 
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
     values.push(limit, offset);
-
     const result = await this.pool.query(
-      `SELECT id, entity_type, entity_record, op_date, reason, sbj_state, signer_name, creditor_req_end_date, created_at
-       FROM termination_started ${whereClause}
-       ORDER BY id DESC
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      `SELECT t.id, t.entity_type, t.entity_record,
+              COALESCE(l.edrpou, p.edrpou) AS edrpou,
+              COALESCE(l.name, p.name) AS entity_name,
+              COALESCE(l.short_name, p.short_name) AS entity_short_name,
+              COALESCE(l.stan, p.stan) AS entity_state,
+              t.op_date, t.reason, t.sbj_state, t.signer_name, t.creditor_req_end_date
+       FROM termination_started t
+       LEFT JOIN legal_entities l ON t.entity_type = 'UO' AND l.record = t.entity_record
+       LEFT JOIN public_associations p ON t.entity_type = 'FSU' AND p.record = t.entity_record
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY t.id DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values
     );
 
     if (result.rows.length === 0) {
       return [{ found: false, query, message: 'Записів про припинення не знайдено' }];
     }
-    return result.rows;
+    return result.rows.map(formatTerminationRow);
   }
 
   /**
