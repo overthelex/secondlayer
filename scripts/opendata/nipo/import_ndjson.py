@@ -37,6 +37,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 
 DEFAULT_HARVEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "harvest")
@@ -180,11 +181,58 @@ def _party_from_inid(blocks, name_base, country_base):
     return (names[0] if names else None), (countries[0] if countries else None)
 
 
+def mark_title(verbal):
+    """Display text of a trademark from MarkSignificantVerbalElement (LEXAI-2103).
+
+    NIPO lists the full phrase AND each of its words as separate elements
+    («відновлення», «сила», ..., «моршинська. моя сила відновлення.»); joining them
+    all produced a token bag. Drop an element another one already covers (all its
+    words occur in a longer element, same text up to punctuation/case, or a 1-2 char
+    fragment of a longer one) and join the distinct rest with " / ".
+    Mirror of deriveMarkTitle() in mcp_backend/src/api/tools/ip-objects-tools.ts.
+    """
+    if isinstance(verbal, dict):
+        verbal = [verbal]
+    if not isinstance(verbal, list):
+        return None
+    items = []
+    for i, v in enumerate(verbal):
+        text = v if isinstance(v, str) else (v or {}).get("#text")
+        text = " ".join(str(text or "").split())
+        if not text:
+            continue
+        try:
+            seq = int((v or {}).get("@sequenceNumber") or 0) if isinstance(v, dict) else 0
+        except (TypeError, ValueError):
+            seq = 0
+        lower = text.lower()
+        tokens = [t for t in re.split(r"[\W_]+", lower) if t]
+        items.append({"text": text, "seq": seq or i + 1, "i": i, "lower": lower,
+                      "tokens": tokens, "set": set(tokens), "compact": "".join(tokens)})
+    if not items:
+        return None
+    items.sort(key=lambda x: (x["seq"], x["i"]))
+
+    def covers(f, e):
+        if f is e:
+            return False
+        if not e["compact"]:
+            return len(f["lower"]) > len(e["lower"]) and e["lower"] in f["lower"]
+        if f["compact"] == e["compact"]:
+            return f["i"] < e["i"]
+        if len(f["tokens"]) > len(e["tokens"]) and all(t in f["set"] for t in e["tokens"]):
+            return True
+        return len(e["compact"]) <= 2 and len(f["compact"]) > len(e["compact"]) and e["compact"] in f["compact"]
+
+    kept = [e for e in items if not any(covers(f, e) for f in items)]
+    return " / ".join(x["text"] for x in kept) or None
+
+
 def extract_trademark(record, obj_state):
     data = record.get("data") or {}
 
     wm = (data.get("WordMarkSpecification") or {}).get("MarkSignificantVerbalElement")
-    mark_text = " ".join(w.get("#text", "") for w in wm if w.get("#text")) if isinstance(wm, list) else None
+    mark_text = mark_title(wm)
 
     classes = []
     gs = ((data.get("GoodsServicesDetails") or {}).get("GoodsServices") or {})
@@ -368,6 +416,7 @@ def run(args):
             registration_date=EXCLUDED.registration_date,
             expiry_date=EXCLUDED.expiry_date,
             status=EXCLUDED.status,
+            title_ua=EXCLUDED.title_ua,
             owner_name=EXCLUDED.owner_name,
             owner_edrpou=EXCLUDED.owner_edrpou,
             classes=EXCLUDED.classes,

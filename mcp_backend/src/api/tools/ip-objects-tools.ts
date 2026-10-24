@@ -24,11 +24,129 @@ const MAX_LIMIT = 100;
 // well inside the 60 s tool timeout.
 const DOSSIER_SUBTOOL_TIMEOUT_MS = 30_000;
 
+// Trademark verbal elements, pulled from raw_data so the display title can be rebuilt
+// at read time (see deriveMarkTitle). Only the small jsonb path, not the whole raw_data,
+// reaches the client; the helper strips it again before responding.
+const VERBAL_COLUMN = `CASE WHEN obj_type = 4
+    THEN raw_data->'WordMarkSpecification'->'MarkSignificantVerbalElement' END AS _verbal`;
+
 // Columns returned by the list tools — compact, panel-friendly (no raw_data).
 const LIST_COLUMNS = `id, obj_type, obj_type_name, obj_state, app_number, app_date,
   registration_number, registration_date, expiry_date, status, title_ua,
   class_system, classes, owner_name, owner_edrpou, owner_country, owner_kind,
-  owner_role, image_path`;
+  owner_role, image_path, ${VERBAL_COLUMN}`;
+
+// Collision list caps for get_trademark_dossier: other-owner marks are the real
+// blockers and come first; the owner's own family is kept short (LEXAI-2102).
+const DOSSIER_COLLISION_FETCH = 40;
+const DOSSIER_OTHER_OWNER_MAX = 15;
+const DOSSIER_SAME_OWNER_MAX = 5;
+const DOSSIER_NICE_SAMPLE_TERMS = 5;
+
+/**
+ * Display text of a trademark from its NIPO `MarkSignificantVerbalElement` list (LEXAI-2103).
+ *
+ * NIPO lists the mark's full phrase AND every word of it as separate elements, e.g.
+ * «відновлення», «сила», «моя», «моршинська», «моршинська. моя сила відновлення.».
+ * The importer joined them all, so `title_ua` became a token bag. Here an element is
+ * dropped when another element already covers it — every word of it occurs in a longer
+ * element, it is the same text up to punctuation/case («в.р.к.» vs «врк»), or it is a
+ * 1-2 character fragment of a longer one («5» of «а5»). What is left are the genuinely
+ * distinct verbal parts (a phrase, a transliteration, a slogan), in NIPO sequence order,
+ * joined with « / ». NIPO stores most marks in lower case; the text is kept as given.
+ * Falls back to `fallback` when there are no verbal elements.
+ */
+export function deriveMarkTitle(verbal: unknown, fallback: string | null = null): string | null {
+  const list = Array.isArray(verbal) ? verbal : verbal && typeof verbal === 'object' ? [verbal] : [];
+  const items = list
+    .map((v: any, i: number) => ({
+      text: String((typeof v === 'string' ? v : v?.['#text']) ?? '').replace(/\s+/g, ' ').trim(),
+      seq: Number(v?.['@sequenceNumber']) || i + 1,
+      i,
+    }))
+    .filter(x => x.text)
+    .sort((a, b) => a.seq - b.seq || a.i - b.i)
+    .map(x => {
+      const lower = x.text.toLowerCase();
+      const tokens = lower.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+      return { ...x, lower, tokens, tokenSet: new Set(tokens), compact: tokens.join('') };
+    });
+  if (items.length === 0) return fallback ?? null;
+
+  const covers = (f: typeof items[number], e: typeof items[number]): boolean => {
+    if (f === e) return false;
+    if (!e.compact) {
+      // symbol-only element («+», «=») — redundant if a longer element contains it
+      return f.lower.length > e.lower.length && f.lower.includes(e.lower);
+    }
+    if (f.compact === e.compact) return f.i < e.i; // same text up to punctuation: keep the first
+    if (f.tokens.length > e.tokens.length && e.tokens.every(t => f.tokenSet.has(t))) return true;
+    return e.compact.length <= 2 && f.compact.length > e.compact.length && f.compact.includes(e.compact);
+  };
+  const kept = items.filter(e => !items.some(f => covers(f, e)));
+  return kept.map(x => x.text).join(' / ') || fallback || null;
+}
+
+/** Replace the stored token-bag title of trademark rows with the derived one; drop _verbal. */
+function withMarkTitles<T extends Record<string, any>>(rows: T[]): T[] {
+  return rows.map(row => {
+    if (!row || !('_verbal' in row)) return row;
+    const { _verbal, ...rest } = row as any;
+    if (Number(rest.obj_type) === 4 && _verbal != null) {
+      rest.title_ua = deriveMarkTitle(_verbal, rest.title_ua ?? null);
+    }
+    return rest as T;
+  });
+}
+
+/** Normalise an owner name for same-owner comparison (case, quotes, legal-form noise). */
+function normOwnerName(name: unknown): string {
+  return String(name ?? '')
+    .toLowerCase()
+    .replace(/[«»"'“”„`’]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isSameOwner(a: any, b: any): boolean {
+  if (a?.owner_edrpou && b?.owner_edrpou) return String(a.owner_edrpou) === String(b.owner_edrpou);
+  const na = normOwnerName(a?.owner_name);
+  return !!na && na === normOwnerName(b?.owner_name);
+}
+
+/** Compact Nice-class summary from raw_data (class, term count, first few terms). */
+export function niceSummary(raw: any): Array<{ class: string; terms_count: number; sample_terms: string[] }> {
+  let cds = raw?.GoodsServicesDetails?.GoodsServices?.ClassDescriptionDetails?.ClassDescription;
+  if (cds && !Array.isArray(cds)) cds = [cds];
+  if (!Array.isArray(cds)) return [];
+  return cds
+    .filter((c: any) => c?.ClassNumber != null)
+    .map((c: any) => {
+      let terms = c.ClassificationTermDetails?.ClassificationTerm;
+      if (terms && !Array.isArray(terms)) terms = [terms];
+      const texts: string[] = (Array.isArray(terms) ? terms : [])
+        .map((t: any) => String(t?.ClassificationTermText ?? '').replace(/\s+/g, ' ').trim().replace(/[.;]$/, ''))
+        .filter(Boolean);
+      return {
+        class: String(c.ClassNumber),
+        terms_count: texts.length,
+        sample_terms: texts.slice(0, DOSSIER_NICE_SAMPLE_TERMS),
+      };
+    });
+}
+
+/**
+ * Short distinctive name to look the mark up in court texts: the first verbal part,
+ * as a whole when it is one or two words, else its first word (the brand usually
+ * leads: «моршинська. моя сила відновлення.» → «моршинська»).
+ */
+export function markSearchName(title: string | null | undefined): string | null {
+  const first = String(title ?? '').split(' / ')[0];
+  const tokens = first.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (tokens.length === 0) return null;
+  if (tokens.length <= 2) return tokens.join(' ');
+  return tokens[0].length >= 3 ? tokens[0] : tokens.slice(0, 2).join(' ');
+}
 
 export class IpObjectsTools extends BaseToolHandler {
   // toolRegistry (optional) lets get_trademark_dossier orchestrate other tools
@@ -177,7 +295,7 @@ export class IpObjectsTools extends BaseToolHandler {
       if (result.rows.length === 0) {
         return this.wrapResponse('За вказаними критеріями об’єктів не знайдено.');
       }
-      return this.wrapSearchResults(result.rows, lim);
+      return this.wrapSearchResults(withMarkTitles(result.rows), lim);
     } catch (error: any) {
       logger.error(`${toolLabel} error`, { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
@@ -328,7 +446,7 @@ export class IpObjectsTools extends BaseToolHandler {
       if (result.rows.length === 0) {
         return this.wrapResponse('Схожих марок у тих самих класах не знайдено.');
       }
-      return this.wrapSearchResults(result.rows, lim);
+      return this.wrapSearchResults(withMarkTitles(result.rows), lim);
     } catch (error: any) {
       logger.error('find_similar_trademarks error', { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
@@ -365,7 +483,7 @@ export class IpObjectsTools extends BaseToolHandler {
       if (result.rows.length === 0) {
         return this.wrapResponse('Об’єкт не знайдено.');
       }
-      const obj = result.rows[0];
+      const [obj] = withMarkTitles(result.rows);
       // Lifecycle timeline (продовження / визнання недійсним / припинення) from
       // the classified data_docs events, plus a derived current legal status.
       let events: any[] = [];
@@ -409,8 +527,19 @@ export class IpObjectsTools extends BaseToolHandler {
 
   /** Best-effort call of another registered tool; returns parsed JSON or null. */
   private async callTool(name: string, args: any, timeoutMs?: number): Promise<any> {
-    if (!this.toolRegistry) return null;
+    return (await this.callToolDetailed(name, args, timeoutMs)).data;
+  }
+
+  /**
+   * Like callTool, but says WHY there is no data (timeout / error / unavailable), so the
+   * dossier can tell "no court decisions" apart from "the search did not answer".
+   */
+  private async callToolDetailed(
+    name: string, args: any, timeoutMs?: number,
+  ): Promise<{ status: 'ok' | 'timeout' | 'error' | 'unavailable'; data: any; error?: string }> {
+    if (!this.toolRegistry) return { status: 'unavailable', data: null };
     let timer: NodeJS.Timeout | undefined;
+    const TIMEOUT = Symbol('timeout');
     try {
       const call = this.toolRegistry.executeTool(name, args);
       // A soft deadline: the dossier is useful without its enrichment, and one slow
@@ -418,24 +547,99 @@ export class IpObjectsTools extends BaseToolHandler {
       const res = timeoutMs
         ? await Promise.race([
             call,
-            new Promise<null>((resolve) => {
+            new Promise<typeof TIMEOUT>((resolve) => {
               timer = setTimeout(() => {
                 logger.warn(`get_trademark_dossier: sub-tool ${name} exceeded ${timeoutMs} ms, skipped`);
-                resolve(null);
+                resolve(TIMEOUT);
               }, timeoutMs);
             }),
           ])
         : await call;
-      if (!res || res.isError) return null;
+      if (res === TIMEOUT) return { status: 'timeout', data: null };
+      if (!res) return { status: 'unavailable', data: null };
       const txt = res.content?.[0]?.text;
-      if (typeof txt !== 'string') return null;
-      try { return JSON.parse(txt); } catch { return txt; }
+      if (res.isError) return { status: 'error', data: null, error: typeof txt === 'string' ? txt.slice(0, 300) : undefined };
+      if (typeof txt !== 'string') return { status: 'error', data: null };
+      try { return { status: 'ok', data: JSON.parse(txt) }; } catch { return { status: 'ok', data: txt }; }
     } catch (e: any) {
       logger.warn(`get_trademark_dossier: sub-tool ${name} failed`, { error: e.message });
-      return null;
+      return { status: 'error', data: null, error: e.message };
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /**
+   * Court practice for the dossier (LEXAI-2102). The old probe was one natural-language
+   * `fulltext` query built from the token-bag title plus generic words («свідоцтво
+   * недійсне торговельна марка»): the LLM distillation dropped the mark entirely, the FTS
+   * leg timed out and fell back to hybrid, so the call either missed the 30 s deadline
+   * (court_practice: null) or returned generic trademark-law cases unrelated to the mark.
+   *
+   * Now: deterministic `exact` probes for what identifies THIS mark in a decision text —
+   * the application number; the certificate number and the mark name each next to «знак
+   * для товарів і послуг»; the mark name next to «торговельна марка» — merged by doc_id.
+   * Always returns an object with a results list and, when it is empty, the reason.
+   */
+  private async courtPracticeForMark(tm: any): Promise<any> {
+    const name = markSearchName(tm.title_ua);
+    const probes: Array<{ basis: string; query: string }> = [];
+    if (tm.app_number) probes.push({ basis: 'app_number', query: String(tm.app_number) });
+    if (tm.registration_number) probes.push({ basis: 'registration_number', query: `${tm.registration_number} знак для товарів і послуг` });
+    if (name) {
+      probes.push({ basis: 'mark_name', query: `${name} торговельна марка` });
+      probes.push({ basis: 'mark_name', query: `${name} знак для товарів і послуг` });
+    }
+    if (probes.length === 0) {
+      return { results: [], total: 0, queries: [], note: 'Немає номера чи назви марки для пошуку в ЄДРСР.' };
+    }
+
+    const outcomes = await Promise.all(probes.map(p =>
+      this.callToolDetailed('search_court_decisions', { mode: 'exact', query: p.query, limit: 10 }, DOSSIER_SUBTOOL_TIMEOUT_MS)));
+
+    const byDoc = new Map<string, any>();
+    const queries = probes.map((p, i) => {
+      const o = outcomes[i];
+      const rows: any[] = Array.isArray(o.data?.results) ? o.data.results : [];
+      for (const r of rows) {
+        const key = String(r.doc_id ?? r.external_url ?? JSON.stringify(r));
+        const prev = byDoc.get(key);
+        if (prev) {
+          if (!prev.matched_by.includes(p.basis)) prev.matched_by.push(p.basis);
+        } else {
+          byDoc.set(key, { ...r, matched_by: [p.basis] });
+        }
+      }
+      const status = o.status === 'ok' && o.data?.timed_out ? 'timeout' : o.status;
+      return {
+        basis: p.basis, query: p.query, status,
+        found: o.status === 'ok' ? Number(o.data?.total ?? rows.length) : null,
+        ...(o.error ? { error: o.error } : {}),
+      };
+    });
+
+    // Number matches are the strongest evidence; trademark disputes are mostly commercial
+    // (justice_kind 3), so those lead next; then newest first.
+    const strength = (r: any) => (r.matched_by.includes('app_number') || r.matched_by.includes('registration_number') ? 1 : 0);
+    const commercial = (r: any) => (Number(r.justice_kind) === 3 ? 1 : 0);
+    const results = [...byDoc.values()].sort((a, b) =>
+      strength(b) - strength(a) || commercial(b) - commercial(a)
+      || String(b.adjudication_date ?? '').localeCompare(String(a.adjudication_date ?? '')));
+
+    let note: string;
+    if (results.length === 0) {
+      const failed = queries.filter(q => q.status !== 'ok');
+      note = failed.length === queries.length
+        ? `Пошук у ЄДРСР не відповів (${[...new Set(failed.map(q => q.status))].join(', ')}); судову практику не перевірено.`
+        : `У ЄДРСР не знайдено рішень, що згадують заявку ${tm.app_number ?? '—'}`
+          + (tm.registration_number ? `, свідоцтво ${tm.registration_number}` : '')
+          + (name ? ` або позначення «${name}» як торговельну марку` : '')
+          + (failed.length ? ` (частина запитів не відповіла: ${failed.map(q => q.query).join('; ')})` : '')
+          + '.';
+    } else {
+      note = 'Збіги за назвою (matched_by: mark_name) можуть стосуватися іншої марки з тим самим словом, а за номером свідоцтва — іншого документа з тим самим номером; перевір текст рішення.';
+    }
+    return { results, total: results.length, queries, note };
   }
 
   /**
@@ -456,10 +660,11 @@ export class IpObjectsTools extends BaseToolHandler {
       // 1. Disambiguation — every IP object registered under this number.
       const disamb = await this.db.query(
         `SELECT obj_type, obj_type_name, obj_state, app_number, registration_number,
-                title_ua, owner_name, status
+                title_ua, owner_name, status, ${VERBAL_COLUMN}
          FROM ip_objects WHERE ${col} = $1 ORDER BY obj_type, obj_state DESC`,
         [number],
       );
+      disamb.rows = withMarkTitles(disamb.rows);
       if (disamb.rows.length === 0) {
         return this.wrapResponse(`Об'єкт з номером «${number}» не знайдено в реєстрі ip_objects.`);
       }
@@ -479,7 +684,11 @@ export class IpObjectsTools extends BaseToolHandler {
          FROM ip_objects WHERE ${col} = $1 AND obj_type = 4 ORDER BY obj_state DESC LIMIT 1`,
         [number],
       );
-      const tm = card.rows[0];
+      // Stored token-bag title: trigram similarity below compares it with the other
+      // marks' stored titles, like with like. The response shows the derived title.
+      const storedTitle: string | null = card.rows[0].title_ua;
+      const [tmFull] = withMarkTitles(card.rows);
+      const { raw_data: tmRaw, ...tm } = tmFull;
 
       let events: any[] = [];
       try {
@@ -491,20 +700,35 @@ export class IpObjectsTools extends BaseToolHandler {
       } catch (e: any) {
         logger.warn('dossier events lookup failed', { error: e.message });
       }
-      const legal_status = this.deriveLegalStatus(tm, events);
+      const legal_status = this.deriveLegalStatus(tmFull, events);
+      // raw_data (full goods/services list, addresses) is dropped from the dossier — it was
+      // most of the payload. A compact Nice-class summary replaces it (LEXAI-2102).
+      const nice_classes = niceSummary(tmRaw);
 
       // 3. Collision — similar designations in the same МКТП classes (both states, excl. self).
+      // Most hits are usually the owner's own family of marks, which are no blocker:
+      // flag them same_owner and list other owners' marks first (LEXAI-2102).
       let collisions: any[] = [];
-      if (Array.isArray(tm.classes) && tm.classes.length && tm.title_ua) {
+      let collision_summary: any = null;
+      if (Array.isArray(tm.classes) && tm.classes.length && storedTitle) {
         try {
-          collisions = (await this.db.query(
+          const rows = withMarkTitles((await this.db.query(
             `SELECT ${LIST_COLUMNS}, ROUND(similarity(title_ua, $1)::numeric, 3) AS similarity
              FROM ip_objects
              WHERE obj_type = 4 AND classes && $2::text[]
                AND similarity(title_ua, $1) >= $3 AND app_number <> $4
-             ORDER BY similarity(title_ua, $1) DESC LIMIT 15`,
-            [tm.title_ua, tm.classes, 0.3, tm.app_number],
-          )).rows;
+             ORDER BY similarity(title_ua, $1) DESC LIMIT ${DOSSIER_COLLISION_FETCH}`,
+            [storedTitle, tm.classes, 0.3, tm.app_number],
+          )).rows).map((r: any) => ({ ...r, same_owner: isSameOwner(tm, r) }));
+          const other = rows.filter((r: any) => !r.same_owner);
+          const same = rows.filter((r: any) => r.same_owner);
+          collisions = [...other.slice(0, DOSSIER_OTHER_OWNER_MAX), ...same.slice(0, DOSSIER_SAME_OWNER_MAX)];
+          collision_summary = {
+            other_owner: other.length,
+            same_owner: same.length,
+            shown: collisions.length,
+            note: 'Спершу марки інших власників (потенційні блокери), далі — власні марки правовласника (same_owner: true).',
+          };
         } catch (e: any) {
           logger.warn('dossier collision failed', { error: e.message });
         }
@@ -523,10 +747,7 @@ export class IpObjectsTools extends BaseToolHandler {
         tm.owner_edrpou
           ? this.callTool('openreyestr_get_by_edrpou', { edrpou: tm.owner_edrpou }, DOSSIER_SUBTOOL_TIMEOUT_MS)
           : null,
-        this.callTool('search_court_decisions', {
-          mode: 'fulltext', justice_kind: 3, limit: 5,
-          query: `${tm.title_ua} свідоцтво недійсне торговельна марка`,
-        }, DOSSIER_SUBTOOL_TIMEOUT_MS),
+        this.courtPracticeForMark(tm),
         filingDate
           ? this.callTool('get_legislation_section', {
               rada_id: '3689-12', article_number: '6', as_of_date: filingDate,
@@ -543,8 +764,9 @@ export class IpObjectsTools extends BaseToolHandler {
       const dossier = {
         query_number: number,
         disambiguation: disamb.rows,
-        trademark: { ...tm, events, legal_status },
+        trademark: { ...tm, nice_classes, events, legal_status },
         collisions,
+        collision_summary,
         court_practice,
         temporal,
         owner_check,
