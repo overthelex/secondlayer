@@ -326,6 +326,100 @@ describe('EdsrUnifiedSearchTool', () => {
     });
   });
 
+  // LEXAI-2085: a timed-out FTS probe came back as an ordinary empty page, so relaxation,
+  // role relaxation and the hybrid fallback each re-ran it — past the 120 s tool cap.
+  describe('FTS timeout (LEXAI-2085)', () => {
+    const timedOut = (q: string) => Promise.resolve({ query: q, total: 0, returned: 0, offset: 0, has_more: false, results: [], timed_out: true });
+    const novaPoshta = {
+      mode: 'fulltext', query: 'Нова Пошта втрата посилки відшкодування',
+      party_name: 'Нова Пошта', party_role: 'defendant', limit: 5,
+    };
+
+    it('does not relax or re-probe a timed-out probe; hybrid runs without its FTS leg', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      mockFtsService.searchFulltext = jest.fn((q: string) => timedOut(q));
+      mockVectorizer.semanticSearch = jest.fn(() => Promise.resolve([]));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+
+      const result = await tool.executeTool('search_court_decisions', novaPoshta);
+
+      expect(mockFtsService.searchFulltext).toHaveBeenCalledTimes(1);
+      expect(mockVectorizer.semanticSearch).toHaveBeenCalled();
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+      expect(parsed.mode).toBe('hybrid');
+      expect(parsed.fallback_from).toBe('fulltext_timeout');
+      expect(parsed.legs.fts_timed_out).toBe(true);
+      expect(parsed._notice).toContain('не вклався в ліміт часу');
+      expect(parsed._notice).toContain('«Нова Пошта»');
+    });
+
+    it('answers with Ukrainian advice when there is no vector leg to fall back to', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      mockFtsService.searchFulltext = jest.fn((q: string) => timedOut(q));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+
+      const result = await tool.executeTool('search_court_decisions', novaPoshta);
+
+      expect(mockFtsService.searchFulltext).toHaveBeenCalledTimes(1);
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0].text).toContain('Повнотекстовий пошук за стороною «Нова Пошта» не вклався в ліміт часу');
+      expect(result?.content[0].text).toContain('date_from/date_to');
+    });
+
+    it('retries a topical probe once with the small cap (2087), then hybrid skips its FTS leg', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const caps: any[] = [];
+      mockFtsService.searchFulltext = jest.fn((q: string, ...rest: any[]) => {
+        caps.push(rest[6]?.candidateCap);
+        return timedOut(q);
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+
+      const result = await tool.executeTool('search_court_decisions', {
+        mode: 'fulltext', query: 'стягнення моральної шкоди затримка виплати', limit: 5,
+      });
+
+      // First probe at the default cap, one retry at 100 — then no relaxation, no FTS leg in hybrid.
+      expect(caps).toEqual([undefined, 100]);
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+      expect(parsed.fallback_from).toBe('fulltext_timeout');
+      expect(parsed.legs.fts_timed_out).toBe(true);
+    });
+
+    it('starts no new FTS probe once the shared 40 s budget is spent', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const realNow = Date.now;
+      let now = 1_000_000;
+      (Date as any).now = () => now;
+      try {
+        mockFtsService.searchFulltext = jest.fn((q: string) => {
+          now += 41_000; // every probe "takes" longer than the whole budget
+          return Promise.resolve({ query: q, total: 0, returned: 0, offset: 0, has_more: false, results: [] });
+        });
+        tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+
+        await tool.executeTool('search_court_decisions', novaPoshta);
+      } finally {
+        (Date as any).now = realNow;
+      }
+      // One probe: no term relaxation and no role relaxation after the deadline.
+      expect(mockFtsService.searchFulltext).toHaveBeenCalledTimes(1);
+    });
+
+    it('hybrid mode reports the FTS timeout when the vector leg has nothing either', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      mockFtsService.searchFulltext = jest.fn((q: string) => timedOut(q));
+      const failingVector = { semanticSearch: jest.fn(() => Promise.reject(new Error('Qdrant down'))) };
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, failingVector as any);
+
+      const result = await tool.executeTool('search_court_decisions', { ...novaPoshta, mode: 'hybrid' });
+
+      expect(mockFtsService.searchFulltext).toHaveBeenCalledTimes(1);
+      expect(result?.isError).toBe(true);
+      expect(result?.content[0].text).toContain('не вклався в ліміт часу');
+    });
+  });
+
   describe('term relaxation (relax-on-empty)', () => {
     it('drops trailing tokens until a non-empty hit, surfacing term_relaxed', async () => {
       db = makeDb(() => ({ rows: [] }));
