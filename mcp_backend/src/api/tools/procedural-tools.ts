@@ -898,10 +898,10 @@ export class ProceduralTools extends BaseToolHandler {
           );
           if (!resp) break;
           for (const d of resp.results) {
-            if (byDoc.has(d.doc_id)) continue;
+            if (byDoc.has(Number(d.doc_id))) continue;
             if (!isCourtLevelMatch(d.court_code, courtLevelFilter)) continue;
-            byDoc.set(d.doc_id, {
-              doc_id: d.doc_id,
+            byDoc.set(Number(d.doc_id), {
+              doc_id: Number(d.doc_id), // pg bigint arrives as a string
               court_code: d.court_code,
               date: d.adjudication_date,
               case_number: d.cause_num,
@@ -947,7 +947,7 @@ export class ProceduralTools extends BaseToolHandler {
             if (!isCourtLevelMatch(d.court_code, courtLevelFilter)) continue;
             seen.add(d.doc_id);
             out.push({
-              doc_id: d.doc_id,
+              doc_id: Number(d.doc_id), // pg bigint arrives as a string
               court_code: d.court_code,
               date: d.adjudication_date,
               case_number: d.cause_num,
@@ -1089,7 +1089,7 @@ export class ProceduralTools extends BaseToolHandler {
       return null;
     }
 
-    const validDocIds = new Set(candidates.map(c => c.doc_id));
+    const validDocIds = new Set(candidates.map(c => Number(c.doc_id)));
     const map = new Map<number, { stance: 'supports' | 'opposes' | 'not_on_point'; quote: string; confidence: number }>();
     for (const item of list) {
       const docId = Number(item?.doc_id);

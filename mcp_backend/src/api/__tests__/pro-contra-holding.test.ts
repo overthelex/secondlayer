@@ -189,6 +189,20 @@ describe('comparePracticeProContra — LLM holding classification', () => {
     // No longer a one-sided insufficient_practice result.
     expect(out.insufficient_practice).toBeUndefined();
   });
+
+  it('classifies FTS candidates whose doc_id comes from pg as a string', async () => {
+    // 24.10.2026: every semantic hit was boilerplate, the pool was FTS-only, pg returned bigint
+    // doc_ids as strings, and the LLM's numeric doc_ids matched none of them → "unclassified".
+    const tools = makeTools({
+      hits: [],
+      ftsResults: [{ ...ftsRow(0, 9921, 'суд відмовив у поновленні строку'), doc_id: '31025116' }],
+      classifications: [{ doc_id: 31025116, stance: 'opposes', quote: 'відмовив', confidence: 0.8 }],
+    });
+    const out = await run(tools, { procedure_code: 'cpc', query: 'теза' });
+
+    expect(out.stance_classification_unavailable).toBeUndefined();
+    expect(out.contra.map((c: any) => c.doc_id)).toEqual([31025116]);
+  });
 });
 
 describe('appeal boilerplate (24.10.2026: a custody case counted as "pro" on an appeal-deadline thesis)', () => {
