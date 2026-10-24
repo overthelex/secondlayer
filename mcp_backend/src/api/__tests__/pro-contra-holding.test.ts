@@ -248,4 +248,46 @@ describe('appeal boilerplate (24.10.2026: a custody case counted as "pro" on an 
     const prompt = ((tools as any).llm.chatCompletion as jest.Mock).mock.calls[0][0].messages[1].content;
     expect(prompt).not.toContain('Учасник справи, якому повне');
   });
+
+  it('drops the last chunk of a decision when it holds any of the notice, however long the rest', async () => {
+    // A notice wording the markers miss leaves > 80 chars; the chunk position settles it.
+    const lastChunk = ' право на поновлення строку на апеляційне оскарження, якщо апеляційна скарга подана протягом тридцяти днів з дня вручення йому повного рішення суду. Строк на апеляційне оскарження рішення суду обчислюється з дня отримання копії повного рішення суду відповідно до процесуального закону. Суддя';
+    const reasoning = 'Суд визнав поважною причиною пропуску строку отримання повного тексту рішення через три місяці після його складення.';
+    const tools = makeTools({
+      hits: [
+        { ...hit(311, 1503, lastChunk), chunk_index: 1, total_chunks: 2 },
+        { ...hit(312, 9921, reasoning), chunk_index: 0, total_chunks: 2 },
+      ],
+      classifications: [{ doc_id: 312, stance: 'supports', quote: 'визнав поважною', confidence: 0.9 }],
+    });
+    const out = await run(tools, { procedure_code: 'cpc', query: 'теза' });
+    expect(out.candidates_considered).toBe(1);
+    expect(out.pro.map((c: any) => c.doc_id)).toEqual([312]);
+  });
+
+  it('fills the pool from FTS under the current code when the semantic leg is all notices', async () => {
+    const tools = makeTools({
+      hits: [hit(321, 1503, tail)],
+      ftsResults: [{ ...ftsRow(0, 2690, 'поновив строк на апеляційне оскарження'), doc_id: '120000001' }],
+      classifications: [{ doc_id: 120000001, stance: 'supports', quote: 'поновив строк', confidence: 0.9 }],
+    });
+    const out = await run(tools, { procedure_code: 'cpc', query: 'теза' });
+    expect(out.pro.map((c: any) => c.doc_id)).toEqual([120000001]);
+    const fts = (tools as any).ftsService.searchFulltext as jest.Mock;
+    // The backfill leg ran (its query has no contra-seed suffix).
+    expect(fts.mock.calls.some((c) => !String(c[0]).includes('відмовити'))).toBe(true);
+    for (const call of fts.mock.calls) expect(call[2].date_from).toBe('2017-12-15');
+  });
+
+  it('keeps the caller time range instead of the current-code floor', async () => {
+    const tools = makeTools({
+      hits: [],
+      ftsResults: [ftsRow(331, 2690, 'поновив строк')],
+      classifications: [{ doc_id: 331, stance: 'supports', quote: 'поновив', confidence: 0.9 }],
+    });
+    await run(tools, { procedure_code: 'cpc', query: 'теза', time_range: { from: '2010-01-01', to: '2015-12-31' } });
+    const fts = (tools as any).ftsService.searchFulltext as jest.Mock;
+    expect(fts.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fts.mock.calls) expect(call[2].date_from).not.toBe('2017-12-15');
+  });
 });
