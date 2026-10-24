@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { EdsrUnifiedSearchTool } from '../tools/edrsr-unified-search-tool.js';
+import { EdsrUnifiedSearchTool, hybridFtsCandidateCap } from '../tools/edrsr-unified-search-tool.js';
 
 type QueryCall = { sql: string; params?: any[] };
 
@@ -394,6 +394,121 @@ describe('EdsrUnifiedSearchTool', () => {
       // 3→2 then stop (never probes a single token)
       const minTokens = Math.min(...seen.map(q => q.split(/\s+/).filter(Boolean).length));
       expect(minTokens).toBe(2);
+    });
+  });
+
+  describe('FTS statement timeout is not "too narrow" (LEXAI-2087)', () => {
+    // The reformulation observed in prod for "стягнення моральної шкоди за затримку виплати
+    // заробітної плати": 16 terms. Every probe hit the 8s FTS timeout, the relax loop read the
+    // empty response as an over-narrow AND-chain and dropped a term 4 times (5 × 8s), and the
+    // hybrid leg ended with fts_candidates 0 / fts_collapsed.
+    const SIXTEEN = 'моральна шкода заробітна плата затримка виплата відшкодування трудовий спір роботодавець немайнова шкода стаття 237 116 117 КЗпП';
+    const reformulator = { reformulate: jest.fn(() => Promise.resolve({ fts: SIXTEEN, semantic: 'відшкодування моральної шкоди' })) };
+    const hit = (id: number) => ({ doc_id: id, rank: 0.4, headline: 'моральна шкода' });
+    const tokens = (q: string) => q.split(/\s+/).filter(Boolean).length;
+
+    it('hybrid: probes a capped term set with a small candidate cap and fills the FTS leg', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const seen: { q: string; opts: any }[] = [];
+      mockFtsService.searchFulltext = jest.fn((q: string, _db: any, _f: any, _l: number, _o: number, _h: any, _tsq: any, opts: any) => {
+        seen.push({ q, opts });
+        return Promise.resolve({ query: q, total: 100, results: Array.from({ length: 15 }, (_v, i) => hit(1000 + i)) });
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+      tool.setQueryReformulator(reformulator as any);
+
+      const result = await tool.executeTool('search_court_decisions', { mode: 'hybrid', query: 'стягнення моральної шкоди за затримку виплати заробітної плати', limit: 5 });
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+
+      expect(seen).toHaveLength(1);
+      expect(tokens(seen[0].q)).toBe(6);                 // 16 terms capped, not all-AND
+      expect(seen[0].opts).toEqual({ candidateCap: 100 }); // limit 5 × oversample 3 → floor 100
+      expect(parsed.legs.fts_candidates).toBe(15);
+      expect(parsed.legs.fts_collapsed).toBeUndefined();
+      expect(parsed.legs.fts_timed_out).toBeUndefined();
+    });
+
+    it('hybrid: a timed-out probe stops instead of dropping terms (one probe, not five)', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const seen: string[] = [];
+      mockFtsService.searchFulltext = jest.fn((q: string) => {
+        seen.push(q);
+        return Promise.resolve({ query: q, total: 0, timed_out: true, results: [] });
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+      tool.setQueryReformulator(reformulator as any);
+
+      const result = await tool.executeTool('search_court_decisions', { mode: 'hybrid', query: 'стягнення моральної шкоди', limit: 5 });
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+
+      // cap 100 is already the retry cap → no retry, and never a relax probe
+      expect(seen).toHaveLength(1);
+      expect(parsed.legs.fts_timed_out).toBe(true);
+    });
+
+    it('fulltext: on timeout retries the SAME terms once with a small cap, then relaxes normally', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const seen: { q: string; opts: any }[] = [];
+      mockFtsService.searchFulltext = jest.fn((q: string, _db: any, _f: any, _l: number, _o: number, _h: any, _tsq: any, opts: any) => {
+        seen.push({ q, opts });
+        if (!opts) return Promise.resolve({ query: q, total: 0, timed_out: true, results: [] });
+        return Promise.resolve({ query: q, total: 100, total_is_floor: true, candidate_cap: 100, results: [hit(1), hit(2), hit(3)] });
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+      tool.setQueryReformulator(reformulator as any);
+
+      const result = await tool.executeTool('search_court_decisions', { mode: 'fulltext', query: 'стягнення моральної шкоди за затримку виплати заробітної плати' });
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+
+      expect(seen).toHaveLength(2);
+      expect(seen[1].q).toBe(seen[0].q);                // same terms — no term dropped on timeout
+      expect(seen[0].opts).toBeUndefined();             // default cap first
+      expect(seen[1].opts).toEqual({ candidateCap: 100 });
+      expect(parsed.total).toBe(100);
+      expect(parsed.term_relaxed).toBeUndefined();
+      expect(parsed.fts_timed_out).toBe(true);
+    });
+
+    it('fulltext: gives up after the retry also times out (2 probes, not 5 × 8s)', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const seen: string[] = [];
+      mockFtsService.searchFulltext = jest.fn((q: string) => {
+        seen.push(q);
+        return Promise.resolve({ query: q, total: 0, timed_out: true, results: [] });
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService); // no vectorizer → no hybrid fallback
+      tool.setQueryReformulator(reformulator as any);
+
+      await tool.executeTool('search_court_decisions', { mode: 'fulltext', query: 'стягнення моральної шкоди' });
+      expect(seen).toHaveLength(2);
+      expect(seen[1]).toBe(seen[0]);
+    });
+
+    it('still relaxes a genuinely empty (non-timed-out) probe', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      const seen: string[] = [];
+      mockFtsService.searchFulltext = jest.fn((q: string) => {
+        seen.push(q);
+        return Promise.resolve(tokens(q) <= 3
+          ? { query: q, total: 40, results: [hit(1)] }
+          : { query: q, total: 0, results: [] });
+      });
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+      tool.setQueryReformulator(reformulator as any);
+
+      const result = await tool.executeTool('search_court_decisions', { mode: 'fulltext', query: 'стягнення моральної шкоди' });
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+      expect(seen.map(tokens)).toEqual([6, 5, 4, 3]);
+      expect(parsed.term_relaxed).toEqual({ from_tokens: 6, to_tokens: 3 });
+    });
+  });
+
+  describe('hybridFtsCandidateCap', () => {
+    it('ranks ~5 candidates per needed hit, within [100, 500]', () => {
+      expect(hybridFtsCandidateCap(15)).toBe(100);
+      expect(hybridFtsCandidateCap(30)).toBe(150);
+      expect(hybridFtsCandidateCap(250)).toBe(500);
+      expect(hybridFtsCandidateCap(0)).toBe(100);
     });
   });
 

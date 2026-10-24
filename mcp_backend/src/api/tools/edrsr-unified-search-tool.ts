@@ -42,6 +42,26 @@ const FTS_MAX_RELAX_STEPS = 4;
 // Relax not just on a hard 0, but on near-collapse: 1–2 hits means the AND-chain is
 // over-narrow and the FTS leg can't carry recall (the semantic leg ends up masking it).
 const FTS_RELAX_MIN_RESULTS = 3;
+// LEXAI-2087: a probe that hits the FTS statement timeout comes back EMPTY, and the relax
+// loop used to read that as "conjunction too narrow" and drop a term — four more probes, each
+// burning the full 8s timeout (40s per leg; "стягнення моральної шкоди за затримку виплати
+// заробітної плати" → 5 timeouts → fts_candidates 0 → fts_collapsed). Dropping an AND term
+// only BROADENS the match set, so it never makes a timed-out probe cheaper. The cost is the
+// ranking stage: every candidate's TOASTed tsv is read (~10-15 ms/row cold), so the 2000-row
+// default cap cannot rank in budget on a cold cache. On timeout, retry the SAME terms once
+// with FTS_TIMEOUT_RETRY_CAP candidates; if that times out too, stop.
+const FTS_TIMEOUT_RETRY_CAP = 100;
+// The hybrid FTS leg only feeds candidateLimit (limit × oversample) hits into RRF, so it never
+// needs to rank 2000 candidates. Rank HYBRID_FTS_CAP_PER_HIT × candidateLimit, within bounds.
+const HYBRID_FTS_CAP_PER_HIT = 5;
+const HYBRID_FTS_MIN_CAP = 100;
+const HYBRID_FTS_MAX_CAP = 500;
+
+/** Candidate cap for the hybrid FTS leg (see HYBRID_FTS_CAP_PER_HIT). */
+export function hybridFtsCandidateCap(candidateLimit: number): number {
+  const n = Math.max(1, Math.floor(Number(candidateLimit) || 1));
+  return Math.min(HYBRID_FTS_MAX_CAP, Math.max(HYBRID_FTS_MIN_CAP, n * HYBRID_FTS_CAP_PER_HIT));
+}
 
 const KUPAP_PRESETS: Record<string, { category_codes: number[]; label: string }> = {
   'traffic_dui':        { category_codes: [41090, 5952], label: 'П\'яне водіння (ст. 130 КУпАП)' },
@@ -423,7 +443,8 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     limit: number,
     offset: number,
     noIdf: boolean = false,
-  ): Promise<{ result: EdsrFtsSearchResponse; usedQuery: string; startTokens: number; usedTokens: number; relaxedFromTokens?: number }> {
+    candidateCap?: number,
+  ): Promise<{ result: EdsrFtsSearchResponse; usedQuery: string; startTokens: number; usedTokens: number; relaxedFromTokens?: number; timedOut?: boolean; candidateCap?: number }> {
     const rawTokens = String(topicalQuery).trim().split(/\s+/).filter(Boolean);
     // CORE-21 P1.5a: order tokens by IDF (discriminative first) so the probe keeps rare
     // terms (донецьк/окупован/ДРРП) and relaxation drops the commonest (податок/майно),
@@ -473,26 +494,49 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       return { usedQuery, topicalTsquery };
     };
 
+    let cap = candidateCap;
+    const run = (q: string, tsq: string | undefined) =>
+      this.ftsService!.searchFulltext(q, this.db, filters, limit, offset, undefined, tsq,
+        cap !== undefined ? { candidateCap: cap } : undefined);
+
     let { usedQuery, topicalTsquery } = probe(n);
-    let result = await this.ftsService!.searchFulltext(usedQuery, this.db, filters, limit, offset, undefined, topicalTsquery);
+    logger.info('[EdsrUnifiedSearch] FTS probe', {
+      query: topicalTsquery || usedQuery, tokens: n, from_tokens: rawTokens.length, candidate_cap: cap ?? 'default',
+    });
+    let result = await run(usedQuery, topicalTsquery);
+    let timedOut = false;
 
     let steps = 0;
     // Relax while near-empty (not just hard 0): dropping the LEAST discriminative AND-term
     // (the idf-ranked tail) only widens the match set, so we keep broadening until the probe
-    // clears the floor or we hit the bounds.
-    while (result.total < FTS_RELAX_MIN_RESULTS && n > FTS_MIN_TOKENS && steps < FTS_MAX_RELAX_STEPS) {
+    // clears the floor or we hit the bounds. A TIMED-OUT probe is not "near-empty" — see
+    // FTS_TIMEOUT_RETRY_CAP: retry the same terms once with a small cap, never drop a term.
+    while (result.total < FTS_RELAX_MIN_RESULTS) {
+      if (result.timed_out) {
+        if (timedOut || (cap !== undefined && cap <= FTS_TIMEOUT_RETRY_CAP)) break; // retried already
+        timedOut = true;
+        cap = FTS_TIMEOUT_RETRY_CAP;
+        logger.warn('[EdsrUnifiedSearch] FTS probe timed out — retrying same terms with a smaller candidate cap', {
+          query: topicalTsquery || usedQuery, tokens: n, candidate_cap: cap,
+        });
+        result = await run(usedQuery, topicalTsquery);
+        continue;
+      }
+      if (n <= FTS_MIN_TOKENS || steps >= FTS_MAX_RELAX_STEPS) break;
       n -= 1; steps += 1;
       ({ usedQuery, topicalTsquery } = probe(n));
       logger.info('[EdsrUnifiedSearch] FTS relax-on-near-empty', {
         from_tokens: n + 1, to_tokens: n, prev_total: result.total, query: topicalTsquery || usedQuery,
         idf_ranked: idfRanked, prefix: usePrefix,
       });
-      result = await this.ftsService!.searchFulltext(usedQuery, this.db, filters, limit, offset, undefined, topicalTsquery);
+      result = await run(usedQuery, topicalTsquery);
     }
 
     return {
       result, usedQuery, startTokens, usedTokens: n,
       ...(n < cappedFrom ? { relaxedFromTokens: cappedFrom } : {}),
+      ...(timedOut || result.timed_out ? { timedOut: true } : {}),
+      ...(cap !== undefined ? { candidateCap: cap } : {}),
     };
   }
 
@@ -639,6 +683,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
         ...(fts.usedTokens < fts.startTokens ? { query_truncated: { from_tokens: fts.startTokens, used: fts.usedQuery } } : {}),
         ...(fts.relaxedFromTokens ? { term_relaxed: { from_tokens: fts.relaxedFromTokens, to_tokens: fts.usedTokens } } : {}),
         ...(partyRoleRelaxed ? { party_role_relaxed: true } : {}),
+        ...(fts.timedOut ? { fts_timed_out: true } : {}),
         ...(reformulated && ftsQuery !== originalQuery ? { reformulated: { fts: reformulated.fts } } : {}),
         results: output.filtered,
         ...(output.original_count !== output.filtered_count
@@ -691,9 +736,12 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     // gate (P1.5b) to reproduce the pre-improvement retrieval for a controlled before/after.
     // Debug-only; never set on normal traffic.
     const evalBaseline = args._eval_baseline === true;
+    // LEXAI-2087: rank only a few candidates per hit we need (see hybridFtsCandidateCap) —
+    // the default 2000-candidate rank timed out on a cold cache for common topical queries.
+    let ftsTimedOut = false;
     const ftsPromise = this
-      .ftsWithRelaxation(ftsQuery, filters, candidateLimit, 0, evalBaseline)
-      .then(r => r.result)
+      .ftsWithRelaxation(ftsQuery, filters, candidateLimit, 0, evalBaseline, hybridFtsCandidateCap(candidateLimit))
+      .then(r => { ftsTimedOut = !!r.timedOut; return r.result; })
       .catch((err: any) => { logger.warn('[EdsrUnifiedSearch] FTS leg failed', { error: err.message }); return null; });
 
     const justiceKind = args.justice_kind ? Number(args.justice_kind) : undefined;
@@ -783,6 +831,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     if (ftsCollapsed) {
       logger.info('[EdsrUnifiedSearch] FTS collapsed — strict relevance gate', {
         fts_total: ftsResponse?.total ?? 0, min_score: STRICT_MIN_SCORE, candidates: enriched.length,
+        fts_timed_out: ftsTimedOut,
       });
     }
     const output = await this.maybeFilter(enriched, query, ftsCollapsed ? { minScore: STRICT_MIN_SCORE } : undefined);
@@ -793,7 +842,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       ...(reformulated ? { reformulated: { fts: reformulated.fts, semantic: reformulated.semantic } } : {}),
       ...(partyName ? { party_filter: { party_name: partyName, party_role: partyRole || 'any' } } : {}),
       ...(instanceCode ? { instance_code: instanceCode } : {}),
-      legs: { fts_available: !!ftsResponse, vector_available: !!vectorResults, fts_candidates: ftsResults.length, vector_candidates: vectorHits.length, ...(chunkBackfilled > 0 ? { fts_chunks_backfilled: chunkBackfilled } : {}), ...(ftsCollapsed ? { fts_collapsed: true, strict_relevance_gate: true } : {}), ...(evalBaseline ? { eval_baseline: true } : {}) },
+      legs: { fts_available: !!ftsResponse, vector_available: !!vectorResults, fts_candidates: ftsResults.length, vector_candidates: vectorHits.length, ...(chunkBackfilled > 0 ? { fts_chunks_backfilled: chunkBackfilled } : {}), ...(ftsCollapsed ? { fts_collapsed: true, strict_relevance_gate: true } : {}), ...(ftsTimedOut ? { fts_timed_out: true } : {}), ...(evalBaseline ? { eval_baseline: true } : {}) },
       ...(structuralFilter ? { structural_filter: structuralFilter } : {}),
       total_fused: fused.length, returned: output.filtered.length,
       results: output.filtered,

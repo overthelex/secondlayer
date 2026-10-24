@@ -126,10 +126,28 @@ export interface EdsrFtsSearchResponse {
   total_is_floor?: boolean;
   /** The cap that produced the floor, present only alongside `total_is_floor`. */
   candidate_cap?: number;
+  /**
+   * True when the statement hit FTS_STATEMENT_TIMEOUT_MS. The response is then empty, but
+   * that is NOT "nothing matches": the query was too costly to rank in budget. Callers must
+   * not treat it as a narrow conjunction (dropping AND terms only broadens it and costs
+   * another full timeout) — see ftsWithRelaxation (LEXAI-2087).
+   */
+  timed_out?: boolean;
   returned: number;
   offset: number;
   has_more: boolean;
   results: EdsrFtsResult[];
+}
+
+/** Optional knobs for searchFulltext. */
+export interface EdsrFtsSearchOptions {
+  /**
+   * Candidate cap for the cap-before-rank CTE (default FTS_CANDIDATE_CAP). Ranking reads every
+   * candidate's TOASTed tsv, ~10-15 ms/row cold on the IO-bound prod disk, so 2000 candidates
+   * cannot rank inside the 8s statement timeout. Callers that need only a handful of hits (the
+   * hybrid FTS leg) pass a smaller cap. Clamped to [1, FTS_CANDIDATE_CAP].
+   */
+  candidateCap?: number;
 }
 
 export interface PartyCaseCount {
@@ -753,10 +771,15 @@ export class EdsrFtsService {
     offset: number = 0,
     headlineQuery?: string,
     topicalTsquery?: string,
+    options: EdsrFtsSearchOptions = {},
   ): Promise<EdsrFtsSearchResponse> {
     dbPool = this.resolvePool(dbPool);
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const safeOffset = Math.max(offset, 0);
+    const requestedCap = Math.floor(Number(options.candidateCap));
+    const candidateCap = Number.isFinite(requestedCap) && requestedCap > 0
+      ? Math.min(requestedCap, FTS_CANDIDATE_CAP)
+      : FTS_CANDIDATE_CAP;
 
     // LEXAI Cause-A.2: when the caller supplies a prebuilt prefix tsquery (vocabulary-snapped
     // stems like "окупован:* & нерухом:*"), match/rank/highlight with to_tsquery so declined
@@ -765,7 +788,9 @@ export class EdsrFtsService {
     const topicalArg = useTsq ? topicalTsquery!.trim() : query;
     const topicalExpr = useTsq ? `to_tsquery('simple', $1)` : `plainto_tsquery('simple', $1)`;
     // Distinct cache key per actual tsquery so prefix and plainto results never collide.
-    const cacheKey = useTsq ? `tsq:${topicalArg}` : query;
+    // A non-default candidate cap changes `total`, so it is part of the key as well.
+    const baseCacheKey = useTsq ? `tsq:${topicalArg}` : query;
+    const cacheKey = candidateCap === FTS_CANDIDATE_CAP ? baseCacheKey : `${baseCacheKey}|cap:${candidateCap}`;
 
     // Check cache first
     if (this.edsrCache) {
@@ -954,7 +979,7 @@ export class EdsrFtsService {
           SELECT f.doc_id
           FROM ${fromClause}${extraJoin}
           WHERE ${whereClause}
-          LIMIT ${FTS_CANDIDATE_CAP}
+          LIMIT ${candidateCap}
         )
         SELECT ${selectFields}, (SELECT count(*)::int FROM cand) AS cand_total
         FROM ${outerFrom}
@@ -976,6 +1001,7 @@ export class EdsrFtsService {
     try {
       let total: number;
       let dataResult: any;
+      let timedOut = false;
 
       try {
         ({ total, dataResult } = await executeQuery(true));
@@ -989,8 +1015,9 @@ export class EdsrFtsService {
           // empty so the caller's relax/hybrid fallback (FTS-0 → hybrid) takes over instead
           // of erroring out to the user.
           logger.warn('[EdsrFtsService] FTS statement timeout; returning empty for fallback', {
-            query: cacheKey, timeoutMs: FTS_STATEMENT_TIMEOUT_MS,
+            query: cacheKey, timeoutMs: FTS_STATEMENT_TIMEOUT_MS, candidateCap,
           });
+          timedOut = true;
           total = 0;
           dataResult = { rows: [] };
         } else {
@@ -1008,7 +1035,8 @@ export class EdsrFtsService {
       const response = {
         query,
         total,
-        ...(total >= FTS_CANDIDATE_CAP ? { total_is_floor: true, candidate_cap: FTS_CANDIDATE_CAP } : {}),
+        ...(total >= candidateCap ? { total_is_floor: true, candidate_cap: candidateCap } : {}),
+        ...(timedOut ? { timed_out: true } : {}),
         returned: dataResult.rows.length,
         offset: safeOffset,
         has_more: safeOffset + dataResult.rows.length < total,
@@ -1025,8 +1053,10 @@ export class EdsrFtsService {
         })),
       };
 
-      // Cache the result (keyed by the actual tsquery so prefix/plainto never collide)
-      if (this.edsrCache) {
+      // Cache the result (keyed by the actual tsquery so prefix/plainto never collide).
+      // Never cache a timeout: it says nothing about the query, and caching it would replay
+      // a cold-cache miss as "no matches" for the whole TTL.
+      if (this.edsrCache && !timedOut) {
         this.edsrCache.setCachedFtsResults(cacheKey, filters, safeLimit, safeOffset, response).catch(() => {});
       }
 
