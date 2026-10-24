@@ -407,11 +407,14 @@ async function importEdition(
       );
     }
 
-    // Record edition in legislation_editions
+    // Record edition in legislation_editions. A re-import that recovers articles
+    // the old parser dropped must refresh the count, not keep the stale one
+    // (ЦПК 2025-07-17 stayed at 500 with 523 rows stored — LEXAI-2106).
     await client.query(
       `INSERT INTO legislation_editions (legislation_id, edition_date, edition_key, article_count)
        VALUES ($1, $2, $3, $4)
-       ON CONFLICT (legislation_id, edition_date) DO NOTHING`,
+       ON CONFLICT (legislation_id, edition_date)
+       DO UPDATE SET article_count = GREATEST(legislation_editions.article_count, EXCLUDED.article_count)`,
       [legislationId, versionDate, editionDate, articles.length],
     );
 

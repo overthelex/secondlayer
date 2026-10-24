@@ -824,19 +824,60 @@ export class LegislationService {
     return result.rows.map((row: any) => row.type);
   }
 
-  async getEditionDates(radaId: string): Promise<Array<{ edition_date: string; article_count: number }>> {
+  /**
+   * Editions of an act with the article counts actually stored for each one.
+   *
+   * legislation_editions.article_count is written once by the edition importer
+   * (ON CONFLICT DO NOTHING), so a re-import that adds the indexed articles the
+   * old parser dropped (LEXAI-1957: «Стаття 350-1» collided with 350) never
+   * updates it — ЦПК kept a stale 500 for 2025-07-17 although 523 rows are
+   * stored (LEXAI-2106). Count the rows instead; fall back to the column only
+   * when an edition has no stored articles at all.
+   *
+   * `future` marks editions Rada has published ahead of their effective date
+   * (ЦПК 01.01.2028, підстава 3585-IX); compared with the Kyiv calendar date.
+   */
+  async getEditionDates(radaId: string): Promise<Array<{
+    edition_date: string;
+    article_count: number;
+    stored_article_count: number;
+    indexed_article_count: number;
+    future: boolean;
+    rada_total_editions: number | null;
+  }>> {
     const result = await this.db.query(
-      `SELECT le.edition_date, le.article_count
+      `SELECT le.edition_date,
+              le.article_count AS stored_article_count,
+              COALESCE(c.n, 0) AS live_article_count,
+              COALESCE(c.idx, 0) AS indexed_article_count,
+              le.edition_date > (now() AT TIME ZONE 'Europe/Kyiv')::date AS future,
+              l.total_editions AS rada_total_editions
        FROM legislation_editions le
        JOIN legislation l ON le.legislation_id = l.id
+       LEFT JOIN LATERAL (
+         SELECT count(*)::int AS n,
+                count(*) FILTER (WHERE la.article_number LIKE '%-%')::int AS idx
+         FROM legislation_articles la
+         WHERE la.legislation_id = le.legislation_id
+           AND la.is_current = false
+           AND la.version_date = le.edition_date
+       ) c ON true
        WHERE LOWER(l.rada_id) = LOWER($1)
        ORDER BY le.edition_date DESC`,
       [radaId]
     );
-    return result.rows.map((row: any) => ({
-      edition_date: row.edition_date,
-      article_count: row.article_count,
-    }));
+    return result.rows.map((row: any) => {
+      const stored = Number(row.stored_article_count) || 0;
+      const live = Number(row.live_article_count) || 0;
+      return {
+        edition_date: row.edition_date,
+        article_count: live > 0 ? live : stored,
+        stored_article_count: stored,
+        indexed_article_count: Number(row.indexed_article_count) || 0,
+        future: row.future === true,
+        rada_total_editions: row.rada_total_editions == null ? null : Number(row.rada_total_editions),
+      };
+    });
   }
 
   async getAmendmentHistory(radaId: string): Promise<Array<{
