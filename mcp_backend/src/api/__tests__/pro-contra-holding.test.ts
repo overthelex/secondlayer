@@ -190,3 +190,31 @@ describe('comparePracticeProContra — LLM holding classification', () => {
     expect(out.insufficient_practice).toBeUndefined();
   });
 });
+
+describe('appeal boilerplate (24.10.2026: a custody case counted as "pro" on an appeal-deadline thesis)', () => {
+  const { stripAppealBoilerplate } = require('../tools/procedural-tools');
+  const tail =
+    'Рішення суду може бути оскаржене до Одеського апеляційного суду протягом тридцяти днів з дня складення повного тексту рішення суду. ' +
+    'Учасник справи, якому повне рішення не було вручене у день його складання, має право на поновлення строку на апеляційне оскарження шляхом подання апеляційної скарги протягом тридцяти днів з дня вручення йому повного рішення суду. ' +
+    'Повний текст судового рішення буде складений 18.02.2022 року.';
+
+  it('strips the closing appeal formula and keeps reasoning about appealability', () => {
+    const r = stripAppealBoilerplate(`Визначити місце проживання дитини з матір'ю. ${tail}`);
+    expect(r.removed).toBe(true);
+    expect(r.text).toBe("Визначити місце проживання дитини з матір'ю.");
+    const reasoning = 'Ухвала про забезпечення позову може бути оскаржена окремо від рішення суду.';
+    expect(stripAppealBoilerplate(reasoning)).toEqual({ text: reasoning, removed: false });
+  });
+
+  it('drops a semantic hit that was only the appeal paragraph and never shows it to the classifier', async () => {
+    const tools = makeTools({
+      hits: [hit(301, 1503, tail), hit(302, 9921, 'Суд визнав поважною причиною пропуску строку отримання повного тексту рішення через три місяці після його складення.')],
+      classifications: [{ doc_id: 302, stance: 'supports', quote: 'визнав поважною', confidence: 0.9 }],
+    });
+    const out = await run(tools, { procedure_code: 'cpc', query: 'пізнє отримання повного тексту — поважна причина' });
+    expect(out.candidates_considered).toBe(1);
+    expect(out.pro.map((c: any) => c.doc_id)).toEqual([302]);
+    const prompt = ((tools as any).llm.chatCompletion as jest.Mock).mock.calls[0][0].messages[1].content;
+    expect(prompt).not.toContain('Учасник справи, якому повне');
+  });
+});

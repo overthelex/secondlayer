@@ -126,6 +126,38 @@ function parseClassifications(content: string | undefined | null): any[] {
  * True when a court_code belongs to the requested instance level. Supreme Court cassation
  * courts are numbered 99*, the Grand Chamber is 9901. No filter → always true.
  */
+/**
+ * Sentences every decision ends with: how, where and by when it can be appealed, when it takes
+ * effect, when the full text will be ready. They restate procedural norms, not the court's
+ * position. Semantic search on an appeal-deadline thesis ranks exactly this paragraph highest
+ * («Учасник справи, якому повне рішення не було вручене…, має право на поновлення строку…»),
+ * and the classifier counted a custody case as practice FOR "late receipt of the full text is
+ * a good reason" (24.10.2026: all four "pro" results were that paragraph).
+ */
+const APPEAL_BOILERPLATE: RegExp[] = [
+  // The closing formula only («…може бути оскаржене до/в/шляхом/протягом…»), so reasoning
+  // such as «ухвала може бути оскаржена окремо від рішення» survives.
+  /(?:Рішення|Ухвала|Постанова|Вирок)(?:[^.]|\.(?=\d)){0,100}може бути оскаржен[а-яіїє]* (?:до |в |у |шляхом |протягом |безпосередньо )(?:[^.]|\.(?=\d))*\./gi,
+  /(?:Рішення|Ухвала|Постанова)(?:[^.]|\.(?=\d)){0,60}оскарженню не підляга(?:[^.]|\.(?=\d))*\./gi,
+  /Учасник(?:и)? справи,? як(?:ому|им) повн(?:[^.]|\.(?=\d))*\./gi,
+  /(?:Апеляційна|Касаційна) скарга (?:на (?:[^.]|\.(?=\d)){0,60})?подається(?:[^.]|\.(?=\d))*\./gi,
+  /(?:Рішення|Ухвала|Постанова)(?: суду)? набира(?:є|ють) законної сили (?:з моменту|після закінчення|з дня|негайно)(?:[^.]|\.(?=\d))*\./gi,
+  /Повний текст(?:[^.]|\.(?=\d)){0,80}(?:складен|виготовлен|проголошен)(?:[^.]|\.(?=\d))*\./gi,
+];
+
+/** Remove appeal/entry-into-force boilerplate; `removed` tells whether any was found. */
+export function stripAppealBoilerplate(text: string): { text: string; removed: boolean } {
+  let out = text || '';
+  let removed = false;
+  for (const re of APPEAL_BOILERPLATE) {
+    out = out.replace(re, () => { removed = true; return ' '; });
+  }
+  return { text: out.replace(/\s+/g, ' ').trim(), removed };
+}
+
+// A semantic hit that was mostly boilerplate: what is left is too short to carry a position.
+const PRO_CONTRA_MIN_FRAGMENT_CHARS = 80;
+
 function isCourtLevelMatch(courtCode: any, filter?: 'SC' | 'GrandChamber'): boolean {
   if (!filter) return true;
   const code = String(courtCode ?? '');
@@ -787,13 +819,17 @@ export class ProceduralTools extends BaseToolHandler {
         for (const h of hits) {
           if (seen.has(h.doc_id)) continue;
           if (!isCourtLevelMatch(h.metadata.court_code, courtLevelFilter)) continue;
+          const cleaned = stripAppealBoilerplate(h.text || '');
+          // Matched on the closing appeal paragraph alone: not evidence of a position. A
+          // later chunk of the same decision may still qualify, so don't mark it seen.
+          if (cleaned.removed && cleaned.text.length < PRO_CONTRA_MIN_FRAGMENT_CHARS) continue;
           seen.add(h.doc_id);
           semanticHits.push({
             doc_id: h.doc_id,
             court_code: h.metadata.court_code,
             date: formatCourtDate(h.metadata.adjudication_date),
             case_number: h.metadata.cause_num,
-            fragment: (h.text || '').slice(0, 900),
+            fragment: cleaned.text.slice(0, 900),
           });
         }
         // Fill up to (maxN - seedReserve) now; the remainder of semanticHits is used to top
@@ -923,8 +959,10 @@ export class ProceduralTools extends BaseToolHandler {
       for (const r of res.rows) {
         const { dispositive } = extractDispositiveFromText(r.full_text || '');
         if (!dispositive) continue;
+        const operative = stripAppealBoilerplate(dispositive).text;
+        if (!operative) continue;
         out.set(Number(r.doc_id), {
-          dispositive: dispositive.replace(/\s+/g, ' ').slice(0, PRO_CONTRA_DISPOSITIVE_SLICE_CHARS),
+          dispositive: operative.slice(0, PRO_CONTRA_DISPOSITIVE_SLICE_CHARS),
           outcome: classifyOutcome(dispositive),
         });
       }
@@ -974,6 +1012,10 @@ export class ProceduralTools extends BaseToolHandler {
       'а не лише цитуванню норми у фрагменті. Зваж, ХТО подав скаргу: «касаційну скаргу залишити ' +
       'без задоволення» означає, що в силі лишається попереднє рішення — визнач результат для ПОЗОВУ, ' +
       'а не для скарги. Якщо резолютивна частина суперечить фрагменту — довіряй резолютивній частині. ' +
+      'Стандартні роз\'яснення наприкінці рішення (як і куди його оскаржити, строки оскарження, ' +
+      'право на поновлення строку, набрання законної сили, дата складення повного тексту) — це ' +
+      'переказ процесуальної норми, а НЕ позиція суду: якщо тезу підтверджує лише такий абзац, ' +
+      'став "not_on_point". Рішення має стосуватися предмета тези по суті. ' +
       'Якщо не впевнений — став "not_on_point". Відповідай ВИКЛЮЧНО валідним JSON.';
     const user =
       `ТЕЗА: ${thesis}\n\nРІШЕННЯ:\n${items}\n\n` +
