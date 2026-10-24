@@ -978,17 +978,45 @@ export class LegislationTools extends BaseToolHandler {
     const radaId = normalizeRadaId(args.rada_id);
     const editions = await this.service.getEditionDates(radaId);
     const structure = await this.service.getLegislationStructure(radaId, undefined, false);
+
+    // An edition with no indexed article (350-1, 1-1 …) after an earlier edition
+    // had some was imported by the pre-LEXAI-1957 parser, which dropped every
+    // indexed article: its list is incomplete, not a genuine repeal. Walk oldest
+    // to newest so "earlier" means earlier in time.
+    const incomplete = new Set<number>();
+    let seenIndexed = false;
+    for (let i = editions.length - 1; i >= 0; i--) {
+      const e = editions[i];
+      if (e.indexed_article_count > 0) seenIndexed = true;
+      else if (seenIndexed && e.article_count > 0) incomplete.add(i);
+    }
+
+    const futureCount = editions.filter(e => e.future).length;
+    const radaTotal = editions[0]?.rada_total_editions ?? null;
+    const notes: string[] = [];
+    if (editions.length === 0) notes.push('Історичні редакції ще не завантажені для цього акту');
+    if (futureCount > 0) {
+      notes.push(`${futureCount} редакц. ще не набрали чинності (future: true) — це опубліковані Радою майбутні редакції з відкладеним набранням чинності, не поточний текст.`);
+    }
+    if (incomplete.size > 0) {
+      notes.push(`${incomplete.size} редакц. завантажено без статей з індексом (напр. 350-1) — article_count у них занижений, перелік статей неповний (indexed_articles_missing: true).`);
+    }
+    if (radaTotal != null && radaTotal > editions.length) {
+      notes.push(`На zakon.rada.gov.ua ${radaTotal} редакц., у базі ${editions.length} — частину редакцій ще не завантажено.`);
+    }
+
     return {
       rada_id: radaId,
       title: structure?.title || null,
       total_editions: editions.length,
-      editions: editions.map(e => ({
+      rada_total_editions: radaTotal ?? undefined,
+      editions: editions.map((e, i) => ({
         date: e.edition_date,
         article_count: e.article_count,
+        ...(e.future ? { future: true, status: 'набирає чинності' } : {}),
+        ...(incomplete.has(i) ? { indexed_articles_missing: true } : {}),
       })),
-      note: editions.length === 0
-        ? 'Історичні редакції ще не завантажені для цього акту'
-        : undefined,
+      note: notes.length > 0 ? notes.join(' ') : undefined,
     };
   }
 
