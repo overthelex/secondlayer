@@ -140,7 +140,10 @@ function parseClassifications(content: string | undefined | null): any[] {
  */
 const APPEAL_BOILERPLATE_MARKERS: RegExp[] = [
   // «…має право на поновлення (пропущеного) строку… з дня вручення йому…»
-  /право на поновлення (?:пропущеного )?строку[\s\S]*з дня вручення (?:йому|їй|їм)/i,
+  /право на поновлення (?:пропущеного )?строку[\s\S]*з дня вручення (?:(?:йому|їй|їм) )?повн/i,
+  // «Строк на апеляційне оскарження може бути також поновлений в разі пропуску з інших
+  // поважних причин…» — the next sentence of the same notice; «також» marks the notice form.
+  /може бути також поновлен/i,
   // «Рішення … може бути оскаржене до / протягом / шляхом…» — the closing formula only, so
   // «ухвала може бути оскаржена окремо від рішення» (reasoning about appealability) survives.
   // Must name the appeal route or a deadline, so «акт Кабінету Міністрів може бути оскаржений
