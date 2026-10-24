@@ -1,0 +1,55 @@
+##############################################################################
+# RADA roll-call votes: data.rada.gov.ua → rada.voting_records (legal.org.ua)
+# - LEXAI-2094: voting had no schedule; the last hand-run import was 25.03.2026,
+#   so rada_analyze_voting_record knew nothing after 13.03.2026.
+# - Runs sync-voting.js inside the running rada container on cthulhu, which
+#   already has the DB credentials. Upserts by RADA id_event, never deletes.
+# - Daily, re-reading the last 14 days: RADA republishes a day's file after the
+#   session (late roll-calls, corrections).
+##############################################################################
+name: 'Cron: RADA voting sync'
+
+on:
+  schedule:
+    # 02:30 UTC = 05:30 Kyiv (summer)
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'START_DATE (YYYY-MM-DD), default = 14 days ago'
+        required: false
+        type: string
+      end_date:
+        description: 'END_DATE (YYYY-MM-DD), default = today'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rada-voting-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-voting:
+    name: Sync RADA voting
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 60
+    env:
+      RADA_CONTAINER: rada-mcp-app-local
+    steps:
+      - name: Run sync
+        env:
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+        run: |
+          set -euo pipefail
+          if ! docker ps --format '{{.Names}}' | grep -qx "$RADA_CONTAINER"; then
+            echo "::error::$RADA_CONTAINER is not running"
+            exit 1
+          fi
+          args=(-e DAYS_BACK=14 -e DELAY_MS=1000)
+          [ -n "${START_DATE:-}" ] && args+=(-e "START_DATE=$START_DATE")
+          [ -n "${END_DATE:-}" ] && args+=(-e "END_DATE=$END_DATE")
+          docker exec "${args[@]}" "$RADA_CONTAINER" node dist/scripts/sync-voting.js
