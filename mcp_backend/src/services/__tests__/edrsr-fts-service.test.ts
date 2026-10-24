@@ -165,6 +165,78 @@ describe('EdsrFtsService.searchFulltext total', () => {
   });
 });
 
+describe('EdsrFtsService.searchFulltext candidate cap + timeout (LEXAI-2087)', () => {
+  const makeDbWithRows = (rowCount: number, candTotal: number) => {
+    const calls: { sql: string; params: any[] }[] = [];
+    const rows = Array.from({ length: rowCount }, (_v, i) => ({
+      doc_id: i + 1, headline: 'x', rank: 0.5, cand_total: candTotal,
+    }));
+    return {
+      calls,
+      query: jest.fn((sql: string, params: any[]) => {
+        calls.push({ sql, params });
+        return Promise.resolve({ rows });
+      }),
+    };
+  };
+
+  it('uses the default 2000-candidate cap when none is given', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDbWithRows(1, 1);
+    await svc.searchFulltext('іпотека', db as any);
+    expect(db.calls[0].sql).toMatch(/LIMIT 2000\s*\)/);
+  });
+
+  it('honours a smaller candidate cap and reports the floor against it', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDbWithRows(16, 100);
+    const res = await svc.searchFulltext('морал:* & шкода:*', db as any, {}, 15, 0, undefined, 'морал:* & шкода:*', { candidateCap: 100 });
+    expect(db.calls[0].sql).toMatch(/LIMIT 100\s*\)/);
+    expect(res.total).toBe(100);
+    expect(res.total_is_floor).toBe(true);
+    expect(res.candidate_cap).toBe(100);
+  });
+
+  it('clamps the cap to the default ceiling and ignores junk values', async () => {
+    const svc = new EdsrFtsService();
+    const big = makeDbWithRows(1, 1);
+    await svc.searchFulltext('іпотека', big as any, {}, 20, 0, undefined, undefined, { candidateCap: 999999 });
+    expect(big.calls[0].sql).toMatch(/LIMIT 2000\s*\)/);
+    const junk = makeDbWithRows(1, 1);
+    await svc.searchFulltext('іпотека', junk as any, {}, 20, 0, undefined, undefined, { candidateCap: -5 });
+    expect(junk.calls[0].sql).toMatch(/LIMIT 2000\s*\)/);
+  });
+
+  it('marks a statement timeout as timed_out (not a genuine 0) and does not cache it', async () => {
+    const svc = new EdsrFtsService();
+    const cache = {
+      getCachedFtsResults: jest.fn(() => Promise.resolve(null)),
+      setCachedFtsResults: jest.fn(() => Promise.resolve()),
+    };
+    (svc as any).edsrCache = cache;
+    const db = {
+      query: jest.fn(() => Promise.reject(Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }))),
+    };
+    const res = await svc.searchFulltext('морал:* & шкода:*', db as any, {}, 15, 0, undefined, 'морал:* & шкода:*');
+    expect(res.total).toBe(0);
+    expect(res.timed_out).toBe(true);
+    expect(cache.setCachedFtsResults).not.toHaveBeenCalled();
+  });
+
+  it('keys the cache by candidate cap so a capped total never answers an uncapped query', async () => {
+    const svc = new EdsrFtsService();
+    const keys: string[] = [];
+    (svc as any).edsrCache = {
+      getCachedFtsResults: jest.fn((k: string) => { keys.push(k); return Promise.resolve(null); }),
+      setCachedFtsResults: jest.fn(() => Promise.resolve()),
+    };
+    await svc.searchFulltext('x', makeDbWithRows(1, 1) as any, {}, 20, 0, undefined, 'морал:*');
+    await svc.searchFulltext('x', makeDbWithRows(1, 1) as any, {}, 20, 0, undefined, 'морал:*', { candidateCap: 100 });
+    expect(keys[0]).toBe('tsq:морал:*');
+    expect(keys[1]).toBe('tsq:морал:*|cap:100');
+  });
+});
+
 describe('buildPartyRoleRegex', () => {
   it('anchors the defendant on the respondent slot and requires a closing quote', () => {
     const rx = buildPartyRoleRegex('Нова Пошта', 'defendant');
