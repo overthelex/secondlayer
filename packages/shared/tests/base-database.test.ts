@@ -29,6 +29,7 @@ jest.mock('pg', () => ({
     idleCount: 3,
     waitingCount: 0,
   })),
+  types: { setTypeParser: jest.fn() },
 }));
 
 jest.mock('../src/utils/logger', () => ({

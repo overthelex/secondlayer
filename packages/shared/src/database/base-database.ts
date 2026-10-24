@@ -1,5 +1,6 @@
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { logger } from '../utils/logger';
+import './pg-type-parsers';
 
 export interface DatabaseConfig {
   host: string;
