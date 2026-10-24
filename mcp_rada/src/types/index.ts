@@ -189,6 +189,8 @@ export interface BillSearchResult {
   total: number;
   query: string;
   filters: Partial<BillSearchParams>;
+  /** true when weighted any-word title matches were appended (LEXAI-2099) */
+  relaxed?: boolean;
 }
 
 export interface DeputyInfoResult {

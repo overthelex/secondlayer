@@ -5,6 +5,7 @@
 
 import { DeputyService } from '../services/deputy-service';
 import { BillService } from '../services/bill-service';
+import { billCardUrl } from '../services/bill-feed';
 import { LegislationService } from '../services/legislation-service';
 import { VotingService } from '../services/voting-service';
 import { CrossReferenceService } from '../services/cross-reference-service';
@@ -291,6 +292,9 @@ export class MCPRadaAPI {
               query: args.query,
               status: args.status || 'all',
               total_found: result.total,
+              ...(result.relaxed
+                ? { note: 'Частина результатів містить не всі слова запиту в назві (впорядковано за релевантністю).' }
+                : {}),
               bills: result.bills.map(bill => ({
                 bill_number: bill.bill_number,
                 title: bill.title,
@@ -300,7 +304,7 @@ export class MCPRadaAPI {
                 initiator_type: bill.initiator_type,
                 initiator_names: bill.initiator_names,
                 main_committee_name: bill.main_committee_name,
-                url: bill.url,
+                url: bill.url || billCardUrl(bill.metadata?.bill_id),
               })),
             }, null, 2),
           },
