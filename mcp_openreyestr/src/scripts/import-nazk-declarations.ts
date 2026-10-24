@@ -85,11 +85,21 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function extractDeclarantInfo(doc: any): {
+/** Submission time from the API's `date`: an ISO string, or unix seconds in older payloads. */
+export function parseNazkDate(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  const asNumber = typeof value === 'number' ? value : /^\d+$/.test(String(value)) ? Number(value) : NaN;
+  const d = Number.isFinite(asNumber) ? new Date(asNumber * 1000) : new Date(String(value));
+  // Declarations exist from 2015; anything earlier is a parse error, not a date.
+  if (isNaN(d.getTime()) || d.getUTCFullYear() < 2015) return null;
+  return d.toISOString();
+}
+
+export function extractDeclarantInfo(doc: any): {
   name: string; position: string; workplace: string; region: string;
   postType: string; postCategory: string; corruptionAffected: boolean;
-  hasRealEstate: boolean; hasVehicles: boolean; hasSecurities: boolean;
-  hasCorporateRights: boolean; hasIncome: boolean; totalIncome: number | null;
+  hasRealEstate: boolean | null; hasVehicles: boolean | null; hasSecurities: boolean | null;
+  hasCorporateRights: boolean | null; hasIncome: boolean | null; totalIncome: number | null;
 } {
   const data = doc.data || {};
 
@@ -104,27 +114,24 @@ function extractDeclarantInfo(doc: any): {
   const postCategory = doc.post_category || step1.postCategory || '';
   const corruptionAffected = doc.corruption_affected === true || step1.corruptionAffected === '1';
 
-  // Step 3: real estate
-  const step3 = data.step_3?.data || {};
-  const hasRealEstate = Object.keys(step3).length > 0;
+  // Sections 3-11 are absent from the /documents/list response (it carries only step_0 and
+  // step_1; checked 24.10.2026). Absent means unknown, not "has none": these used to default
+  // to false, so all 322 934 imported declarations claimed no property and no income.
+  const section = (step: string): Record<string, any> | null =>
+    data[step] && typeof data[step] === 'object' ? (data[step].data || {}) : null;
+  const present = (sec: Record<string, any> | null): boolean | null =>
+    sec === null ? null : Object.keys(sec).length > 0;
 
-  // Step 6: vehicles
-  const step6 = data.step_6?.data || {};
-  const hasVehicles = Object.keys(step6).length > 0;
-
-  // Step 7: securities
-  const step7 = data.step_7?.data || {};
-  const hasSecurities = Object.keys(step7).length > 0;
-
-  // Step 8: corporate rights
-  const step8 = data.step_8?.data || {};
-  const hasCorporateRights = Object.keys(step8).length > 0;
+  const hasRealEstate = present(section('step_3'));
+  const hasVehicles = present(section('step_6'));
+  const hasSecurities = present(section('step_7'));
+  const hasCorporateRights = present(section('step_8'));
 
   // Step 11: income
-  const step11 = data.step_11?.data || {};
-  const hasIncome = Object.keys(step11).length > 0;
+  const step11 = section('step_11');
+  const hasIncome = present(step11);
   let totalIncome: number | null = null;
-  if (hasIncome) {
+  if (step11 && hasIncome) {
     let sum = 0;
     for (const key of Object.keys(step11)) {
       const entry = step11[key];
@@ -217,12 +224,9 @@ async function importNazk() {
 
                 const info = extractDeclarantInfo(doc);
                 let submissionDate: string | null = null;
-                if (doc.date) {
-                  try {
-                    const ts = typeof doc.date === 'number' ? doc.date : parseInt(doc.date);
-                    if (!isNaN(ts) && ts > 0) submissionDate = new Date(ts * 1000).toISOString();
-                  } catch { /* skip */ }
-                }
+                // The API sends an ISO string ("2026-10-23T21:43:05+03:00"). parseInt read
+                // its year as unix seconds, so every submission_date was 1970-01-01 00:33.
+                if (doc.date) submissionDate = parseNazkDate(doc.date);
 
                 const result = await client.query(
                   `INSERT INTO nazk_declarations (
@@ -233,6 +237,13 @@ async function importNazk() {
                     has_income, total_income_declared
                   ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
                   ON CONFLICT (declaration_id) DO UPDATE SET
+                    submission_date = EXCLUDED.submission_date,
+                    has_real_estate = EXCLUDED.has_real_estate,
+                    has_vehicles = EXCLUDED.has_vehicles,
+                    has_securities = EXCLUDED.has_securities,
+                    has_corporate_rights = EXCLUDED.has_corporate_rights,
+                    has_income = EXCLUDED.has_income,
+                    total_income_declared = EXCLUDED.total_income_declared,
                     updated_at = CURRENT_TIMESTAMP
                   RETURNING (xmax = 0) AS is_insert`,
                   [
@@ -306,4 +317,6 @@ async function importNazk() {
   await pool.end();
 }
 
-importNazk().catch(e => { console.error(e); process.exit(1); });
+if (require.main === module) {
+  importNazk().catch(e => { console.error(e); process.exit(1); });
+}

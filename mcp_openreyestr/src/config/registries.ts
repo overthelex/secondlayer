@@ -216,16 +216,19 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     tableName: 'bankruptcy_cases',
     uniqueKey: 'registration_number',
     recordPath: 'DATA.RECORD',
+    // Tags as the file has them (checked 24.10.2026): RN_NUM, REG_DATE, REG_NUM (court case
+    // number, often empty), DATE_START, NAME, STAN_PROV, PROC_BORG_NAME. The previous map
+    // named tags the file does not have (DEBTOR_NAME, COURT_NAME, STATUS…), so 35 433 of
+    // 35 436 rows had no debtor and the tool returned bare case numbers. There is no
+    // debtor EDRPOU, debtor type or court in the file.
     fieldMap: {
-      registration_number: 'REG_NUM',
+      registration_number: 'RN_NUM',
       registration_date: 'REG_DATE',
-      case_number: 'CASE_NUM',
-      court_decision_date: 'COURT_DATE',
-      debtor_name: 'DEBTOR_NAME',
-      debtor_edrpou: 'DEBTOR_EDRPOU',
-      debtor_type: 'DEBTOR_TYPE',
-      proceeding_status: 'STATUS',
-      court_name: 'COURT_NAME',
+      case_number: 'REG_NUM',
+      court_decision_date: 'DATE_START',
+      debtor_name: 'NAME',
+      proceeding_status: (_v: string, r: Record<string, unknown>) =>
+        [r.PROC_BORG_NAME, r.STAN_PROV].map((x) => (x == null ? '' : String(x).replace(/^[\s,]+|[\s,]+$/g, ''))).filter(Boolean).join(': ').slice(0, 255) || null,
     },
     updateFrequency: 'daily',
     sizeCategory: 'medium',
