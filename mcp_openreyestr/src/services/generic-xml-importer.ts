@@ -97,6 +97,45 @@ export async function importXml(
 }
 
 /**
+ * The encoding a registry file is actually in. The XML prolog wins when it names one;
+ * without a prolog, a head that is valid UTF-8 and contains non-ASCII bytes is UTF-8.
+ * Only then does the configured encoding apply. data.gov.ua switched the notaries file
+ * (17-ex_xml_wern) to UTF-8 without a prolog while the config still said windows-1251,
+ * and all 6 233 names were stored as mojibake («Р§РµСЂРЅРёС€РѕРІР°»), so a search by
+ * surname found nothing.
+ */
+export function detectXmlEncoding(head: Buffer, configured: string): string {
+  const prolog = head.subarray(0, 200).toString('latin1').match(/<\?xml[^>]*encoding=["']([^"']+)["']/i);
+  if (prolog) {
+    const enc = prolog[1].toLowerCase();
+    return enc === 'utf8' ? 'utf-8' : enc;
+  }
+  if (!head.some((b) => b >= 0x80)) return configured;
+  // Drop a multi-byte character the slice may have cut at the end.
+  let end = head.length;
+  for (let i = 0; i < 3 && end > 0 && (head[end - 1] & 0xc0) === 0x80; i++) end--;
+  if (end > 0 && head[end - 1] >= 0xc0) end--;
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(head.subarray(0, end));
+    return 'utf-8';
+  } catch {
+    return configured;
+  }
+}
+
+function readHead(filePath: string, bytes = 64 * 1024): Buffer {
+  const { openSync, readSync, closeSync } = require('fs');
+  const fd = openSync(filePath, 'r');
+  try {
+    const buf = Buffer.alloc(bytes);
+    const n = readSync(fd, buf, 0, bytes, 0);
+    return buf.subarray(0, n);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * In-memory XML parsing for small/medium files
  */
 async function importXmlInMemory(
@@ -107,9 +146,11 @@ async function importXmlInMemory(
 ): Promise<ImportStats> {
   const { readFileSync } = require('fs');
   const rawBuffer = readFileSync(filePath);
-  const xmlContent = config.encoding === 'utf-8'
+  const encoding = detectXmlEncoding(rawBuffer.subarray(0, 64 * 1024), config.encoding);
+  if (encoding !== config.encoding) console.log(`  File is ${encoding}, config says ${config.encoding}; decoding as ${encoding}`);
+  const xmlContent = encoding === 'utf-8'
     ? rawBuffer.toString('utf-8')
-    : iconv.decode(rawBuffer, config.encoding);
+    : iconv.decode(rawBuffer, encoding);
 
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -294,8 +335,10 @@ async function importXmlStreaming(
       }
     });
 
-    if (config.encoding !== 'utf-8') {
-      const decoder = iconv.decodeStream(config.encoding);
+    const encoding = detectXmlEncoding(readHead(filePath), config.encoding);
+    if (encoding !== config.encoding) console.log(`  File is ${encoding}, config says ${config.encoding}; decoding as ${encoding}`);
+    if (encoding !== 'utf-8') {
+      const decoder = iconv.decodeStream(encoding);
       decoder.on('error', (err: Error) => {
         console.error('  Decoder stream error:', err.message);
         reject(err);
