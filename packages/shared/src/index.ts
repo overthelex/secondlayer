@@ -16,6 +16,7 @@ export * from './utils/anthropic-client';
 export * from './utils/bedrock-client';
 export * from './utils/llm-client-manager';
 export * from './database/base-database';
+export * from './database/pg-type-parsers';
 export * from './http/sse-handler';
 export * from './http/base-http-server';
 export * from './services/base-cost-tracker';
