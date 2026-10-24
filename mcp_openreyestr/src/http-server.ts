@@ -16,6 +16,7 @@ import { MCPOpenReyestrAPI } from './api/mcp-openreyestr-api';
 import { MetricsService } from './services/metrics-service';
 import { globalApiRateLimit, healthCheckRateLimit } from './middleware/rate-limit';
 import rateLimit from 'express-rate-limit';
+import type { ChildProcess } from 'child_process';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ class HTTPOpenReyestrServer {
   private costTracker: CostTracker;
   private mcpAPI: MCPOpenReyestrAPI;
   private metricsService: MetricsService;
+  private prozorroImport: ChildProcess | null = null;
 
   constructor() {
     this.app = express();
@@ -434,6 +436,30 @@ class HTTPOpenReyestrServer {
       }
 
       logger.info('Admin sync-registry triggered', { registry, clientKey: req.clientKey?.substring(0, 8) });
+
+      // ProZorro is an API feed, not a NAIS dataset: run the incremental
+      // importer (LEXAI-2089) as a child process. It resumes from its own cursor
+      // and holds a pg advisory lock, so an overlapping trigger exits at once.
+      if (registry === 'prozorro') {
+        if (this.prozorroImport && this.prozorroImport.exitCode === null) {
+          res.status(409).json({ error: 'ProZorro import already running', pid: this.prozorroImport.pid });
+          return;
+        }
+        const { spawn } = await import('child_process');
+        const path = await import('path');
+        const maxMinutes = String(parseInt(process.env.PROZORRO_SYNC_MAX_MINUTES || '180', 10));
+        const child = spawn(
+          process.execPath,
+          [path.join(__dirname, 'scripts', 'import-prozorro.js'), `--max-minutes=${maxMinutes}`],
+          { stdio: ['ignore', 'pipe', 'pipe'], env: process.env },
+        );
+        this.prozorroImport = child;
+        child.stdout?.on('data', (d: Buffer) => logger.info(`[prozorro] ${d.toString().trimEnd()}`));
+        child.stderr?.on('data', (d: Buffer) => logger.warn(`[prozorro] ${d.toString().trimEnd()}`));
+        child.on('exit', (code) => logger.info('ProZorro import finished', { code }));
+        res.status(202).json({ status: 'accepted', message: 'ProZorro incremental import started', registry, pid: child.pid });
+        return;
+      }
 
       try {
         // Import and run sync for the specified registry

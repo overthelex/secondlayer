@@ -292,6 +292,21 @@ const naisWeeklySources: DataSourceSchedule[] = [
   },
 ];
 
+// ─── OpenReyestr API feeds (incremental, sync via the same HTTP trigger) ──
+
+const openreyestrFeedSources: DataSourceSchedule[] = [
+  {
+    // LEXAI-2089: import-prozorro.js resumes from its cursor (prozorro_sync_state),
+    // upserts only, stops after PROZORRO_SYNC_MAX_MINUTES (default 180).
+    name: 'prozorro_tenders',
+    title: 'ProZorro — Тендери (інкрементально)',
+    cron: '30 1 * * *', // 01:30 daily
+    target: 'openreyestr',
+    sourceName: 'prozorro',
+    enabled: true,
+  },
+];
+
 // ─── ECHR HUDOC data sources (weekly, all 47 CoE member states) ─────
 
 const echrWeeklySources: DataSourceSchedule[] = [
@@ -680,6 +695,7 @@ export const ALL_SOURCES: DataSourceSchedule[] = [
   ...backendWeeklySources,
   ...naisDailySources,
   ...naisWeeklySources,
+  ...openreyestrFeedSources,
   ...echrWeeklySources,
 ];
 
