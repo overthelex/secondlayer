@@ -233,7 +233,11 @@ export class MCPOpenReyestrAPI {
         description: `Пошук справ про банкрутство
 
 💰 Примерная стоимость: $0.001-$0.003 USD
-Пошук справ про банкрутство за боржником, ЄДРПОУ або номером справи.`,
+Пошук справ про банкрутство за боржником, ЄДРПОУ або номером справи.
+Поля: procedure — процедура (ліквідація, розпорядження майном, санація…); case_status — стан провадження;
+case_closure_ground — підстава закриття (ст. 90 КУзПБ); case_initiator — ініціатор справи (кредитор/заявник).
+Джерело НАІС не містить ЄДРПОУ боржника і суду: debtor_edrpou заповнюється лише за точним і однозначним збігом назви з ЄДР
+(debtor_edrpou_source = edr_exact_name_match), інакше null. Дати — YYYY-MM-DD.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -497,12 +501,13 @@ export class MCPOpenReyestrAPI {
         description: `Пошук юридичних осіб, щодо яких розпочато процедуру припинення
 
 💰 Примерная стоимость: $0.001-$0.003 USD
-Пошук за назвою/ЄДРПОУ, типом суб'єкта, підписантом або причиною припинення. 148K записів.`,
+Пошук за назвою/ЄДРПОУ, типом суб'єкта, підписантом або причиною припинення. 148K записів.
+Назва і ЄДРПОУ беруться з ЄДР (юрособи та громадські формування) за номером запису.`,
         inputSchema: {
           type: 'object',
           properties: {
-            query: { type: 'string', description: 'Назва або ЄДРПОУ суб\'єкта (пошук по entity_record)' },
-            entity_type: { type: 'string', description: 'Тип суб\'єкта' },
+            query: { type: 'string', description: 'Частина назви суб\'єкта або код ЄДРПОУ (лише цифри)' },
+            entity_type: { type: 'string', description: 'Тип суб\'єкта: UO (юрособа) або FSU (громадське формування)' },
             signer_name: { type: 'string', description: 'Ім\'я підписанта' },
             reason: { type: 'string', description: 'Причина припинення' },
             limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
