@@ -98,6 +98,100 @@ export function buildPartyRoleRegex(partyName: string, role: Exclude<PartyRole, 
     : `за[[:space:]]+позов[а-яіїєґ]*[[:space:]]+${anchoredName}`;
 }
 
+// Procedural-role nouns that introduce a party by name ("відповідач: АТ «X»", "кредитор — ПАТ
+// X", "апеляційну скаргу АТ «X»", "за заявою ТОВ «X»", "представник АТ «X»", "за позовом
+// Акціонерного товариства «X»" — a spelled-out form the claim-clause slot does not know). Stems with free endings: the 'simple'
+// config / POSIX regex have no Ukrainian stemmer. Constant ERE (no user input).
+const PARTY_ROLE_NOUN_GROUP =
+  '(?:позивач[а-яіїєґ]*|відповідач[а-яіїєґ]*|заявник[а-яіїєґ]*|стягувач[а-яіїєґ]*|боржник[а-яіїєґ]*' +
+  '|кредитор[а-яіїєґ]*|апелянт[а-яіїєґ]*|скаржник[а-яіїєґ]*|скарг[а-яіїєґ]*|заяв(?:ою|а|и|у)' +
+  '|представник[а-яіїєґ]*|позов[а-яіїєґ]*' +
+  '|трет[а-яіїєґ]*[[:space:]]+особ[а-яіїєґ]*)';
+
+// Legal forms for the role-noun branch: the claim-clause set plus the spelled-out
+// "акціонерне товариство" that a party list uses ("відповідач: Акціонерне товариство «X»").
+const PARTY_LEGAL_FORM_GROUP =
+  `(?:${LEGAL_FORM_GROUP}|акціонерн[а-яіїєґ]*[[:space:]]+товариств[а-яіїєґ]*)`;
+
+/**
+ * POSIX-ERE pattern for `full_text ~* $param` that matches the party in ANY procedural role
+ * (LEXAI-2124) — used by countByParty when no party_role is given.
+ *
+ * A bare name match is not a party match: a bank appears in tens of thousands of decisions
+ * only as a payee's account holder ("на користь КП «Луцьктепло», р/р … МФО 322313 АТ
+ * «Укрексімбанк»", "кошти перерахувати на рахунок … в АТ «Укрексімбанк»"), in evidence lists
+ * ("журнал банківських виписок АТ «Укрексімбанк»") or in quoted precedent. On a 30-decision
+ * sample of Укрексімбанк matches since 2025 only 2 had the bank as a party. So the name must
+ * stand in a party slot:
+ *   - the claim-clause plaintiff or defendant slot (buildPartyRoleRegex), or
+ *   - directly after a role noun, separated only by ":"/dash/whitespace, an optional legal
+ *     form and an optional opening quote — or by a quote-, digit- and punctuation-free
+ *     descriptive name ending in "(" ("кредитор: Публічне акціонерне товариство Державний
+ *     експортно-імпортний банк України (АТ Укрексімбанк)").
+ * Nothing but a legal form may sit between the role noun and the name, which is what keeps
+ * "рахунок боржника в АТ «X»" and "на користь стягувача КП «Y», р/р … в АТ «X»" out. The name
+ * must end at a quote, bracket or punctuation, so a longer company name that merely starts
+ * with it is not counted.
+ */
+// Max characters between "позов…" and "до <defendant>" (the plaintiff span) in the any-role
+// pattern. PARTY_WINDOW_BEFORE must exceed it plus the longest legal form, so the windowed
+// recheck sees everything the pattern can reach back to.
+const PARTY_CLAIM_SPAN = 250;
+
+/**
+ * Characters of context kept on each side of every occurrence of the name's split token by
+ * the windowed any-role recheck (see partyAnyRoleRecheckSql). Before: the role noun / claim
+ * clause, the legal form and the leading words of a multi-word name. After: the rest of the
+ * name and its closing quote or punctuation.
+ */
+export const PARTY_WINDOW_BEFORE = 400;
+export const PARTY_WINDOW_AFTER = 160;
+
+/**
+ * The token the windowed recheck splits full_text on: the longest word of the name,
+ * lower-cased (the text is lower-cased too). Splitting on a single word, not the whole name,
+ * keeps multi-word names that the decision spells with odd whitespace (nbsp, double space).
+ */
+export function partySplitToken(partyName: string): string {
+  const words = partyName.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return words.reduce((best, w) => (w.length > best.length ? w : best), '');
+}
+
+/**
+ * SQL predicate: some occurrence of the split token sits in a window of `alias`.full_text that
+ * matches the any-role pattern. Equivalent to `full_text ~* pattern` (the pattern cannot reach
+ * further than the window either side of the name), but the regex — which has no literal
+ * prefix to anchor on and costs ~9 ms over a 15 KB decision — runs only over a few hundred
+ * characters around each mention: 15,748 Укрексімбанк candidates took 7.5 s instead of 143 s
+ * on prod. `tokenParam` / `regexParam` are placeholders such as '$4'.
+ */
+export function partyAnyRoleRecheckSql(alias: string, tokenParam: string, regexParam: string): string {
+  return `EXISTS (
+            SELECT 1 FROM (
+              SELECT u.p, lead(u.p) OVER (ORDER BY u.o) AS nx
+              FROM unnest(string_to_array(lower(${alias}.full_text), ${tokenParam})) WITH ORDINALITY u(p, o)
+            ) w
+            WHERE w.nx IS NOT NULL
+              AND right(w.p, ${PARTY_WINDOW_BEFORE}) || ${tokenParam} || left(w.nx, ${PARTY_WINDOW_AFTER}) ~* ${regexParam}
+          )`;
+}
+
+export function buildPartyAnyRoleRegex(partyName: string): string {
+  const name = partyName
+    .trim()
+    .replace(/[.\\*+?()[\]{}|^$]/g, '\\$&')
+    .replace(/\s+/g, '[[:space:]]+');
+  const roleNoun =
+    `${PARTY_ROLE_NOUN_GROUP}[[:space:]]*[:–—-]?[[:space:]]*` +
+    `(?:[^.;:0-9/«»"“”()]{0,120}\\([[:space:]]*)?` +
+    `(?:${PARTY_LEGAL_FORM_GROUP}[[:space:]]*)?[«"”“]?[[:space:]]*${name}[[:space:]]*[»"”“),;.]`;
+  // A bare "до X" is not a defendant slot without the claim it belongs to: "запити до АТ «X»",
+  // "передані на зберігання до АТ «X»", "направлено до АТ «X»" all read as one. So here the
+  // "до/проти" slot must follow "позов…" within the same clause (no ";").
+  const defendantSlot = `позов[а-яіїєґ]*[^;]{0,${PARTY_CLAIM_SPAN}}[[:space:]]${buildPartyRoleRegex(partyName, 'defendant')}`;
+  return `(?:${buildPartyRoleRegex(partyName, 'plaintiff')}|${defendantSlot}|${roleNoun})`;
+}
+
 export interface EdsrFtsResult {
   doc_id: number;
   headline: string | null;
@@ -1329,9 +1423,17 @@ export class EdsrFtsService {
       params.push(buildPartyRoleRegex(partyName, partyRole));
       p++;
     }
+    // LEXAI-2124: with no role, the name must still stand in SOME party slot. A bare name
+    // match counted every decision that cites the party's bank details — Укрексімбанк since
+    // 2025 came back as 12,558 cases, ~93% of them utility-debt orders paying into an
+    // account "в АТ «Укрексімбанк»". Windowed so the regex reads only the text around each
+    // mention (see partyAnyRoleRecheckSql).
+    // (Its params are appended after the period/justice_kind ones, below.)
+    const splitToken = partySplitToken(partyName);
+    const anyRole = (!partyRole || partyRole === 'any') && splitToken.length > 0;
     const carry = [
       ...(recheck.some(r => r.startsWith('j.tsv')) ? ['f.tsv'] : []),
-      ...(partyRole && partyRole !== 'any' ? ['f.full_text'] : []),
+      ...((partyRole && partyRole !== 'any') || anyRole ? ['f.full_text'] : []),
     ];
     const carryOut = carry.map(c => c.replace(/^f\./, 'm.'));
 
@@ -1348,6 +1450,11 @@ export class EdsrFtsService {
       params.push(filters.date_to); p++;
     }
     if (filters.justice_kind) { docConditions.push(`d.justice_kind = $${p}`); params.push(filters.justice_kind); p++; }
+    if (anyRole) {
+      recheck.push(partyAnyRoleRecheckSql('j', `$${p}`, `$${p + 1}`));
+      params.push(splitToken, buildPartyAnyRoleRegex(partyName));
+      p += 2;
+    }
 
     const cols = 'd.doc_id, d.court_code, d.cause_num, d.justice_kind, d.adjudication_date';
     const cap = PARTY_COUNT_CAND_CAP;
@@ -1400,6 +1507,7 @@ export class EdsrFtsService {
           (SELECT coalesce(json_agg(s), '[]'::json) FROM (
              SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM cand
              ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
+      logger.debug('[EdsrFtsService] countByParty SQL', { sql, params });
       const res = await this.queryWithTimeout(dbPool, sql, params, PARTY_FTS_COUNT_TIMEOUT_MS);
       const row = res.rows[0] ?? {};
 

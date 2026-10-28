@@ -6,7 +6,11 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { EdsrFtsService, buildPartyRoleRegex, buildYearLegs, yearLegPredicate, kyivDayBoundsSql, partyNameTokenCount } from '../edrsr-fts-service';
+import {
+  EdsrFtsService, buildPartyRoleRegex, buildPartyAnyRoleRegex, partySplitToken, partyAnyRoleRecheckSql,
+  PARTY_WINDOW_BEFORE, PARTY_WINDOW_AFTER,
+  buildYearLegs, yearLegPredicate, kyivDayBoundsSql, partyNameTokenCount,
+} from '../edrsr-fts-service';
 
 const findRegexParam = (params: any[]): string | undefined =>
   params.find((p) => typeof p === 'string' && (p.includes('(?:до|проти)') || p.includes('за[[:space:]]+позов')));
@@ -257,6 +261,79 @@ describe('buildPartyRoleRegex', () => {
   });
 });
 
+// LEXAI-2124. The patterns run in PostgreSQL ARE (`~*`); for these tests they are translated
+// to an equivalent JS RegExp (POSIX [[:space:]] → \s, case-insensitive). The snippets are
+// real Укрексімбанк contexts from prod EDRSR decisions (2025).
+describe('buildPartyAnyRoleRegex (LEXAI-2124)', () => {
+  const toJs = (ere: string) => new RegExp(ere.replace(/\[\[:space:\]\]/g, '\\s'), 'iu');
+  const rx = toJs(buildPartyAnyRoleRegex('Укрексімбанк'));
+
+  it.each([
+    // payee bank requisites in a utility-debt court order
+    'на користь Міського комунального підприємства «Чернівцітеплокомуненерго», р/р НОМЕР_2 в АТ «Укрексімбанк» м. Чернівці, МФО 322313, код 34519280',
+    'на користь стягувача Державного комунального підприємства «Луцьктепло», яке знаходиться за адресою: 43021, місто Луцьк, IBAN НОМЕР_2 МФО 322313 АТ «Укрексімбанк», заборгованість',
+    'на користь стягувача комунального підприємства «Луцькводоканал», що знаходиться за адресою: м. Луцьк, вул. Дубнівська, 26, р/р № НОМЕР_2 в АТ «Укрексімбанк», МФО 322313',
+    'Стягнути в солідарному порядку з відповідачів ОСОБА_1 та ОСОБА_2 на користь МКП «Чернівцітеплокомуненерго» заборгованість в сумі 4 998,72 гривень, на р/р НОМЕР_2 в АТ «Укрексімбанк»',
+    'Кошти перерахувати на розрахунковий рахунок НОМЕР_2 в АТ «Укрексімбанк», Код ЄДРПОУ 03344065.',
+    // enforcement: the debtor's account in the bank, banks listed for arrest
+    'арешт коштів боржника в АТ «Укрексімбанк»',
+    'АТ Ощадбанк, МФО 300465; АТ СЕНС БАНК, МФО 300346; АТ Укрексімбанк, МФО 322313;',
+    // evidence / custody / requests — "до" without a claim
+    'журнал банківських виписок АТ «Укрексімбанк» за листопад 2021 рік на 93 арк.',
+    'які передані на зберігання до АТ «Укрексімбанк» (58005, м. Чернівці',
+    'запити до банківських установ: - АТ «ПУМБ»; - запити до АТ «Укрексімбанк» з метою встановлення',
+    'направлено до АТ "Укрексімбанк"; № 9/2024/35158255 від 28.02.2024',
+  ])('does not count a non-party mention: %s', (text) => {
+    expect(rx.test(text)).toBe(false);
+  });
+
+  it.each([
+    'за позовом Акціонерного товариства «Укрексімбанк» до ДП «Чайка» про стягнення',
+    'зустрічний позов ОСОБА_1 до АТ "Укрексімбанк" про витребування майна',
+    'за зустрічним позовом ТОВ Аграрний дім Геліос до АТ «Укрексімбанк», за участі третіх осіб',
+    'третя особа: Акціонерне товариство «Укрексімбанк», про стягнення боргу',
+    'на стороні відповідача АТ Укрексімбанк, позовні вимоги задоволено',
+    'кредитор: Публічне акціонерне товариство Державний експортно-імпортний банк України (АТ Укрексімбанк) (вул. Антоновича, 127',
+    'апеляційну скаргу АТ «Укрексімбанк» залишено без задоволення',
+    'заява АТ «Укрексімбанк» про видачу дубліката виконавчого листа',
+    'представник АТ "Укрексімбанк" заперечував проти відкладення',
+    'вимоги, забезпечені заставою майна боржника - кредитори - АТ "Укрексімбанк", ТОВ "Немишвіль-ГВ"',
+  ])('counts a party mention: %s', (text) => {
+    expect(rx.test(text)).toBe(true);
+  });
+
+  it('does not count a longer company name that merely starts with the party name', () => {
+    expect(toJs(buildPartyAnyRoleRegex('Нова Пошта')).test('відповідач: ТОВ «Нова Пошта Інтернешнл»')).toBe(false);
+    expect(toJs(buildPartyAnyRoleRegex('Нова Пошта')).test('відповідач: ТОВ «Нова Пошта»')).toBe(true);
+  });
+
+  it('escapes regex metacharacters in user-supplied names', () => {
+    const ere = buildPartyAnyRoleRegex('А.Б (В)');
+    expect(ere).toContain('А\\.Б[[:space:]]+\\(В\\)');
+  });
+});
+
+describe('partySplitToken / partyAnyRoleRecheckSql (LEXAI-2124)', () => {
+  it('splits on the longest word, lower-cased', () => {
+    expect(partySplitToken('Укрексімбанк')).toBe('укрексімбанк');
+    expect(partySplitToken('Нова Пошта')).toBe('пошта');
+    expect(partySplitToken('«Фінансова компанія Фангарант груп»')).toBe('фінансова'); // first of equals
+  });
+
+  it('runs the pattern over windows around each mention, not over the whole text', () => {
+    const sql = partyAnyRoleRecheckSql('j', '$4', '$5');
+    expect(sql).toContain('string_to_array(lower(j.full_text), $4)');
+    expect(sql).toContain(`right(w.p, ${PARTY_WINDOW_BEFORE}) || $4 || left(w.nx, ${PARTY_WINDOW_AFTER}) ~* $5`);
+    expect(sql).not.toMatch(/j\.full_text ~\*/);
+  });
+
+  it('windows reach further than the pattern can (equivalence with a whole-text match)', () => {
+    // claim span (250) + "позов…" + legal form must fit before the split token.
+    expect(PARTY_WINDOW_BEFORE).toBeGreaterThanOrEqual(400);
+    expect(PARTY_WINDOW_AFTER).toBeGreaterThan(0);
+  });
+});
+
 describe('EdsrFtsService.filterDocIdsByConstraints', () => {
   it('adds the claim-clause role regex post-filter on the fused candidates', async () => {
     const svc = new EdsrFtsService();
@@ -449,7 +526,8 @@ describe('EdsrFtsService.countByParty', () => {
     expect(leg).toContain("d.adjudication_date >= ($2::date)::timestamp AT TIME ZONE 'Europe/Kyiv'");
     expect(leg).toContain("d.adjudication_date < ($3::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'");
     expect(leg).not.toMatch(/LIMIT/);
-    expect(params).toEqual(['Приватбанк', '2025-01-01', '2025-03-31']);
+    // Date bounds keep $2/$3; the any-role recheck (LEXAI-2124) appends split token + pattern.
+    expect(params).toEqual(['Приватбанк', '2025-01-01', '2025-03-31', 'приватбанк', buildPartyAnyRoleRegex('Приватбанк')]);
     expect(res.total).toBe(50553);
     expect(res.capped).toBeUndefined();
   });
@@ -473,6 +551,27 @@ describe('EdsrFtsService.countByParty', () => {
     const sql = ftsCall(db).sql;
     expect(sql).not.toContain('phraseto_tsquery');
     expect(sql).not.toContain('f.tsv,'); // tsv is not carried out of the scan, so never detoasted
+  });
+
+  it('anchors a role-less count to a party slot, after the date filter (LEXAI-2124)', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCountDb({ cum: [446, 1075], distinct_cases: 306, by_court: [] });
+    await svc.countByParty('Укрексімбанк', undefined, db, { date_from: '2025-01-01' });
+    const { sql, params } = ftsCall(db);
+    // full_text is carried out of the fenced scan and rechecked on the date-filtered rows only.
+    expect(sql).toContain('SELECT f.doc_id, f.full_text');
+    expect(sql).toMatch(/\) j\s+WHERE EXISTS \(/);
+    expect(sql).toContain('string_to_array(lower(j.full_text), $3)');
+    expect(params).toEqual(['Укрексімбанк', '2025-01-01', 'укрексімбанк', buildPartyAnyRoleRegex('Укрексімбанк')]);
+  });
+
+  it('keeps the claim-clause regex (not the any-role one) for an explicit role', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCountDb({ cum: [1], distinct_cases: 1, by_court: [] });
+    await svc.countByParty('Укрексімбанк', 'plaintiff', db, { date_from: '2025-01-01' });
+    const { sql, params } = ftsCall(db);
+    expect(sql).not.toContain('string_to_array');
+    expect(params).not.toContain(buildPartyAnyRoleRegex('Укрексімбанк'));
   });
 
   it('runs the role regex after the date filter too', async () => {
