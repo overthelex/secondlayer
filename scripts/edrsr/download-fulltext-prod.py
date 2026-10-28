@@ -359,6 +359,9 @@ async def download_one(session, doc_id, url, stats, semaphore, source_ip):
                                 await f.write(data)
                             await stats.inc('downloaded', source_ip)
                             return
+                    elif resp.status == 404:
+                        # Removed from the registry: retrying only burns a worker for ~12s.
+                        break
                     elif resp.status == 429:
                         await asyncio.sleep(5 * (attempt + 1))
                         continue
