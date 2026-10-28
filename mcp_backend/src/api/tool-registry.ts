@@ -84,11 +84,30 @@ export class ToolRegistry {
   private remoteToolDefs: ToolDefinition[] = [];
   private remoteToolDefsLoaded = false;
   private remoteClient: RemoteServiceClient;
+  /** Post-processors for proxied tool results, keyed by client tool name. */
+  private remoteResultTransforms: Map<string, (result: any) => Promise<any>> = new Map();
 
   constructor(remoteClient?: RemoteServiceClient) {
     this.routes = new Map();
     this.remoteClient = remoteClient || new RemoteServiceClient();
     this.initializeRoutes();
+  }
+
+  // ========================= Remote Result Transforms =========================
+
+  /**
+   * Register a post-processor for a proxied (remote) tool's result. Used when the
+   * gateway owns data the remote service cannot reach (e.g. openreyestr_get_statistics
+   * counting public organizations from the backend DB, LEXAI-2121).
+   */
+  registerRemoteResultTransform(toolName: string, transform: (result: any) => Promise<any>): void {
+    this.remoteResultTransforms.set(toolName, transform);
+  }
+
+  /** Apply the registered transform for a proxied tool, or return the result unchanged. */
+  async transformRemoteResult(toolName: string, result: any): Promise<any> {
+    const transform = this.remoteResultTransforms.get(toolName);
+    return transform ? transform(result) : result;
   }
 
   // ========================= Handler Registration =========================
@@ -164,7 +183,7 @@ export class ToolRegistry {
       service: route.service,
     });
 
-    return responseData?.result || responseData;
+    return this.transformRemoteResult(route.toolName, responseData?.result || responseData);
   }
 
   /**
