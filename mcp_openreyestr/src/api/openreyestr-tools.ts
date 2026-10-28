@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { z } from 'zod';
+import { isSyntheticKey } from '../services/synthetic-keys';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -160,6 +161,15 @@ function cleanNais(v: unknown): string | null {
   const s = String(v).replace(/^[\s,]+|[\s,]+$/g, '');
   if (!s || s === '.' || s === '-' || /^\(?не визначено\)?$/i.test(s)) return null;
   return s;
+}
+
+/**
+ * Debtor row → output. Rows imported before LEXAI-2120 carry the importer's
+ * "gen_<n>" surrogate in debtor_edrpou for individuals without a code; that is
+ * not a registry code, so it is reported as null.
+ */
+export function formatDebtorRow(row: any): Record<string, unknown> {
+  return { ...row, debtor_edrpou: isSyntheticKey(row.debtor_edrpou) ? null : row.debtor_edrpou ?? null };
 }
 
 /**
@@ -804,7 +814,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || edrpou || '', message: 'Боржників не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatDebtorRow);
   }
 
   /**

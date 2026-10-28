@@ -13,6 +13,7 @@ import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
 import iconv from 'iconv-lite';
 import { RegistryConfig } from '../config/registries';
+import { fillMissingUniqueKeys } from './synthetic-keys';
 
 const BATCH_SIZE_NORMAL = 1000;
 const BATCH_SIZE_HUGE = 5000;
@@ -327,13 +328,8 @@ function mapCsvRecord(
     }
   }
 
-  // Ensure unique key columns have values
-  const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
-  for (const key of uniqueKeys) {
-    if (!mapped[key] && mapped[key] !== 0) {
-      mapped[key] = `gen_${fallbackIndex}`;
-    }
-  }
+  // Ensure unique key columns have values (except nullableKeyColumns)
+  fillMissingUniqueKeys(config, mapped, fallbackIndex);
 
   return mapped;
 }
