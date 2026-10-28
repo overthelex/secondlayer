@@ -665,9 +665,9 @@ def main():
         source_ips, _dead = discover_source_ips(args.ips, args.allow_primary, args.iface)
         if not source_ips:
             print(
-                "ERROR: no usable egress IP. Secondary private IPs need an EIP each "
-                "(aws ec2 allocate-address + associate-address, then `ip addr add <priv>/20 dev ens5`). "
-                "Re-run with --allow-primary to use the prod primary IP instead.",
+                f"ERROR: no usable egress IP on {args.iface}. On AWS, secondary private IPs need an EIP each "
+                f"(aws ec2 allocate-address + associate-address, then `ip addr add <priv>/20 dev {args.iface}`). "
+                "On a single-uplink host (cthulhu) pass --allow-primary.",
                 file=sys.stderr, flush=True,
             )
             return 1

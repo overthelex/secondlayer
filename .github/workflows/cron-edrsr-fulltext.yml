@@ -60,9 +60,14 @@ jobs:
           mkdir -p "$RTF_ROOT/daily" "$RTF_ROOT/sweep"
 
       - name: Harvest (recent window)
+        env:
+          # Through env, never ${{ }} inside the script: this runs on a self-hosted box.
+          DAYS_BACK: ${{ inputs.days_back || '10' }}
         run: |
-          DAYS="${{ inputs.days_back || '10' }}"
-          FROM=$(date -u -d "-${DAYS} days" +%Y-%m-%d)
+          case "$DAYS_BACK" in ''|*[!0-9]*) echo "::error::days_back must be a number, got '$DAYS_BACK'"; exit 1;; esac
+          # +1: adjudication_date is Kyiv midnight, i.e. 21:00/22:00 UTC the day
+          # before, so a window starting exactly on day D would drop day D.
+          FROM=$(date -u -d "-$((DAYS_BACK + 1)) days" +%Y-%m-%d)
           TO=$(date -u -d "+1 day" +%Y-%m-%d)
           echo "Harvesting $FROM .. $TO (exclusive)"
           # The egress address is discovered on bond0 and probed rather than
@@ -83,7 +88,7 @@ jobs:
           # what is missing, and 404s (the registry publishes the URL before the file)
           # fail fast instead of being retried.
           if [ "$(date -u +%u)" != "1" ]; then echo "not Monday — skipping the sweep"; exit 0; fi
-          FROM=$(date -u -d "-1 year" +%Y-%m-%d)
+          FROM=$(date -u -d "-1 year -1 day" +%Y-%m-%d)
           TO=$(date -u -d "+1 day" +%Y-%m-%d)
           echo "Sweeping $FROM .. $TO for documents whose URL arrived late"
           python3 scripts/edrsr/download-fulltext-prod.py \
@@ -103,8 +108,8 @@ jobs:
                    count(*) FILTER (WHERE f.doc_id IS NULL AND d.doc_url IS NOT NULL) AS missing_with_url
             FROM edrsr_documents d
             LEFT JOIN edrsr_fulltext f ON f.doc_id = d.doc_id
-            WHERE d.adjudication_date >= current_date - interval '10 days'
-              AND d.adjudication_date < current_date + interval '1 day'
+            WHERE d.adjudication_date >= ((now() AT TIME ZONE 'Europe/Kyiv')::date - 10)::timestamp AT TIME ZONE 'Europe/Kyiv'
+              AND d.adjudication_date <  ((now() AT TIME ZONE 'Europe/Kyiv')::date + 1)::timestamp  AT TIME ZONE 'Europe/Kyiv'
             GROUP BY 1 ORDER BY 1;"
 
       - name: Prune harvested RTFs older than 3 days
