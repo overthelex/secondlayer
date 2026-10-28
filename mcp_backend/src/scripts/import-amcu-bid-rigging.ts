@@ -22,6 +22,7 @@ import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 import ExcelJS from 'exceljs';
+import { parseBidRiggingDate, sourceFileDateOf } from './amcu-dates.js';
 
 const DEFAULT_DIR = '/data/opendata/amcu/zvedeni-vidomosti-torhy';
 const BATCH_SIZE = 500;
@@ -48,29 +49,10 @@ function cellText(v: any): string | null {
   return String(v).trim() || null;
 }
 
-/**
- * Return YYYY-MM-DD only if (y, m, d) is a real calendar date, else null. This guards
- * the DB insert: some source files carry malformed dates (e.g. "2020-29-05") that would
- * otherwise fail the whole batch and drop an entire file.
- */
-function isoIfValid(y: number, m: number, d: number): string | null {
-  if (y < 1900 || y > 2100) return null;
-  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
-  const dim = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (m < 1 || m > 12 || d < 1 || d > dim[m - 1]) return null;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${y}-${pad(m)}-${pad(d)}`;
-}
-
-function toDate(v: any): string | null {
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  const s = cellText(v);
-  if (!s) return null;
-  let m = s.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/); // d.m.yyyy
-  if (m) return isoIfValid(+m[3], +m[2], +m[1]);
-  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); // yyyy-m-d (some files store yyyy-d-m)
-  if (m) return isoIfValid(+m[1], +m[2], +m[3]) ?? isoIfValid(+m[1], +m[3], +m[2]);
-  return null;
+/** dateOfDecision → YYYY-MM-DD; a date after the list's publication date is read day/month-swapped (LEXAI-2118). */
+function toDate(v: any, notAfter: string | null): string | null {
+  if (v instanceof Date) return parseBidRiggingDate(v.toISOString().slice(0, 10), notAfter);
+  return parseBidRiggingDate(cellText(v), notAfter);
 }
 
 /** Normalise a header key so PascalCase/spaced/lowercase variants collapse to one key. */
@@ -145,6 +127,7 @@ async function insertBatch(rows: any[]): Promise<number> {
 
 async function importFile(file: string): Promise<number> {
   const base = path.basename(file);
+  const publishedOn = sourceFileDateOf(base);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(file);
   const ws = wb.worksheets[0];
@@ -186,7 +169,7 @@ async function importFile(file: string): Promise<number> {
     // Only treat it as a data row when a plausible ЄДРПОУ or date is present.
     if (entityName == null && edrpouRaw == null && dateRaw == null) {
       const posEdrpou = sanitizeEdrpou(rowData['col8']);
-      const posDate = toDate(rowData['col5']);
+      const posDate = toDate(rowData['col5'], publishedOn);
       if (posEdrpou || posDate) {
         entityName = (rowData['col7'] as string | null) ?? null;
         edrpouRaw = rowData['col8'];
@@ -197,7 +180,7 @@ async function importFile(file: string): Promise<number> {
     batch.push({
       source_file: base,
       row_num: rn,
-      decision_date: toDate(dateRaw),
+      decision_date: toDate(dateRaw, publishedOn),
       entity_name: (typeof entityName === 'string' && entityName.trim()) ? entityName.trim() : null,
       entity_edrpou: sanitizeEdrpou(edrpouRaw),
       row_data: rowData,
