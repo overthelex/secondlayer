@@ -1,48 +1,27 @@
 ##############################################################################
-# EDRSR Daily Fulltext Harvest: od.reyestr.court.gov.ua → prod PostgreSQL
-# - Companion to cron-edrsr-sync.yml, which imports METADATA only. Until this
-#   workflow existed the texts were fetched by hand: the last manual run was
-#   2026-07-15, so by 2026-08-13 the corpus had metadata for 680K documents it
-#   had no text for — July at 32% coverage, August at 0%, while every earlier
-#   month sat at 97-99%.
-# - Runs on the prod self-hosted runner, 02:30 UTC — after the 01:00 UTC
-#   metadata sync, so the documents it harvests are already in edrsr_documents.
+# EDRSR Daily Fulltext Harvest: od.reyestr.court.gov.ua → legal.org.ua PostgreSQL
+# - Companion to cron-edrsr-sync.yml, which imports METADATA only. Without this
+#   job the texts drift: after the AWS box went away (03.09.2026) nothing fetched
+#   them, and by 28.10 September and October sat at 0% text while every earlier
+#   month was at 97-99%.
+# - Runs on the cthulhu runner, 02:30 UTC — after the 01:00 UTC metadata sync,
+#   so the documents it harvests are already in edrsr_documents.
 # - Trailing window, not "yesterday": a decision's metadata and its text can
 #   both land days late, and the harvester only fetches what is missing, so an
-#   overlapping window is cheap and closes gaps the previous runs left.
+#   overlapping window is cheap and closes gaps the previous runs left. It also
+#   absorbs the UTC/Kyiv boundary: adjudication_date is Kyiv midnight, so a
+#   window that starts exactly on a day misses that day's documents.
+# - One egress address (cthulhu's uplink) at 2 threads: measured 28.10 at
+#   70-100 docs/s with zero overload pages over 1.59M documents. Above the
+#   registry's limit it does not fail — it answers HTTP 200 with an overload
+#   page, and the script aborts when that passes 10%.
 ##############################################################################
-#
-# ⚠ OFF SCHEDULE SINCE 13.09.2026, AND IT CANNOT SIMPLY BE RELABELLED.
-#
-# Everything below was written for the AWS box, which was decommissioned on
-# 03.09.2026: the egress step reads EC2 IMDS at 169.254.169.254 and adds
-# addresses to `ens5`, the harvester's throughput comes from fourteen secondary
-# private IPs each with its own EIP, the RTF scratch directories live under
-# /home/ubuntu, and the coverage report queries secondlayer-postgres-prod for
-# secondlayer_prod. None of that exists on cthulhu, where the corpus now lives.
-#
-# It kept its `prod-deploy` label and its schedule anyway, so every night it
-# queued for a runner that no longer exists and was cancelled hours later. Ten
-# days of that looked exactly like ten days of successful harvesting.
-#
-# Porting it is real work, not a label change (LEXAI-2048):
-#   - drop the IMDS/ens5 egress step; cthulhu has one uplink, so the pool
-#     collapses to a single source address
-#   - make CONTAINER/PGDB in scripts/edrsr/download-fulltext-prod.py
-#     environment-driven instead of hardcoded to the prod names
-#   - move the RTF scratch dirs off /home/ubuntu
-#   - re-measure the safe rate from one IP. The 2-threads-per-IP ceiling was
-#     measured across fourteen addresses; od.reyestr.court.gov.ua answers 200
-#     from cthulhu (checked 13.09), but the per-IP limit has not been retested,
-#     and exceeding it does not fail — it returns an overload page with HTTP 200
-#     that lands in the corpus as the decision text.
-#
-# Until then the workflow stays dispatch-only and fails immediately, so its
-# state is legible instead of looking like a harvest that runs every night.
-##############################################################################
-name: 'Cron: EDRSR Fulltext Harvest (NOT PORTED — see header)'
+name: 'Cron: EDRSR Fulltext Harvest'
 
 on:
+  schedule:
+    # 02:30 UTC = 04:30/05:30 Kyiv, after cron-edrsr-sync.yml (01:00 UTC)
+    - cron: '30 2 * * *'
   workflow_dispatch:
     inputs:
       days_back:
@@ -58,45 +37,27 @@ concurrency:
   group: edrsr-fulltext
   cancel-in-progress: false
 
+env:
+  PG_CONTAINER: secondlayer-postgres-local
+  PG_DB: secondlayer_local
+  RTF_ROOT: /mnt/bulk_storage/edrsr-rtf
+
 jobs:
   harvest:
     name: Harvest missing fulltexts
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, cthulhu]
     timeout-minutes: 300
     steps:
-      - name: Refuse to run until the harvester is ported off AWS
-        run: |
-          echo "::error::EDRSR fulltext harvest is not ported to cthulhu — see the header of this file and LEXAI-2048."
-          echo "The steps below still assume the AWS box: EC2 IMDS egress on ens5, fourteen EIPs,"
-          echo "/home/ubuntu scratch dirs and the secondlayer-postgres-prod / secondlayer_prod names."
-          exit 1
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure the egress IP is configured
+      - name: Check prerequisites
         run: |
-          # Secondary private IPs are added with `ip addr add`, which does not
-          # survive a reboot. Best-effort: re-add the ones the ENI already owns.
-          # If none can egress the harvester exits non-zero below — loudly, rather
-          # than reporting a successful run that fetched nothing.
-          TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
-            -H "X-aws-ec2-metadata-token-ttl-seconds: 120")
-          META="http://169.254.169.254/latest/meta-data"
-          MAC=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$META/network/interfaces/macs/" | head -1)
-          PRIMARY=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" "$META/local-ipv4")
-          # Only private IPs that actually have an EIP behind them are worth
-          # configuring — the rest have no route out and would just slow the probe.
-          for pub in $(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-              "$META/network/interfaces/macs/${MAC}public-ipv4s"); do
-            priv=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
-              "$META/network/interfaces/macs/${MAC}ipv4-associations/$pub")
-            [ -z "$priv" ] && continue
-            [ "$priv" = "$PRIMARY" ] && continue
-            ip -4 addr show dev ens5 | grep -q "inet $priv/" || sudo -n ip addr add "$priv/20" dev ens5 || true
-            echo "  egress $priv -> $pub"
-          done
-          ip -4 -o addr show dev ens5 | awk '{print "  configured:", $4}'
+          # aiohttp/aiofiles live in the runner user's ~/.local; fail here, by name,
+          # rather than with an ImportError halfway through the first batch.
+          python3 -c "import aiohttp, aiofiles"
+          docker exec "$PG_CONTAINER" pg_isready -U secondlayer -d "$PG_DB"
+          mkdir -p "$RTF_ROOT/daily" "$RTF_ROOT/sweep"
 
       - name: Harvest (recent window)
         run: |
@@ -104,13 +65,13 @@ jobs:
           FROM=$(date -u -d "-${DAYS} days" +%Y-%m-%d)
           TO=$(date -u -d "+1 day" +%Y-%m-%d)
           echo "Harvesting $FROM .. $TO (exclusive)"
-          # --threads 2 is not a default worth trusting: at 5 threads x 14 IPs (~1200
-          # docs/s) the registry answers HTTP 200 with an overload page instead of the
-          # decision, which is how 3.8M rows came to hold that page. 2 threads measured
-          # 287-650 docs/s with zero overload responses across 1.3M documents.
+          # The egress address is discovered on bond0 and probed rather than
+          # hardcoded: DHCP or a network move would otherwise leave a dead IP here.
           python3 scripts/edrsr/download-fulltext-prod.py \
-            --from "$FROM" --to "$TO" --threads 2 \
-            --rtf-dir "/home/ubuntu/edrsr-rtf-daily"
+            --from "$FROM" --to "$TO" --threads 2 --workers 8 \
+            --container "$PG_CONTAINER" --db "$PG_DB" \
+            --iface bond0 --allow-primary \
+            --rtf-dir "$RTF_ROOT/daily"
 
       - name: Sweep the late-URL tail (Mondays)
         if: github.event_name == 'schedule'
@@ -118,26 +79,28 @@ jobs:
           # data.gov.ua publishes a decision first WITHOUT a doc_url and adds the link in
           # a later re-publication, so a document whose link arrives more than `days_back`
           # after its adjudication date falls out of the daily window and is never
-          # harvested. Measured 2026-08-14: 7,411 such documents for 2023-2026 alone,
-          # every sampled one still served by the registry. A weekly pass over the last
-          # year closes that tail; it fetches only what is missing, so a quiet week costs
-          # one query.
+          # harvested. A weekly pass over the last year closes that tail; it fetches only
+          # what is missing, and 404s (the registry publishes the URL before the file)
+          # fail fast instead of being retried.
           if [ "$(date -u +%u)" != "1" ]; then echo "not Monday — skipping the sweep"; exit 0; fi
           FROM=$(date -u -d "-1 year" +%Y-%m-%d)
           TO=$(date -u -d "+1 day" +%Y-%m-%d)
           echo "Sweeping $FROM .. $TO for documents whose URL arrived late"
           python3 scripts/edrsr/download-fulltext-prod.py \
-            --from "$FROM" --to "$TO" --threads 2 \
-            --rtf-dir "/home/ubuntu/edrsr-rtf-sweep"
+            --from "$FROM" --to "$TO" --threads 2 --workers 8 \
+            --container "$PG_CONTAINER" --db "$PG_DB" \
+            --iface bond0 --allow-primary \
+            --rtf-dir "$RTF_ROOT/sweep"
 
       - name: Coverage report
         if: always()
         run: |
-          docker exec secondlayer-postgres-prod psql -U secondlayer -d secondlayer_prod -A -F'|' -c "
-            SELECT d.adjudication_date::date AS day,
+          docker exec "$PG_CONTAINER" psql -U secondlayer -d "$PG_DB" -A -F'|' -c "
+            SELECT (d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::date AS day,
                    count(*) AS docs,
                    count(f.doc_id) AS with_text,
-                   round(100.0 * count(f.doc_id) / count(*), 1) AS pct
+                   round(100.0 * count(f.doc_id) / count(*), 1) AS pct,
+                   count(*) FILTER (WHERE f.doc_id IS NULL AND d.doc_url IS NOT NULL) AS missing_with_url
             FROM edrsr_documents d
             LEFT JOIN edrsr_fulltext f ON f.doc_id = d.doc_id
             WHERE d.adjudication_date >= current_date - interval '10 days'
@@ -150,7 +113,7 @@ jobs:
           # The RTFs are a download scratch area — the text lives in Postgres
           # once imported. Keeping them lets a re-run skip re-downloading, but
           # they accumulate at ~30GB per million documents.
-          for d in /home/ubuntu/edrsr-rtf-daily /home/ubuntu/edrsr-rtf-sweep; do
+          for d in "$RTF_ROOT/daily" "$RTF_ROOT/sweep"; do
             find "$d" -type f -mtime +3 -delete 2>/dev/null || true
             du -sh "$d" 2>/dev/null || true
           done
