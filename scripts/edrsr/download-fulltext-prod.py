@@ -80,6 +80,9 @@ def discover_source_ips(explicit=None, allow_primary=False, iface=EGRESS_IFACE):
     return live, dead
 
 RTF_DIR = Path("/home/ubuntu/edrsr-rtf")  # overridden by --rtf-dir
+# Defaults are the old AWS prod box. Prod for legal.org.ua now runs on cthulhu, where
+# the names differ (secondlayer-postgres-local / secondlayer_local); --container and
+# --db override them rather than a second copy of this script drifting from the first.
 CONTAINER = "secondlayer-postgres-prod"
 PGUSER = "secondlayer"
 PGDB = "secondlayer_prod"
@@ -356,6 +359,9 @@ async def download_one(session, doc_id, url, stats, semaphore, source_ip):
                                 await f.write(data)
                             await stats.inc('downloaded', source_ip)
                             return
+                    elif resp.status == 404:
+                        # Removed from the registry: retrying only burns a worker for ~12s.
+                        break
                     elif resp.status == 429:
                         await asyncio.sleep(5 * (attempt + 1))
                         continue
@@ -611,7 +617,7 @@ def verify(date_from, date_to):
 
 
 def main():
-    global RTF_DIR
+    global RTF_DIR, CONTAINER, PGDB, PGUSER
 
     parser = argparse.ArgumentParser(description="ЄДРСР fulltext — PROD multi-IP downloader")
     parser.add_argument('--from', dest='date_from', required=True,
@@ -633,6 +639,11 @@ def main():
                              'that have no text at all')
     parser.add_argument('--allow-primary', action='store_true',
                         help=f"Permit the primary IP ({PRIMARY_IP}) in the pool — it carries prod's own traffic")
+    parser.add_argument('--container', default=CONTAINER, help=f'Postgres container (default {CONTAINER})')
+    parser.add_argument('--db', default=PGDB, help=f'Database name (default {PGDB})')
+    parser.add_argument('--pguser', default=PGUSER, help=f'Database user (default {PGUSER})')
+    parser.add_argument('--iface', default=EGRESS_IFACE,
+                        help=f'Interface whose addresses form the egress pool (default {EGRESS_IFACE})')
     args = parser.parse_args()
 
     for d in (args.date_from, args.date_to):
@@ -640,6 +651,8 @@ def main():
             parser.error(f"date must be YYYY-MM-DD, got: {d}")
     if args.date_from >= args.date_to:
         parser.error(f"--from ({args.date_from}) must be before --to ({args.date_to})")
+
+    CONTAINER, PGDB, PGUSER = args.container, args.db, args.pguser
 
     RTF_DIR = Path(args.rtf_dir) if args.rtf_dir else \
         Path(f"/home/ubuntu/edrsr-rtf-{args.date_from}_{args.date_to}")
@@ -649,12 +662,12 @@ def main():
     source_ips = []
     if not args.skip_download:
         print("[0/4] Probing egress pool...", flush=True)
-        source_ips, _dead = discover_source_ips(args.ips, args.allow_primary)
+        source_ips, _dead = discover_source_ips(args.ips, args.allow_primary, args.iface)
         if not source_ips:
             print(
-                "ERROR: no usable egress IP. Secondary private IPs need an EIP each "
-                "(aws ec2 allocate-address + associate-address, then `ip addr add <priv>/20 dev ens5`). "
-                "Re-run with --allow-primary to use the prod primary IP instead.",
+                f"ERROR: no usable egress IP on {args.iface}. On AWS, secondary private IPs need an EIP each "
+                f"(aws ec2 allocate-address + associate-address, then `ip addr add <priv>/20 dev {args.iface}`). "
+                "On a single-uplink host (cthulhu) pass --allow-primary.",
                 file=sys.stderr, flush=True,
             )
             return 1
