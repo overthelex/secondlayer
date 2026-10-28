@@ -1212,7 +1212,9 @@ services:
     command:
       - '-docker_only=true'
       - '-housekeeping_interval=30s'
-      - '-disable_metrics=cpu_topology,hugetlb,memory_numa,perf_event,referenced_memory,resctrl,sched,tcp,udp'
+      - '-store_container_labels=false'
+      # disk = periodic du over every container's overlay layers; nothing scrapes container_fs_*
+      - '-disable_metrics=cpu_topology,disk,hugetlb,memory_numa,perf_event,referenced_memory,resctrl,sched,tcp,udp'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -1226,7 +1228,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # 256M sat at memory.max ~150x/s with 56 containers -> reclaim + GC loop at ~100% CPU
+          memory: 1G
         reservations:
           memory: 64M
 
