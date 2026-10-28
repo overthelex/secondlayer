@@ -110,9 +110,9 @@ export class OpenDataTools extends BaseToolHandler {
         description: `Пошук дисциплінарних даних суддів з ВРП
 
 Об'єднаний пошук по 3 реєстрах:
-- Звільнені судді (59 записів)
-- Відсторонені судді (236 записів)
-- Повідомлення про втручання (443 записів)
+- Звільнені за істотний дисциплінарний проступок
+- Відсторонені від здійснення правосуддя
+- Повідомлення суддів про втручання (джерело: data.gov.ua, оновлюється щотижня)
 Пошук за ПІБ судді, назвою суду, типом запису.`,
         inputSchema: {
           type: 'object',
@@ -278,6 +278,8 @@ export class OpenDataTools extends BaseToolHandler {
     // number through vrp_decisions (idx_vrp_decisions_decision_num). That table starts in
     // 2023-11, so suspensions from 2024 resolve and the 2018–2020 dismissals do not —
     // those keep judge_name null rather than a guess.
+    // LEXAI-2117: the registers are now re-imported from data.gov.ua with judge_name
+    // (migration 231); this title fallback stays for rows that still lack it.
     const decisionJoin = (numExpr: string) => `LEFT JOIN LATERAL (
           SELECT vd.title FROM vrp_decisions vd
           WHERE vd.decision_num = ${numExpr}

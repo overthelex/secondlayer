@@ -11,6 +11,7 @@ import http from 'http';
 import { URL } from 'url';
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
+import { normalizeApostrophes } from './legislation-search-utils.js';
 
 // Default prod IPs (AWS ENIs)
 const DEFAULT_IPS = [
@@ -77,6 +78,39 @@ const taskProgress = new Map<number, {
   lastError: string | null;
   startTime: number;
 }>();
+
+/**
+ * Resolve a dotted path in a JSON record. A key that is not present verbatim is matched
+ * apostrophe-insensitively: Ukrainian open-data headers mix ' (U+0027), ’ (U+2019) and
+ * ʼ (U+02BC), e.g. ВРП's «Прізвище, ім’я, по батькові судді». An exact-key-only lookup
+ * silently yields null for such a column (LEXAI-2117). Exported for tests.
+ */
+export function getJsonPath(obj: any, path: string): any {
+  if (!path) return obj;
+  let v: any = obj;
+  for (const part of path.split('.')) {
+    if (v == null) return null;
+    if (typeof v === 'object' && !(part in v)) {
+      const want = normalizeApostrophes(part);
+      const alt = Object.keys(v).find(k => normalizeApostrophes(k) === want);
+      v = alt === undefined ? undefined : v[alt];
+    } else {
+      v = (v as any)[part];
+    }
+  }
+  return v;
+}
+
+/**
+ * Mapped columns whose source path resolves in none of the records — the signature of a
+ * renamed/misspelt header, which would otherwise load as an all-NULL column. Exported for tests.
+ */
+export function unresolvedMappingColumns(records: any[], mapping: Record<string, string>): string[] {
+  if (records.length === 0) return [];
+  return Object.entries(mapping)
+    .filter(([, path]) => !records.some(rec => getJsonPath(rec, path) !== undefined))
+    .map(([col]) => col);
+}
 
 export class ImportTaskService {
   constructor(private db: Database) {}
@@ -370,6 +404,23 @@ export class ImportTaskService {
     const mapping = config.mapping as Record<string, string> | undefined;
     const uniqueKey = (config.unique_key as string[] | undefined) || undefined;
 
+    const unresolved = mapping ? unresolvedMappingColumns(records, mapping) : [];
+    if (unresolved.length > 0) {
+      logger.warn(`[ImportTask ${taskId}] mapped columns absent from every record: ${unresolved.join(', ')}`);
+    }
+
+    // Snapshot registries without a stable natural key (row numbers are re-issued on every
+    // release) are reloaded whole: DELETE + INSERT in one transaction.
+    if (config.replace === true && mapping && source.target_table) {
+      if (records.length === 0) throw new Error('replace import: source returned 0 records, table left as is');
+      if (unresolved.length > 0) {
+        throw new Error(`replace import: source has no field for ${unresolved.join(', ')}, table left as is`);
+      }
+      const imported = await this.replaceJsonSnapshot(source.target_table, mapping, records);
+      if (mem) { mem.recordsImported = imported; mem.pagesDone = 1; }
+      return;
+    }
+
     if (!mapping || !uniqueKey?.length || !source.target_table) {
       const reason = 'upsert skipped: source_config.mapping / unique_key not configured';
       logger.warn(`[ImportTask ${taskId}] ${reason}`);
@@ -463,14 +514,39 @@ export class ImportTaskService {
     return { imported, failed };
   }
 
-  private getJsonPath(obj: any, path: string): any {
-    if (!path) return obj;
-    let v: any = obj;
-    for (const part of path.split('.')) {
-      if (v == null) return null;
-      v = (v as any)[part];
+  private async replaceJsonSnapshot(
+    table: string,
+    mapping: Record<string, string>,
+    records: any[],
+  ): Promise<number> {
+    const cols = Object.keys(mapping);
+    const paths = Object.values(mapping);
+    const client = await this.db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM ${table}`);
+      const batchSize = 500;
+      for (let i = 0; i < records.length; i += batchSize) {
+        const params: any[] = [];
+        const rowsSql = records.slice(i, i + batchSize).map(rec => {
+          const placeholders = cols.map((_, c) => `$${params.length + c + 1}`).join(',');
+          for (const p of paths) params.push(this.normalizeValue(getJsonPath(rec, p)));
+          return `(${placeholders})`;
+        });
+        await client.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES ${rowsSql.join(',')}`, params);
+      }
+      await client.query('COMMIT');
+      return records.length;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
-    return v;
+  }
+
+  private getJsonPath(obj: any, path: string): any {
+    return getJsonPath(obj, path);
   }
 
   private normalizeValue(v: any): any {

@@ -194,6 +194,31 @@ const backendWeeklySources: DataSourceSchedule[] = [
     sourceName: 'judge_candidates',
     enabled: true,
   },
+  // ВРП registers (LEXAI-2117): full snapshot reload, a few hundred to ~3K rows each.
+  {
+    name: 'vrp_dismissed_judges',
+    title: 'ВРП — Судді, звільнені за дисциплінарний проступок',
+    cron: '45 8 * * 0', // Sunday 08:45
+    target: 'backend',
+    sourceName: 'vrp_dismissed_judges',
+    enabled: true,
+  },
+  {
+    name: 'vrp_suspended_judges',
+    title: 'ВРП — Відсторонення суддів',
+    cron: '50 8 * * 0', // Sunday 08:50
+    target: 'backend',
+    sourceName: 'vrp_suspended_judges',
+    enabled: true,
+  },
+  {
+    name: 'vrp_interference_reports',
+    title: 'ВРП — Повідомлення суддів про втручання',
+    cron: '55 8 * * 0', // Sunday 08:55
+    target: 'backend',
+    sourceName: 'vrp_interference_reports',
+    enabled: true,
+  },
 ];
 
 // ─── OpenReyestr NAIS registries (sync via HTTP trigger) ────────────
