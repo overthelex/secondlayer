@@ -31,6 +31,7 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from './base-tool-handler
 import { extractSourceStrings, generateCaseNumberVariations, resolveCauseNumber, edrsrPool } from './tool-utils.js';
 import type { CitationGraphService } from '../services/citation-graph-service.js';
 import type { EdsrFtsService } from '../services/edrsr-fts-service.js';
+import { reconcilePrecedentStatus } from './precedent-status-reconcile.js';
 
 export type StreamEventCallback = (event: {
   type: string;
@@ -270,9 +271,10 @@ export class MCPQueryAPI extends BaseToolHandler {
       if (resolution.resolved) effectiveCaseNumber = resolution.resolved;
     }
 
-    const status = await this.citationValidator.validatePrecedentStatus(
-      caseId,
-      effectiveCaseNumber || undefined,
+    // Status, overruled_by and distinguished_in are re-derived from the same decisive
+    // decision(s) so they can never contradict each other (LEXAI-2122).
+    const status = reconcilePrecedentStatus(
+      await this.citationValidator.validatePrecedentStatus(caseId, effectiveCaseNumber || undefined) as any,
     );
 
     // Best-effort precedent-weight signal from the decision↔case graph (Neo4j,
@@ -364,9 +366,13 @@ export class MCPQueryAPI extends BaseToolHandler {
     // overruled, modified → limited. Never weakens an already explicitly_overruled status.
     if (supersession?.status === 'overruled' && effectiveStatus?.status !== 'explicitly_overruled') {
       const modified = supersession.supersededBy?.disposition === 'modified';
+      // Keep the id lists in step with the overridden status (LEXAI-2122).
+      const byDoc = supersession.supersededBy?.docId ? [String(supersession.supersededBy.docId)] : [];
+      const listKey = modified ? 'distinguished_in' : 'overruled_by';
       effectiveStatus = {
         ...effectiveStatus,
         status: modified ? 'limited' : 'explicitly_overruled',
+        [listKey]: [...new Set([...(effectiveStatus?.[listKey] || []), ...byDoc])],
         superseded_note: modified
           ? 'Рішення змінено вищою інстанцією (див. citation_graph.superseded_by).'
           : 'Рішення скасовано вищою інстанцією (див. citation_graph.superseded_by).',
@@ -457,7 +463,7 @@ export class MCPQueryAPI extends BaseToolHandler {
       {
         name: 'check_precedent_status',
         annotations: { title: 'Статус прецеденту', readOnlyHint: true, idempotentHint: true },
-        description: `Перевіряє актуальність судового рішення: чи не скасовано вищою інстанцією. Реконструює ланцюг інстанцій з локального реєстру ЄДРСР (перша → апеляція → касація → ВП) і визначає статус: valid, explicitly_overruled, limited, unknown. Для конкретного doc_id перевіряє граф інстанцій (SUPERSEDED_BY): чи скасовано/змінено це рішення вищою інстанцією та яким рішенням. Додатково враховує відступ від правової позиції Великою Палатою (граф цитувань Neo4j).
+        description: `Перевіряє актуальність судового рішення: чи не скасовано вищою інстанцією. Реконструює ланцюг інстанцій з локального реєстру ЄДРСР (перша → апеляція → касація → ВП) і визначає статус: valid, explicitly_overruled, limited, unknown. Статус = остаточний результат справи на найвищій інстанції, до якої вона дійшла (поле decided_by: яке рішення, яка інстанція, коли); overruled_by/distinguished_in містять лише ці визначальні рішення, а інші скасування/зміни в ланцюгу (інші документи чи етапи справи) — у other_reversals; summary пояснює це текстом. Для конкретного doc_id перевіряє граф інстанцій (SUPERSEDED_BY): чи скасовано/змінено це рішення вищою інстанцією та яким рішенням. Додатково враховує відступ від правової позиції Великою Палатою (граф цитувань Neo4j).
 
 Приймає: case_number (номер справи, наприклад 922/989/18) або doc_id (ЄДРСР doc_id).
 
