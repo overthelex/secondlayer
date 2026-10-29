@@ -27,6 +27,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import article_number
+import structural_heading
 
 # A single act runs to 4M characters; the default 128 KB field cap would truncate mid-document
 # and silently drop every heading past it.
@@ -39,6 +40,11 @@ MIN_ARTICLES = 3
 MONO_MIN = 0.9          # share of steps that must not go backwards
 
 _art_num = article_number.leading_int
+
+
+def article_title(body):
+    """What follows «Стаття N.» in the first 300 characters (the repair reuses this)."""
+    return body[:300].split(".", 1)[-1].strip()[:300] if "." in body[:300] else ""
 
 
 def parse(text):
@@ -62,8 +68,11 @@ def parse(text):
             continue
         taken.add(no)
         end = ms[i + 1].start() if i + 1 < len(ms) else len(text)
-        body = text[m.start():end].strip()
-        title = body[:300].split(".", 1)[-1].strip()[:300] if "." in body[:300] else ""
+        # The next «Стаття» is not the only thing that ends an article: a Розділ /
+        # Глава / § heading or the final provisions in between belong to no article
+        # and used to be glued to the end of this one (LEXAI-2123).
+        body = structural_heading.trim_article(text[m.start():end].strip())
+        title = article_title(body)
         out.append((no, len(out), title, body))
     return out
 
