@@ -30,6 +30,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import AdmZip from 'adm-zip';
 import mammoth from 'mammoth';
+import { fileDateOf, resolveDecisionDate } from './amcu-dates.js';
 
 const DEFAULT_DIR = '/data/opendata/amcu/rishennia-ta-rekomendatsii';
 const BATCH_SIZE = 100;
@@ -81,13 +82,6 @@ function kindOf(name: string): string {
   return 'other';
 }
 
-function dateOf(name: string): string | null {
-  let m = name.match(/(\d{2})[-.](\d{2})[-.](\d{4})/); // dd-mm-yyyy
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-  m = name.match(/(\d{4})[-.](\d{2})[-.](\d{2})/); // yyyy-mm-dd
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  return null;
-}
 
 function decisionNoOf(name: string): string | null {
   // Cyrillic form: «№ 470-р», «№728-р», «№ 561-р Витяг», «№ 552-563»
@@ -211,7 +205,7 @@ async function processDir(
         // decision number lives in the leaf filename; the full path may carry
         // stray numbers from folder names (e.g. "…№724-731/…№724-р.doc").
         decision_no: decisionNoOf(path.basename(rel)),
-        decision_date: dateOf(df),
+        decision_date: resolveDecisionDate(df, body),
         body_text: body,
         extracted,
       });
@@ -244,6 +238,28 @@ async function insertBatch(rows: any[]): Promise<number> {
   `;
   const res = await pool.query(sql, values);
   return res.rowCount || 0;
+}
+
+/**
+ * Legacy .doc rows get their body_text later (scripts/amcu/04_backfill_doc_texts.py),
+ * and the upsert keeps that text while overwriting decision_date with a value
+ * computed WITHOUT it. Re-resolve every row from its stored text so a re-import
+ * never regresses a header-derived date back to a mistyped file name (LEXAI-2118).
+ */
+async function redateFromStoredText(): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT id, doc_file, left(body_text, 2000) AS head, decision_date::text AS decision_date
+       FROM opendata_amcu_decisions WHERE doc_kind <> 'list'`,
+  );
+  let n = 0;
+  for (const r of rows) {
+    const want = resolveDecisionDate(r.doc_file, r.head);
+    if (want && want !== r.decision_date) {
+      await pool.query('UPDATE opendata_amcu_decisions SET decision_date = $1 WHERE id = $2', [want, r.id]);
+      n++;
+    }
+  }
+  return n;
 }
 
 async function main(): Promise<void> {
@@ -321,7 +337,7 @@ async function main(): Promise<void> {
           const disp = displayName(en); // cp866-decoded name for classification (doc_file stays raw)
           await push({
             archive_file: f, doc_file: df, doc_kind: kindOf(disp),
-            decision_no: decisionNoOf(path.basename(disp)), decision_date: dateOf(disp), body_text: body, extracted,
+            decision_no: decisionNoOf(path.basename(disp)), decision_date: resolveDecisionDate(df, body), body_text: body, extracted,
           });
         }
       }
@@ -332,18 +348,19 @@ async function main(): Promise<void> {
       const body = await extractBody(ext, fs.readFileSync(full));
       const extracted = body != null;
       if (extracted) stats.docxOk++; else stats.docLegacy++;
-      await push({ archive_file: null, doc_file: f, doc_kind: kindOf(f), decision_no: decisionNoOf(f), decision_date: dateOf(f), body_text: body, extracted });
+      await push({ archive_file: null, doc_file: f, doc_kind: kindOf(f), decision_no: decisionNoOf(f), decision_date: resolveDecisionDate(f, body), body_text: body, extracted });
       continue;
     }
 
     if (ext === '.xlsx' || ext === '.xls') {
-      await push({ archive_file: null, doc_file: f, doc_kind: 'list', decision_no: null, decision_date: dateOf(f), body_text: null, extracted: false });
+      await push({ archive_file: null, doc_file: f, doc_kind: 'list', decision_no: null, decision_date: fileDateOf(f), body_text: null, extracted: false });
     }
   }
   if (batch.length) total += await insertBatch(batch);
+  const redated = await redateFromStoredText();
 
   const zMsg = has7z() ? `${sevenZip} .7z archives extracted` : `${sevenZip} .7z archives skipped (7z binary not found)`;
-  console.log(`✅ АМКУ decisions: ${total} rows (docx/odt text ${stats.docxOk}, legacy/no-text ${stats.docLegacy}); ${zMsg}`);
+  console.log(`✅ АМКУ decisions: ${total} rows (docx/odt text ${stats.docxOk}, legacy/no-text ${stats.docLegacy}); ${zMsg}; ${redated} re-dated from stored text`);
   await pool.end();
 }
 
