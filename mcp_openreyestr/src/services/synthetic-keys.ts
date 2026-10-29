@@ -45,10 +45,13 @@ export function notSyntheticSql(column: string): string {
  * Copy of an output row in which each listed column holding a `gen_<n>`
  * surrogate is reported as null (LEXAI-2129, same rule as formatDebtorRow).
  */
-export function nullSyntheticKeys<T extends Record<string, unknown>>(row: T, columns: readonly string[]): T {
+export function nullSyntheticKeys<T extends Record<string, unknown>, K extends keyof T & string>(
+  row: T,
+  columns: readonly K[]
+): Omit<T, K> & { [P in K]: T[P] | null } {
   const out: Record<string, unknown> = { ...row };
   for (const col of columns) {
     if (isSyntheticKey(out[col])) out[col] = null;
   }
-  return out as T;
+  return out as Omit<T, K> & { [P in K]: T[P] | null };
 }
