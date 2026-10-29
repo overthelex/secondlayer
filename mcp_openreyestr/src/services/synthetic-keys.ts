@@ -31,3 +31,24 @@ export function fillMissingUniqueKeys(
     }
   }
 }
+
+/**
+ * SQL predicate that is true when `column` does not hold a `gen_<n>` surrogate.
+ * Drops legacy surrogate rows that duplicate a row with the real key
+ * (LEXAI-2129). The column name comes from code, never from user input.
+ */
+export function notSyntheticSql(column: string): string {
+  return `${column} !~ '^gen_[0-9]+$'`;
+}
+
+/**
+ * Copy of an output row in which each listed column holding a `gen_<n>`
+ * surrogate is reported as null (LEXAI-2129, same rule as formatDebtorRow).
+ */
+export function nullSyntheticKeys<T extends Record<string, unknown>>(row: T, columns: readonly string[]): T {
+  const out: Record<string, unknown> = { ...row };
+  for (const col of columns) {
+    if (isSyntheticKey(out[col])) out[col] = null;
+  }
+  return out as T;
+}
