@@ -76,13 +76,23 @@ export function statusForEffect(effect?: string): 'valid' | 'limited' | 'explici
   return undefined;
 }
 
+/**
+ * Kyiv calendar date (YYYY-MM-DD) or undefined. formatCourtDate hands unparseable
+ * strings back verbatim («не встановлено»), and those would sort after every ISO date
+ * and win the decisive-date pick — treat them as missing.
+ */
+function kyivDate(value?: string): string | undefined {
+  const d = formatCourtDate(value);
+  return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+}
+
 function toRef(d: AffectingDecisionLike): DecisionRef {
   return {
     doc_id: String(d.doc_id),
     instance: d.instance,
     court: d.court,
     // Kyiv calendar date: the stored instant is Kyiv midnight, i.e. the previous UTC day.
-    date: d.date ? formatCourtDate(d.date) || undefined : undefined,
+    date: kyivDate(d.date),
     outcome: d.outcome,
     effect: d.effect,
   };

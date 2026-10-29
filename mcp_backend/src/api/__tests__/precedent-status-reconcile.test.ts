@@ -141,6 +141,20 @@ describe('reconcilePrecedentStatus', () => {
     }
   });
 
+  it('a non-date string never wins the decisive-date pick', () => {
+    const out: any = reconcilePrecedentStatus(
+      validatorResult('d/1/20', 'unknown', [
+        { doc_id: 'bad', instance: 'Апеляція', court: 'АС', date: 'не встановлено', outcome: 'скасовано', effect: 'overruled' },
+        { doc_id: 'good', instance: 'Апеляція', court: 'АС', date: '2023-03-21T22:00:00.000Z', outcome: 'залишено без змін', effect: 'upheld' },
+      ]),
+    );
+    expect(out.decided_by.doc_id).toBe('good');
+    expect(out.status).toBe('valid');
+    expect(out.overruled_by).toEqual([]);
+    expect(out.other_reversals).toEqual([expect.objectContaining({ doc_id: 'bad', date: undefined })]);
+    expect(out.summary).toContain('дата невідома');
+  });
+
   it('no higher-court evidence: keeps status, empties lists, explains', () => {
     const out: any = reconcilePrecedentStatus(validatorResult('n/1/20', 'valid', []));
     expect(out.status).toBe('valid');
