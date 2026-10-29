@@ -117,8 +117,14 @@ export function reconcilePrecedentStatus<T extends Record<string, any>>(status: 
   if (!shep || shep.check_source === 'local') return status;
 
   if (affecting.length === 0) {
+    // No higher-court decision to point at: only `valid` (nothing reviewed it) or
+    // `unknown` can stand. The EDRSR path never yields overruled/limited without
+    // evidence, but a stale cached row could — don't let it contradict empty lists.
+    const fallback = status.status === 'valid' ? 'valid' : 'unknown';
     return {
       ...status,
+      status: fallback,
+      shepardization: { ...shep, status: fallback },
       overruled_by: [],
       distinguished_in: [],
       decided_by: null,

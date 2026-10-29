@@ -162,6 +162,15 @@ describe('reconcilePrecedentStatus', () => {
     expect(out.summary).toMatch(/не знайдено/);
   });
 
+  it('no evidence but a stale overruled/limited status → unknown, consistent with empty lists', () => {
+    for (const stale of ['explicitly_overruled', 'limited']) {
+      const out: any = reconcilePrecedentStatus(validatorResult('s/1/20', stale, [], ['x']));
+      expect(out.status).toBe('unknown');
+      expect(out.shepardization.status).toBe('unknown');
+      expect(out.overruled_by).toEqual([]);
+    }
+  });
+
   it('leaves results without shepardization (local fallback) untouched', () => {
     const local = { case_id: 'abc', status: 'explicitly_overruled', overruled_by: ['x'], confidence: 0.9 };
     expect(reconcilePrecedentStatus(local)).toBe(local);
