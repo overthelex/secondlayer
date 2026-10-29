@@ -61,6 +61,7 @@ import { IndiaCourtTools } from '../api/tools/india-court-tools.js';
 import { ABTestingTools } from '../api/tools/ab-testing-tools.js';
 import { ABTestingService } from '../services/ab-testing-service.js';
 import { logger } from '../utils/logger.js';
+import { enrichOpenreyestrStatistics } from '../services/openreyestr-statistics-enricher.js';
 import path from 'path';
 
 export interface ToolServices {
@@ -107,6 +108,11 @@ export function createToolServices(
   const remoteClient = new RemoteServiceClient();
   const toolRegistry = new ToolRegistry(remoteClient);
   const serviceProxy = new ServiceProxy(costTracker, remoteClient);
+  // The OpenReyestr service cannot see opendata_public_organizations (backend DB),
+  // so the gateway fills in that counter (LEXAI-2121).
+  toolRegistry.registerRemoteResultTransform('openreyestr_get_statistics', (result) =>
+    enrichOpenreyestrStatistics(result, coreServices.db)
+  );
   logger.info('Unified Gateway initialized (Tool Registry + Service Proxy)');
 
   // EDRSR FTS service — instantiated early so procedural/unified tools can share it

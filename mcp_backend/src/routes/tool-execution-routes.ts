@@ -656,7 +656,7 @@ export function createToolExecutionRoutes(deps: {
           requestId,
         });
 
-        result = remoteResult.result || remoteResult;
+        result = await deps.toolRegistry.transformRemoteResult(toolName, remoteResult.result || remoteResult);
 
       } else {
         // LOCAL EXECUTION - backend tools

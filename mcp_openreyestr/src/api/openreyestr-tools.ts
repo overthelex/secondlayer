@@ -213,6 +213,8 @@ export function formatTerminationRow(row: any): Record<string, unknown> {
 }
 
 export class OpenReyestrTools {
+  private static readonly STATS_CACHE_TTL_MS = 60 * 60 * 1000;
+  private statsCache: { value: any; at: number } | null = null;
   private pool: Pool;
 
   constructor(pool: Pool) {
@@ -599,59 +601,76 @@ export class OpenReyestrTools {
   }
 
   /**
-   * Get registry statistics
+   * Get registry statistics.
+   *
+   * Exact counts (index-only scans, ~0.3s in total on 8.8M rows), cached in memory for
+   * STATS_CACHE_TTL_MS: the ЄДР tables change once a day on import, so recounting on
+   * every call is wasted work. pg_stat n_live_tup is not used — it reads 0 after bulk
+   * loads (LEXAI-2121).
+   *
+   * publicAssociations here is the ЄДР FSU table, which holds only a few hundred rows;
+   * the gateway (mcp_backend) replaces it with the Minjust registry of public formations.
    */
   async getStatistics(): Promise<any> {
-    const uoCount = await this.pool.query('SELECT COUNT(*) FROM legal_entities');
-    const fopCount = await this.pool.query('SELECT COUNT(*) FROM individual_entrepreneurs');
-    const fsuCount = await this.pool.query('SELECT COUNT(*) FROM public_associations');
+    if (this.statsCache && Date.now() - this.statsCache.at < OpenReyestrTools.STATS_CACHE_TTL_MS) {
+      return this.statsCache.value;
+    }
+    const countByStatus = async (table: string) => {
+      const r = await this.pool.query(
+        `SELECT COUNT(*)::bigint AS total, COUNT(*) FILTER (WHERE stan = $1)::bigint AS active FROM ${table}`,
+        ['зареєстровано']
+      );
+      return { total: parseInt(r.rows[0].total), active: parseInt(r.rows[0].active) };
+    };
+    const [uo, fop, fsu] = await Promise.all([
+      countByStatus('legal_entities'),
+      countByStatus('individual_entrepreneurs'),
+      countByStatus('public_associations'),
+    ]);
 
-    const uoActive = await this.pool.query(
-      'SELECT COUNT(*) FROM legal_entities WHERE stan = $1',
-      ['зареєстровано']
-    );
-    const fopActive = await this.pool.query(
-      'SELECT COUNT(*) FROM individual_entrepreneurs WHERE stan = $1',
-      ['зареєстровано']
-    );
-    const fsuActive = await this.pool.query(
-      'SELECT COUNT(*) FROM public_associations WHERE stan = $1',
-      ['зареєстровано']
-    );
-
-    return {
+    const value = {
       totalEntities: {
-        legalEntities: parseInt(uoCount.rows[0].count),
-        individualEntrepreneurs: parseInt(fopCount.rows[0].count),
-        publicAssociations: parseInt(fsuCount.rows[0].count),
-        total:
-          parseInt(uoCount.rows[0].count) +
-          parseInt(fopCount.rows[0].count) +
-          parseInt(fsuCount.rows[0].count),
+        legalEntities: uo.total,
+        individualEntrepreneurs: fop.total,
+        publicAssociations: fsu.total,
+        total: uo.total + fop.total + fsu.total,
       },
       activeEntities: {
-        legalEntities: parseInt(uoActive.rows[0].count),
-        individualEntrepreneurs: parseInt(fopActive.rows[0].count),
-        publicAssociations: parseInt(fsuActive.rows[0].count),
-        total:
-          parseInt(uoActive.rows[0].count) +
-          parseInt(fopActive.rows[0].count) +
-          parseInt(fsuActive.rows[0].count),
+        legalEntities: uo.active,
+        individualEntrepreneurs: fop.active,
+        publicAssociations: fsu.active,
+        total: uo.active + fop.active + fsu.active,
       },
     };
+    this.statsCache = { value, at: Date.now() };
+    return value;
   }
 
   /**
-   * Get approximate record counts from all registry tables (fast, uses pg_stat)
+   * Approximate record counts of the ЄДР tables, shown in "not found" responses.
+   * pg_class.reltuples (refreshed by ANALYZE / VACUUM / CREATE INDEX), not
+   * pg_stat n_live_tup, which reads 0 after bulk loads (LEXAI-2121). A table that was
+   * never analyzed (reltuples = -1) falls back to an exact count.
    */
   private async getRegistrySummary(): Promise<{ registry: string; records: number }[]> {
-    const result = await this.pool.query(`
-      SELECT relname, n_live_tup as count
-      FROM pg_stat_user_tables
-      WHERE relname IN ('legal_entities', 'individual_entrepreneurs', 'public_associations')
-      ORDER BY relname
-    `);
-    return result.rows.map((r: any) => ({ registry: r.relname, records: parseInt(r.count) }));
+    const tables = ['individual_entrepreneurs', 'legal_entities', 'public_associations'];
+    const result = await this.pool.query(
+      `SELECT t.name, c.reltuples::bigint AS count
+         FROM unnest($1::text[]) AS t(name)
+         JOIN pg_class c ON c.oid = to_regclass(t.name)`,
+      [tables]
+    );
+    const estimates = new Map<string, number>(result.rows.map((r: any) => [r.name, parseInt(r.count)]));
+    const out: { registry: string; records: number }[] = [];
+    for (const table of tables) {
+      let records = estimates.get(table) ?? -1;
+      if (records < 0) {
+        const exact = await this.pool.query(`SELECT COUNT(*)::bigint AS count FROM ${table}`);
+        records = parseInt(exact.rows[0].count);
+      }
+      out.push({ registry: table, records });
+    }
+    return out;
   }
 
   /**
