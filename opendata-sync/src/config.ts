@@ -735,12 +735,27 @@ export interface ServiceConfig {
   timezone: string;
 }
 
+/**
+ * One Bearer token from an env value that may hold a comma-separated key list.
+ *
+ * Compose wires OPENREYESTR_API_KEY (and BACKEND_API_KEY) from the services'
+ * allow-lists (OPENREYESTR_API_KEYS, SECONDARY_LAYER_KEYS). Once a list had
+ * more than one key, the whole "k1,k2,k3" string went out as the Bearer token
+ * and every openreyestr sync got 401 "Invalid API key" (LEXAI-2130). The
+ * servers split their lists on commas, so any single entry is valid; send the
+ * first non-empty one.
+ */
+export function firstApiKey(value: string | undefined): string {
+  if (!value) return '';
+  return value.split(',').map(k => k.trim()).find(k => k.length > 0) ?? '';
+}
+
 export function loadConfig(): ServiceConfig {
   return {
     backendUrl: process.env.BACKEND_URL || 'http://app-prod:3000',
-    backendApiKey: process.env.BACKEND_API_KEY || '',
+    backendApiKey: firstApiKey(process.env.BACKEND_API_KEY),
     openreyestrUrl: process.env.OPENREYESTR_URL || 'http://app-openreyestr-prod:3005',
-    openreyestrApiKey: process.env.OPENREYESTR_API_KEY || '',
+    openreyestrApiKey: firstApiKey(process.env.OPENREYESTR_API_KEY),
     healthPort: parseInt(process.env.HEALTH_PORT || '3010', 10),
     timezone: process.env.TZ || 'Europe/Kiev',
   };

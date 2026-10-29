@@ -6,6 +6,8 @@
  *
  * For "huge" registries: TRUNCATE + plain INSERT (no ON CONFLICT),
  * drop/recreate indexes, bigger batches, skip raw_data column.
+ * Huge registries with upsertOnReload keep their UNIQUE key index during the
+ * load and insert with ON CONFLICT (key) DO UPDATE instead (LEXAI-2130).
  */
 
 import { Pool, PoolClient } from 'pg';
@@ -14,6 +16,7 @@ import { createInterface } from 'readline';
 import iconv from 'iconv-lite';
 import { RegistryConfig } from '../config/registries';
 import { fillMissingUniqueKeys } from './synthetic-keys';
+import { dedupeAndSortByKey, isUniqueKeyIndex, rowKey, uniqueKeyColumns } from './unique-key-load';
 
 const BATCH_SIZE_NORMAL = 1000;
 const BATCH_SIZE_HUGE = 5000;
@@ -39,7 +42,11 @@ interface IndexDef {
  * For huge registries: drop all non-PK indexes and constraints before bulk insert,
  * recreate them after. Handles UNIQUE constraints that can't be dropped via DROP INDEX.
  */
-async function dropIndexes(pool: Pool, tableName: string): Promise<IndexDef[]> {
+async function dropIndexes(
+  pool: Pool,
+  tableName: string,
+  keep: (indexdef: string) => boolean = () => false
+): Promise<IndexDef[]> {
   // Get all indexes
   const { rows: indexes } = await pool.query<{ indexname: string; indexdef: string }>(
     `SELECT indexname, indexdef FROM pg_indexes
@@ -59,6 +66,10 @@ async function dropIndexes(pool: Pool, tableName: string): Promise<IndexDef[]> {
 
   const result: IndexDef[] = [];
   for (const idx of indexes) {
+    if (keep(idx.indexdef)) {
+      console.log(`  Keeping index during load: ${idx.indexname}`);
+      continue;
+    }
     const isConstraint = constraintMap.has(idx.indexname);
     const constraintType = constraintMap.get(idx.indexname) || null;
     result.push({ ...idx, is_constraint: isConstraint, constraint_type: constraintType });
@@ -111,19 +122,36 @@ export async function importCsv(
   const start = Date.now();
   const delimiter = config.csvDelimiter || ';';
   const isHuge = config.sizeCategory === 'huge';
+  const uniqueKeys = uniqueKeyColumns(config);
+  const upsertOnReload = isHuge && config.upsertOnReload === true;
   const batchSize = isHuge ? BATCH_SIZE_HUGE : BATCH_SIZE_NORMAL;
 
-  console.log(`  CSV delimiter: "${delimiter}", encoding: ${config.encoding}, workers: ${NUM_WORKERS}, mode: ${isHuge ? 'TRUNCATE+INSERT' : 'UPSERT'}, batch: ${batchSize}`);
+  console.log(`  CSV delimiter: "${delimiter}", encoding: ${config.encoding}, workers: ${NUM_WORKERS}, mode: ${upsertOnReload ? 'TRUNCATE+UPSERT' : isHuge ? 'TRUNCATE+INSERT' : 'UPSERT'}, batch: ${batchSize}`);
 
   // For huge registries: truncate and drop indexes for max throughput
   let savedIndexes: IndexDef[] = [];
   if (isHuge) {
+    const keepKeyIndex = (indexdef: string) => upsertOnReload && isUniqueKeyIndex(indexdef, uniqueKeys);
+    if (upsertOnReload) {
+      // Check before TRUNCATE: without the key index ON CONFLICT (key) fails on
+      // every batch and the table would be left empty.
+      const { rows: idx } = await pool.query<{ indexdef: string }>(
+        `SELECT indexdef FROM pg_indexes WHERE tablename = $1`,
+        [config.tableName]
+      );
+      if (!idx.some(i => keepKeyIndex(i.indexdef))) {
+        throw new Error(
+          `${config.name}: no UNIQUE index on (${uniqueKeys.join(', ')}) in ${config.tableName}; ` +
+          `run the openreyestr migrations before importing. Table left untouched.`
+        );
+      }
+    }
     console.log(`  TRUNCATE ${config.tableName}...`);
     // RESTART IDENTITY bounds sequence growth to a single run. Without it each
     // daily reimport permanently consumed ~N sequence values and the id
     // sequence eventually overflowed its type (see migration 017).
     await pool.query(`TRUNCATE ${config.tableName} RESTART IDENTITY`);
-    savedIndexes = await dropIndexes(pool, config.tableName);
+    savedIndexes = await dropIndexes(pool, config.tableName, keepKeyIndex);
 
     // Disable autovacuum during bulk load
     await pool.query(`ALTER TABLE ${config.tableName} SET (autovacuum_enabled = false)`);
@@ -153,8 +181,7 @@ export async function importCsv(
     ? [...columns, 'source_file']
     : [...columns, 'raw_data', 'source_file'];
 
-  // Build ON CONFLICT clause (only for non-huge)
-  const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
+  // Build ON CONFLICT clause (non-huge, and huge with upsertOnReload)
   const conflictTarget = uniqueKeys.join(', ');
   const updateCols = columns
     .filter(c => !uniqueKeys.includes(c))
@@ -176,7 +203,7 @@ export async function importCsv(
     }
   }
 
-  const processBatch = isHuge
+  const processBatch = isHuge && !upsertOnReload
     ? (records: Record<string, string>[]) =>
         processCsvBatchPlainInsert(pool, config, records, allColumns, sourceFile, isHuge)
     : (records: Record<string, string>[]) =>
@@ -396,21 +423,13 @@ async function processCsvBatchMultiRow(
 ): Promise<{ imported: number; errors: number }> {
   // Deduplicate within batch by unique key to avoid
   // "ON CONFLICT DO UPDATE command cannot affect row a second time"
-  const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
-  const seen = new Map<string, number>();
-  const dedupedRecords: Record<string, string>[] = [];
-
-  for (let j = 0; j < records.length; j++) {
-    const mapped = mapCsvRecord(config, records[j], j + 1);
-    const keyParts = uniqueKeys.map(k => String(mapped[k] ?? ''));
-    const key = keyParts.join('|');
-    if (seen.has(key)) {
-      dedupedRecords[seen.get(key)!] = records[j];
-    } else {
-      seen.set(key, dedupedRecords.length);
-      dedupedRecords.push(records[j]);
-    }
-  }
+  // The last occurrence wins; rows are sorted by key so parallel batches take
+  // row locks in the same order.
+  const uniqueKeys = uniqueKeyColumns(config);
+  const { rows: deduped } = dedupeAndSortByKey(
+    records.map((record, j) => ({ record, mapped: mapCsvRecord(config, record, j + 1) })),
+    r => rowKey(r.mapped, uniqueKeys)
+  );
 
   const client: PoolClient = await pool.connect();
   try {
@@ -418,10 +437,10 @@ async function processCsvBatchMultiRow(
     const rowPlaceholders: string[] = [];
     const colCount = allColumns.length;
 
-    for (let j = 0; j < dedupedRecords.length; j++) {
-      const mapped = mapCsvRecord(config, dedupedRecords[j], j + 1);
+    for (let j = 0; j < deduped.length; j++) {
+      const { record, mapped } = deduped[j];
       const rowValues = allColumns.map(col => {
-        if (col === 'raw_data') return JSON.stringify(dedupedRecords[j]);
+        if (col === 'raw_data') return JSON.stringify(record);
         if (col === 'source_file') return sourceFile;
         return mapped[col] ?? null;
       });
@@ -438,7 +457,7 @@ async function processCsvBatchMultiRow(
         ${updateCols.join(', ')}`;
 
     await client.query(sql, allValues);
-    return { imported: dedupedRecords.length, errors: records.length - dedupedRecords.length };
+    return { imported: deduped.length, errors: records.length - deduped.length };
   } catch {
     // Multi-row failed — fall back to row-by-row with savepoints
     return await processCsvBatchRowByRow(client, config, records, allColumns, conflictTarget, updateCols, sourceFile);

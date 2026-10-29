@@ -23,6 +23,15 @@ export interface RegistryConfig {
    * source has no value, instead of getting a `gen_<n>` surrogate (LEXAI-2120).
    */
   nullableKeyColumns?: string[];
+  /**
+   * Huge (TRUNCATE-reloaded) registries only: keep the UNIQUE index on
+   * `uniqueKey` during the load and insert with ON CONFLICT (uniqueKey) DO
+   * UPDATE, so duplicate key rows in the source collapse instead of breaking
+   * the UNIQUE index recreate. The index must exist before the import
+   * (LEXAI-2130, migration 020 for debtors); the importer refuses to TRUNCATE
+   * without it.
+   */
+  upsertOnReload?: boolean;
   /** XML root path to records, e.g. "DATA.RECORD" */
   recordPath: string;
   /** Map: DB column name → XML/CSV field name (string) or custom mapper */
@@ -395,9 +404,11 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     tableName: 'debtors',
     uniqueKey: ['proceeding_number', 'debtor_name', 'debtor_edrpou'],
     // Individuals have no DEBTOR_CODE in the source. A "gen_<n>" surrogate here
-    // leaked to the API as a fake EDRPOU (LEXAI-2120). The table is reloaded
-    // via TRUNCATE + plain INSERT, so no ON CONFLICT depends on this column.
+    // leaked to the API as a fake EDRPOU (LEXAI-2120), so the column stays NULL.
+    // The key index is UNIQUE NULLS NOT DISTINCT (migration 020), so NULL rows
+    // still conflict on (proceeding_number, debtor_name) in the upsert.
     nullableKeyColumns: ['debtor_edrpou'],
+    upsertOnReload: true,
     recordPath: '',
     fieldMap: {
       proceeding_number: 'VP_ORDERNUM',
