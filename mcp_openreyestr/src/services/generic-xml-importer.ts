@@ -14,6 +14,7 @@ import { Transform } from 'stream';
 import sax from 'sax';
 import iconv from 'iconv-lite';
 import { RegistryConfig } from '../config/registries';
+import { fillMissingUniqueKeys } from './synthetic-keys';
 
 const BATCH_SIZE = 2000;
 
@@ -370,12 +371,7 @@ function mapRecord(
     }
   }
 
-  const uniqueKeys = Array.isArray(config.uniqueKey) ? config.uniqueKey : [config.uniqueKey];
-  for (const key of uniqueKeys) {
-    if (!mapped[key] && mapped[key] !== 0) {
-      mapped[key] = `gen_${fallbackIndex}`;
-    }
-  }
+  fillMissingUniqueKeys(config, mapped, fallbackIndex);
 
   return mapped;
 }

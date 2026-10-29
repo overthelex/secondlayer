@@ -18,6 +18,11 @@ export interface RegistryConfig {
   tableName: string;
   /** Column(s) for ON CONFLICT. Array = composite unique. */
   uniqueKey: string | string[];
+  /**
+   * Unique-key columns that hold real registry data and must stay NULL when the
+   * source has no value, instead of getting a `gen_<n>` surrogate (LEXAI-2120).
+   */
+  nullableKeyColumns?: string[];
   /** XML root path to records, e.g. "DATA.RECORD" */
   recordPath: string;
   /** Map: DB column name → XML/CSV field name (string) or custom mapper */
@@ -389,6 +394,10 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     innerFileName: '',
     tableName: 'debtors',
     uniqueKey: ['proceeding_number', 'debtor_name', 'debtor_edrpou'],
+    // Individuals have no DEBTOR_CODE in the source. A "gen_<n>" surrogate here
+    // leaked to the API as a fake EDRPOU (LEXAI-2120). The table is reloaded
+    // via TRUNCATE + plain INSERT, so no ON CONFLICT depends on this column.
+    nullableKeyColumns: ['debtor_edrpou'],
     recordPath: '',
     fieldMap: {
       proceeding_number: 'VP_ORDERNUM',
