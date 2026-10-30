@@ -290,3 +290,69 @@ describe('uk_check_citations: repeal, removal, commencement and coverage', () =>
     expect(parse(r).message).toContain(String(MAX_PROVISIONS));
   });
 });
+
+describe('uk_check_citations: an act repealed as a whole with survivors (LEXAI-2133)', () => {
+  // Data Protection Act 1998: 'repealed (except s. 62, Sch. 15 paras. 13, 15, 16, 18, 19)' by
+  // the 2018 Act. The title carries no '(repealed)', and the archive keeps s.7 as a row of dots.
+  const DPA = 'ukpga/1998/29';
+  const H7 = '71'.repeat(16), HDOTS = '72'.repeat(16), H62 = '73'.repeat(16), H8 = '74'.repeat(16), H8B = '75'.repeat(16);
+  const db = () => mockDb([
+    { match: /WHERE id = \$1/, rows: (p) => [{ id: p[0], title: 'Data Protection Act 1998' }] },
+    { match: /FROM uk_legislation l LEFT JOIN uk_pit_load_state/, rows: [{ title: 'Data Protection Act 1998', versions: 40, last_version: '2019-12-02' }] },
+    {
+      match: /FROM uk_legislation_effects/,
+      rows: [{ affected_provisions: 'Act', effect_type: 'repealed (except s. 62, Sch. 15 paras. 13, 15, 16, 18, 19)', affecting_id: 'ukpga/2018/12', affecting_title: 'Data Protection Act 2018', affecting_provisions: 'Sch. 19 para. 44', in_force_date: '2018-05-25', applied: true }],
+    },
+    {
+      match: /FROM uk_provision_version/,
+      rows: [
+        { provision_key: `${DPA}/section/7`, valid_from: '2000-03-01', valid_to: '2018-05-25', h: H7 },
+        { provision_key: `${DPA}/section/7`, valid_from: '2018-05-25', valid_to: null, h: HDOTS },
+        { provision_key: `${DPA}/section/62`, valid_from: '2000-03-01', valid_to: null, h: H62 },
+      ],
+    },
+    { match: /FROM uk_provision_text/, rows: [{ h: H7, text: 'right of access' }, { h: HDOTS, text: '. . . . . . . .' }] },
+  ]);
+
+  it('a provision not among the survivors is revoked, named with the repealing act', async () => {
+    const out = parse(await new UkDueDiligenceTools(db()).executeTool('uk_check_citations', {
+      as_of: '2012-05-01', compare_to: '2026-10-30',
+      citations: [{ instrument: DPA, provisions: ['s.7', 's.62'] }],
+    }));
+    const by = Object.fromEntries(out.instruments[0].provisions.map((p: any) => [p.provision, p]));
+    expect(by['s.7'].status).toBe('revoked_since_signing');
+    expect(by['s.7'].revoked_on).toBe('2018-05-25');
+    expect(by['s.7'].revoked_by[0].by.leg_id).toBe('ukpga/2018/12');
+    expect(by['s.62'].status).not.toMatch(/revoked/);
+    expect(out.instruments[0].status).toBe('revoked_since_signing');
+  });
+
+  it('a repeal before signing is revoked_before_signing', async () => {
+    const out = parse(await new UkDueDiligenceTools(db()).executeTool('uk_check_citations', {
+      as_of: '2019-01-01', compare_to: '2026-10-30',
+      citations: [{ instrument: DPA, provisions: ['s.7'] }],
+    }));
+    expect(out.instruments[0].provisions[0].status).toBe('revoked_before_signing');
+  });
+
+  it('a row of dots in the current text is a repeal even without a register entry', async () => {
+    const d = mockDb([
+      { match: /WHERE id = \$1/, rows: (p) => [{ id: p[0], title: 'Some Act 2000' }] },
+      { match: /FROM uk_legislation l LEFT JOIN uk_pit_load_state/, rows: [{ title: 'Some Act 2000', versions: 5, last_version: '2024-01-01' }] },
+      { match: /FROM uk_legislation_effects/, rows: [] },
+      {
+        match: /FROM uk_provision_version/,
+        rows: [
+          { provision_key: 'ukpga/2000/1/section/8', valid_from: '2000-01-01', valid_to: '2020-01-01', h: H8 },
+          { provision_key: 'ukpga/2000/1/section/8', valid_from: '2020-01-01', valid_to: null, h: H8B },
+        ],
+      },
+      { match: /FROM uk_provision_text/, rows: [{ h: H8, text: 'old text' }, { h: H8B, text: '. . .' }] },
+    ]);
+    const out = parse(await new UkDueDiligenceTools(d).executeTool('uk_check_citations', {
+      as_of: '2010-01-01', compare_to: '2026-10-30', citations: [{ instrument: 'ukpga/2000/1', provisions: ['s.8'] }],
+    }));
+    expect(out.instruments[0].provisions[0].status).toBe('revoked_since_signing');
+    expect(out.instruments[0].status).toBe('revoked_since_signing');
+  });
+});

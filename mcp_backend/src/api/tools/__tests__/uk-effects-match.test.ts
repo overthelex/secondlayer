@@ -1,4 +1,4 @@
-import { classifyEffect, matchEffect, parseTarget } from '../uk-effects-match';
+import { classifyEffect, matchEffect, parseTarget, wholeRepealCovers } from '../uk-effects-match';
 
 // Register strings below are real ones seen in uk_legislation_effects for the acts a
 // 2016 London office lease cites.
@@ -82,5 +82,28 @@ describe('classifyEffect', () => {
     expect(classifyEffect('applied by 2007 c. 27 s. 27A(2) (as inserted)')).toBe('other');
     expect(classifyEffect('power to apply (with or without modifications) conferred by 2007 c. 27 s. 27A(7) (as inserted)')).toBe('other');
     expect(classifyEffect('transfer of powers in part (W)')).toBe('other');
+  });
+});
+
+describe('wholeRepealCovers', () => {
+  const s = (n: string) => ({ kind: 'section', number: n });
+  const para = (sch: string, n: string) => ({ kind: 'paragraph', schedule: sch, number: n });
+  const DPA = 'repealed (except s. 62, Sch. 15 paras. 13, 15, 16, 18, 19)';
+  it.each([
+    ['repealed', s('7'), true],
+    ['revoked', s('7'), true],
+    ['repealed (with savings)', s('7'), true],
+    [DPA, s('7'), true],
+    [DPA, s('62'), false],
+    [DPA, para('15', '15'), false],
+    [DPA, para('15', '14'), true],
+    ['repealed (except ss. 1 and 2)', s('2'), false],
+    ['repealed (except ss. 1-5)', s('3'), false],
+    ['repealed (except Pt. 2)', s('3'), false],
+    ['repealed (S.)', s('7'), false],
+    ['words repealed', s('7'), false],
+    ['excluded', s('7'), false],
+  ])('%s / %j -> %s', (effect, target, want) => {
+    expect(wholeRepealCovers(effect as string, target as any)).toBe(want);
   });
 });

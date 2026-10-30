@@ -158,3 +158,13 @@ describe('the other leg_id tools resolve the same way', () => {
     expect(db.query).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('uk_get_effects ordering (LEXAI-2134)', () => {
+  it('lists effects on the provision before Part and whole-act effects', async () => {
+    const e = (affected: string, date: string) => ({ ...EFFECT, affected_provisions: affected, effect_type: 'excluded', in_force_date: date });
+    const db = { query: jest.fn().mockResolvedValueOnce({ rows: [e('Act', '2003-03-24'), e('Pt. 2', '2005-01-01'), e('s. 24(1)', '2010-01-01'), e('s. 24-28', '2024-12-02')] }) };
+    const out = parse(await new UkLegislationTools(db).executeTool('uk_get_effects', { leg_id: 'ukpga/Eliz2/2-3/56', provision: '24' }));
+    expect(out.effects.map((x: any) => x.scope)).toEqual(['provision', 'provision', 'part', 'whole_instrument']);
+    expect(out.effects[0].in_force_date).toBe('2010-01-01');
+  });
+});
