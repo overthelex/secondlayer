@@ -88,11 +88,73 @@ describe('uk_get_effects leg_id resolution', () => {
     expect(db.query.mock.calls[1][1][0]).toBe('ukpga/2030/1');
   });
 
+  it('does not read the lookup for tools without a leg_id', async () => {
+    const db = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+    const tools = new UkLegislationTools(db);
+    await tools.executeTool('uk_search_legislation', { query: 'ukpga/1954/56' });
+    expect(db.query.mock.calls[0][0]).not.toMatch(/exact/);
+  });
+
   it('skips the lookup for a regnal id', async () => {
     const db = { query: jest.fn().mockResolvedValueOnce({ rows: [EFFECT] }) };
     const tools = new UkLegislationTools(db);
     const out = parse(await tools.executeTool('uk_get_effects', { leg_id: 'ukpga/Eliz2/2-3/56' }));
     expect(out.total).toBe(1);
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the other leg_id tools resolve the same way', () => {
+  const LTA = [{ id: 'ukpga/Eliz2/2-3/56', title: 'Landlord and Tenant Act 1954', exact: false }];
+
+  it('uk_get_act finds the act by its calendar-year id', async () => {
+    const db = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: LTA })
+        .mockResolvedValueOnce({ rows: [{ id: 'ukpga/Eliz2/2-3/56', title: 'Landlord and Tenant Act 1954' }] })
+        .mockResolvedValueOnce({ rows: [{ provisions: 120, pit_rows: 900, versions: 45 }] })
+        .mockResolvedValueOnce({ rows: [{ total: 300, applied: 294, unapplied: 6 }] }),
+    };
+    const out = parse(await new UkLegislationTools(db).executeTool('uk_get_act', { leg_id: 'ukpga/1954/56' }));
+    expect(out.resolved_from).toBe('ukpga/1954/56');
+    expect(out.act.id).toBe('ukpga/Eliz2/2-3/56');
+    expect(db.query.mock.calls.slice(1).every((c: any[]) => c[1][0] === 'ukpga/Eliz2/2-3/56')).toBe(true);
+  });
+
+  it('uk_get_provision reads the provision under the regnal id', async () => {
+    const db = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: LTA })
+        .mockResolvedValueOnce({ rows: [{ provision_key: 'ukpga/Eliz2/2-3/56/section/24', text: 'x' }] }),
+    };
+    const out = parse(await new UkLegislationTools(db).executeTool('uk_get_provision', { leg_id: 'ukpga/1954/56', provision: '24' }));
+    expect(out.resolved_from).toBe('ukpga/1954/56');
+    expect(out.leg_id).toBe('ukpga/Eliz2/2-3/56');
+    expect(db.query.mock.calls[1][1][0]).toBe('ukpga/Eliz2/2-3/56');
+  });
+
+  it('says resolved_from on an error reply too', async () => {
+    const db = {
+      query: jest.fn()
+        .mockResolvedValueOnce({ rows: LTA })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ n: 0 }] }),
+    };
+    const out = parse(await new UkLegislationTools(db).executeTool('uk_get_provision_history', { leg_id: 'ukpga/1954/56', provision: '999' }));
+    expect(out.resolved_from).toBe('ukpga/1954/56');
+    expect(out.leg_id).toBe('ukpga/Eliz2/2-3/56');
+    expect(out.error).toBe('no_point_in_time');
+  });
+
+  it('uk_get_act_as_at refuses an ambiguous id before touching the text', async () => {
+    const db = {
+      query: jest.fn().mockResolvedValueOnce({ rows: [
+        { id: 'ukpga/Eliz2/2-3/10', title: 'First Act', exact: false },
+        { id: 'ukpga/Eliz2/3-4/10', title: 'Second Act', exact: false },
+      ] }),
+    };
+    const out = parse(await new UkLegislationTools(db).executeTool('uk_get_act_as_at', { leg_id: 'ukpga/1954/10', as_of: '2000-01-01' }));
+    expect(out.error).toBe('ambiguous_leg_id');
     expect(db.query).toHaveBeenCalledTimes(1);
   });
 });
