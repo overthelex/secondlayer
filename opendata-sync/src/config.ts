@@ -735,12 +735,18 @@ export interface ServiceConfig {
   timezone: string;
 }
 
+/** First non-empty key of a comma-separated list: the env may hold a whole allow-list (LEXAI-2130). */
+export function firstApiKey(value: string | undefined): string {
+  if (!value) return '';
+  return value.split(',').map(k => k.trim()).find(k => k.length > 0) ?? '';
+}
+
 export function loadConfig(): ServiceConfig {
   return {
     backendUrl: process.env.BACKEND_URL || 'http://app-prod:3000',
-    backendApiKey: process.env.BACKEND_API_KEY || '',
+    backendApiKey: firstApiKey(process.env.BACKEND_API_KEY),
     openreyestrUrl: process.env.OPENREYESTR_URL || 'http://app-openreyestr-prod:3005',
-    openreyestrApiKey: process.env.OPENREYESTR_API_KEY || '',
+    openreyestrApiKey: firstApiKey(process.env.OPENREYESTR_API_KEY),
     healthPort: parseInt(process.env.HEALTH_PORT || '3010', 10),
     timezone: process.env.TZ || 'Europe/Kiev',
   };
