@@ -203,11 +203,16 @@ export async function importCsv(
     }
   }
 
+  // batchStart = 0-based position of records[0] among all data rows, so gen_<n>
+  // surrogates are numbered across the whole file, not per batch (LEXAI-2129).
+  // Duplicate keys split across concurrent batches resolve in whichever order
+  // the batches commit; in the ЄРБ file every such duplicate is an exact copy
+  // (LEXAI-2130), so the surviving row is the same either way.
   const processBatch = isHuge && !upsertOnReload
-    ? (records: Record<string, string>[]) =>
-        processCsvBatchPlainInsert(pool, config, records, allColumns, sourceFile, isHuge)
-    : (records: Record<string, string>[]) =>
-        processCsvBatchMultiRow(pool, config, records, allColumns, conflictTarget, updateCols, sourceFile);
+    ? (records: Record<string, string>[], batchStart: number) =>
+        processCsvBatchPlainInsert(pool, config, records, allColumns, sourceFile, isHuge, batchStart)
+    : (records: Record<string, string>[], batchStart: number) =>
+        processCsvBatchMultiRow(pool, config, records, allColumns, conflictTarget, updateCols, sourceFile, batchStart);
 
   for await (const line of rl) {
     lineNumber++;
@@ -247,7 +252,7 @@ export async function importCsv(
       const batchToProcess = batch;
       batch = [];
 
-      pendingBatches.push(processBatch(batchToProcess));
+      pendingBatches.push(processBatch(batchToProcess, totalRows - batchToProcess.length));
 
       if (totalRows % PROGRESS_INTERVAL === 0) {
         const elapsed = ((Date.now() - start) / 1000).toFixed(0);
@@ -260,7 +265,7 @@ export async function importCsv(
   // Process remaining batch
   if (batch.length > 0) {
     await drainToN(MAX_PENDING);
-    pendingBatches.push(processBatch(batch));
+    pendingBatches.push(processBatch(batch, totalRows - batch.length));
   }
 
   // Wait for all pending
@@ -372,7 +377,8 @@ async function processCsvBatchPlainInsert(
   records: Record<string, string>[],
   allColumns: string[],
   sourceFile: string,
-  skipRawData: boolean
+  skipRawData: boolean,
+  batchStart: number
 ): Promise<{ imported: number; errors: number }> {
   const client: PoolClient = await pool.connect();
   try {
@@ -381,7 +387,7 @@ async function processCsvBatchPlainInsert(
     const colCount = allColumns.length;
 
     for (let j = 0; j < records.length; j++) {
-      const mapped = mapCsvRecord(config, records[j], j + 1);
+      const mapped = mapCsvRecord(config, records[j], batchStart + j + 1);
       const rowValues = allColumns.map(col => {
         if (col === 'raw_data') return skipRawData ? null : JSON.stringify(records[j]);
         if (col === 'source_file') return sourceFile;
@@ -419,15 +425,17 @@ async function processCsvBatchMultiRow(
   allColumns: string[],
   conflictTarget: string,
   updateCols: string[],
-  sourceFile: string
+  sourceFile: string,
+  batchStart: number
 ): Promise<{ imported: number; errors: number }> {
   // Deduplicate within batch by unique key to avoid
-  // "ON CONFLICT DO UPDATE command cannot affect row a second time"
-  // The last occurrence wins; rows are sorted by key so parallel batches take
-  // row locks in the same order.
+  // "ON CONFLICT DO UPDATE command cannot affect row a second time".
+  // Each record is mapped once, so the surrogate used for dedup is the one
+  // inserted. The last occurrence wins; rows are sorted by key so parallel
+  // batches take row locks in the same order.
   const uniqueKeys = uniqueKeyColumns(config);
   const { rows: deduped } = dedupeAndSortByKey(
-    records.map((record, j) => ({ record, mapped: mapCsvRecord(config, record, j + 1) })),
+    records.map((record, j) => ({ record, mapped: mapCsvRecord(config, record, batchStart + j + 1) })),
     r => rowKey(r.mapped, uniqueKeys)
   );
 
@@ -459,8 +467,10 @@ async function processCsvBatchMultiRow(
     await client.query(sql, allValues);
     return { imported: deduped.length, errors: records.length - deduped.length };
   } catch {
-    // Multi-row failed — fall back to row-by-row with savepoints
-    return await processCsvBatchRowByRow(client, config, records, allColumns, conflictTarget, updateCols, sourceFile);
+    // Multi-row failed — fall back to row-by-row with savepoints,
+    // over the same deduped, key-sorted rows, so it neither hits a key twice
+    // nor takes row locks in a different order.
+    return await processCsvBatchRowByRow(client, config, deduped, records.length, allColumns, conflictTarget, updateCols, sourceFile);
   } finally {
     client.release();
   }
@@ -472,26 +482,29 @@ async function processCsvBatchMultiRow(
 async function processCsvBatchRowByRow(
   client: PoolClient,
   config: RegistryConfig,
-  records: Record<string, string>[],
+  rows: { record: Record<string, string>; mapped: Record<string, unknown> }[],
+  sourceRowCount: number,
   allColumns: string[],
   conflictTarget: string,
   updateCols: string[],
   sourceFile: string
 ): Promise<{ imported: number; errors: number }> {
   let imported = 0;
-  let errors = 0;
+  // Rows collapsed by the in-batch dedupe count as not imported, as in the
+  // multi-row path.
+  let errors = sourceRowCount - rows.length;
 
   try {
     await client.query('BEGIN');
 
-    for (let j = 0; j < records.length; j++) {
+    for (let j = 0; j < rows.length; j++) {
       const sp = `sp_${j}`;
       try {
         await client.query(`SAVEPOINT ${sp}`);
 
-        const mapped = mapCsvRecord(config, records[j], j + 1);
+        const { record, mapped } = rows[j];
         const values = allColumns.map(col => {
-          if (col === 'raw_data') return JSON.stringify(records[j]);
+          if (col === 'raw_data') return JSON.stringify(record);
           if (col === 'source_file') return sourceFile;
           return mapped[col] ?? null;
         });

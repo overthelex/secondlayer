@@ -30,14 +30,17 @@ describe('LEXAI-2130: unique-key helpers', () => {
     expect(indexDefColumns(KEY_INDEX_DEF)).toEqual(DEBTOR_KEY);
     expect(indexDefColumns('CREATE INDEX i ON public.t USING btree ("Col_a", b)')).toEqual(['Col_a', 'b']);
     expect(indexDefColumns("CREATE INDEX i ON public.t USING gin (to_tsvector('simple'::regconfig, debtor_name))")).toBeNull();
+    expect(indexDefColumns('CREATE UNIQUE INDEX i ON public.t USING btree (lower(debtor_name))')).toBeNull();
+    expect(indexDefColumns('CREATE INDEX i ON t (a)')).toBeNull();
   });
 
-  it('recognises only a non-partial UNIQUE index on exactly the key', () => {
+  it('recognises only a non-partial UNIQUE NULLS NOT DISTINCT index on exactly the key', () => {
     expect(isUniqueKeyIndex(KEY_INDEX_DEF, DEBTOR_KEY)).toBe(true);
+    // the 004 constraint's index: NULLs distinct, NULL-edrpou rows never conflict
     expect(isUniqueKeyIndex(
-      'CREATE UNIQUE INDEX k ON public.debtors USING btree (proceeding_number, debtor_name, debtor_edrpou)',
+      'CREATE UNIQUE INDEX debtors_proceeding_number_debtor_name_debtor_edrpou_key ON public.debtors USING btree (proceeding_number, debtor_name, debtor_edrpou)',
       DEBTOR_KEY
-    )).toBe(true);
+    )).toBe(false);
     expect(isUniqueKeyIndex(KEY_INDEX_DEF.replace('UNIQUE ', ''), DEBTOR_KEY)).toBe(false);
     expect(isUniqueKeyIndex(
       'CREATE UNIQUE INDEX k ON public.debtors USING btree (proceeding_number, debtor_name)',
@@ -68,12 +71,15 @@ describe('LEXAI-2130: unique-key helpers', () => {
 });
 
 /** Minimal pg Pool stand-in that records every statement. */
-function fakePool(indexDefs: string[]) {
+function fakePool(indexDefs: string[], failMultiRowInsert = false) {
   const sql: string[] = [];
   const params: unknown[][] = [];
   const query = jest.fn(async (text: string, values?: unknown[]) => {
     sql.push(text);
     params.push(values ?? []);
+    if (failMultiRowInsert && text.startsWith('INSERT INTO') && /\),\s*\(/.test(text)) {
+      throw new Error('simulated multi-row failure');
+    }
     if (text.includes('FROM pg_indexes')) {
       return { rows: indexDefs.map((indexdef, i) => ({ indexname: `idx_${i}`, indexdef })) };
     }
@@ -144,5 +150,21 @@ describe('LEXAI-2130: debtors reload upserts against the natural key', () => {
     const proc = cols.indexOf('proceeding_number');
     expect(rows.map(r => r[proc])).toEqual(['53420132', '70000001', '81645862']);
     expect(rows.map(r => r[edrpou])).toEqual(['35991936', null, null]);
+  });
+
+  it('row-by-row fallback upserts the same deduped, key-sorted rows', async () => {
+    const { pool, sql, params } = fakePool([KEY_INDEX_DEF], true);
+    const stats = await importCsv(pool, REGISTRIES.debtors, file, 'erb.csv');
+
+    const single = sql
+      .map((s, i) => ({ s, p: params[i] }))
+      .filter(x => x.s.trimStart().startsWith('INSERT INTO debtors') && !/\),\s*\(/.test(x.s));
+    expect(single).toHaveLength(3);
+    single.forEach(x => expect(x.s).toMatch(/ON CONFLICT \(proceeding_number, debtor_name, debtor_edrpou\) DO UPDATE/));
+    const cols = single[0].s.match(/INSERT INTO debtors \(([^)]+)\)/)![1].split(', ');
+    const proc = cols.indexOf('proceeding_number');
+    expect(single.map(x => x.p[proc])).toEqual(['53420132', '70000001', '81645862']);
+    expect(stats.imported).toBe(3);
+    expect(stats.errors).toBe(2);
   });
 });

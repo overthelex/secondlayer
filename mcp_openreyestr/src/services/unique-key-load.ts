@@ -21,17 +21,22 @@ export function uniqueKeyColumns(config: RegistryConfig): string[] {
  * returned by pg_indexes.indexdef, or null for expression indexes.
  */
 export function indexDefColumns(indexdef: string): string[] | null {
-  const m = indexdef.match(/\bUSING\s+\w+\s*\(([^()]+)\)/i) ?? indexdef.match(/\(([^()]+)\)/);
+  const m = indexdef.match(/\bUSING\s+\w+\s*\(([^()]+)\)/i);
   if (!m) return null;
   const cols = m[1].split(',').map(c => c.trim().replace(/^"(.*)"$/, '$1'));
   if (cols.some(c => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(c))) return null;
   return cols;
 }
 
-/** True when indexdef is a non-partial UNIQUE index on exactly the key columns. */
+/**
+ * True when indexdef is a non-partial UNIQUE NULLS NOT DISTINCT index on
+ * exactly the key columns. NULLS NOT DISTINCT is required: with the default
+ * (NULLs distinct) rows with a NULL key column never conflict, so the upsert
+ * would not dedupe them.
+ */
 export function isUniqueKeyIndex(indexdef: string, keyColumns: string[]): boolean {
   if (!/^CREATE\s+UNIQUE\s+INDEX\b/i.test(indexdef)) return false;
-  if (/\)\s*(NULLS\s+(NOT\s+)?DISTINCT\s*)?WHERE\b/i.test(indexdef)) return false;
+  if (!/\)\s*NULLS\s+NOT\s+DISTINCT\s*$/i.test(indexdef)) return false;
   const cols = indexDefColumns(indexdef);
   return !!cols && cols.length === keyColumns.length && cols.every((c, i) => c === keyColumns[i]);
 }

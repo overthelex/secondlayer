@@ -8,40 +8,74 @@
 -- 90 surplus rows (every group is a byte-identical copy of the same row).
 --
 -- This migration:
---   1. drops the 004 constraint where it still exists (NULLs distinct, so it
---      cannot dedupe individuals, whose debtor_edrpou is NULL since LEXAI-2120);
---   2. deletes duplicate rows, keeping the lowest id per key, with legacy
---      "gen_<n>" surrogates counted as NULL;
---   3. creates a UNIQUE NULLS NOT DISTINCT index on the key (PostgreSQL 15+).
+--   1. sets legacy "gen_<n>" surrogates in debtor_edrpou to NULL, so stored
+--      values match the key the importer writes since LEXAI-2120;
+--   2. deletes duplicate rows, keeping the lowest id per key;
+--   3. creates a UNIQUE NULLS NOT DISTINCT index on the key (PostgreSQL 15+);
+--   4. drops the 004 constraint where it still exists (NULLs distinct, so it
+--      cannot dedupe individuals, whose debtor_edrpou is NULL).
 -- The importer (RegistryConfig.upsertOnReload) keeps this index during the
--- reload and upserts with ON CONFLICT (proceeding_number, debtor_name,
+-- reload, upserts with ON CONFLICT (proceeding_number, debtor_name,
 -- debtor_edrpou), and refuses to TRUNCATE if the index is missing.
 --
--- Not CONCURRENTLY: the migration runner sends each file as one multi-statement
--- query, which runs in a transaction block where CREATE INDEX CONCURRENTLY is
--- not allowed. A plain CREATE INDEX takes a SHARE lock: SELECTs from the API
--- keep working, only writes wait, and the only writer is the daily importer
--- (which itself rebuilds every debtors index non-concurrently on each run).
+-- Locking. The migration runner sends the file as one multi-statement query,
+-- i.e. one transaction, so every lock below is held until COMMIT, and
+-- CREATE INDEX CONCURRENTLY is not possible here.
+--   - UPDATE / DELETE: ROW EXCLUSIVE + row locks; SELECTs keep working.
+--   - CREATE INDEX: SHARE; SELECTs keep working, writes wait.
+--   - DROP CONSTRAINT: ACCESS EXCLUSIVE, blocks SELECTs too. It is the last
+--     statement, so it is held only from the drop to COMMIT; and it is a no-op
+--     on prod, where the constraint is already gone.
+-- Writes are blocked for the whole migration; the only writer is the daily
+-- importer. Step 1 rewrites every gen_N row (~9.7M on prod) and touches all
+-- debtors indexes, including the GIN one: expect minutes and a table about
+-- twice its size until autovacuum (or the next TRUNCATE reload) reclaims it.
 -- Do not apply while a debtors import is running.
 --
--- Idempotent: every step is skipped once the index exists.
+-- Idempotent: steps 1-3 are skipped once the index exists; step 4 is guarded.
 
-SET LOCAL statement_timeout = '60min';
+SET LOCAL statement_timeout = '120min';
 SET LOCAL lock_timeout = '5min';
 
 DO $$
 BEGIN
-  IF EXISTS (
+  IF NOT EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE schemaname = current_schema()
       AND tablename = 'debtors'
       AND indexname = 'debtors_natural_key_uniq'
   ) THEN
-    RAISE NOTICE 'debtors_natural_key_uniq already exists, skipping';
-    RETURN;
+    -- 1. Legacy surrogates -> NULL (only the rows that hold one).
+    UPDATE debtors
+    SET debtor_edrpou = NULL
+    WHERE debtor_edrpou ~ '^gen_[0-9]+$';
+
+    -- 2. Dedupe on the natural key; PARTITION BY treats NULLs as equal, as the
+    --    NULLS NOT DISTINCT index will.
+    DELETE FROM debtors d
+    USING (
+      SELECT id
+      FROM (
+        SELECT id,
+               row_number() OVER (
+                 PARTITION BY proceeding_number, debtor_name, debtor_edrpou
+                 ORDER BY id
+               ) AS rn
+        FROM debtors
+      ) ranked
+      WHERE rn > 1
+    ) dup
+    WHERE d.id = dup.id;
+
+    -- 3. The key index, built while the old constraint (if any) still stands.
+    CREATE UNIQUE INDEX IF NOT EXISTS debtors_natural_key_uniq
+      ON debtors (proceeding_number, debtor_name, debtor_edrpou) NULLS NOT DISTINCT;
+  ELSE
+    RAISE NOTICE 'debtors_natural_key_uniq already exists, skipping dedupe and index build';
   END IF;
 
-  -- 1. Legacy 004 constraint (default name), if a past reload did not lose it.
+  -- 4. Legacy 004 constraint (default name), last: its ACCESS EXCLUSIVE lock
+  --    is held only until COMMIT.
   IF EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conrelid = 'debtors'::regclass
@@ -49,30 +83,6 @@ BEGIN
   ) THEN
     ALTER TABLE debtors DROP CONSTRAINT debtors_proceeding_number_debtor_name_debtor_edrpou_key;
   END IF;
-
-  -- 2. Dedupe on the natural key; NULLs (and gen_<n> surrogates) compare equal,
-  --    as they will in the NULLS NOT DISTINCT index.
-  DELETE FROM debtors d
-  USING (
-    SELECT id
-    FROM (
-      SELECT id,
-             row_number() OVER (
-               PARTITION BY proceeding_number,
-                            debtor_name,
-                            CASE WHEN debtor_edrpou ~ '^gen_[0-9]+$' THEN NULL ELSE debtor_edrpou END
-               ORDER BY id
-             ) AS rn
-      FROM debtors
-    ) ranked
-    WHERE rn > 1
-  ) dup
-  WHERE d.id = dup.id;
-
-  -- 3. The key index. Distinct gen_<n> values that survive step 2 cannot
-  --    collide: rows equal on the raw key are equal on the normalized one.
-  CREATE UNIQUE INDEX IF NOT EXISTS debtors_natural_key_uniq
-    ON debtors (proceeding_number, debtor_name, debtor_edrpou) NULLS NOT DISTINCT;
 EXCEPTION
   WHEN undefined_table THEN
     RAISE NOTICE 'debtors table does not exist, skipping';

@@ -175,7 +175,7 @@ async function importXmlInMemory(
   let errors = 0;
   for (let i = 0; i < records.length; i += BATCH_SIZE) {
     const batch = records.slice(i, i + BATCH_SIZE);
-    const result = await multiRowUpsert(pool, config, batch, sourceFile);
+    const result = await multiRowUpsert(pool, config, batch, sourceFile, i);
     imported += result.imported;
     errors += result.errors;
   }
@@ -276,7 +276,9 @@ async function importXmlStreaming(
           const batchToProcess = batch;
           batch = [];
           fileStream.pause();
-          pendingBatch = multiRowUpsert(pool, config, batchToProcess, sourceFile)
+          // recordCount already includes this batch: its first record is record
+          // number recordCount - batch.length (0-based) of the whole file.
+          pendingBatch = multiRowUpsert(pool, config, batchToProcess, sourceFile, recordCount - batchToProcess.length)
             .then(stats => {
               totalImported += stats.imported;
               totalErrors += stats.errors;
@@ -300,7 +302,7 @@ async function importXmlStreaming(
     const finalize = async () => {
       if (pendingBatch) await pendingBatch;
       if (batch.length > 0) {
-        const stats = await multiRowUpsert(pool, config, batch, sourceFile);
+        const stats = await multiRowUpsert(pool, config, batch, sourceFile, recordCount - batch.length);
         totalImported += stats.imported;
         totalErrors += stats.errors;
       }
@@ -379,12 +381,18 @@ function mapRecord(
 /**
  * Multi-row INSERT ... VALUES (...),(...),... ON CONFLICT DO UPDATE
  * Single round-trip per batch. Falls back to row-by-row on failure.
+ *
+ * `batchStart` is the 0-based position of records[0] in the whole file, so the
+ * gen_<n> surrogate is the record's file-wide number (LEXAI-2129). A batch-local
+ * index repeated gen_1..gen_2000 in every batch and each batch's keyless rows
+ * overwrote the previous batch's through ON CONFLICT.
  */
-async function multiRowUpsert(
+export async function multiRowUpsert(
   pool: Pool,
   config: RegistryConfig,
   records: Record<string, unknown>[],
-  sourceFile: string
+  sourceFile: string,
+  batchStart: number
 ): Promise<{ imported: number; errors: number }> {
   const columns = Object.keys(config.fieldMap);
   const allColumns = [...columns, 'raw_data', 'source_file'];
@@ -402,7 +410,7 @@ async function multiRowUpsert(
   const rowPlaceholders: string[] = [];
 
   for (let i = 0; i < records.length; i++) {
-    const mapped = mapRecord(config, records[i], i + 1);
+    const mapped = mapRecord(config, records[i], batchStart + i + 1);
     const offset = i * colCount;
     const ph: string[] = [];
     for (let c = 0; c < allColumns.length; c++) {
@@ -435,7 +443,7 @@ async function multiRowUpsert(
     let errors = 0;
     for (let j = 0; j < records.length; j++) {
       try {
-        const mapped = mapRecord(config, records[j], j + 1);
+        const mapped = mapRecord(config, records[j], batchStart + j + 1);
         const values = allColumns.map((col) => {
           if (col === 'raw_data') return JSON.stringify(records[j]);
           if (col === 'source_file') return sourceFile;

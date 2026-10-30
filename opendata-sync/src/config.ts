@@ -735,16 +735,7 @@ export interface ServiceConfig {
   timezone: string;
 }
 
-/**
- * One Bearer token from an env value that may hold a comma-separated key list.
- *
- * Compose wires OPENREYESTR_API_KEY (and BACKEND_API_KEY) from the services'
- * allow-lists (OPENREYESTR_API_KEYS, SECONDARY_LAYER_KEYS). Once a list had
- * more than one key, the whole "k1,k2,k3" string went out as the Bearer token
- * and every openreyestr sync got 401 "Invalid API key" (LEXAI-2130). The
- * servers split their lists on commas, so any single entry is valid; send the
- * first non-empty one.
- */
+/** First non-empty key of a comma-separated list: the env may hold a whole allow-list (LEXAI-2130). */
 export function firstApiKey(value: string | undefined): string {
   if (!value) return '';
   return value.split(',').map(k => k.trim()).find(k => k.length > 0) ?? '';
