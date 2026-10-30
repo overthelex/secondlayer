@@ -124,3 +124,28 @@ export function classifyEffect(effectType: string | null): EffectClass {
   if (/substitut|insert|omit|repeal|revok|renumber|added|amend|word|text|heading|entry|definition|cease/.test(t)) return 'amendment';
   return 'other';
 }
+
+/**
+ * Does a whole-instrument entry repeal or revoke `target`? The register writes a partial
+ * survival into the effect type: 'repealed (except s. 62, Sch. 15 paras. 13, 15, 16)'
+ * (Data Protection Act 1998, by the 2018 Act). Savings and transitional provisions do not
+ * keep the text alive; any other qualifier ('repealed (S.)', 'revoked (prosp.)') might, so
+ * it is not read as a repeal.
+ */
+export function wholeRepealCovers(effectType: string | null, target: ProvisionTarget): boolean {
+  const t = (effectType || '').trim();
+  const m = /^(?:repealed|revoked)\b\s*(.*)$/i.exec(t);
+  if (!m) return false;
+  const rest = m[1].trim();
+  if (!rest) return true;
+  if (/^\(with (?:savings|transitional)/i.test(rest)) return true;
+  const except = /^\(except\s+(.*)\)$/i.exec(rest);
+  if (!except) return false;
+  const segments = except[1].split(/\s*,\s*(?=(?:ss?|Schs?|Pts?|regs?|arts?|rules?|rr?)\.)/i);
+  for (const seg of segments) {
+    const list = /^(.*\b(?:ss?|paras?|regs?|arts?|rules?|rr?)\.\s*)(.+)$/i.exec(seg);
+    const items = list ? list[2].split(/\s*(?:,|\band\b)\s*/).map((i) => list[1] + i) : [seg];
+    if (items.some((i) => matchEffect(i, target) !== null)) return false;
+  }
+  return true;
+}

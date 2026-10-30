@@ -19,7 +19,7 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import { datesToDays } from './uk-dates.js';
-import { classifyEffect, matchEffect, ProvisionTarget } from './uk-effects-match.js';
+import { classifyEffect, matchEffect, ProvisionTarget, wholeRepealCovers } from './uk-effects-match.js';
 import { AS_AT_CAVEAT, ISO_DATE, normaliseLegId } from './uk-legislation-tools.js';
 
 export const MAX_INSTRUMENTS = 60;
@@ -432,9 +432,14 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
       const removed = Boolean(then && !now && rows.length && rows[rows.length - 1].to !== null && rows[rows.length - 1].to <= compareTo);
       const repealed = mine.some((e: any) => /repeal|revok/i.test(e.effect_type || ''));
       const amended = mine.some((e: any) => e.cls === 'amendment');
+      // The act repealed as a whole, with this provision not among the survivors. The
+      // title then carries no '(repealed)', so the check above does not catch it.
+      const wholeRepeal = effects.find((e: any) => matchEffect(e.affected_provisions, t) === 'whole_instrument'
+        && wholeRepealCovers(e.effect_type, t));
 
       let status: CitationStatus;
-      if (!rows.length && !hasHistory) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'no_history';
+      if (wholeRepeal) status = wholeRepeal.day <= asOf ? 'revoked_before_signing' : 'revoked_since_signing';
+      else if (!rows.length && !hasHistory) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'no_history';
       else if (!rows.length) status = repealed ? 'revoked_since_signing' : amended ? 'changed_since_signing' : mine.length ? 'modified_since_signing' : 'not_found';
       else if (rows[0].from > asOf) status = 'not_in_force_at_signing';
       else if (!then && rows[rows.length - 1].to !== null && rows[rows.length - 1].to <= asOf) status = 'revoked_before_signing';
@@ -450,6 +455,7 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
         ...(later.length ? { versions_since_signing: later } : {}),
         ...(mine.length ? { effects: mine.slice(0, 10).map(show), ...(mine.length > 10 ? { more_effects: mine.length - 10 } : {}) } : {}),
         ...(parts ? { part_level_effects: parts } : {}),
+        ...(wholeRepeal ? { revoked_on: wholeRepeal.day, revoked_by: [show(wholeRepeal)] } : {}),
         ...(status === 'not_in_force_at_signing' ? { earliest_version: rows[0].from } : {}),
         ...(removed || status === 'revoked_before_signing' ? { removed_on: rows[rows.length - 1].to } : {}),
         ...(status === 'not_found' ? { note: 'The act has version history but no such provision; check the number.' } : {}),
@@ -469,9 +475,16 @@ Limits: ${MAX_INSTRUMENTS} instruments and ${MAX_PROVISIONS} provisions per call
         [hashes.map((h) => '\\x' + h)])).rows;
       for (const r of rows) texts.set(r.h, r.text);
     }
+    // legislation.gov.uk keeps a repealed provision as a row of dots: that is a repeal, not a
+    // change of wording.
+    const dotted = (h: string | null) => Boolean(h && texts.has(h) && /^[\s.…]+$/.test(texts.get(h)!));
     const out = provisions.map(({ _then, _now, ...x }) =>
       differs({ _then, _now })
-        ? { ...x, text_at_signing: cap(texts.get(_then!)), text_now: _now ? cap(texts.get(_now)) : null }
+        ? {
+          ...x,
+          ...(x.status === 'changed_since_signing' && dotted(_now) ? { status: 'revoked_since_signing' as CitationStatus } : {}),
+          text_at_signing: cap(texts.get(_then!)), text_now: _now ? cap(texts.get(_now)) : null,
+        }
         : x);
 
     return {

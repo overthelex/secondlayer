@@ -188,7 +188,7 @@ With as_of (YYYY-MM-DD) it returns the version in force on that date, from the i
         description: `Full timeline of versions of one provision: every interval during which its text did not change, from the earliest version in the archive to the current one.
 
 Requires leg_id and provision. For each interval it returns valid_from, valid_to, the text length and, with include_text, the text itself.
-This is the direct way to answer "when and how did this provision change". For example, section 4 of the Human Rights Act 1998 has five intervals, and 2009-10-01 in the list is the day the Constitutional Reform Act 2005 replaced the House of Lords with the Supreme Court.
+This is the direct way to answer "when and how did this provision change". For example, in the history of section 4 of the Human Rights Act 1998, 2009-10-01 is the day the Constitutional Reform Act 2005 replaced the House of Lords with the Supreme Court.
 ⚠ ${AS_AT_CAVEAT}`,
         inputSchema: {
           type: 'object',
@@ -253,7 +253,7 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
 
   async executeTool(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
     const given = LEG_ID_TOOLS.has(name) ? normaliseLegId((args as any)?.leg_id) : null;
-    if (!given) return this.dispatch(name, args);
+    if (!given || this.refusesWithoutDb(name, given, args)) return this.dispatch(name, args);
     let resolved;
     try {
       resolved = await this.resolveCalendarLegId(given);
@@ -272,6 +272,13 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
     if (!resolved.resolvedFrom) return this.dispatch(name, args);
     return this.resolvedFrom.run(resolved.resolvedFrom, () =>
       this.dispatch(name, { ...args, leg_id: resolved.legId }));
+  }
+
+  /** Input the tool rejects on its own: answer that without the leg_id lookup query. */
+  private refusesWithoutDb(name: string, legId: string, args: Record<string, unknown>): boolean {
+    const a = args as any;
+    if (['as_of', 'since', 'until'].some((k) => a?.[k] != null && !ISO_DATE.test(String(a[k])))) return true;
+    return name === 'uk_get_effects' && a?.provision != null && !parseTarget(String(a.provision), legId, a.provision_type);
   }
 
   private async dispatch(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
@@ -604,7 +611,12 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
       const classified = rows
         .map((r: any) => ({ r, cls: classifyEffect(r.effect_type), scope: target ? matchEffect(r.affected_provisions, target) : 'provision' }))
         .filter((x: any) => x.scope !== null);
-      const matched = classified.filter((x: any) => includeOther || x.cls !== 'other');
+      // Effects naming the provision first, then its Part, then the whole act: on a much-amended
+      // act the 'Act excluded' entries would otherwise bury the provision's own amendments.
+      // Array.sort is stable, so each group keeps the in-force order of the query.
+      const SCOPE_ORDER: Record<string, number> = { provision: 0, part: 1, whole_instrument: 2 };
+      const matched = classified.filter((x: any) => includeOther || x.cls !== 'other')
+        .sort((x: any, y: any) => SCOPE_ORDER[x.scope] - SCOPE_ORDER[y.scope]);
       const hiddenOther = classified.length - matched.length;
 
       const page = matched.slice(offset, offset + limit).map(({ r, scope, cls }: any) => ({

@@ -26,6 +26,9 @@ function mockDb(routes: Array<{ match: RegExp; rows: any[] }>) {
   return {
     calls,
     query: jest.fn(async (sql: string, params: any[] = []): Promise<Reply> => {
+      // The calendar-year leg_id lookup runs first for the leg_id tools; with no rows the id
+      // is kept as given. Left out of `calls` so they show the tool's own queries.
+      if (/AS exact FROM uk_legislation/.test(sql)) return { rows: [] };
       calls.push({ sql, params });
       for (const r of routes) if (r.match.test(sql)) return { rows: r.rows };
       return { rows: [] };
