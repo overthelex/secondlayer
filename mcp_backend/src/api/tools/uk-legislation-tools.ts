@@ -29,6 +29,7 @@
  *    a section shifts every ord after it, which is exactly what an amendment does.
  */
 
+import { AsyncLocalStorage } from 'async_hooks';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import { datesToDays } from './uk-dates.js';
@@ -54,6 +55,16 @@ export function normaliseLegId(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   const id = String(value).trim().replace(/^https?:\/\/(?:www\.)?legislation\.gov\.uk\/(?:id\/)?/, '').replace(/\/+$/, '');
   return LEG_ID_RE.test(id) ? id : null;
+}
+
+/**
+ * `ukpga/1954/56` → { leg_type, year, number }, the calendar-year form people cite. For
+ * acts before 1963 the register keys them by regnal year instead (`ukpga/Eliz2/2-3/56`),
+ * so the calendar form names no row. Null for anything else.
+ */
+export function calendarParts(legId: string): { leg_type: string; year: number; number: string } | null {
+  const m = /^([a-z]{2,6})\/(\d{4})\/([A-Za-z0-9]+)$/.exec(legId);
+  return m ? { leg_type: m[1], year: Number(m[2]), number: m[3] } : null;
 }
 
 /**
@@ -84,10 +95,22 @@ function pickOne(rows: any[], key: string): any {
   return keys.size === 1 ? rows[0] : AMBIGUOUS;
 }
 
+/** Tools that take a leg_id, and so need a calendar-year id mapped to the register's. */
+const LEG_ID_TOOLS = new Set([
+  'uk_get_act', 'uk_get_provision', 'uk_get_provision_history', 'uk_get_act_as_at', 'uk_get_effects',
+]);
+
 export class UkLegislationTools extends BaseToolHandler {
-  /** Every reply goes through here, so DATE columns leave as calendar days (see uk-dates.ts). */
+  /** The id the caller gave, for the duration of a call whose leg_id was mapped. Per call
+   *  rather than a field, because one instance serves concurrent requests. */
+  private readonly resolvedFrom = new AsyncLocalStorage<string>();
+
+  /** Every reply goes through here, so DATE columns leave as calendar days (see uk-dates.ts),
+   *  and a reply to a mapped leg_id says so, error or not. */
   protected override wrapResponse(data: any): ToolResult {
-    return super.wrapResponse(datesToDays(data));
+    const from = this.resolvedFrom.getStore();
+    const out = from && data && typeof data === 'object' ? { resolved_from: from, ...data } : data;
+    return super.wrapResponse(datesToDays(out));
   }
 
   constructor(private db: any) {
@@ -225,6 +248,29 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
   }
 
   async executeTool(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
+    const given = LEG_ID_TOOLS.has(name) ? normaliseLegId((args as any)?.leg_id) : null;
+    if (!given) return this.dispatch(name, args);
+    let resolved;
+    try {
+      resolved = await this.resolveCalendarLegId(given);
+    } catch (err) {
+      logger.error(`[${name}] leg_id lookup failed`, { err, legId: given });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not look up the act.' });
+    }
+    if ('ambiguous' in resolved) {
+      return this.wrapResponse({
+        error: 'ambiguous_leg_id',
+        leg_id: given,
+        message: `${given} names more than one act (pre-1963 acts are numbered by parliamentary session, and one calendar year can hold two). Pass one of these leg_ids.`,
+        candidates: resolved.ambiguous,
+      });
+    }
+    if (!resolved.resolvedFrom) return this.dispatch(name, args);
+    return this.resolvedFrom.run(resolved.resolvedFrom, () =>
+      this.dispatch(name, { ...args, leg_id: resolved.legId }));
+  }
+
+  private async dispatch(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
     switch (name) {
       case 'uk_search_legislation': return this.searchLegislation(args);
       case 'uk_get_act': return this.getAct(args);
@@ -480,6 +526,29 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
         ORDER BY (provision_uri LIKE $2) DESC, ord
         LIMIT 10`, [legId, `%${suffix}%`, label])).rows;
     return pickOne(rows, key);
+  }
+
+  /**
+   * Maps a calendar-year id the register does not hold onto its regnal-year id. Without
+   * this, `ukpga/1954/56` matched no effect and uk_get_effects answered "no effects
+   * recorded" — a confident wrong answer for the Landlord and Tenant Act 1954, which has
+   * hundreds — while the other leg_id tools said the act was not in the register.
+   * Only when the id itself is not in the register: an id that exists is never rewritten.
+   * 990 (type, year, number) triples name more than one act (two sessions in one calendar
+   * year), so more than one candidate is refused rather than guessed.
+   */
+  private async resolveCalendarLegId(legId: string): Promise<
+    { legId: string; resolvedFrom?: string } | { ambiguous: { leg_id: string; title: string }[] }
+  > {
+    const parts = calendarParts(legId);
+    if (!parts) return { legId };
+    const rows = (await this.db.query(
+      `SELECT id, title, (id = $1) AS exact FROM uk_legislation
+        WHERE id = $1 OR (leg_type = $2 AND year = $3 AND number = $4)
+        ORDER BY id`, [legId, parts.leg_type, parts.year, parts.number])).rows;
+    if (!rows.length || rows.some((r: any) => r.exact)) return { legId };
+    if (rows.length === 1) return { legId: rows[0].id, resolvedFrom: legId };
+    return { ambiguous: rows.map((r: any) => ({ leg_id: r.id, title: r.title })) };
   }
 
   // ─── uk_get_effects ────────────────────────────────────────────────
