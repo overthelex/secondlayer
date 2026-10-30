@@ -57,6 +57,16 @@ export function normaliseLegId(value: unknown): string | null {
 }
 
 /**
+ * `ukpga/1954/56` → { leg_type, year, number }, the calendar-year form people cite. For
+ * acts before 1963 the register keys them by regnal year instead (`ukpga/Eliz2/2-3/56`),
+ * so the calendar form names no row. Null for anything else.
+ */
+export function calendarParts(legId: string): { leg_type: string; year: number; number: string } | null {
+  const m = /^([a-z]{2,6})\/(\d{4})\/([A-Za-z0-9]+)$/.exec(legId);
+  return m ? { leg_type: m[1], year: Number(m[2]), number: m[3] } : null;
+}
+
+/**
  * Accepts a section number ('55', '2A'), a bare key ('section/55') or a full key
  * ('ukpga/1990/8/section/55') and returns the full key. A bare number is assumed to be a
  * section, which is right for primary legislation and wrong for SIs — hence `kind`.
@@ -482,12 +492,49 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
     return pickOne(rows, key);
   }
 
+  /**
+   * Maps a calendar-year id the register does not hold onto its regnal-year id. Without
+   * this, `ukpga/1954/56` matched no effect and came back as "no effects recorded" — a
+   * confident wrong answer for the Landlord and Tenant Act 1954, which has hundreds.
+   * Only when the id itself is not in the register: an id that exists is never rewritten.
+   * 990 (type, year, number) triples name more than one act (two sessions in one calendar
+   * year), so more than one candidate is refused rather than guessed.
+   */
+  private async resolveCalendarLegId(legId: string): Promise<
+    { legId: string; resolvedFrom?: string } | { ambiguous: { leg_id: string; title: string }[] }
+  > {
+    const parts = calendarParts(legId);
+    if (!parts) return { legId };
+    const rows = (await this.db.query(
+      `SELECT id, title, (id = $1) AS exact FROM uk_legislation
+        WHERE id = $1 OR (leg_type = $2 AND year = $3 AND number = $4)
+        ORDER BY id`, [legId, parts.leg_type, parts.year, parts.number])).rows;
+    if (!rows.length || rows.some((r: any) => r.exact)) return { legId };
+    if (rows.length === 1) return { legId: rows[0].id, resolvedFrom: legId };
+    return { ambiguous: rows.map((r: any) => ({ leg_id: r.id, title: r.title })) };
+  }
+
   // ─── uk_get_effects ────────────────────────────────────────────────
 
   private async getEffects(args: Record<string, unknown>): Promise<ToolResult> {
     const a = args as any;
-    const legId = normaliseLegId(a.leg_id);
-    if (!legId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/1986/45'." });
+    const givenId = normaliseLegId(a.leg_id);
+    if (!givenId) return this.wrapResponse({ error: 'bad_leg_id', message: "leg_id must look like 'ukpga/1986/45'." });
+    let resolved;
+    try {
+      resolved = await this.resolveCalendarLegId(givenId);
+    } catch (err) {
+      logger.error('[uk_get_effects] leg_id lookup failed', { err, legId: givenId });
+      return this.wrapResponse({ error: 'query_failed', message: 'Could not retrieve the amendments.' });
+    }
+    if ('ambiguous' in resolved) {
+      return this.wrapResponse({
+        error: 'ambiguous_leg_id',
+        message: `${givenId} names more than one act (pre-1963 acts are numbered by parliamentary session, and one calendar year can hold two). Pass one of these leg_ids.`,
+        candidates: resolved.ambiguous,
+      });
+    }
+    const legId = resolved.legId;
     for (const k of ['since', 'until'] as const) {
       if (a[k] !== undefined && !ISO_DATE.test(String(a[k]))) {
         return this.wrapResponse({ error: 'bad_date', message: `${k} must be in YYYY-MM-DD format.` });
@@ -548,6 +595,7 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
 
       return this.wrapResponse({
         leg_id: legId,
+        ...(resolved.resolvedFrom ? { resolved_from: resolved.resolvedFrom } : {}),
         ...(target ? { provision: target } : {}),
         total: matched.length,
         ...(target ? { by_scope: byScope } : {}),
