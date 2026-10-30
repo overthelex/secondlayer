@@ -96,6 +96,10 @@ function pickOne(rows: any[], key: string): any {
 }
 
 /** Tools that take a leg_id, and so need a calendar-year id mapped to the register's. */
+// Primary legislation outranks instruments made under it: a title search for
+// 'Landlord and Tenant Act 1954' must not bury the act under SIs that name it.
+const PRIMARY_LEG_TYPES = ['ukpga', 'ukla', 'ukppa', 'asp', 'aosp', 'nia', 'apni', 'mnia', 'asc', 'anaw', 'mwa', 'aep', 'aip', 'apgb', 'gbla'];
+
 const LEG_ID_TOOLS = new Set([
   'uk_get_act', 'uk_get_provision', 'uk_get_provision_history', 'uk_get_act_as_at', 'uk_get_effects',
 ]);
@@ -306,6 +310,10 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
     }
     if (leg_type) { values.push(String(leg_type)); where.push(`l.leg_type = $${values.length}`); }
     if (year) { values.push(Number(year)); where.push(`l.year = $${values.length}`); }
+    values.push(q);
+    const qParam = `$${values.length}`;
+    values.push(PRIMARY_LEG_TYPES);
+    const primaryParam = `$${values.length}`;
 
     // Two correlated existence probes rather than joins: an act can have tens of
     // thousands of provision rows and the caller only needs to know whether any exist.
@@ -320,7 +328,11 @@ With provision, the result also lists effects on the whole instrument (e.g. 'Reg
         LEFT JOIN uk_pit_load_state s ON s.leg_id = l.id
        WHERE ${where.join(' AND ')}
          ${with_text_only ? 'AND EXISTS (SELECT 1 FROM uk_legislation_provisions p2 WHERE p2.leg_id = l.id)' : ''}
-       ORDER BY (l.id = $1) DESC, l.year DESC NULLS LAST, l.id
+       ORDER BY (l.id = $1) DESC,
+                (lower(l.title) = lower(${qParam})) DESC,
+                (left(lower(l.title), length(${qParam})) = lower(${qParam})) DESC,
+                (l.leg_type = ANY(${primaryParam}::text[])) DESC,
+                l.year DESC NULLS LAST, l.id
        LIMIT ${limit} OFFSET ${offset}`;
 
     try {
