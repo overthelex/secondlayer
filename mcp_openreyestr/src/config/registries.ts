@@ -195,15 +195,26 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     tableName: 'forensic_methods',
     uniqueKey: 'registration_code',
     recordPath: 'DATA.RECORD',
+    // Tags as the file has them (checked 29.10.2026, LEXAI-2129): MET_CODE, MET_NAME,
+    // EXP_TYPE, YEAR, NOTES, REGISTER_DATE, REGISTER_DATE_STOP, REGISTER_DATE_CHANGE,
+    // YEAR_STOP, YEAR_CHANGE. The previous map named tags the file does not have
+    // (REG_CODE, METHOD_NAME, REG_DATE…), so every row had an empty name.
+    // There is no unique id: MET_CODE repeats (1 478 codes for 1 580 records, distinct
+    // methods share a code), so it cannot be the ON CONFLICT key. registration_code keeps
+    // the importer's gen_N surrogate and the tool reports MET_CODE from raw_data.
     fieldMap: {
-      registration_code: 'REG_CODE',
+      registration_code: () => null,
       expertise_type: 'EXP_TYPE',
-      method_name: 'METHOD_NAME',
-      developer: 'DEVELOPER',
-      year_created: 'YEAR_CREATED',
-      registration_date: 'REG_DATE',
-      registration_info: 'REG_INFO',
-      status: 'STATUS',
+      method_name: 'MET_NAME',
+      // year_created is INTEGER; YEAR is sometimes a list ("1950, 1973") → first year.
+      year_created: (_v: string, r: Record<string, unknown>) => {
+        const m = /\d{4}/.exec(String(r.YEAR ?? ''));
+        return m ? Number(m[0]) : null;
+      },
+      registration_date: 'REGISTER_DATE',
+      registration_info: 'NOTES',
+      status: (_v: string, r: Record<string, unknown>) =>
+        String(r.REGISTER_DATE_STOP ?? '').trim() ? 'stopped' : 'active',
     },
     updateFrequency: 'weekly',
     sizeCategory: 'small',

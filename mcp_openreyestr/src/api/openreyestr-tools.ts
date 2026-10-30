@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { z } from 'zod';
-import { isSyntheticKey } from '../services/synthetic-keys';
+import { isSyntheticKey, notSyntheticSql, nullSyntheticKeys } from '../services/synthetic-keys';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -188,7 +188,7 @@ export function formatBankruptcyRow(row: any): Record<string, unknown> {
   const matched = cleanNais(row.matched_edrpou);
   return {
     id: row.id,
-    registration_number: row.registration_number,
+    registration_number: isSyntheticKey(row.registration_number) ? null : row.registration_number ?? null,
     registration_date: row.registration_date ?? null,
     case_number: cleanNais(row.case_number),
     court_decision_date: row.court_decision_date ?? null,
@@ -210,6 +210,43 @@ export function formatTerminationRow(row: any): Record<string, unknown> {
     op_date: toIsoDate(row.op_date),
     creditor_req_end_date: toIsoDate(row.creditor_req_end_date),
   };
+}
+
+/*
+ * LEXAI-2129: the importers put a "gen_<n>" surrogate into empty unique-key
+ * columns. It is not registry data, so these formatters report it as null.
+ */
+
+/** Court expert row → output. The source has no per-expert id; expert_id gen_N → null. */
+export function formatCourtExpertRow(row: any): Record<string, unknown> {
+  return nullSyntheticKeys(row, ['expert_id']);
+}
+
+/** Special notary form row → output. Legacy gen_N series/number → null. */
+export function formatSpecialFormRow(row: any): Record<string, unknown> {
+  return nullSyntheticKeys(row, ['series', 'form_number']);
+}
+
+/**
+ * Forensic method row → output. The old field map read tags the file does not
+ * have (REG_CODE, METHOD_NAME), so imported rows carry gen_N as the code and an
+ * empty name; the real values are in raw_data (MET_CODE, MET_NAME).
+ */
+export function formatForensicMethodRow(row: any): Record<string, unknown> {
+  const { raw_code, raw_method_name, ...rest } = row;
+  const code = isSyntheticKey(rest.registration_code) ? cleanNais(raw_code) : rest.registration_code ?? null;
+  const name = cleanNais(rest.method_name) ?? cleanNais(raw_method_name);
+  return { ...rest, registration_code: code, method_name: name };
+}
+
+/** Administrative unit row → output. Rows imported before the md5 key carry gen_N in koatuu. */
+export function formatAdministrativeUnitRow(row: any): Record<string, unknown> {
+  return nullSyntheticKeys(row, ['koatuu']);
+}
+
+/** Street row → output. gen_N fills street_type (no prefix) and street_name (settlement-level record). */
+export function formatStreetRow(row: any): Record<string, unknown> {
+  return nullSyntheticKeys(row, ['street_type', 'street_name']);
 }
 
 export class OpenReyestrTools {
@@ -754,7 +791,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || region || '', message: 'Судових експертів не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatCourtExpertRow);
   }
 
   /**
@@ -915,6 +952,8 @@ export class OpenReyestrTools {
       values.push(`%${escapeLike(proceeding_status)}%`);
       conditions.push(`proceeding_status ILIKE $${values.length}`);
     }
+    // Legacy gen_N rows duplicate a row keyed by the real RN_NUM (LEXAI-2129).
+    conditions.push(notSyntheticSql('registration_number'));
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     values.push(limit, offset);
@@ -982,6 +1021,8 @@ export class OpenReyestrTools {
       values.push(status);
       paramIndex++;
     }
+    // Legacy gen_N rows duplicate a row keyed by the real SR/NUM (LEXAI-2129).
+    conditions.push(notSyntheticSql('series'));
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     values.push(limit, offset);
@@ -997,7 +1038,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: series || form_number || recipient || '', message: 'Спеціальних бланків не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatSpecialFormRow);
   }
 
   /**
@@ -1010,7 +1051,8 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`to_tsvector('simple', method_name) @@ plainto_tsquery('simple', $${paramIndex})`);
+      // Rows imported with the old field map have an empty method_name; the name is in raw_data.
+      conditions.push(`to_tsvector('simple', COALESCE(NULLIF(method_name, ''), raw_data->>'MET_NAME', '')) @@ plainto_tsquery('simple', $${paramIndex})`);
       values.push(query);
       paramIndex++;
     }
@@ -1024,7 +1066,8 @@ export class OpenReyestrTools {
     values.push(limit, offset);
 
     const result = await this.pool.query(
-      `SELECT id, registration_code, expertise_type, method_name, developer, year_created, registration_date, status
+      `SELECT id, registration_code, expertise_type, method_name, developer, year_created, registration_date, status,
+              raw_data->>'MET_CODE' AS raw_code, raw_data->>'MET_NAME' AS raw_method_name
        FROM forensic_methods ${whereClause}
        ORDER BY registration_date DESC NULLS LAST
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -1034,7 +1077,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || expertise_type || '', message: 'Методик судових експертиз не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatForensicMethodRow);
   }
 
   /**
@@ -1123,7 +1166,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || region || '', message: 'Адміністративних одиниць не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatAdministrativeUnitRow);
   }
 
   /**
@@ -1170,7 +1213,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || settlement || '', message: 'Вулиць не знайдено за вашим запитом' }];
     }
-    return result.rows;
+    return result.rows.map(formatStreetRow);
   }
 
   /**
