@@ -2,7 +2,7 @@
  * Open Data Tools — bespoke tools with non-parametric query patterns
  *
  * 3 tools that can't be consolidated into search_registry:
- * - search_edrnpa — LEFT JOIN to texts table, conditional column
+ * - search_edrnpa — optional text lookup by reestr_code (second query)
  * - search_vrp_judges_discipline — queries 3 separate tables (dismissed/suspended/interference)
  * - search_vkks — routes to 5 category-specific sub-queries
  */
@@ -26,6 +26,37 @@ const EDRNPA_NAME_KEY_SQL =
 
 /** Amendment acts — «Про внесення змін…», «Про затвердження Змін…». */
 const EDRNPA_AMENDMENT_RE = '^\\s*Про (внесення|затвердження) (до .{0,200})?змін';
+
+/**
+ * Text lookup for search_edrnpa include_text (LEXAI-2148).
+ *
+ * opendata_edrnpa_cards and opendata_edrnpa_texts were bulk-loaded from two separate
+ * data.gov.ua files, each with its own serial id, and the files are not in the same
+ * order (140 930 cards, 140 886 texts). The old `LEFT JOIN texts t ON t.id = c.id`
+ * matched only 180 of 140 886 rows to the right act: KMU №301 got NBU №22, etc.
+ * The shared key is reestr_code. It is unique for ~94% of cards; the rest share
+ * one code across an act and its annexes (2 170 codes, 8 558 cards), so within such
+ * a package the text whose head carries the card's title earliest wins, ties by id.
+ * Runs on the page's card ids only, so the regexp work never scans the whole filter.
+ */
+const EDRNPA_TEXT_SQL = `SELECT c.id, x.full_text, x.n_texts
+  FROM opendata_edrnpa_cards c
+  CROSS JOIN LATERAL (
+    SELECT lower(regexp_replace(coalesce(c.name, ''), '[^[:alnum:]]+', '', 'g')) AS key
+  ) k
+  JOIN LATERAL (
+    SELECT LEFT(t.full_text, 3000) AS full_text, COUNT(*) OVER () AS n_texts
+    FROM opendata_edrnpa_texts t
+    WHERE t.reestr_code = c.reestr_code
+    ORDER BY CASE WHEN length(k.key) >= 10
+               THEN NULLIF(strpos(lower(regexp_replace(LEFT(t.full_text, 6000), '[^[:alnum:]]+', '', 'g')), k.key), 0)
+             END ASC NULLS LAST, t.id
+    LIMIT 1
+  ) x ON true
+  WHERE c.id = ANY($1::bigint[])`;
+
+const EDRNPA_PACKAGE_NOTE =
+  'Реєстраційний код спільний для кількох актів (акт і додатки); текст підібрано за назвою і може належати іншому документу пакета.';
 
 /** Query-side twin of EDRNPA_NAME_KEY_SQL. Exported for tests. */
 export function edrnpaPhraseKey(text: string): string {
@@ -218,16 +249,9 @@ export class OpenDataTools extends BaseToolHandler {
     const lim = Math.min(Number(limit) || 50, 100);
     values.push(lim);
 
-    const textJoin = include_text
-      ? `LEFT JOIN opendata_edrnpa_texts t ON t.id = c.id`
-      : '';
-    const textCol = include_text
-      ? `, LEFT(t.full_text, 3000) AS full_text`
-      : '';
-
-    const sql = `SELECT c.id, c.publisher, c.doc_type, c.date_acc, c.number, c.name, c.status, c.reestr_date, c.keywords${textCol},
+    const sql = `SELECT c.id, c.publisher, c.doc_type, c.date_acc, c.number, c.name, c.status, c.reestr_date, c.keywords,
              COUNT(*) OVER() AS _total_count
-      FROM opendata_edrnpa_cards c ${textJoin}
+      FROM opendata_edrnpa_cards c
       WHERE ${conditions.join(' AND ')}
       ORDER BY ${orderBy}
       LIMIT $${pi}`;
@@ -245,6 +269,7 @@ export class OpenDataTools extends BaseToolHandler {
         if (relaxedResult.rows.length > result.rows.length) { result = relaxedResult; relaxed = true; }
       }
       if (result.rows.length === 0) return this.wrapResponse('Нормативних актів не знайдено');
+      if (include_text) await this.attachEdrnpaTexts(result.rows);
       if (!relaxed) return this.wrapSearchResults(result.rows, lim);
       const total = Number(result.rows[0]._total_count ?? result.rows.length);
       const cleaned = result.rows.map(({ _total_count, ...rest }: any) => rest);
@@ -259,6 +284,18 @@ export class OpenDataTools extends BaseToolHandler {
     } catch (error: any) {
       logger.error('search_edrnpa error', { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
+    }
+  }
+
+  /** Adds full_text (and text_note for a shared reestr_code) to each card row in place. */
+  private async attachEdrnpaTexts(rows: any[]): Promise<void> {
+    const ids = rows.map((r) => r.id);
+    const { rows: texts } = await this.db.query(EDRNPA_TEXT_SQL, [ids]);
+    const byId = new Map<string, any>(texts.map((t: any) => [String(t.id), t]));
+    for (const row of rows) {
+      const t = byId.get(String(row.id));
+      row.full_text = t?.full_text ?? null;
+      if (t && Number(t.n_texts) > 1) row.text_note = EDRNPA_PACKAGE_NOTE;
     }
   }
 
