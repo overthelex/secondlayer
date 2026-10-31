@@ -21,7 +21,7 @@ import type { QueryReformulator } from '../../services/query-reformulator.js';
 import type { EdsrFtsService, EdsrFtsFilters, EdsrFtsSearchResponse } from '../../services/edrsr-fts-service.js';
 import { selectFtsTerms, sanitizeFtsToken, buildPrefixTsquery, isStatusVocabToken } from '../../services/edrsr-fts-service.js';
 import type { EdsrVectorizerService, EdrsrSearchFilters, EdrsrSearchResult } from '../../services/edrsr-vectorizer-service.js';
-import { formatCourtDate } from '../tool-utils.js';
+import { formatCourtDate, GRAND_CHAMBER_COURT_CODE } from '../tool-utils.js';
 
 const DEFAULT_RRF_K = 60;
 const DEFAULT_OVERSAMPLE = 3;
@@ -176,7 +176,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
 
 ⚠️ Роль сторони (конкретна особа/компанія саме ЯК відповідач або позивач) → передавай party_name + party_role у режимі fulltext/hybrid, а НЕ дописуй слово «відповідач» у query. party_name прив'язується до тексту як фраза, party_role — до рольового слова, тож «де X — відповідач» дасть точніший результат, ніж семантика чи ключові слова. Для точного № справи/статті → structured; для точного токена/номера в ТЕКСТІ рішення → exact.
 
-Фільтри (спільні для всіх режимів): court_code/court_name, judge, justice_kind, judgment_code, category_code, date_from/date_to, party_name, party_role, court_level (SC=Верховний Суд).
+Фільтри (спільні для всіх режимів): court_code/court_name, judge, justice_kind, judgment_code, category_code, date_from/date_to, party_name, party_role, court_level (SC=Верховний Суд, GrandChamber=Велика Палата ВС, court_code 9951).
 Пресети: military_preset (військові справи), kupap_preset (адмінправопорушення — traffic_dui, traffic_accident, domestic_violence, hooliganism тощо).
 Для повного тексту рішення — get_court_decision. Для резолютивки — edrsr_get_decision_dispositive.`,
       inputSchema: {
@@ -243,7 +243,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
           court_level: {
             type: 'string',
             enum: ['all', 'SC', 'GrandChamber'],
-            description: 'Рівень суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС). SC/GrandChamber → касаційна інстанція (мапиться на instance_code=1). Узгоджено з search_legal_precedents / find_similar_fact_pattern_cases.',
+            description: 'Рівень суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС). SC → касаційна інстанція (instance_code=1); GrandChamber → court_code=9951 (Велика Палата ВС; 9901 — загальний код «Верховний Суд» 2017–2018, не ВП). Явні court_code/court_name/instance_code мають пріоритет. Узгоджено з search_legal_precedents / find_similar_fact_pattern_cases.',
           },
           military_preset: {
             type: 'string',
@@ -307,9 +307,17 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     args = parsed.value;
 
     // court_level is the cross-tool convention (search_legal_precedents,
-    // find_similar_fact_pattern_cases): SC / GrandChamber → cassation instance. Map it onto
-    // instance_code so every mode honours it; explicit instance_code wins if both are given.
-    if (!args.instance_code && (args.court_level === 'SC' || args.court_level === 'GrandChamber')) {
+    // find_similar_fact_pattern_cases). Map it onto filters every mode already honours:
+    //  - GrandChamber → court_code 9951 (Велика Палата ВС). LEXAI-2172: it used to map to
+    //    instance_code=1 only, i.e. the whole cassation instance, identical to SC (1266 vs
+    //    171 decisions for 2026-10, judgment_code=2). court_code reaches the structured WHERE,
+    //    the FTS filters and the Qdrant court_code payload filter alike.
+    //  - SC → cassation instance (instance_code=1).
+    // An explicit court_code/court_name (or instance_code) from the caller wins.
+    if (args.court_level === 'GrandChamber') {
+      if (!args.court_code && !args.court_name) args.court_code = GRAND_CHAMBER_COURT_CODE;
+      else if (!args.instance_code) args.instance_code = 1;
+    } else if (!args.instance_code && args.court_level === 'SC') {
       args.instance_code = 1;
     }
 
@@ -972,7 +980,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       let ranked = Array.from(deduped.values()).sort((a, b) => b.score - a.score);
 
       // Structural enforcement. The Qdrant leg cannot filter by instance_code / party_name /
-      // party_role (court_level=SC/GrandChamber maps onto instance_code=1 upstream), so pure
+      // party_role (court_level=SC maps onto instance_code=1, GrandChamber onto court_code=9951 upstream), so pure
       // semantic hits arrive unconstrained. Without this, a court_level=SC query leaked
       // lower-instance courts (окружні/апеляційні) and off-party cases into the result —
       // mirrors the post-fusion pass in searchHybrid. Re-check candidates against

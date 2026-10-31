@@ -22,7 +22,7 @@ import { SectionType } from '../../types/index.js';
 import { logger } from '../../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../../utils/html-parser.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate } from '../tool-utils.js';
+import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate, GRAND_CHAMBER_COURT_CODE } from '../tool-utils.js';
 
 /** Max cases to enrich with precedent status per search (cost/latency guard) */
 const MAX_SHEPARDIZATION_BATCH = 15;
@@ -93,6 +93,7 @@ export class LegalAdviceTools extends BaseToolHandler {
       if (jk !== null) f.justice_kind = jk;
     }
     if (courtLevel && courtLevel !== 'all') f.instance_code = 1; // Supreme Court = cassation
+    if (courtLevel === 'GrandChamber') f.court_code = GRAND_CHAMBER_COURT_CODE; // ВП ВС = 9951
     return f;
   }
 
@@ -135,7 +136,7 @@ export class LegalAdviceTools extends BaseToolHandler {
               type: 'string',
               enum: ['all', 'SC', 'GrandChamber'],
               default: 'all',
-              description: 'Фільтр за рівнем суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС)',
+              description: 'Фільтр за рівнем суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС, код суду 9951)',
             },
             procedure_code: {
               type: 'string',
@@ -514,9 +515,9 @@ export class LegalAdviceTools extends BaseToolHandler {
     }
 
     let filtered = this.mapFtsResults(rows);
-    // Grand Chamber lives under a single court_code (9901).
+    // Grand Chamber lives under a single court_code (9951; also pushed into the FTS filter).
     if (courtLevel === 'GrandChamber') {
-      filtered = filtered.filter((d: any) => String(d?.court_code || '') === '9901');
+      filtered = filtered.filter((d: any) => String(d?.court_code || '') === String(GRAND_CHAMBER_COURT_CODE));
     }
     filtered = filtered.slice(0, limit);
 
