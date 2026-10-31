@@ -634,6 +634,49 @@ describe('LegislationService', () => {
       expect(mockAdapter.searchArticles).toHaveBeenCalled();
       expect(result[0].article_number).toBe('99');
     });
+
+    describe('repealed acts (LEXAI-2147)', () => {
+      const ftsRows = [
+        { id: 1, rada_id: '436-15', article_number: '230', title: 'Штрафні санкції', full_text: 'неустойка', metadata: {}, legislation_title: 'ГК' },
+        { id: 2, rada_id: '436-15', article_number: '231', title: 'Розмір', full_text: 'неустойка', metadata: {}, legislation_title: 'ГК' },
+        { id: 3, rada_id: '435-15', article_number: '549', title: 'Поняття неустойки', full_text: 'неустойка', metadata: {}, legislation_title: 'ЦК' },
+      ];
+      const statusRows = {
+        rows: [
+          { nreg: '436-15', status_code: 1, last_ed: '2025-08-28', repeal_note: null },
+          { nreg: '435-15', status_code: 5, last_ed: '2026-08-05', repeal_note: null },
+        ],
+        rowCount: 2,
+      };
+
+      it("'exclude' drops hits from repealed acts", async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce(ftsRows);
+        mockDb.query.mockResolvedValueOnce(statusRows);
+
+        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'exclude' });
+        expect(result.map(r => r.rada_id)).toEqual(['435-15']);
+        expect(mockDb.query.mock.calls[0][0]).toContain('FROM npa.act a');
+      });
+
+      it("'demote' keeps them but ranks current law first", async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce(ftsRows);
+        mockDb.query.mockResolvedValueOnce(statusRows);
+
+        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'demote' });
+        expect(result.map(r => `${r.rada_id}:${r.article_number}`)).toEqual(['435-15:549', '436-15:230', '436-15:231']);
+      });
+
+      it("default 'keep' does not query statuses (legacy order)", async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce(ftsRows);
+
+        const result = await service.findRelevantArticles('неустойка', undefined, 5);
+        expect(result[0].rada_id).toBe('436-15');
+        expect(mockDb.query).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('searchLegislation', () => {

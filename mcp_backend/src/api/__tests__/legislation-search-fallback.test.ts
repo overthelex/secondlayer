@@ -49,8 +49,9 @@ describe('search_legislation semantic fallback when AI-resolved article is missi
     expect(service.findRelevantArticles).toHaveBeenCalledWith(
       'строк чинності патенту на винахід', '3769-12', 10
     );
+    // Unscoped search hides repealed acts by default (LEXAI-2147).
     expect(service.findRelevantArticles).toHaveBeenCalledWith(
-      'строк чинності патенту на винахід', undefined, 10
+      'строк чинності патенту на винахід', undefined, 10, undefined, { repealed: 'exclude' }
     );
   });
 
