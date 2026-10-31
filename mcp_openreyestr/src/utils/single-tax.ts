@@ -38,11 +38,12 @@ export interface NormalizedActivityCodes {
   kvedVersion: KvedVersion | null;
 }
 
-// Division 2 digits, class 1-2 digits, optional KVED-2005 subclass digit. The
+// Division 2 digits, class 2 digits, optional KVED-2005 subclass digit. A
+// one-digit class ("47.1") is a code DPS cut off mid-way and is dropped. The
 // subclass is taken only when no digit follows it, so "68.20,47.19" splits into
 // two codes instead of "68.20.4". "," is accepted as the decimal mark
 // ("16,22  16,23").
-const KVED_CODE = /(?<!\d)(\d{2})[.,](\d{1,2})(?:[.,](\d)(?!\d))?/g;
+const KVED_CODE = /(?<!\d)(\d{2})[.,](\d{2})(?:[.,](\d)(?!\d))?/g;
 
 export function normalizeActivityCodes(raw: string | null | undefined): NormalizedActivityCodes {
   if (raw == null) return { codes: [], kvedVersion: null };
@@ -70,8 +71,17 @@ export function formatActivityCodes(raw: string | null | undefined): string | nu
 /** DPS cuts "vd" at ~239 characters; a value that long has lost codes. */
 export const ACTIVITY_CODES_SOURCE_LIMIT = 238;
 
+/**
+ * True when DPS cut the list: the value reaches the source limit, or digits
+ * follow the last complete code ("_47.19|_6", "68.20, 47.1").
+ */
 export function isActivityCodesTruncated(raw: string | null | undefined): boolean {
-  return raw != null && String(raw).length >= ACTIVITY_CODES_SOURCE_LIMIT;
+  if (raw == null) return false;
+  const text = String(raw);
+  if (text.length >= ACTIVITY_CODES_SOURCE_LIMIT) return true;
+  let tailStart = 0;
+  for (const m of text.matchAll(KVED_CODE)) tailStart = (m.index ?? 0) + m[0].length;
+  return /\d/.test(text.slice(tailStart));
 }
 
 /** ISO yyyy-mm-dd or null; DPS also ships blanks and stray text here. */
@@ -84,7 +94,12 @@ export function normalizeIsoDate(value: string | Date | null | undefined): strin
     return `${value.getFullYear()}-${m}-${d}`;
   }
   const v = String(value).trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  // Date.UTC rolls 2022-02-30 over to 2022-03-02; a real date round-trips.
+  return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d ? v : null;
 }
 
 /**
@@ -92,7 +107,7 @@ export function normalizeIsoDate(value: string | Date | null | undefined): strin
  * hold short ЄДРПОУ and raw activity codes; they are normalised here the same
  * way the importer now normalises them, so the answer does not depend on when
  * the row was loaded. `activity_codes_truncated` is NULL on those rows, and the
- * raw length then tells whether DPS cut the list.
+ * raw value then tells whether DPS cut the list.
  */
 export function formatSingleTaxPayerRow(row: Record<string, any>): Record<string, unknown> {
   const raw = row.activity_codes as string | null | undefined;

@@ -377,12 +377,13 @@ case_closure_ground — підстава закриття (ст. 90 КУзПБ);
 💰 Примерная стоимость: $0.001-$0.003 USD
 Пошук за назвою, ЄДРПОУ або групою єдиного податку.
 Лише юридичні особи: ДПС не публікує податкові номери ФОП. Останній набір ДПС на data.gov.ua датований 23.02.2022.
-activity_codes — коди КВЕД через кому (kved_version: КВЕД-2005, КВЕД-2010 або обидва); activity_codes_truncated = true, якщо ДПС обрізала перелік.`,
+activity_codes — коди КВЕД через кому; kved_version — одне зі значень "КВЕД-2005", "КВЕД-2010", "КВЕД-2005/2010" (є коди обох класифікаторів) або null (кодів немає); activity_codes_truncated = true, якщо ДПС обрізала перелік.
+tin: 8-значний ЄДРПОУ шукається з провідними нулями і без них; 10-значний РНОКПП приймається як є, без змін.`,
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Назва компанії' },
-            tin: { type: 'string', description: 'ЄДРПОУ (з провідними нулями або без них)' },
+            tin: { type: ['string', 'number'], description: 'ЄДРПОУ (з провідними нулями або без них) або 10-значний РНОКПП (як є)' },
             tax_group: { type: 'string', description: 'Група єдиного податку (1, 2, 3, 4)' },
             limit: { type: 'number', default: 50, maximum: 100, minimum: 1 },
             offset: { type: 'number', default: 0 },

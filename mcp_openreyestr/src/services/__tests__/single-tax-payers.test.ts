@@ -11,6 +11,7 @@ import {
   isActivityCodesTruncated,
   normalizeActivityCodes,
   normalizeEdrpou,
+  normalizeIsoDate,
   tinLookupCandidates,
 } from '../../utils/single-tax';
 
@@ -59,6 +60,8 @@ describe('LEXAI-2159: activity codes', () => {
     // cut by DPS mid-code: the partial tail is dropped
     ['_47.19|_47.99|_63.99|_6', ['47.19', '47.99', '63.99'], 'КВЕД-2010'],
     ['_68.20, _68.20', ['68.20'], 'КВЕД-2010'],
+    // a one-digit class is a code cut off mid-way
+    ['68.20, 47.1', ['68.20'], 'КВЕД-2010'],
   ])('%s', (raw, codes, version) => {
     expect(normalizeActivityCodes(raw)).toEqual({ codes, kvedVersion: version });
   });
@@ -75,6 +78,28 @@ describe('LEXAI-2159: activity codes', () => {
     expect(cut.length).toBe(239);
     expect(isActivityCodesTruncated(cut)).toBe(true);
     expect(isActivityCodesTruncated('_47.19, _68.20')).toBe(false);
+  });
+
+  it('flags a partial trailing code even below the length limit', () => {
+    expect(isActivityCodesTruncated('68.20, 47.1')).toBe(true);
+    expect(isActivityCodesTruncated('_47.19|_47.99|_6')).toBe(true);
+    expect(isActivityCodesTruncated('70.20.0;71.10.0; 52.62.0.')).toBe(false);
+    expect(isActivityCodesTruncated('01.11.0 вирощування зернових')).toBe(false);
+    expect(isActivityCodesTruncated('-')).toBe(false);
+    expect(isActivityCodesTruncated(null)).toBe(false);
+  });
+});
+
+describe('LEXAI-2159: dates', () => {
+  it('keeps real calendar dates only', () => {
+    expect(normalizeIsoDate('2022-02-28')).toBe('2022-02-28');
+    expect(normalizeIsoDate('2024-02-29')).toBe('2024-02-29');
+    expect(normalizeIsoDate('2022-02-30')).toBeNull();
+    expect(normalizeIsoDate('2023-02-29')).toBeNull();
+    expect(normalizeIsoDate('2022-13-01')).toBeNull();
+    expect(normalizeIsoDate('2022-00-10')).toBeNull();
+    expect(normalizeIsoDate('_68.20;;')).toBeNull();
+    expect(normalizeIsoDate('')).toBeNull();
   });
 });
 
@@ -112,6 +137,23 @@ describe('LEXAI-2159: tool output for rows loaded before the fix', () => {
     expect(sql).toMatch(/tin = ANY\(\$1::text\[\]\)/);
     expect(params[0]).toEqual(['01744330', '1744330']);
     expect(res[0]).toMatchObject({ tin: '01744330', kved_version: 'КВЕД-2010', activity_codes_truncated: false });
+  });
+
+  it('accepts a numeric tin from JSON clients', async () => {
+    const query = jest.fn(async () => ({ rows: [] }));
+    const pool = { query } as unknown as Pool;
+    const res = await new OpenReyestrTools(pool).searchSingleTaxPayers({ tin: 5391695 });
+    const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[0]).toEqual(['05391695', '5391695']);
+    expect(res[0]).toMatchObject({ found: false, query: '5391695' });
+  });
+
+  it('passes a 10-digit RNOKPP through unchanged', async () => {
+    const query = jest.fn(async () => ({ rows: [] }));
+    const pool = { query } as unknown as Pool;
+    await new OpenReyestrTools(pool).searchSingleTaxPayers({ tin: '0123456789' });
+    const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(params[0]).toEqual(['0123456789']);
   });
 });
 
@@ -164,6 +206,20 @@ describe('LEXAI-2159: single_tax_payers import', () => {
     expect(cfg.datasetUrl).toContain('reestr-platnukiv-edunogo-podatku-2022_02_23.zip');
     expect(cfg.upsertOnReload).toBe(true);
     expect(cfg.uniqueKey).toBe('tin');
+  });
+
+  it('leaves the table untouched when every row is skipped', async () => {
+    const onlyFop = join(dir, 'fop-only.csv');
+    writeFileSync(onlyFop, [
+      'name;tin;data_n;stavka;grup;vd;data_k',
+      '"ІВАНЕНКО ІВАН ІВАНОВИЧ";;2020-01-01;5;2;"_47.11";',
+      '"ПЕТРЕНКО ПЕТРО";;2021-03-01;5;2;"_47.19";',
+    ].join('\n'), 'utf-8');
+    const { pool, sql } = fakePool([TIN_INDEX]);
+    await expect(importCsv(pool, REGISTRIES.single_tax_payers, onlyFop, 'fop-only.csv'))
+      .rejects.toThrow(/no rows to import \(2 skipped\).*untouched/);
+    expect(sql.some(s => s.startsWith('TRUNCATE'))).toBe(false);
+    expect(sql.some(s => s.startsWith('DROP INDEX'))).toBe(false);
   });
 
   it('skips rows without a tax number and stores normalised values', async () => {

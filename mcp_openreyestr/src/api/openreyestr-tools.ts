@@ -1259,16 +1259,18 @@ export class OpenReyestrTools {
   /**
    * Search single tax payers registry
    */
-  async searchSingleTaxPayers(params: { query?: string; tin?: string; tax_group?: string; limit?: number; offset?: number }): Promise<any[]> {
+  async searchSingleTaxPayers(params: { query?: string; tin?: string | number; tax_group?: string; limit?: number; offset?: number }): Promise<any[]> {
     const { query, tin, tax_group, limit = 50, offset = 0 } = params;
     const conditions: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
-    if (tin && tin.trim()) {
+    // MCP clients may send the code as a JSON number.
+    const tinText = tin != null ? String(tin).trim() : '';
+    if (tinText) {
       // Rows imported before LEXAI-2159 hold ЄДРПОУ without leading zeros.
       conditions.push(`tin = ANY($${paramIndex}::text[])`);
-      values.push(tinLookupCandidates(tin));
+      values.push(tinLookupCandidates(tinText));
       paramIndex++;
     } else if (query) {
       conditions.push(`name ILIKE $${paramIndex}`);
@@ -1298,7 +1300,7 @@ export class OpenReyestrTools {
     );
 
     if (result.rows.length === 0) {
-      return [{ found: false, query: query || tin || '', message: 'Платників єдиного податку не знайдено' }];
+      return [{ found: false, query: query || tinText, message: 'Платників єдиного податку не знайдено' }];
     }
     return result.rows.map(formatSingleTaxPayerRow);
   }
@@ -1881,7 +1883,7 @@ export const SearchVatPayersSchema = z.object({
 
 export const SearchSingleTaxPayersSchema = z.object({
   query: z.string().optional(),
-  tin: z.string().optional(),
+  tin: z.union([z.string(), z.number()]).optional(),
   tax_group: z.string().optional(),
   limit: z.number().min(1).max(100).optional(),
   offset: z.number().min(0).optional(),
