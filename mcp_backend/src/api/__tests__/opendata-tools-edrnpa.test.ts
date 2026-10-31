@@ -110,8 +110,8 @@ describe('search_edrnpa', () => {
       db.query
         .mockResolvedValueOnce({ rows: [{ ...KMU_301 }, { ...KMU_298 }] })
         .mockResolvedValueOnce({ rows: [
-          { id: '140869', full_text: 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ ПОСТАНОВА від 6 березня 2026 р. N 301', n_texts: '1' },
-          { id: '140868', full_text: 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ ПОСТАНОВА від 6 березня 2026 р. N 298', n_texts: '1' },
+          { id: '140869', full_text: 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ ПОСТАНОВА від 6 березня 2026 р. N 301', n_cards: '1' },
+          { id: '140868', full_text: 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ ПОСТАНОВА від 6 березня 2026 р. N 298', n_cards: '1' },
         ] });
 
       const out = parse(await tools.executeTool('search_edrnpa',
@@ -135,13 +135,27 @@ describe('search_edrnpa', () => {
     it('flags a text picked from a package that shares one reestr_code, and nulls a missing one', async () => {
       db.query
         .mockResolvedValueOnce({ rows: [{ ...KMU_301 }, { ...KMU_298 }] })
-        .mockResolvedValueOnce({ rows: [{ id: '140869', full_text: 'НАКАЗ N 1226', n_texts: '23' }] });
+        .mockResolvedValueOnce({ rows: [{ id: '140869', full_text: 'НАКАЗ N 1226', n_cards: '23' }] });
 
       const out = parse(await tools.executeTool('search_edrnpa', { publisher: 'КМУ', include_text: true }));
 
       expect(out.results[0].text_note).toContain('спільний для кількох актів');
       expect(out.results[1].full_text).toBeNull();
       expect(out.results[1].text_note).toBeUndefined();
+    });
+
+    it('notes a package shared by several cards even when it has a single text', async () => {
+      db.query
+        .mockResolvedValueOnce({ rows: [{ ...KMU_301 }] })
+        .mockResolvedValueOnce({ rows: [{ id: '140869', full_text: 'НАКАЗ N 1226', n_cards: '3' }] });
+
+      const out = parse(await tools.executeTool('search_edrnpa', { publisher: 'КМУ', include_text: true }));
+
+      const textSql: string = db.query.mock.calls[1][0];
+      expect(textSql).toContain('c2.reestr_code = c.reestr_code');
+      expect(textSql).not.toContain('n_texts');
+      expect(db.query).toHaveBeenCalledTimes(2);   // one batched text query per page
+      expect(out.results[0].text_note).toContain('спільний для кількох актів');
     });
 
     it('makes no text query without include_text', async () => {

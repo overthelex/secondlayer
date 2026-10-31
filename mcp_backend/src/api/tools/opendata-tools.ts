@@ -37,15 +37,19 @@ const EDRNPA_AMENDMENT_RE = '^\\s*Про (внесення|затверджен�
  * The shared key is reestr_code. It is unique for ~94% of cards; the rest share
  * one code across an act and its annexes (2 170 codes, 8 558 cards), so within such
  * a package the text whose head carries the card's title earliest wins, ties by id.
- * Runs on the page's card ids only, so the regexp work never scans the whole filter.
+ * Runs once per page, batched over the page's card ids (= ANY($1)), so the regexp work
+ * never scans the whole filter; both sides use idx_edrnpa_{cards,texts}_reestr.
+ * n_cards (acts sharing the code) drives the package note, not the text count: a
+ * package that has only one text still needs the warning.
  */
-const EDRNPA_TEXT_SQL = `SELECT c.id, x.full_text, x.n_texts
+const EDRNPA_TEXT_SQL = `SELECT c.id, x.full_text,
+    (SELECT COUNT(*) FROM opendata_edrnpa_cards c2 WHERE c2.reestr_code = c.reestr_code) AS n_cards
   FROM opendata_edrnpa_cards c
   CROSS JOIN LATERAL (
     SELECT lower(regexp_replace(coalesce(c.name, ''), '[^[:alnum:]]+', '', 'g')) AS key
   ) k
   JOIN LATERAL (
-    SELECT LEFT(t.full_text, 3000) AS full_text, COUNT(*) OVER () AS n_texts
+    SELECT LEFT(t.full_text, 3000) AS full_text
     FROM opendata_edrnpa_texts t
     WHERE t.reestr_code = c.reestr_code
     ORDER BY CASE WHEN length(k.key) >= 10
@@ -295,7 +299,7 @@ export class OpenDataTools extends BaseToolHandler {
     for (const row of rows) {
       const t = byId.get(String(row.id));
       row.full_text = t?.full_text ?? null;
-      if (t && Number(t.n_texts) > 1) row.text_note = EDRNPA_PACKAGE_NOTE;
+      if (t && Number(t.n_cards) > 1) row.text_note = EDRNPA_PACKAGE_NOTE;
     }
   }
 
