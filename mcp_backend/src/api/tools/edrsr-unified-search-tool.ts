@@ -243,7 +243,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
           court_level: {
             type: 'string',
             enum: ['all', 'SC', 'GrandChamber'],
-            description: 'Рівень суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС). SC → касаційна інстанція (instance_code=1); GrandChamber → court_code=9951 (Велика Палата ВС; 9901 — загальний код «Верховний Суд» 2017–2018, не ВП). Явні court_code/court_name/instance_code мають пріоритет. Узгоджено з search_legal_precedents / find_similar_fact_pattern_cases.',
+            description: 'Рівень суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС). SC → касаційна інстанція (instance_code=1); GrandChamber → court_code=9951 (Велика Палата ВС; 9901 — загальний код «Верховний Суд» 2017–2018, не ВП). Явні фільтри мають пріоритет: з court_code/court_name GrandChamber/SC звужує лише до instance_code=1; з instance_code≠1 court_level ігнорується. Узгоджено з search_legal_precedents / find_similar_fact_pattern_cases.',
           },
           military_preset: {
             type: 'string',
@@ -313,10 +313,20 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
     //    171 decisions for 2026-10, judgment_code=2). court_code reaches the structured WHERE,
     //    the FTS filters and the Qdrant court_code payload filter alike.
     //  - SC → cassation instance (instance_code=1).
-    // An explicit court_code/court_name (or instance_code) from the caller wins.
+    // Explicit filters always win over court_level (one rule for SC and GrandChamber):
+    //  - explicit court_code/court_name → no 9951 pin; instance_code=1 if none was given;
+    //  - explicit instance_code other than 1 (appeal/first instance) → court_level is ignored,
+    //    instead of pinning 9951 on top and silently returning 0 hits (the Grand Chamber is a
+    //    cassation court, so the two can never both match).
+    const explicitInstance = args.instance_code ? Number(args.instance_code) : undefined;
     if (args.court_level === 'GrandChamber') {
-      if (!args.court_code && !args.court_name) args.court_code = GRAND_CHAMBER_COURT_CODE;
-      else if (!args.instance_code) args.instance_code = 1;
+      if (explicitInstance !== undefined && explicitInstance !== 1) {
+        // explicit instance_code wins; court_level dropped
+      } else if (!args.court_code && !args.court_name) {
+        args.court_code = GRAND_CHAMBER_COURT_CODE;
+      } else if (!args.instance_code) {
+        args.instance_code = 1;
+      }
     } else if (!args.instance_code && args.court_level === 'SC') {
       args.instance_code = 1;
     }

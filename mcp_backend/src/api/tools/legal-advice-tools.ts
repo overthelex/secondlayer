@@ -380,9 +380,16 @@ export class LegalAdviceTools extends BaseToolHandler {
       count_all: args.count_all || false,
     });
 
+    // court_level / procedure_code filters apply to every path, incl. count_all and the
+    // case-number shortcut (LEXAI-2172: GrandChamber → court_code 9951).
+    const levelFilters = this.buildEdsrFilters(
+      args.court_level ? String(args.court_level) : undefined,
+      args.procedure_code ? String(args.procedure_code) : undefined,
+    );
+
     if (args.count_all === true) {
       if (!this.ftsService || !this.db) throw new Error('FTS сервіс недоступний');
-      const countResult = await countAllResults(this.ftsService, this.db, query);
+      const countResult = await countAllResults(this.ftsService, this.db, query, levelFilters);
       return this.wrapResponse({
         query,
         count_all_mode: true,
@@ -426,7 +433,7 @@ export class LegalAdviceTools extends BaseToolHandler {
 
         const requestedDisplay = Math.min(50, Math.max(1, Number(args.limit || 10)));
         const ftsResp = await this.ftsService.searchFulltext(
-          smartQuery, this.db, {}, Math.max(requestedDisplay * 2, 20), 0,
+          smartQuery, this.db, levelFilters, Math.max(requestedDisplay * 2, 20), 0,
         );
         const similarCasesForDisplay = this.mapFtsResults(
           ftsResp.results.filter((r) => r.doc_id !== sourceCase.doc_id),

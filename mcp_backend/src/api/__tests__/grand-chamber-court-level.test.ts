@@ -1,4 +1,11 @@
+jest.mock('../../utils/html-parser', () => ({
+  ...jest.requireActual('../../utils/html-parser'),
+  extractSearchTermsWithAI: jest.fn().mockResolvedValue({ searchQuery: 'оренда землі', keywords: [], lawArticles: [] }),
+}));
+
 import { ProceduralTools } from '../tools/procedural-tools';
+import { LegalAdviceTools } from '../tools/legal-advice-tools';
+import { EdsrUnifiedSearchTool } from '../tools/edrsr-unified-search-tool';
 import {
   GRAND_CHAMBER_COURT_CODE,
   courtLevelCourtCode,
@@ -110,5 +117,111 @@ describe('compare_practice_pro_contra court_level=GrandChamber', () => {
     const all = [...out.pro, ...out.contra].map((c: any) => c.doc_id);
     expect(all).toEqual([GC_DOC]);
     expect(out.court_level_filter).toBe('GrandChamber');
+  });
+});
+
+// cubic P2 #1: the keyword-FTS fallback (no LLM / empty gather) ignored court_level.
+describe('compare_practice_pro_contra keyword-FTS fallback honours court_level', () => {
+  it('GrandChamber → only instance 1 with court_code 9951 on every FTS call', async () => {
+    const ftsService: any = {
+      searchFulltext: jest.fn().mockResolvedValue({
+        results: [{ doc_id: GC_DOC, court_code: 9951, adjudication_date: '2020-06-22', cause_num: '922/989/18', headline: 'оренда' }],
+      }),
+    };
+    // No LLM → straight to the keyword-FTS fallback.
+    const tools = new ProceduralTools({} as any, {} as any, {} as any, {} as any, {} as any, undefined as any, ftsService, {} as any, undefined as any);
+    const res = await (tools as any).comparePracticeProContra({ procedure_code: 'gpc', query: 'теза', court_level: 'GrandChamber' });
+    const out = JSON.parse(res.content[0].text);
+
+    expect(ftsService.searchFulltext).toHaveBeenCalled();
+    for (const call of ftsService.searchFulltext.mock.calls) {
+      expect(call[2].court_code).toBe(9951);
+      expect(call[2].instance_code).toBe(1);
+    }
+    expect(JSON.stringify(out)).toContain('Велика Палата ВС');
+  });
+
+  it('SC → only instance 1, no court_code pin; no court_level → walks 1/2/3', async () => {
+    const empty: any = { searchFulltext: jest.fn().mockResolvedValue({ results: [] }) };
+    const tools = new ProceduralTools({} as any, {} as any, {} as any, {} as any, {} as any, undefined as any, empty, {} as any, undefined as any);
+    await (tools as any).comparePracticeProContra({ procedure_code: 'gpc', query: 'теза', court_level: 'SC' });
+    const scInstances = empty.searchFulltext.mock.calls.map((c: any[]) => c[2].instance_code);
+    expect(new Set(scInstances)).toEqual(new Set([1]));
+    expect(empty.searchFulltext.mock.calls.every((c: any[]) => c[2].court_code === undefined)).toBe(true);
+
+    empty.searchFulltext.mockClear();
+    await (tools as any).comparePracticeProContra({ procedure_code: 'gpc', query: 'теза' });
+    const allInstances = empty.searchFulltext.mock.calls.map((c: any[]) => c[2].instance_code);
+    expect(new Set(allInstances)).toEqual(new Set([1, 2, 3]));
+  });
+});
+
+// cubic P2 #2: search_legal_precedents count_all and case-number shortcut ignored court_level.
+describe('search_legal_precedents court_level=GrandChamber on every path', () => {
+  function makeLegal(dbRows: any[] = []) {
+    const ftsService: any = { searchFulltext: jest.fn().mockResolvedValue({ results: [], total: 0 }) };
+    const db: any = { query: jest.fn().mockResolvedValue({ rows: dbRows }) };
+    const queryPlanner: any = {
+      classifyIntent: jest.fn().mockResolvedValue({ intent: 'x' }),
+      generateOptimizedSearchQuery: jest.fn().mockImplementation((q: string) => Promise.resolve(q)),
+    };
+    const llm: any = { chatCompletion: jest.fn() };
+    const tools = new LegalAdviceTools(
+      queryPlanner, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      undefined, llm, db, ftsService,
+    );
+    return { tools, ftsService };
+  }
+
+  it('count_all passes court_code 9951 + instance 1 + justice_kind to the FTS count', async () => {
+    const { tools, ftsService } = makeLegal();
+    await (tools as any).searchLegalPrecedents({ query: 'оренда землі', count_all: true, court_level: 'GrandChamber', procedure_code: 'gpc' });
+    const filters = ftsService.searchFulltext.mock.calls[0][2];
+    expect(filters).toEqual({ instance_code: 1, court_code: 9951, justice_kind: 3 });
+  });
+
+  it('case-number shortcut searches similar cases with court_code 9951', async () => {
+    const { tools, ftsService } = makeLegal([{
+      doc_id: 1, cause_num: '922/2310/16', judge: 'X', court_code: 9901, justice_kind: 3,
+      category_code: 1, adjudication_date: '2018-01-09', full_text: 'оренда землі '.repeat(20),
+    }]);
+    await (tools as any).searchLegalPrecedents({ query: 'справа 922/2310/16', court_level: 'GrandChamber' });
+    const filters = ftsService.searchFulltext.mock.calls[0][2];
+    expect(filters.court_code).toBe(9951);
+    expect(filters.instance_code).toBe(1);
+  });
+});
+
+// cubic P2 #3: GrandChamber + explicit instance_code≠1 used to pin 9951 on top → always 0 hits.
+describe('search_court_decisions: explicit filters win over court_level', () => {
+  const mockFts = () => ({
+    searchFulltext: jest.fn().mockResolvedValue({ results: [], total: 0 }),
+    filterDocIdsByConstraints: jest.fn(),
+    resolveJudgeNames: jest.fn(),
+  });
+  const db: any = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+
+  it('GrandChamber + instance_code=2 → instance_code=2 wins, no 9951 pin', async () => {
+    const fts: any = mockFts();
+    const tool = new EdsrUnifiedSearchTool(db, fts);
+    await tool.executeTool('search_court_decisions', { mode: 'exact', query: 'тест', court_level: 'GrandChamber', instance_code: 2 });
+    const filters = fts.searchFulltext.mock.calls[0][2];
+    expect(filters.instance_code).toBe(2);
+    expect(filters.court_code).toBeUndefined();
+  });
+
+  it('GrandChamber + instance_code=1 → still pinned to 9951', async () => {
+    const fts: any = mockFts();
+    const tool = new EdsrUnifiedSearchTool(db, fts);
+    await tool.executeTool('search_court_decisions', { mode: 'exact', query: 'тест', court_level: 'GrandChamber', instance_code: 1 });
+    const filters = fts.searchFulltext.mock.calls[0][2];
+    expect(filters.court_code).toBe(9951);
+    expect(filters.instance_code).toBe(1);
+  });
+
+  it('documents the precedence rule in the court_level description', () => {
+    const tool = new EdsrUnifiedSearchTool(db);
+    const desc = (tool.getToolDefinitions()[0].inputSchema.properties as any).court_level.description as string;
+    expect(desc).toContain('instance_code≠1 court_level ігнорується');
   });
 });

@@ -719,18 +719,25 @@ export class ProceduralTools extends BaseToolHandler {
     const ftsSearch = async (suffix: string) => {
       if (!this.ftsService || !this.db) return { results: [], instanceLabel: '' };
 
+      // Honour court_level here too: SC/GrandChamber → cassation only, GrandChamber also
+      // pinned to court_code 9951 (LEXAI-2172).
+      const fallbackGcCode = courtLevelCourtCode(courtLevelFilter);
       const baseFilters: EdsrFtsFilters = {
         ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
         ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
         ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+        ...(fallbackGcCode ? { court_code: fallbackGcCode } : {}),
       };
 
       const bareQuery = trimFtsQuery(query, 3);
-      for (const inst of [
-        { code: 1, label: 'Верховний Суд' },
-        { code: 2, label: 'апеляційні суди' },
-        { code: 3, label: 'суди першої інстанції' },
-      ] as const) {
+      const fallbackInstances: ReadonlyArray<{ code: number; label: string }> = courtLevelFilter
+        ? [{ code: 1, label: courtLevelFilter === 'GrandChamber' ? 'Велика Палата ВС' : 'Верховний Суд' }]
+        : [
+            { code: 1, label: 'Верховний Суд' },
+            { code: 2, label: 'апеляційні суди' },
+            { code: 3, label: 'суди першої інстанції' },
+          ];
+      for (const inst of fallbackInstances) {
         const resp = await this.ftsService.searchFulltext(
           `${bareQuery} ${suffix}`, this.db,
           { ...baseFilters, instance_code: inst.code }, limit,
