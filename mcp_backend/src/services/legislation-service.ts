@@ -23,8 +23,22 @@ import { ActStatusResolver, ActStatus } from './legislation-act-status.js';
  */
 export type RepealedActMode = 'keep' | 'demote' | 'exclude';
 
-/** Score multiplier for repealed-act hits in 'demote' mode. */
+/** Score multiplier for fully repealed acts (status 1) in 'demote' mode. */
 export const REPEALED_ACT_PENALTY = 0.5;
+/** Score multiplier for partially repealed acts (status 9) in 'demote' and 'exclude' modes. */
+export const PARTIALLY_REPEALED_ACT_PENALTY = 0.75;
+
+/**
+ * Ranking weight for a hit from an act with this status: null = drop it.
+ * Only a full repeal (status 1) is ever dropped; status 9 keeps some
+ * provisions in force, so it is demoted, not hidden.
+ */
+export function repealedActWeight(status: ActStatus | undefined, mode: RepealedActMode): number | null {
+  if (!status || mode === 'keep') return 1;
+  if (status.repealed) return mode === 'exclude' ? null : REPEALED_ACT_PENALTY;
+  if (status.partially_repealed) return PARTIALLY_REPEALED_ACT_PENALTY;
+  return 1;
+}
 
 export interface LegislationReference {
   rada_id: string;
@@ -1448,9 +1462,15 @@ export class LegislationService {
     radaId?: string,
     limit: number = 5,
     asOfDate?: string,
-    opts: { repealed?: RepealedActMode } = {}
+    opts: {
+      repealed?: RepealedActMode;
+      /** Filled in when 'exclude' drops hits, so the caller can say why a page is short or empty. */
+      stats?: { excluded_repealed: number };
+    } = {}
   ): Promise<LegislationReference[]> {
     const repealedMode: RepealedActMode = opts.repealed ?? 'keep';
+    const stats = opts.stats;
+    if (stats) stats.excluded_repealed = 0;
     const toReference = (row: any): LegislationReference => ({
       rada_id: row.rada_id,
       article_number: row.article_number,
@@ -1467,15 +1487,25 @@ export class LegislationService {
     });
 
     const textFallback = async (): Promise<LegislationReference[]> => {
-      const textResults = await this.searchLegislation(query, radaId, limit);
+      // Oversample when statuses may drop or reorder hits, so the page still fills.
+      const fetchLimit = repealedMode === 'keep' ? limit : limit * 3;
+      const textResults = await this.searchLegislation(query, radaId, fetchLimit);
       const refs = textResults.flatMap(r => r.articles.map((a: any) => toReference({
         ...a,
         rada_id: r.rada_id,
         npa_title: r.legislation_title,
       })));
-      if (repealedMode !== 'exclude' || refs.length === 0) return refs;
+      if (repealedMode === 'keep' || refs.length === 0) return refs.slice(0, limit);
       const statuses = await this.getActStatuses(refs.map(r => r.rada_id));
-      return refs.filter(r => !statuses.get(String(r.rada_id).toLowerCase())?.repealed);
+      const weighted: Array<{ ref: LegislationReference; w: number; i: number }> = [];
+      refs.forEach((ref, i) => {
+        const w = repealedActWeight(statuses.get(String(ref.rada_id).toLowerCase()), repealedMode);
+        if (w === null) { if (stats) stats.excluded_repealed++; return; }
+        weighted.push({ ref, w, i });
+      });
+      // Text results carry no score: demote = stable sort by weight (current law first).
+      weighted.sort((a, b) => b.w - a.w || a.i - b.i);
+      return weighted.slice(0, limit).map(x => x.ref);
     };
 
     try {
@@ -1531,18 +1561,18 @@ export class LegislationService {
       const fused = fuseRankLists(vectorKeys, ftsKeys);
 
       // Legal status per act behind the candidates — one cached PK lookup on npa.act.
-      let repealedIds = new Set<string>();
+      let actStatuses = new Map<string, ActStatus>();
       if (repealedMode !== 'keep' && fused.size > 0) {
         const ids = new Set<string>();
         for (const key of fused.keys()) {
           const rid = ftsRowByKey.get(key)?.rada_id ?? vectorBest.get(key)?.radaId;
           if (rid) ids.add(String(rid).toLowerCase());
         }
-        const statuses = await this.getActStatuses([...ids]);
-        repealedIds = new Set([...statuses.values()].filter(s => s.repealed).map(s => s.rada_id));
-        if (repealedMode === 'exclude' && repealedIds.size > 0) {
-          for (const key of [...fused.keys()]) {
-            if (repealedIds.has(key.slice(0, key.indexOf(':')))) fused.delete(key);
+        actStatuses = await this.getActStatuses([...ids]);
+        for (const key of [...fused.keys()]) {
+          if (repealedActWeight(actStatuses.get(key.slice(0, key.indexOf(':'))), repealedMode) === null) {
+            fused.delete(key);
+            if (stats) stats.excluded_repealed++;
           }
         }
       }
@@ -1617,9 +1647,7 @@ export class LegislationService {
             full_text_length: (row.full_text || '').length,
             is_transitional: isTransitional,
           }, numberTokens);
-          if (repealedMode === 'demote' && repealedIds.has(String(row.rada_id).toLowerCase())) {
-            score *= REPEALED_ACT_PENALTY;
-          }
+          score *= repealedActWeight(actStatuses.get(String(row.rada_id).toLowerCase()), repealedMode) ?? 1;
           return { row, score };
         })
         .filter((x): x is { row: any; score: number } => x !== null)

@@ -337,6 +337,9 @@ export class LegislationTools extends BaseToolHandler {
     // explicit rada_id is the caller's choice and is served (with a warning).
     const repealedMode: RepealedActMode = includeRepealed ? 'demote' : 'exclude';
     const unscopedOpts = { repealed: repealedMode };
+    // A guessed act (AI/regexp, not the caller's rada_id) gets the same filter
+    // when we search inside it as a fallback.
+    const guessedScopeOpts = { repealed: args.rada_id ? 'keep' as const : repealedMode };
 
     // Dedup: if a recent search already found articles from the same rada_id, return cached
     const now = Date.now();
@@ -447,7 +450,7 @@ export class LegislationTools extends BaseToolHandler {
           // (сам факт "стаття відсутня" — сильний сигнал, що і закон може бути не той).
           try {
             const [scoped, unscoped] = await Promise.all([
-              this.service.findRelevantArticles(args.query, resolvedRadaId, limit),
+              this.service.findRelevantArticles(args.query, resolvedRadaId, limit, undefined, guessedScopeOpts),
               this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts),
             ]);
             const seen = new Set<string>();
@@ -538,8 +541,8 @@ export class LegislationTools extends BaseToolHandler {
           args.query,
           `${article.title || ''} ${article.full_text || ''}`
         );
-        // A repealed act is never the whole answer: always add current law.
-        const refRepealed = Boolean(refStatus?.repealed);
+        // A (fully or partially) repealed act is never the whole answer: always add current law.
+        const refRepealed = Boolean(refStatus?.repealed || refStatus?.partially_repealed);
         const trusted =
           !refRepealed &&
           (directRef.confidence ?? 0) >= AI_REF_TRUSTED_CONFIDENCE &&
@@ -598,7 +601,7 @@ export class LegislationTools extends BaseToolHandler {
             if (response.articles.length > 1) {
               response.resolved_reference.supplemented = true;
               response.note = refRepealed
-                ? 'Визначена стаття належить акту, що втратив чинність, — додано чинні норми за семантичним пошуком.'
+                ? `Визначена стаття належить акту, що ${refStatus?.repealed ? 'втратив' : 'частково втратив'} чинність, — додано чинні норми за семантичним пошуком.`
                 : 'AI-визначена стаття могла не повністю відповідати запиту — додано релевантні статті за семантичним пошуком. Перевірте, яка стаття відповідає питанню.';
             }
             logger.info('[MCP Tool] search_legislation supplemented low-grounding AI reference', {
@@ -624,6 +627,16 @@ export class LegislationTools extends BaseToolHandler {
         }
 
         response.articles = await this.annotateHits(response.articles);
+        // An AI guess is only a guess: do not force a repealed article to the top
+        // of the combined list (include_repealed:true path). An explicit citation
+        // («ст. 230 ГК») stays first — the caller asked for exactly that article.
+        if (refRepealed && directRef.source !== 'regexp') {
+          const weight = (a: any) => (a.act_status?.repealed ? 0.5 : a.act_status?.partially_repealed ? 0.75 : 1);
+          response.articles = response.articles
+            .map((a: any, i: number) => ({ a, i }))
+            .sort((x: any, y: any) => weight(y.a) - weight(x.a) || x.i - y.i)
+            .map((x: any) => x.a);
+        }
         const refWarning = buildStatusWarning(refStatus);
         return refWarning ? { warning: refWarning, ...response } : response;
       }
@@ -659,29 +672,37 @@ export class LegislationTools extends BaseToolHandler {
       }
     }
 
+    const searchStats = { excluded_repealed: 0 };
     const articles = await this.service.findRelevantArticles(
       args.query,
       args.rada_id,
       limit,
       undefined,
-      args.rada_id ? { repealed: 'keep' } : unscopedOpts
+      args.rada_id ? { repealed: 'keep' } : { ...unscopedOpts, stats: searchStats }
     );
+    const excludedRepealed = searchStats.excluded_repealed;
 
     if (articles.length === 0) {
       return {
         query: args.query,
         total_found: 0,
         articles: [],
-        suggestion: 'Try a different search query or check if the legislation is loaded',
+        ...(excludedRepealed > 0 ? { excluded_repealed: excludedRepealed } : {}),
+        suggestion: excludedRepealed > 0
+          ? `Знайдено лише норми актів, що втратили чинність (${excludedRepealed} збігів), — їх не показано. Передайте include_repealed:true, щоб їх побачити, або уточніть запит для пошуку чинних норм.`
+          : 'Try a different search query or check if the legislation is loaded',
       };
     }
 
     const response: any = {
       query: args.query,
       total_found: articles.length,
-      ...(args.rada_id || includeRepealed
-        ? {}
-        : { note: 'Акти, що втратили чинність, не показано; передайте include_repealed:true, щоб включити їх (нижче за чинні).' }),
+      ...(excludedRepealed > 0
+        ? {
+            excluded_repealed: excludedRepealed,
+            note: `${excludedRepealed} збіг(ів) з актів, що втратили чинність, не показано; передайте include_repealed:true, щоб включити їх (нижче за чинні).`,
+          }
+        : {}),
       articles: articles.map(a => ({
         rada_id: a.rada_id,
         article_number: a.article_number,

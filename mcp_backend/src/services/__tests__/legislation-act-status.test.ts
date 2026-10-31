@@ -91,10 +91,23 @@ describe('buildActStatus / buildStatusWarning', () => {
     expect(buildStatusWarning(s)).toContain('Див. акт, яким скасовано (2427-19)');
   });
 
-  it('labels status 9 as partially repealed', () => {
+  it('treats status 9 as partially repealed: caveat, not «НЕ чинна норма»', () => {
     const s = buildActStatus({ nreg: 'x', status_code: 9, last_ed: '2020-01-01', repeal_note: null });
-    expect(s.repealed).toBe(true);
-    expect(buildStatusWarning(s)).toContain('втратив чинність, крім окремих положень, з 01.01.2020');
+    expect(s.repealed).toBe(false);
+    expect(s.partially_repealed).toBe(true);
+    expect(s.repealed_from).toBe('2020-01-01');
+    const w = buildStatusWarning(s)!;
+    expect(w).toContain('Акт частково втратив чинність з 01.01.2020');
+    expect(w).toContain('діють лише окремі положення');
+    expect(w).not.toContain('НЕ чинна норма');
+    expect(actStatusField(s)).toMatchObject({ partially_repealed: true, in_force: false });
+    expect(actStatusField(s)).not.toHaveProperty('repealed');
+  });
+
+  it('gives status 8 a partial-effect caveat', () => {
+    const s = buildActStatus({ nreg: 'z', status_code: 8 });
+    expect(s.in_force).toBe(true);
+    expect(buildStatusWarning(s)).toContain('набрав чинності частково');
   });
 
   it('gives no warning for an act in force, and a caveat for a suspended one', () => {
@@ -105,40 +118,90 @@ describe('buildActStatus / buildStatusWarning', () => {
     const suspended = buildActStatus({ nreg: 'y', status_code: 3 });
     expect(buildStatusWarning(suspended)).toContain('Дію акта зупинено');
   });
+
+  it('lower-cases a mixed-case nreg and still finds the curated successor', () => {
+    const s = buildActStatus({ nreg: '436-15', status_code: 1, last_ed: '2025-08-28' });
+    expect(s.successors?.[0].rada_id).toBe('435-15');
+    const k = buildActStatus({ nreg: '254К/96-ВР', status_code: 5 });
+    expect(k.rada_id).toBe('254к/96-вр');
+  });
 });
 
 describe('ActStatusResolver', () => {
-  function db(rows: any[], numberRows: any[] = []) {
+  const STATUS_ROWS = [
+    { nreg: '436-15', status_code: 1, last_ed: '2025-08-28' },
+    { nreg: '435-15', status_code: 5, last_ed: '2026-08-05' },
+    { nreg: '1007-14', status_code: 1, last_ed: '2019-01-01' },
+    { nreg: '254к/96-вр', status_code: 5, last_ed: '2020-01-01' },
+  ];
+  const NOTES: Record<string, string> = { '436-15': GK_NOTE, '1007-14': INLINE_NOTE };
+
+  /** Dispatches on SQL; `badNote` makes the note query throw (TOAST failure) for that act. */
+  function db(opts: { badNote?: string; statusFails?: boolean } = {}) {
     return {
-      query: jest.fn(async (sql: string) =>
-        sql.includes('npa.act_number') ? { rows: numberRows } : { rows }
-      ),
+      query: jest.fn(async (sql: string, params: any[]) => {
+        if (sql.includes('npa.act_number')) {
+          return { rows: [{ nreg: '4196-20', kind: 'official', alias_raw: '4196-IX', confidence: 1 }] };
+        }
+        if (sql.includes('npa.edition_text')) {
+          const ids: string[] = params[0];
+          if (opts.badNote && ids.includes(opts.badNote)) {
+            throw new Error('invalid byte sequence for encoding "UTF8": 0xd0');
+          }
+          return { rows: ids.filter((id) => NOTES[id]).map((id) => ({ nreg: id, repeal_note: NOTES[id] })) };
+        }
+        if (opts.statusFails) throw new Error('relation "npa.act" does not exist');
+        const ids: string[] = params[0];
+        return { rows: STATUS_ROWS.filter((r) => ids.includes(r.nreg)) };
+      }),
     } as any;
   }
+  const calls = (d: any, needle: string) => d.query.mock.calls.filter((c: any[]) => c[0].includes(needle));
 
-  it('batches, lower-cases and caches lookups', async () => {
-    const d = db([
-      { nreg: '436-15', status_code: 1, last_ed: '2025-08-28', repeal_note: GK_NOTE },
-      { nreg: '435-15', status_code: 5, last_ed: '2026-08-05', repeal_note: null },
-    ], [{ nreg: '4196-20', kind: 'official', alias_raw: '4196-IX', confidence: 1 }]);
+  it('batches, lower-cases (mixed-case input) and caches lookups', async () => {
+    const d = db();
     const r = new ActStatusResolver(d);
-    const m = await r.getStatuses(['436-15', '435-15', '435-15', null]);
+    const m = await r.getStatuses(['436-15', '435-15', '435-15', '254К/96-ВР', null]);
     expect(m.get('436-15')?.repealed).toBe(true);
+    expect(m.get('436-15')?.repealed_by).toContain('4196-IX');
     expect(m.get('436-15')?.repealed_by_rada_id).toBe('4196-20');
     expect(m.get('435-15')?.in_force).toBe(true);
-    const actQueries = () => d.query.mock.calls.filter((c: any[]) => c[0].includes('FROM npa.act a')).length;
-    expect(actQueries()).toBe(1);
-    expect(d.query.mock.calls[0][1][0]).toEqual(['436-15', '435-15']);
+    expect(m.get('254к/96-вр')?.in_force).toBe(true);
+    expect(calls(d, 'FROM npa.act a')).toHaveLength(1);
+    expect(calls(d, 'FROM npa.act a')[0][1][0]).toEqual(['436-15', '435-15', '254к/96-вр']);
+    // The note is read only for the repealed act, never for acts in force.
+    expect(calls(d, 'npa.edition_text')[0][1][0]).toEqual(['436-15']);
 
     await r.getStatuses(['436-15', 'unknown-1']);
     await r.getStatuses(['unknown-1']);
-    // 436-15 cached; unknown-1 fetched once, then negatively cached.
-    expect(actQueries()).toBe(2);
+    expect(calls(d, 'FROM npa.act a')).toHaveLength(2);
+  });
+
+  it('forces a full detoast before slicing the body (npa TOAST bug)', async () => {
+    const d = db();
+    await new ActStatusResolver(d).getStatuses(['436-15']);
+    const sql: string = calls(d, 'npa.edition_text')[0][0];
+    expect(sql).toContain("t.body || ''");
+    expect(sql).not.toMatch(/left\(\s*t\.body/);
+  });
+
+  it('a note that cannot be read costs only that act its note, not every status', async () => {
+    const d = db({ badNote: '436-15' });
+    const r = new ActStatusResolver(d);
+    const m = await r.getStatuses(['436-15', '1007-14', '435-15']);
+    // Status and date survive without the note.
+    expect(m.get('436-15')).toMatchObject({ repealed: true, repealed_from: '2025-08-28' });
+    expect(m.get('436-15')?.repealed_by).toBeUndefined();
+    // The other repealed act still gets its note via the per-act retry.
+    expect(m.get('1007-14')?.repealed_by_rada_id).toBe('2427-19');
+    expect(m.get('435-15')?.in_force).toBe(true);
+    // The act whose note failed is not cached, so the next call retries it.
+    await r.getStatuses(['436-15', '1007-14']);
+    expect(calls(d, 'FROM npa.act a')[1][1][0]).toEqual(['436-15']);
   });
 
   it('returns an empty map when the npa schema is unavailable', async () => {
-    const d = { query: jest.fn().mockRejectedValue(new Error('relation "npa.act" does not exist')) } as any;
-    const m = await new ActStatusResolver(d).getStatuses(['436-15']);
+    const m = await new ActStatusResolver(db({ statusFails: true })).getStatuses(['436-15']);
     expect(m.size).toBe(0);
   });
 });

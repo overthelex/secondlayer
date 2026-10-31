@@ -121,9 +121,9 @@ describe('search_legislation and repealed acts (LEXAI-2147)', () => {
     });
     const res = await tools.searchLegislation({ query: QUERY, include_repealed: true });
     expect(service.findRelevantArticles).toHaveBeenCalledWith(QUERY, undefined, 10, undefined, { repealed: 'demote' });
-    expect(res.articles[0].rada_id).toBe('436-15');
-    expect(res.articles[0].warning).toContain('втратив чинність');
-    expect(res.articles.some((a: any) => a.rada_id === '435-15')).toBe(true);
+    // The AI guess is not forced first: current law ranks above the repealed article.
+    expect(res.articles.map((a: any) => a.rada_id)).toEqual(['435-15', '436-15']);
+    expect(res.articles[1].warning).toContain('втратив чинність');
     expect(res.warning).toContain('втратив чинність');
   });
 
@@ -141,11 +141,62 @@ describe('search_legislation and repealed acts (LEXAI-2147)', () => {
   });
 
   it('plain semantic search excludes repealed acts by default and labels hits', async () => {
-    const { tools, service } = buildTools();
+    const { tools, service } = buildTools({
+      findRelevantArticles: jest.fn(async (_q: string, _r: any, _l: number, _d: any, opts: any) => {
+        if (opts?.stats) opts.stats.excluded_repealed = 3;
+        return [ckArticle];
+      }),
+    });
     const res = await tools.searchLegislation({ query: 'неустойка пеня' });
-    expect(service.findRelevantArticles).toHaveBeenCalledWith('неустойка пеня', undefined, 10, undefined, { repealed: 'exclude' });
+    expect(service.findRelevantArticles).toHaveBeenCalledWith(
+      'неустойка пеня', undefined, 10, undefined, expect.objectContaining({ repealed: 'exclude' })
+    );
     expect(res.articles[0].act_status).toEqual({ status: 'Чинний', in_force: true });
+    expect(res.excluded_repealed).toBe(3);
     expect(res.note).toContain('include_repealed');
+  });
+
+  it('says repealed matches were filtered out when nothing current is left', async () => {
+    const { tools } = buildTools({
+      findRelevantArticles: jest.fn(async (_q: string, _r: any, _l: number, _d: any, opts: any) => {
+        if (opts?.stats) opts.stats.excluded_repealed = 4;
+        return [];
+      }),
+    });
+    const res = await tools.searchLegislation({ query: 'оперативно-господарські санкції' });
+    expect(res.total_found).toBe(0);
+    expect(res.suggestion).toContain('include_repealed:true');
+    expect(res.suggestion).not.toContain('legislation is loaded');
+  });
+
+  it('no filter note when nothing was excluded', async () => {
+    const { tools } = buildTools();
+    const res = await tools.searchLegislation({ query: 'неустойка пеня' });
+    expect(res.note).toBeUndefined();
+  });
+
+  it('a partially repealed act (status 9) gets a caveat, not the repeal redirect', async () => {
+    const partial = buildActStatus({ nreg: '436-15', status_code: 9, last_ed: '2025-08-28' });
+    const { tools, service } = buildTools({
+      parseArticleReferenceWithAI: jest.fn().mockResolvedValue({
+        radaId: '436-15', articleNumber: '230', source: 'ai', confidence: 0.95,
+      }),
+      getActStatuses: jest.fn(async (ids: string[]) => {
+        const m = new Map();
+        for (const id of ids) {
+          if (id === '436-15') m.set(id, partial);
+          if (id === '435-15') m.set(id, CK);
+        }
+        return m;
+      }),
+    });
+    const res = await tools.searchLegislation({ query: QUERY });
+    expect(service.getArticle).toHaveBeenCalled();
+    expect(res.repealed_reference).toBeUndefined();
+    expect(res.warning).toContain('частково втратив чинність');
+    expect(res.warning).not.toContain('НЕ чинна норма');
+    // Still supplemented with current law, current law first.
+    expect(res.articles[0].rada_id).toBe('435-15');
   });
 
   it('an explicit rada_id keeps that act even if repealed', async () => {

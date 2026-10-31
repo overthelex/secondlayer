@@ -46,8 +46,9 @@ describe('search_legislation semantic fallback when AI-resolved article is missi
     expect(result.articles[0].article_number).toBe('6');
     expect(result.resolved_reference.not_found).toBe(true);
     // Both scoped (guessed act) and unscoped searches must run
+    // The guessed act is not the caller's rada_id, so the repealed filter applies (LEXAI-2147).
     expect(service.findRelevantArticles).toHaveBeenCalledWith(
-      'строк чинності патенту на винахід', '3769-12', 10
+      'строк чинності патенту на винахід', '3769-12', 10, undefined, { repealed: 'exclude' }
     );
     // Unscoped search hides repealed acts by default (LEXAI-2147).
     expect(service.findRelevantArticles).toHaveBeenCalledWith(

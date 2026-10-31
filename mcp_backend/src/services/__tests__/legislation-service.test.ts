@@ -649,14 +649,65 @@ describe('LegislationService', () => {
         rowCount: 2,
       };
 
-      it("'exclude' drops hits from repealed acts", async () => {
+      it("'exclude' drops hits from repealed acts and reports how many", async () => {
         mockEmbedding.searchVectors.mockResolvedValueOnce([]);
         mockAdapter.searchArticlesHybrid.mockResolvedValueOnce(ftsRows);
         mockDb.query.mockResolvedValueOnce(statusRows);
 
-        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'exclude' });
+        const stats = { excluded_repealed: 0 };
+        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'exclude', stats });
         expect(result.map(r => r.rada_id)).toEqual(['435-15']);
+        expect(stats.excluded_repealed).toBe(2);
         expect(mockDb.query.mock.calls[0][0]).toContain('FROM npa.act a');
+      });
+
+      it("'exclude' keeps a partially repealed act (status 9) but ranks it below current law", async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce(ftsRows);
+        mockDb.query.mockResolvedValueOnce({
+          rows: [
+            { nreg: '436-15', status_code: 9, last_ed: '2025-08-28' },
+            { nreg: '435-15', status_code: 5, last_ed: '2026-08-05' },
+          ],
+          rowCount: 2,
+        });
+
+        const stats = { excluded_repealed: 0 };
+        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'exclude', stats });
+        expect(result.map(r => `${r.rada_id}:${r.article_number}`)).toEqual(['435-15:549', '436-15:230', '436-15:231']);
+        expect(stats.excluded_repealed).toBe(0);
+      });
+
+      it('text fallback oversamples, filters and demotes', async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce([]);
+        mockAdapter.searchArticles.mockResolvedValueOnce([
+          { rada_id: '436-15', legislation_title: 'ГК', article_number: '230', title: 'a', full_text: 'x', metadata: {} },
+          { rada_id: '436-15', legislation_title: 'ГК', article_number: '231', title: 'b', full_text: 'x', metadata: {} },
+          { rada_id: '435-15', legislation_title: 'ЦК', article_number: '549', title: 'c', full_text: 'x', metadata: {} },
+          { rada_id: '435-15', legislation_title: 'ЦК', article_number: '550', title: 'd', full_text: 'x', metadata: {} },
+        ]);
+        mockDb.query.mockResolvedValueOnce(statusRows);
+
+        const stats = { excluded_repealed: 0 };
+        const excluded = await service.findRelevantArticles('неустойка', undefined, 2, undefined, { repealed: 'exclude', stats });
+        // Asked the text search for 3x the page, so 2 current hits still fill it.
+        expect(mockAdapter.searchArticles.mock.calls[0]).toContain(6);
+        expect(excluded.map(r => r.article_number)).toEqual(['549', '550']);
+        expect(stats.excluded_repealed).toBe(2);
+      });
+
+      it("text fallback in 'demote' puts current law first", async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce([]);
+        mockAdapter.searchArticles.mockResolvedValueOnce([
+          { rada_id: '436-15', legislation_title: 'ГК', article_number: '230', title: 'a', full_text: 'x', metadata: {} },
+          { rada_id: '435-15', legislation_title: 'ЦК', article_number: '549', title: 'c', full_text: 'x', metadata: {} },
+        ]);
+        mockDb.query.mockResolvedValueOnce(statusRows);
+
+        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'demote' });
+        expect(result.map(r => r.rada_id)).toEqual(['435-15', '436-15']);
       });
 
       it("'demote' keeps them but ranks current law first", async () => {
