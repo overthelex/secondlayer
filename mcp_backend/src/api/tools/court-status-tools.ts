@@ -20,14 +20,21 @@ import { logger } from '../../utils/logger.js';
 export const CASE_NUMBER_NORM_SQL = `lower(regexp_replace(case_number, '\\s+', '', 'g'))`;
 
 /**
- * Sort key for stage_date (DD.MM.YYYY text): YYYYMMDD, or NULL when the value is not a date
- * or its year is implausible. The ДСА source has typed years such as «01.12.2323» and
- * «28.08.9022» (LEXAI-2173); the importer and migration 233 clean stored rows, and this keeps
- * any that slip through from sorting above every real stage.
+ * Sort key for stage_date (DD.MM.YYYY text): YYYYMMDD, or NULL when the value is not a real
+ * calendar date or its year is implausible. The ДСА source has typed years such as
+ * «01.12.2323» and «28.08.9022» (LEXAI-2173): the importer normalises incoming rows and
+ * migration 233 cleaned the rows already stored; this key keeps any that remain from sorting
+ * above every real stage. The nested CASEs never throw: each cast or make_date() runs only
+ * after the previous level has validated its input.
  */
 export const STAGE_DATE_SORT_SQL = `CASE WHEN stage_date ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$' THEN
         CASE WHEN substr(stage_date, 7, 4)::int BETWEEN 1991 AND extract(year FROM now())::int + 1
-          THEN substr(stage_date, 7, 4) || substr(stage_date, 4, 2) || substr(stage_date, 1, 2) END
+              AND substr(stage_date, 4, 2)::int BETWEEN 1 AND 12 THEN
+          CASE WHEN substr(stage_date, 1, 2)::int BETWEEN 1 AND extract(day FROM make_date(
+                  substr(stage_date, 7, 4)::int, substr(stage_date, 4, 2)::int, 1)
+                  + interval '1 month - 1 day')::int
+            THEN substr(stage_date, 7, 4) || substr(stage_date, 4, 2) || substr(stage_date, 1, 2) END
+        END
       END`;
 
 /** Same normalisation as CASE_NUMBER_NORM_SQL, applied to user input. */
@@ -154,7 +161,7 @@ export class CourtStatusTools extends BaseToolHandler {
     }
 
     if (conditions.length === 0) {
-      return this.wrapResponse('Вкажіть номер справи, суддю або опис для пошуку');
+      return this.wrapResponse('Вкажіть номер справи, суддю, опис або назву суду для пошуку');
     }
 
     values.push(Math.min(Number(limit) || 50, 100));

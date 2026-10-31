@@ -6,6 +6,7 @@ import {
   SOURCE_COLUMNS,
   TARGET_COLUMNS,
   pickLatestZip,
+  isCalendarDate,
 } from '../court-case-status-dates';
 import { CourtStatusTools, STAGE_DATE_SORT_SQL } from '../../api/tools/court-status-tools';
 
@@ -37,6 +38,28 @@ describe('normalizeCourtDate (LEXAI-2173)', () => {
     expect(normalizeCourtDate('2024-10-01', MAX)).toEqual({ value: null, fix: 'dropped' });
     expect(normalizeCourtDate('', MAX)).toEqual({ value: null, fix: 'empty' });
     expect(normalizeCourtDate(null, MAX)).toEqual({ value: null, fix: 'empty' });
+  });
+});
+
+describe('calendar validation (cubic review)', () => {
+  it('rejects days that do not exist in the month or year', () => {
+    expect(normalizeCourtDate('31.02.2024', MAX)).toEqual({ value: null, fix: 'dropped' });
+    expect(normalizeCourtDate('29.02.2023', MAX)).toEqual({ value: null, fix: 'dropped' });
+    expect(normalizeCourtDate('31.04.2024', MAX)).toEqual({ value: null, fix: 'dropped' });
+    expect(normalizeCourtDate('29.02.2024', MAX)).toEqual({ value: '29.02.2024', fix: 'ok' });
+    expect(normalizeCourtDate('31.12.2024', MAX)).toEqual({ value: '31.12.2024', fix: 'ok' });
+  });
+
+  it('checks the repaired year, not the typed one', () => {
+    expect(normalizeCourtDate('29.02.2424', MAX)).toEqual({ value: '29.02.2024', fix: 'repaired' });
+    expect(normalizeCourtDate('29.02.2323', MAX)).toEqual({ value: null, fix: 'dropped' });
+  });
+
+  it('isCalendarDate follows the Gregorian leap rules', () => {
+    expect(isCalendarDate(29, 2, 2000)).toBe(true);
+    expect(isCalendarDate(29, 2, 2100)).toBe(false);
+    expect(isCalendarDate(30, 2, 2024)).toBe(false);
+    expect(isCalendarDate(0, 1, 2024)).toBe(false);
   });
 });
 
@@ -96,5 +119,17 @@ describe('search_court_case_status ordering (LEXAI-2173)', () => {
     const [sql] = db.query.mock.calls[0];
     expect(sql).toContain(`ORDER BY ${STAGE_DATE_SORT_SQL} DESC NULLS LAST`);
     expect(STAGE_DATE_SORT_SQL).toContain('BETWEEN 1991 AND extract(year FROM now())::int + 1');
+    // Day-of-month bound comes from the real month length, and make_date() sits in an inner
+    // CASE reached only after year and month were validated.
+    expect(STAGE_DATE_SORT_SQL).toContain("make_date(");
+    expect(STAGE_DATE_SORT_SQL).toContain("interval '1 month - 1 day'");
+    expect(STAGE_DATE_SORT_SQL.indexOf('BETWEEN 1 AND 12')).toBeLessThan(STAGE_DATE_SORT_SQL.indexOf('make_date('));
+  });
+
+  it('names every search field when no filter is given', async () => {
+    const db = { query: jest.fn() };
+    const res: any = await new CourtStatusTools(db).executeTool('search_court_case_status', {});
+    expect(JSON.stringify(res)).toContain('назву суду');
+    expect(db.query).not.toHaveBeenCalled();
   });
 });

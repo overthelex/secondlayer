@@ -37,20 +37,30 @@ export function normalizeCourtDate(raw: unknown, maxYear: number): NormalizedCou
   const m = DATE_RE.exec(s);
   if (!m) return { value: null, fix: 'dropped' };
   const [, dd, mm, yyyy] = m;
-  const day = Number(dd);
-  const month = Number(mm);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return { value: null, fix: 'dropped' };
-
   const year = Number(yyyy);
-  if (year >= MIN_COURT_YEAR && year <= maxYear) return { value: s, fix: 'ok' };
-
-  if (DOUBLED_YEAR_RE.test(yyyy)) {
-    const fixed = 2000 + Number(yyyy.slice(2));
-    if (fixed >= MIN_COURT_YEAR && fixed <= maxYear) {
-      return { value: `${dd}.${mm}.${fixed}`, fix: 'repaired' };
+  let fixedYear: number | null = null;
+  let fix: CourtDateFix = 'ok';
+  if (year >= MIN_COURT_YEAR && year <= maxYear) {
+    fixedYear = year;
+  } else if (DOUBLED_YEAR_RE.test(yyyy)) {
+    const candidate = 2000 + Number(yyyy.slice(2));
+    if (candidate >= MIN_COURT_YEAR && candidate <= maxYear) {
+      fixedYear = candidate;
+      fix = 'repaired';
     }
   }
-  return { value: null, fix: 'dropped' };
+  if (fixedYear === null) return { value: null, fix: 'dropped' };
+  // The calendar check runs on the final year: 29.02 is valid in 2024 but not in 2023.
+  if (!isCalendarDate(Number(dd), Number(mm), fixedYear)) return { value: null, fix: 'dropped' };
+  return { value: fix === 'ok' ? s : `${dd}.${mm}.${fixedYear}`, fix };
+}
+
+/** True when day/month/year name a real day (31.02 and 29.02 of a non-leap year do not). */
+export function isCalendarDate(day: number, month: number, year: number): boolean {
+  if (month < 1 || month > 12 || day < 1) return false;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return day <= days;
 }
 
 /** Column order of the ДСА TSV header (the file's "type" column maps to case_type). */

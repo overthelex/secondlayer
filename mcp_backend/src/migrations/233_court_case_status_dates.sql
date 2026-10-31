@@ -8,7 +8,8 @@
 -- normalises dates via court-case-status-dates.ts; this applies the same rules to the
 -- stored rows:
 --   * a doubled two-digit year (2323, 2424, 2121 …) becomes 20YY when that is plausible;
---   * any other year outside 1991 .. next year, or an impossible day/month, becomes NULL.
+--   * any other year outside 1991 .. next year, or a day that does not exist in that
+--     month and year (31.02, 29.02 of a non-leap year), becomes NULL.
 -- Prod snapshot 31.10.2026 (1,249,720 rows): stage_date 12 repaired + 99 nulled,
 -- registration_date 2 repaired + 1 nulled.
 -- Idempotent: after one run no stored value matches the WHERE clauses any more. The casts
@@ -30,19 +31,27 @@ UPDATE opendata_court_case_status
 
 UPDATE opendata_court_case_status
    SET stage_date = NULL
- WHERE CASE WHEN stage_date ~ '^\d{2}\.\d{2}\.\d{4}$'
-         THEN substr(stage_date, 7, 4)::int NOT BETWEEN 1991 AND extract(year FROM now())::int + 1
-           OR substr(stage_date, 4, 2)::int NOT BETWEEN 1 AND 12
-           OR substr(stage_date, 1, 2)::int NOT BETWEEN 1 AND 31
-         ELSE false END;
+ WHERE CASE WHEN stage_date ~ '^\d{2}\.\d{2}\.\d{4}$' THEN
+         CASE WHEN substr(stage_date, 7, 4)::int NOT BETWEEN 1991 AND extract(year FROM now())::int + 1
+                OR substr(stage_date, 4, 2)::int NOT BETWEEN 1 AND 12
+           THEN true
+           ELSE substr(stage_date, 1, 2)::int NOT BETWEEN 1 AND extract(day FROM make_date(
+                  substr(stage_date, 7, 4)::int, substr(stage_date, 4, 2)::int, 1)
+                  + interval '1 month - 1 day')::int
+         END
+       ELSE false END;
 
 UPDATE opendata_court_case_status
    SET registration_date = NULL
- WHERE CASE WHEN registration_date ~ '^\d{2}\.\d{2}\.\d{4}$'
-         THEN substr(registration_date, 7, 4)::int NOT BETWEEN 1991 AND extract(year FROM now())::int + 1
-           OR substr(registration_date, 4, 2)::int NOT BETWEEN 1 AND 12
-           OR substr(registration_date, 1, 2)::int NOT BETWEEN 1 AND 31
-         ELSE false END;
+ WHERE CASE WHEN registration_date ~ '^\d{2}\.\d{2}\.\d{4}$' THEN
+         CASE WHEN substr(registration_date, 7, 4)::int NOT BETWEEN 1991 AND extract(year FROM now())::int + 1
+                OR substr(registration_date, 4, 2)::int NOT BETWEEN 1 AND 12
+           THEN true
+           ELSE substr(registration_date, 1, 2)::int NOT BETWEEN 1 AND extract(day FROM make_date(
+                  substr(registration_date, 7, 4)::int, substr(registration_date, 4, 2)::int, 1)
+                  + interval '1 month - 1 day')::int
+         END
+       ELSE false END;
 
 -- The catalog entry pointed at a dataset that data.gov.ua no longer serves (every weekly
 -- start_import since 19.04.2026 failed with «Cannot download JSON»), and json_array without
@@ -53,4 +62,6 @@ UPDATE import_source_catalog
        source_type = 'file_download',
        enabled = false
  WHERE name = 'court_case_status'
-   AND source_url <> 'https://data.gov.ua/dataset/0ad60ea9-b029-456d-abc0-8c77a99b205c';
+   AND (source_url IS DISTINCT FROM 'https://data.gov.ua/dataset/0ad60ea9-b029-456d-abc0-8c77a99b205c'
+        OR source_type IS DISTINCT FROM 'file_download'
+        OR enabled IS DISTINCT FROM false);
