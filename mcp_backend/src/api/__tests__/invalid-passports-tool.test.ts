@@ -13,6 +13,8 @@ import {
   Tier1OpenDataTools,
   normalizePassportSeries,
   textTokenPatterns,
+  apostropheFreeSql,
+  patternNeedsApostropheFold,
 } from '../tools/tier1-opendata-tools.js';
 
 type Call = { sql: string; params: any[] };
@@ -50,8 +52,9 @@ describe('normalizePassportSeries', () => {
 });
 
 describe('textTokenPatterns', () => {
+  // Mirrors the SQL: translate(column, apostrophes, '') ILIKE pattern, for every pattern.
   const matches = (input: string, value: string) =>
-    textTokenPatterns(input).every((p) => likeToRegex(p).test(value));
+    textTokenPatterns(input).every((p) => likeToRegex(p).test(value.replace(/['’ʼ`]/g, '')));
 
   it('matches registry status wording from the documented forms', () => {
     expect(matches('ВИКРАДЕНО', 'ВИКРАДЕНИЙ')).toBe(true);
@@ -67,6 +70,23 @@ describe('textTokenPatterns', () => {
     expect(matches('ГУНП Київ', 'ДАРНИЦЬКЕ УПРАВЛІННЯ ПОЛІЦІЇ ГУНП В М. КИЄВІ')).toBe(true);
     expect(matches("Солом'янське", 'СОЛОМ’ЯНСЬКЕ УПРАВЛІННЯ ПОЛІЦІЇ ГУНП В М. КИЄВІ')).toBe(true);
     expect(matches('ГУНП Київ', 'ДЕРЖАВНА МІГРАЦІЙНА СЛУЖБА УКРАЇНИ')).toBe(false);
+  });
+
+  it('treats the apostrophe as optional in both directions', () => {
+    const stored = ['СОЛОМ’ЯНСЬКЕ УПРАВЛІННЯ', "СОЛОМ'ЯНСЬКЕ УПРАВЛІННЯ", 'СОЛОМЯНСЬКЕ УПРАВЛІННЯ'];
+    for (const input of ["Солом'янське", 'Солом’янське', 'Соломянське']) {
+      for (const value of stored) expect(matches(input, value)).toBe(true);
+    }
+    expect(textTokenPatterns("Солом'янське")).toEqual(['%СОЛОМЯНСЬК%']);
+    expect(textTokenPatterns('Солом’янське')).toEqual(['%СОЛОМЯНСЬК%']);
+    expect(apostropheFreeSql('ovd')).toBe("translate(ovd, chr(39) || chr(8217) || chr(700) || chr(96), '')");
+  });
+
+  it('splits words on hyphens and dashes', () => {
+    expect(textTokenPatterns('Івано-Франківський')).toEqual(['%ІВАН%', '%ФРАНКІВСЬК%']);
+    expect(textTokenPatterns('ГУНП—Київ')).toEqual(['%ГУНП%', '%КИ_В%']);
+    expect(textTokenPatterns('ГУНП – Київ')).toEqual(['%ГУНП%', '%КИ_В%']);
+    expect(matches('Івано-Франківськ', 'ІВАНО-ФРАНКІВСЬКИЙ ВІДДІЛ ПОЛІЦІЇ')).toBe(true);
   });
 
   it('escapes LIKE metacharacters and drops one-letter words', () => {
@@ -115,11 +135,22 @@ describe('search_invalid_passports', () => {
     expect(calls[0].params).toEqual(['EP', '137986']);
   });
 
-  it('reports the real total, not the page size, for OVD searches', async () => {
-    const page = Array.from({ length: 3 }, (_, i) => ({ id: `r${i}`, insert_date: '2026-03-27' }));
+  it('strips a series embedded in d_number even when d_series is given', async () => {
+    const { tool, calls } = makeTool(() => []);
+    await tool.executeTool('search_invalid_passports', { d_series: 'НМ', d_number: 'НМ525271', include_foreign: false });
+    expect(calls[0].params).toEqual(['HM', '525271']);
+  });
+
+  it('prefers d_series when it conflicts with the series in d_number', async () => {
+    const { tool, calls } = makeTool(() => []);
+    await tool.executeTool('search_invalid_passports', { d_series: 'НМ', d_number: 'ЕР525271', include_foreign: false });
+    expect(calls[0].params).toEqual(['HM', '525271']);
+  });
+
+  it('reports the real total from COUNT(*) OVER() in the same query', async () => {
     const { tool, calls } = makeTool(({ sql }) => {
-      if (sql.startsWith('SELECT count(*)')) return [{ n: sql.includes('_foreign') ? '1200' : '365389' }];
-      return page;
+      const total = sql.includes('_foreign') ? '1200' : '365389';
+      return Array.from({ length: 3 }, (_, i) => ({ id: `r${i}`, insert_date: '2026-03-27', _total_count: total }));
     });
 
     const out = parse(await tool.executeTool('search_invalid_passports', { ovd: 'ГУНП Київ', limit: 3 }));
@@ -128,17 +159,34 @@ describe('search_invalid_passports', () => {
     expect(out.total_by_type).toEqual({ internal: 365389, foreign: 1200 });
     expect(out.has_more).toBe(true);
     expect(out.results).toHaveLength(3);
+    expect(out.results[0]).not.toHaveProperty('_total_count');
+    expect(calls).toHaveLength(2); // one query per table, no separate count scan
     const select = calls[0];
+    expect(select.sql).toMatch(/count\(\*\) OVER\(\)/);
+    // No apostrophe can occur in ГУНП/КИЇВ, so the cheap plain column is used.
     expect(select.sql).toMatch(/ovd ILIKE \$1 AND ovd ILIKE \$2/);
+    expect(select.sql).not.toContain('translate(');
     expect(select.params).toEqual(['%ГУНП%', '%КИ_В%']);
   });
 
-  it('skips the count query when the page is not full', async () => {
-    const { tool, calls } = makeTool(({ sql }) => (sql.includes('_foreign') ? [] : [{ id: 'a' }, { id: 'b' }]));
+  it('folds apostrophes in the column only for words that can contain one', async () => {
+    const { tool, calls } = makeTool(() => []);
+    await tool.executeTool('search_invalid_passports', { ovd: 'Соломянське ГУНП', include_foreign: false });
+    expect(calls[0].sql).toContain(`${apostropheFreeSql('ovd')} ILIKE $1 AND ovd ILIKE $2`);
+    expect(calls[0].params).toEqual(['%СОЛОМЯНСЬК%', '%ГУНП%']);
+    expect(patternNeedsApostropheFold('%П_ЯТИХАТСЬК%')).toBe(true);   // П'ЯТИХАТСЬКИЙ
+    expect(patternNeedsApostropheFold('%КИ_В%')).toBe(false);
+    expect(patternNeedsApostropheFold('%ВИКРАДЕН%')).toBe(false);
+    expect(patternNeedsApostropheFold('%A\\_B%')).toBe(false);
+  });
+
+  it('searches by status alone', async () => {
+    const { tool, calls } = makeTool(({ sql }) =>
+      sql.includes('_foreign') ? [] : [{ id: 'a', _total_count: '2' }, { id: 'b', _total_count: '2' }]);
     const out = parse(await tool.executeTool('search_invalid_passports', { d_status: 'ВИКРАДЕНО' }));
     expect(out.total_count).toBe(2);
+    expect(out.total_by_type).toEqual({ internal: 2, foreign: 0 });
     expect(out.has_more).toBe(false);
-    expect(calls.some((c) => c.sql.startsWith('SELECT count(*)'))).toBe(false);
     expect(calls[0].params).toEqual(['%ВИКРАДЕН%']);
   });
 

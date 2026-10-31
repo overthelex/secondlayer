@@ -36,20 +36,37 @@ const UA_ENDING = /(ОГО|ЕГО|ОМУ|ЕМУ|ИМИ|ІМИ|ІЙ|ИЙ|ІЇ|О�
  * Turn free text ("ВИКРАДЕНО", "ГУНП Київ", "власник розшукується") into ILIKE
  * patterns, one per word, all of which must match. Each word is cut to a rough stem
  * so inflected forms match the registry's wording ("ВИКРАДЕНО" -> "ВИКРАДЕНИЙ",
- * "КИЇВ" -> "М. КИЄВІ"); Ї/Є (Київ/Києві) and apostrophes become single-char wildcards.
+ * "КИЇВ" -> "М. КИЄВІ"); Ї/Є (Київ/Києві) become single-char wildcards. Hyphens and
+ * dashes separate words. Apostrophes are dropped here and, via apostropheFreeSql(), from
+ * the column, so "СОЛОМ'ЯНСЬКЕ", "СОЛОМ’ЯНСЬКЕ" and "СОЛОМЯНСЬКЕ" all match each other.
  */
 export function textTokenPatterns(input: string): string[] {
   const words = input
     .toUpperCase()
-    .split(/[\s,.;:!?"«»()/]+/)
+    .replace(/['’ʼ`]/g, '')
+    .split(/[\s,.;:!?"«»()/\-‐‑‒–—―]+/)
     .filter((w) => w.length >= 2);
   return words.map((w) => {
     let stem = w;
     const m = stem.match(UA_ENDING);
     if (m && stem.length - m[1].length >= 4) stem = stem.slice(0, -m[1].length);
     const escaped = stem.replace(/[\\%_]/g, (c) => '\\' + c);
-    return `%${escaped.replace(/[ЇЄ'’ʼ`]/g, '_')}%`;
+    return `%${escaped.replace(/[ЇЄ]/g, '_')}%`;
   });
+}
+
+/** SQL expression for a text column with the apostrophes ' ’ ʼ ` removed. */
+export function apostropheFreeSql(column: string): string {
+  return `translate(${column}, chr(39) || chr(8217) || chr(700) || chr(96), '')`;
+}
+
+/**
+ * Whether a pattern could hit a stored apostrophe. Ukrainian writes one only after
+ * Б/П/В/М/Ф/Р before Я/Ю/Є/Ї (Є/Ї are already `_` in the pattern). Only such patterns
+ * need the translate() column, which costs ~2x on a 2.9M-row scan.
+ */
+export function patternNeedsApostropheFold(pattern: string): boolean {
+  return /[БПВМФР](?:[ЯЮ]|(?<!\\)_)/.test(pattern);
 }
 
 function dateKey(d: unknown): number {
@@ -117,10 +134,13 @@ AML/sanctions screening. Перелік ДСФМУ — першоджерело 
     let series = typeof args.d_series === 'string' ? normalizePassportSeries(args.d_series) : '';
     let number = typeof args.d_number === 'string' || typeof args.d_number === 'number'
       ? String(args.d_number).replace(/[\s-]/g, '') : '';
-    // "НМ525271" passed as the number alone: split it into series + number.
-    if (!series && number) {
+    // "НМ525271" in d_number: split off the series. If d_series is also given it wins.
+    if (number) {
       const m = number.match(/^(\D{1,4})(\d+)$/);
-      if (m) { series = normalizePassportSeries(m[1]); number = m[2]; }
+      if (m) {
+        if (!series) series = normalizePassportSeries(m[1]);
+        number = m[2];
+      }
     }
 
     const conditions: string[] = [];
@@ -135,7 +155,8 @@ AML/sanctions screening. Перелік ДСФМУ — першоджерело 
     for (const [column, input] of [['ovd', ovd], ['d_status', d_status]] as const) {
       if (typeof input !== 'string') continue;
       for (const pattern of textTokenPatterns(input)) {
-        conditions.push(`${column} ILIKE $${pi}`); values.push(pattern); pi++;
+        const expr = patternNeedsApostropheFold(pattern) ? apostropheFreeSql(column) : column;
+        conditions.push(`${expr} ILIKE $${pi}`); values.push(pattern); pi++;
       }
     }
 
@@ -151,20 +172,17 @@ AML/sanctions screening. Перелік ДСФМУ — першоджерело 
       const results: any[] = [];
       const counts: Record<string, number> = {};
       for (const [table, kind] of tables) {
+        // The page is capped at `lim`; COUNT(*) OVER() gives the real number of matches
+        // from the same scan (prod 01.11.2026: 'ГУНП Київ' 586 ms, 'ВИКРАДЕНО' 191 ms,
+        // broadest 'ГУНП' 1.88M rows 853 ms), not a second full scan.
         const page = await this.db.query(
-          `SELECT id, d_series, d_number, d_type, d_status, ovd, theft_date, insert_date, '${kind}' as passport_type
+          `SELECT id, d_series, d_number, d_type, d_status, ovd, theft_date, insert_date, '${kind}' as passport_type,
+                  count(*) OVER() AS _total_count
            FROM ${table} WHERE ${where} ORDER BY insert_date DESC NULLS LAST LIMIT ${lim}`,
           values
         );
-        results.push(...page.rows);
-        // The page is capped at `lim`; count separately so OVD/status searches report
-        // the real number of matches instead of the page size.
-        if (page.rows.length < lim) {
-          counts[kind] = page.rows.length;
-        } else {
-          const c = await this.db.query(`SELECT count(*)::bigint AS n FROM ${table} WHERE ${where}`, values);
-          counts[kind] = Number(c.rows[0]?.n ?? page.rows.length);
-        }
+        counts[kind] = page.rows.length > 0 ? Number(page.rows[0]._total_count ?? page.rows.length) : 0;
+        results.push(...page.rows.map(({ _total_count, ...row }: any) => row));
       }
 
       if (results.length === 0) {
