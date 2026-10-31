@@ -375,12 +375,14 @@ case_closure_ground — підстава закриття (ст. 90 КУзПБ);
         description: `Пошук у реєстрі платників єдиного податку (ДПС)
 
 💰 Примерная стоимость: $0.001-$0.003 USD
-Пошук за назвою, ІПН або групою єдиного податку.`,
+Пошук за назвою, ЄДРПОУ або групою єдиного податку.
+Лише юридичні особи: ДПС не публікує податкові номери ФОП. Останній набір ДПС на data.gov.ua датований 23.02.2022.
+activity_codes — коди КВЕД через кому (kved_version: КВЕД-2005, КВЕД-2010 або обидва); activity_codes_truncated = true, якщо ДПС обрізала перелік.`,
         inputSchema: {
           type: 'object',
           properties: {
-            query: { type: 'string', description: 'Назва ФОП/компанії' },
-            tin: { type: 'string', description: 'ІПН або ЄДРПОУ' },
+            query: { type: 'string', description: 'Назва компанії' },
+            tin: { type: 'string', description: 'ЄДРПОУ (з провідними нулями або без них)' },
             tax_group: { type: 'string', description: 'Група єдиного податку (1, 2, 3, 4)' },
             limit: { type: 'number', default: 50, maximum: 100, minimum: 1 },
             offset: { type: 'number', default: 0 },

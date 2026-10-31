@@ -174,6 +174,7 @@ export async function importCsv(
   let totalImported = 0;
   let totalErrors = 0;
   let totalRows = 0;
+  let totalSkipped = 0;
 
   // Get DB column names — skip raw_data for huge registries
   const columns = Object.keys(config.fieldMap);
@@ -243,6 +244,11 @@ export async function importCsv(
       record[headers[i]] = values[i];
     }
 
+    if (config.skipRecord?.(record)) {
+      totalSkipped++;
+      continue;
+    }
+
     batch.push(record);
     totalRows++;
 
@@ -288,7 +294,7 @@ export async function importCsv(
   }
 
   const elapsed = (Date.now() - start) / 1000;
-  console.log(`\n  CSV import complete: ${totalRows} rows, ${totalImported} imported, ${totalErrors} errors (${elapsed.toFixed(1)}s)`);
+  console.log(`\n  CSV import complete: ${totalRows} rows, ${totalImported} imported, ${totalErrors} errors, ${totalSkipped} skipped (${elapsed.toFixed(1)}s)`);
 
   // Batch failures are swallowed per-batch so one bad batch can't abort the run.
   // But a huge import that read rows and inserted none has already TRUNCATEd the

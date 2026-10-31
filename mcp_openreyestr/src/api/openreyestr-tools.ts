@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { z } from 'zod';
 import { isSyntheticKey, notSyntheticSql, nullSyntheticKeys } from '../services/synthetic-keys';
+import { formatSingleTaxPayerRow, tinLookupCandidates } from '../utils/single-tax';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -1264,9 +1265,10 @@ export class OpenReyestrTools {
     const values: any[] = [];
     let paramIndex = 1;
 
-    if (tin) {
-      conditions.push(`tin = $${paramIndex}`);
-      values.push(tin);
+    if (tin && tin.trim()) {
+      // Rows imported before LEXAI-2159 hold ЄДРПОУ without leading zeros.
+      conditions.push(`tin = ANY($${paramIndex}::text[])`);
+      values.push(tinLookupCandidates(tin));
       paramIndex++;
     } else if (query) {
       conditions.push(`name ILIKE $${paramIndex}`);
@@ -1286,7 +1288,9 @@ export class OpenReyestrTools {
     values.push(limit, offset);
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
     const result = await this.pool.query(
-      `SELECT id, name, tin, start_date, rate, tax_group, activity_codes, end_date
+      `SELECT id, name, tin, start_date, rate, tax_group, activity_codes,
+              to_jsonb(single_tax_payers) -> 'activity_codes_truncated' AS activity_codes_truncated,
+              end_date
        FROM single_tax_payers ${whereClause}
        ORDER BY name ASC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -1296,7 +1300,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || tin || '', message: 'Платників єдиного податку не знайдено' }];
     }
-    return result.rows;
+    return result.rows.map(formatSingleTaxPayerRow);
   }
 
   /**
