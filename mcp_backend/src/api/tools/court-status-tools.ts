@@ -2,7 +2,7 @@
  * Court Case Status Tools
  *
  * 1 tool:
- * - search_court_case_status — пошук статусів судових справ (1.25M записів)
+ * - search_court_case_status — стан розгляду справ (ДСА: КЦС, ККС, ВП та частина місцевих судів)
  *
  * Note: search_court_schedule was merged into search_court_hearing_schedule (court-session-tools.ts)
  */
@@ -18,6 +18,17 @@ import { logger } from '../../utils/logger.js';
  * case folded ("-Ц" and "-ц" are the same proceeding suffix).
  */
 export const CASE_NUMBER_NORM_SQL = `lower(regexp_replace(case_number, '\\s+', '', 'g'))`;
+
+/**
+ * Sort key for stage_date (DD.MM.YYYY text): YYYYMMDD, or NULL when the value is not a date
+ * or its year is implausible. The ДСА source has typed years such as «01.12.2323» and
+ * «28.08.9022» (LEXAI-2173); the importer and migration 233 clean stored rows, and this keeps
+ * any that slip through from sorting above every real stage.
+ */
+export const STAGE_DATE_SORT_SQL = `CASE WHEN stage_date ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$' THEN
+        CASE WHEN substr(stage_date, 7, 4)::int BETWEEN 1991 AND extract(year FROM now())::int + 1
+          THEN substr(stage_date, 7, 4) || substr(stage_date, 4, 2) || substr(stage_date, 1, 2) END
+      END`;
 
 /** Same normalisation as CASE_NUMBER_NORM_SQL, applied to user input. */
 export function normalizeCaseNumber(raw: string): string {
@@ -69,10 +80,10 @@ export class CourtStatusTools extends BaseToolHandler {
       {
         name: 'search_court_case_status',
         annotations: { title: 'Статус судової справи', readOnlyHint: true },
-        description: `Пошук статусів судових справ (Касаційний суд та інші)
+        description: `Пошук стану розгляду судових справ за відкритими даними ДСА.
 
 💰 Примерная стоимость: $0.001-$0.005 USD
-Пошук за номером справи, суддею, учасниками або описом. 1.25M записів (2000-2025).`,
+Пошук за номером справи, суддею, описом або назвою суду. Покриття: Касаційний цивільний суд, Касаційний кримінальний суд і Велика Палата Верховного Суду, а також частина справ місцевих та апеляційних судів. Касаційний господарський і Касаційний адміністративний суди у джерелі майже відсутні, тому порожній результат для них не означає, що справи немає.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -151,6 +162,7 @@ export class CourtStatusTools extends BaseToolHandler {
     // stage_date is DD.MM.YYYY text, so ordering the raw string sorted by day of month
     // (30.06.2021 above 13.07.2022); order by YYYYMMDD so the latest step is first. String
     // rearrangement rather than to_date(), which raises on an impossible date like 31.02.
+    // Years outside 1991..next year are source typos (LEXAI-2173) and sort last.
     // stage_name is a single space in 1.03M of 1.25M rows: the cassation courts' feed leaves
     // it blank and carries the procedural step in cause_result instead (every row has one of
     // the two). Surface the step as stage_name, trimmed, and turn blank strings into null.
@@ -162,8 +174,7 @@ export class CourtStatusTools extends BaseToolHandler {
         NULLIF(btrim(description), '') AS description
       FROM opendata_court_case_status
       WHERE ${conditions.join(' AND ')}
-      ORDER BY CASE WHEN stage_date ~ '^\\d{2}\\.\\d{2}\\.\\d{4}$'
-        THEN substr(stage_date, 7, 4) || substr(stage_date, 4, 2) || substr(stage_date, 1, 2) END DESC NULLS LAST
+      ORDER BY ${STAGE_DATE_SORT_SQL} DESC NULLS LAST
       LIMIT $${pi}`;
 
     try {
