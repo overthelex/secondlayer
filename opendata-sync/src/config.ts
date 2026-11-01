@@ -123,7 +123,7 @@ const backendWeeklySources: DataSourceSchedule[] = [
     enabled: true,
   },
   // LEXAI-2183: dsfmu_terrorism, lustration, wage_debtors and judge_candidates are disabled
-  // in import_source_catalog (migration 236 gives each reason): their data.gov.ua datasets
+  // in import_source_catalog (migration 237 gives each reason): their data.gov.ua datasets
   // are frozen or not a usable list. The other sources of that batch moved to the CKAN path.
   {
     name: 'dsfmu_terrorism',

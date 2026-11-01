@@ -1,4 +1,4 @@
--- Migration 236: import catalog sources whose data.gov.ua resources moved (LEXAI-2183)
+-- Migration 237: import catalog sources whose data.gov.ua resources moved (LEXAI-2183)
 --
 -- Ten catalog rows from migration 125 pointed at fixed resource URLs that return 404, and
 -- every scheduled run failed with «Cannot download JSON» (23-170 failed import_tasks each,

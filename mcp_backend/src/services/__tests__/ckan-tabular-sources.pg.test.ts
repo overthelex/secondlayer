@@ -1,5 +1,5 @@
 /**
- * LEXAI-2183 against a real PostgreSQL: migration 236's catalog rows drive the importer
+ * LEXAI-2183 against a real PostgreSQL: migration 237's catalog rows drive the importer
  * end to end (CSV, TSV, XLSX, CKAN "API" resource) and the disabled sources are refused.
  *
  * Needs a throwaway database; skipped unless IMPORT_TEST_PG_URL is set, e.g.
@@ -153,10 +153,10 @@ d('moved catalog sources on PostgreSQL (LEXAI-2183)', () => {
     pool = new Pool({ connectionString: PG_URL, max: 4, options: `-c search_path=${schema}` });
     await pool.query(handMadeTables);
     for (const f of ['110_import_tasks.sql', '117_tier1_opendata_tables.sql', '125_add_missing_sync_sources.sql',
-      '235_invalid_passports_ckan_sources.sql', '236_moved_catalog_sources_ckan.sql']) {
+      '235_invalid_passports_ckan_sources.sql', '237_moved_catalog_sources_ckan.sql']) {
       await pool.query(migration(f));
     }
-    await pool.query(migration('236_moved_catalog_sources_ckan.sql')); // idempotent
+    await pool.query(migration('237_moved_catalog_sources_ckan.sql')); // idempotent
     body = files(await stateAidXlsx());
   });
 
