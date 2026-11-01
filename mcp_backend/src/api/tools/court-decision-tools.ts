@@ -570,8 +570,22 @@ total_resolved_links=0 означає відсутність даних граф
     }
 
     if (!row) {
-      const hint = caseNumberFallback?.ambiguous_case_number ? ` ${caseNumberFallback.case_number_note}` : '';
-      return this.wrapError(`Рішення не знайдено в ЄДРСР (doc_id=${docId || 'N/A'}, cause_num=${caseNumber || 'N/A'})${hint}`);
+      const message = `Рішення не знайдено в ЄДРСР (doc_id=${docId || 'N/A'}, cause_num=${caseNumber || 'N/A'})`;
+      if (caseNumberFallback?.ambiguous_case_number) {
+        // Machine-readable, so a client can offer the candidates instead of parsing prose.
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              error: `${message}. ${caseNumberFallback.case_number_note}`,
+              requested_case_number: caseNumberFallback.requested_case_number,
+              ambiguous_case_number: caseNumberFallback.ambiguous_case_number,
+            }, null, 2),
+          }],
+          isError: true,
+        };
+      }
+      return this.wrapError(message);
     }
 
     // Enrich with court/judge names

@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { lookupWithCauseNumberFallback, resolveCauseNumber } from '../tool-utils';
+import { causeNumRangeEnd, lookupWithCauseNumberFallback, resolveCauseNumber } from '../tool-utils';
 import { EdsrUnifiedSearchTool } from '../tools/edrsr-unified-search-tool.js';
 import { CourtDecisionTools } from '../tools/court-decision-tools';
 
@@ -23,13 +23,40 @@ const DECISION_TEXT =
   'розглянув у порядку письмового провадження касаційну скаргу. Керуючись статтями 400, 409, 410 ' +
   'ЦПК України, Верховний Суд постановив касаційну скаргу залишити без задоволення. '.repeat(3);
 
-/** A corpus holding one case, keyed by its stored cause_num. */
+/**
+ * A tiny corpus, keyed by stored cause_num. It answers the way Postgres would:
+ * - the case-index probe (`cause_num = ANY($1)`) and the sibling range probe
+ *   (`cause_num >= $1 AND cause_num < $2 AND cause_num LIKE $3`) against the index;
+ * - structured COUNT/data queries apply EVERY `d.<col> = $n` predicate in the SQL, so a
+ *   retry that drops or misplaces a filter changes the answer instead of passing silently.
+ */
+type Doc = { doc_id: number; cause_num: string; justice_kind: number; judgment_code: number };
+
 function makeCorpusDb(stored: Record<string, number> = { [STORED]: 9 }) {
+  const docs: Doc[] = Object.entries(stored).flatMap(([cause_num, n], k) =>
+    Array.from({ length: n }, (_, i) => ({ doc_id: 72073973 + k * 100 + i, cause_num, justice_kind: 1, judgment_code: 2 })),
+  );
   const calls: Array<{ sql: string; params: any[] }> = [];
+
+  const applyFilters = (sql: string, params: any[]) => {
+    let out = docs;
+    for (const m of sql.matchAll(/d\.(cause_num|justice_kind|judgment_code) = \$(\d+)/g)) {
+      const col = m[1] as keyof Doc;
+      const val = params[Number(m[2]) - 1];
+      out = out.filter((d) => String(d[col]) === String(val));
+    }
+    return out;
+  };
+
   return {
     calls,
     query: jest.fn(async (sql: string, params: any[] = []) => {
       calls.push({ sql, params });
+      if (sql.includes('edrsr_case_index') && sql.includes('LIKE')) {
+        const [lo, hi, like] = params as string[];
+        const prefix = like.replace(/%$/, '');
+        return { rows: Object.keys(stored).filter((cn) => cn >= lo && cn < hi && cn.startsWith(prefix)).map(() => ({ '?column?': 1 })) };
+      }
       if (sql.includes('edrsr_case_index')) {
         const wanted: string[] = params[0];
         return {
@@ -38,17 +65,13 @@ function makeCorpusDb(stored: Record<string, number> = { [STORED]: 9 }) {
             .map(([cause_num, member_count]) => ({ cause_num, member_count })),
         };
       }
-      const cn = params[0];
-      const n = typeof cn === 'string' ? stored[cn] ?? 0 : 0;
-      if (sql.includes('COUNT(')) return { rows: [{ total: n }] };
-      if (sql.includes('FROM edrsr_documents') || sql.includes('edrsr_documents d')) {
-        if (!n) return { rows: [] };
+      if (sql.includes('COUNT(')) return { rows: [{ total: applyFilters(sql, params).length }] };
+      if (sql.includes('edrsr_documents')) {
         return {
-          rows: [{
-            doc_id: 72073973, cause_num: cn, judge: 'Луспеник Д. Д.', court_code: 9911,
-            justice_kind: 1, judgment_code: 2, category_code: null,
+          rows: applyFilters(sql, params).slice(0, 1).map((d) => ({
+            ...d, judge: 'Луспеник Д. Д.', court_code: 9911, category_code: null,
             adjudication_date: '2018-02-07', full_text: DECISION_TEXT,
-          }],
+          })),
         };
       }
       return { rows: [] };
@@ -56,27 +79,55 @@ function makeCorpusDb(stored: Record<string, number> = { [STORED]: 9 }) {
   };
 }
 
-describe('resolveCauseNumber — reverse direction (typed suffix, stored bare)', () => {
-  const db = (rows: Array<{ cause_num: string; member_count: number }>) => ({
-    query: jest.fn(() => Promise.resolve({ rows })),
+describe('causeNumRangeEnd', () => {
+  it('bumps the last digit, carrying past 9s and slashes', () => {
+    expect(causeNumRangeEnd('352/923/16')).toBe('352/923/17');
+    expect(causeNumRangeEnd('352/923/19')).toBe('352/923/2');
+    expect(causeNumRangeEnd('352/923/99')).toBe('352/924');
+    expect(causeNumRangeEnd('99/999/99')).toBeNull();
   });
+});
 
+describe('resolveCauseNumber — reverse direction (typed suffix, stored bare)', () => {
   it('drops a measured procedural suffix when the case is stored without one', async () => {
-    const res = await resolveCauseNumber('120/15617/23-а', db([{ cause_num: '120/15617/23', member_count: 2 }]));
+    const res = await resolveCauseNumber('120/15617/23-а', makeCorpusDb({ '120/15617/23': 2 }));
     expect(res.resolved).toBe('120/15617/23');
   });
 
   it('does not drop an unmeasured tail — it still names a specific case', async () => {
-    const res = await resolveCauseNumber('120/15617/23-XYZ', db([{ cause_num: '120/15617/23', member_count: 2 }]));
+    const res = await resolveCauseNumber('120/15617/23-XYZ', makeCorpusDb({ '120/15617/23': 2 }));
     expect(res.resolved).toBeNull();
   });
 
-  it('does not drop the suffix when the base also carries a differently-suffixed case', async () => {
-    const res = await resolveCauseNumber('120/15617/23-а', db([
-      { cause_num: '120/15617/23', member_count: 2 },
-      { cause_num: '120/15617/23-ц', member_count: 4 },
-    ]));
+  it('does not drop the suffix when the base also carries a measured differently-suffixed case', async () => {
+    const res = await resolveCauseNumber('120/15617/23-а', makeCorpusDb({ '120/15617/23': 2, '120/15617/23-ц': 4 }));
     expect(res.resolved).toBeNull();
+  });
+
+  it('does not drop the suffix when the sibling carries a suffix outside the measured list (-кр)', async () => {
+    // -кр is not in CAUSE_NUM_SUFFIXES, so the candidate probe never sees it; only the
+    // index-wide sibling check does. Without it the bare case would be picked over -кр.
+    const db = makeCorpusDb({ '120/15617/23': 2, '120/15617/23-кр': 5 });
+    const res = await resolveCauseNumber('120/15617/23-а', db);
+
+    expect(res.resolved).toBeNull();
+    const sibling = db.calls.find((c) => c.sql.includes('LIKE'));
+    expect(sibling?.params).toEqual(['120/15617/23', '120/15617/24', '120/15617/23-%']);
+  });
+
+  it('checks siblings under the other year spelling too', async () => {
+    const res = await resolveCauseNumber('120/15617/23-а', makeCorpusDb({ '120/15617/23': 2, '120/15617/2023-кр': 1 }));
+    expect(res.resolved).toBeNull();
+  });
+
+  it('fails closed when the sibling check errors', async () => {
+    const db = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('LIKE')) throw new Error('timeout');
+        return { rows: [{ cause_num: '120/15617/23', member_count: 2 }] };
+      }),
+    };
+    expect((await resolveCauseNumber('120/15617/23-а', db)).resolved).toBeNull();
   });
 });
 
@@ -149,10 +200,20 @@ describe('search_court_decisions structured — LEXAI-2176', () => {
   it('keeps the other filters when retrying with the variant', async () => {
     const db = makeCorpusDb();
     const tool = new EdsrUnifiedSearchTool(db as any);
-    await tool.executeTool('search_court_decisions', { mode: 'structured', cause_num: BARE, justice_kind: 1 });
+    const run = async (extra: Record<string, any>) => JSON.parse(
+      (await tool.executeTool('search_court_decisions', { mode: 'structured', cause_num: BARE, ...extra }))
+        ?.content[0].text || '{}',
+    );
 
+    // Matching filters: the variant's 9 docs come back.
+    expect((await run({ justice_kind: 1, judgment_code: 2 })).total).toBe(9);
     const retry = db.calls.filter((c) => c.sql.includes('COUNT(')).pop();
-    expect(retry?.params).toEqual([STORED, 1]);
+    expect(retry?.params).toEqual([STORED, 1, 2]);
+
+    // A filter the variant does not satisfy must still exclude it on the retry.
+    const excluded = await run({ justice_kind: 2 });
+    expect(excluded.total).toBe(0);
+    expect(excluded.resolved_case_number).toBeUndefined();
   });
 });
 
@@ -171,6 +232,17 @@ describe('get_court_decision — LEXAI-2176', () => {
     expect(parsed.case_number).toBe(STORED);
     expect(parsed.requested_case_number).toBe(BARE);
     expect(parsed.resolved_case_number).toBe(STORED);
+  });
+
+  it('returns the candidates as structured fields when the bare number is ambiguous', async () => {
+    const db = makeCorpusDb({ '123/456/20-ц': 3, '123/456/20-а': 2 });
+    const result = await build(db).executeTool('get_court_decision', { case_number: '123/456/20' });
+
+    expect(result?.isError).toBe(true);
+    const parsed = JSON.parse(result?.content[0].text || '{}');
+    expect(parsed.error).toContain('не знайдено');
+    expect(parsed.requested_case_number).toBe('123/456/20');
+    expect(parsed.ambiguous_case_number.candidates.sort()).toEqual(['123/456/20-а', '123/456/20-ц']);
   });
 
   it('still says «не знайдено» when no spelling exists', async () => {

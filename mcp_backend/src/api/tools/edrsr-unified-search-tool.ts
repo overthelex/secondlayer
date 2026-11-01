@@ -21,7 +21,7 @@ import type { QueryReformulator } from '../../services/query-reformulator.js';
 import type { EdsrFtsService, EdsrFtsFilters, EdsrFtsSearchResponse } from '../../services/edrsr-fts-service.js';
 import { selectFtsTerms, sanitizeFtsToken, buildPrefixTsquery, isStatusVocabToken } from '../../services/edrsr-fts-service.js';
 import type { EdsrVectorizerService, EdrsrSearchFilters, EdrsrSearchResult } from '../../services/edrsr-vectorizer-service.js';
-import { formatCourtDate, GRAND_CHAMBER_COURT_CODE, lookupWithCauseNumberFallback, edrsrPool } from '../tool-utils.js';
+import { formatCourtDate, GRAND_CHAMBER_COURT_CODE, lookupWithCauseNumberFallback } from '../tool-utils.js';
 
 const DEFAULT_RRF_K = 60;
 const DEFAULT_OVERSAMPLE = 3;
@@ -452,7 +452,10 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       const lookup = args.cause_num
         ? await lookupWithCauseNumberFallback(
             String(args.cause_num),
-            edrsrPool(this.ftsService, this.db),
+            // Same pool as the structured query itself, so the resolution and the retry
+            // read one corpus (a dedicated EDRSR pool would otherwise resolve against a
+            // different database than the one the retry runs on).
+            this.db,
             (cn) => runWith(cn),
             (r) => r.total === 0,
           )
