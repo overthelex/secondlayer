@@ -22,7 +22,8 @@
 #                                            # re-extract it after an extractor change
 #
 # Env: PG_CONTAINER (default secondlayer-postgres-local). DB and user come from the
-# container's own POSTGRES_DB / POSTGRES_USER.
+# container's own POSTGRES_DB / POSTGRES_USER. ALLOW_FAILED=1 marks a year covered even if
+# some rows still fail extraction (see edrsr_parties_failed).
 set -euo pipefail
 
 CONTAINER="${PG_CONTAINER:-secondlayer-postgres-local}"
@@ -65,6 +66,8 @@ YEAR="$cmd"
 WORKERS="${2:-4}"
 CHUNK="${3:-2000}"
 [[ "$YEAR" =~ ^[0-9]{4}$ ]] || { echo "bad year: $YEAR"; exit 2; }
+[[ "$WORKERS" =~ ^[1-9][0-9]*$ ]] || { echo "workers must be a positive integer: $WORKERS"; exit 2; }
+[[ "$CHUNK" =~ ^[1-9][0-9]*$ ]] || { echo "chunk_blocks must be a positive integer: $CHUNK"; exit 2; }
 
 q "SELECT 1 FROM pg_proc WHERE proname = 'edrsr_backfill_parties_range'" | grep -q 1 \
   || { echo "FATAL: edrsr_backfill_parties_range missing — apply migration 239 first"; exit 1; }
@@ -72,7 +75,9 @@ q "SELECT to_regclass('edrsr_fulltext_p_$YEAR') IS NOT NULL" | grep -q t \
   || { echo "FATAL: no partition edrsr_fulltext_p_$YEAR"; exit 1; }
 
 # Windows: reuse the recorded ones (resume), else split [0, blocks) into WORKERS equal parts.
-# Rows that land in blocks past the end later are handled by the INSERT/UPDATE triggers.
+# The windows are not extended when the partition grows between runs: rows in blocks past
+# the size recorded at the first run were written after migration 239's triggers existed,
+# and edrsr_parties_mark_covered validates against that recorded size, not the current one.
 mapfile -t WINDOWS < <(q "SELECT blk_lo || ' ' || blk_hi FROM edrsr_parties_progress WHERE adj_year = $YEAR ORDER BY blk_lo")
 if [ "${#WINDOWS[@]}" -eq 0 ]; then
   BLOCKS=$(q "SELECT pg_relation_size('edrsr_fulltext_p_$YEAR') / current_setting('block_size')::int")
@@ -104,7 +109,10 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 echo "[$(ts)] all windows done; marking $YEAR covered"
-q "SELECT adj_year, doc_count, party_count FROM edrsr_parties_mark_covered($YEAR)"
+# Rows left in edrsr_parties_failed are retried there; set ALLOW_FAILED=1 to accept the ones
+# that still fail (unreadable texts) after looking at them.
+ALLOW=false; [ "${ALLOW_FAILED:-0}" = "1" ] && ALLOW=true
+q "SELECT adj_year, doc_count, party_count FROM edrsr_parties_mark_covered($YEAR, $ALLOW)"
 q "SELECT 'role ' || role, count(*) FROM edrsr_parties WHERE adj_year = $YEAR GROUP BY role ORDER BY role"
 q "SELECT 'failed rows', count(*) FROM edrsr_parties_failed WHERE adj_year = $YEAR"
 echo "[$(ts)] done"

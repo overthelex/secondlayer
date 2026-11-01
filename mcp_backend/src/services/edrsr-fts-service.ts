@@ -102,11 +102,34 @@ export function buildPartyRoleRegex(partyName: string, role: Exclude<PartyRole, 
 // LEXAI-1760: the structured parties table (edrsr_parties, migration 239).
 // ---------------------------------------------------------------------------------------
 
+/**
+ * Merge the results of statements over DISJOINT document sets of one year leg (parties leg +
+ * the other-kinds full-text leg): counts add, cause lists union, court counts add.
+ */
+export function mergePartyLegResults(parts: Array<{
+  n: number; causes: string[]; by_court: Array<{ court_code: number; count: number }>; sample: any[];
+}>): { n: number; causes: string[]; by_court: Array<{ court_code: number; count: number }>; sample: any[] } {
+  if (parts.length === 1) return parts[0];
+  const courts = new Map<number, number>();
+  for (const p of parts) for (const b of p.by_court) courts.set(b.court_code, (courts.get(b.court_code) ?? 0) + b.count);
+  return {
+    n: parts.reduce((a, p) => a + p.n, 0),
+    causes: [...new Set(parts.flatMap(p => p.causes))],
+    by_court: [...courts.entries()].map(([court_code, count]) => ({ court_code, count })).sort((a, b) => b.count - a.count),
+    sample: parts.flatMap(p => p.sample),
+  };
+}
+
 /** edrsr_parties.role codes. */
 export const PARTY_ROLE_CODE: Record<Exclude<PartyRole, 'any'>, number> = { plaintiff: 1, defendant: 2 };
 
 /** Justice kinds the extractor covers (civil, commercial, administrative). */
 export const PARTIES_JUSTICE_KINDS: ReadonlySet<number> = new Set([1, 3, 4]);
+
+/** `alias`.justice_kind is one edrsr_parties does not hold (NULL included). */
+export function notPartiesKindSql(alias: string): string {
+  return `coalesce(${alias}.justice_kind, 0) NOT IN (${[...PARTIES_JUSTICE_KINDS].join(', ')})`;
+}
 
 /** Mirror of SQL edrsr_party_norm(): lower-case, one apostrophe, letters/digits/'/- only. */
 export function partyNorm(s: string): string | null {
@@ -805,7 +828,9 @@ export class EdsrFtsService {
    * LEXAI-1760: which of `legs` can be answered from edrsr_parties for a role-filtered party
    * lookup. null when the parties path does not apply at all — no plaintiff/defendant role, a
    * justice_kind the extractor does not cover, a name with no usable key, or no covered year —
-   * in which case every leg stays on the full-text path.
+   * in which case every leg stays on the full-text path. `otherKinds`: no justice_kind filter
+   * was given, so covered legs still need the full-text predicate for the kinds the table
+   * does not hold (NOT_PARTIES_KIND_SQL).
    */
   private async partiesLegPlan(
     partyName: string | undefined,
@@ -813,7 +838,7 @@ export class EdsrFtsService {
     justiceKind: number | undefined,
     legs: YearLeg[],
     dbPool: any,
-  ): Promise<{ keys: PartyNameKeys; role: number; covered: boolean[] } | null> {
+  ): Promise<{ keys: PartyNameKeys; role: number; covered: boolean[]; otherKinds: boolean } | null> {
     if (!partyName || !partyRole || partyRole === 'any') return null;
     if (justiceKind !== undefined && justiceKind !== null && !PARTIES_JUSTICE_KINDS.has(Number(justiceKind))) return null;
     const keys = partyNameKeys(partyName);
@@ -823,7 +848,10 @@ export class EdsrFtsService {
     const thisYear = new Date().getFullYear();
     const covered = legs.map(leg => partiesLegCovered(leg, years, thisYear));
     if (!covered.some(Boolean)) return null;
-    return { keys, role: PARTY_ROLE_CODE[partyRole], covered };
+    // No justice_kind filter: edrsr_parties holds only kinds 1/3/4, so a covered leg must still
+    // take kinds 2/5 (and rows without a kind) from the full-text predicate.
+    const otherKinds = justiceKind === undefined || justiceKind === null;
+    return { keys, role: PARTY_ROLE_CODE[partyRole], covered, otherKinds };
   }
 
   /**
@@ -1081,7 +1109,7 @@ export class EdsrFtsService {
     const partiesPlan = roleRegexApplies
       ? await this.partiesLegPlan(partyName, filters.party_role, filters.justice_kind, yearLegs, dbPool)
       : null;
-    const anyFtsLeg = !partiesPlan || partiesPlan.covered.some(c => !c);
+    const anyFtsLeg = !partiesPlan || partiesPlan.otherKinds || partiesPlan.covered.some(c => !c);
     let partiesLegConds: (leg: YearLeg) => string[] = () => [];
     if (partiesPlan) {
       const k = paramIdx;
@@ -1263,6 +1291,19 @@ export class EdsrFtsService {
       ? ['(SELECT f.doc_id, f.adj_year FROM edrsr_fulltext f WHERE FALSE)']
       : yearLegs.map((leg, i) => {
           const legConds = [...legWhere(leg, i), yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
+          if (partiesPlan?.covered[i] && partiesPlan.otherKinds) {
+            // Kinds edrsr_parties does not hold (2/5, NULL) keep the full-text party predicate.
+            const otherKind = hasMetadataFilter
+              ? notPartiesKindSql('d')
+              : `NOT EXISTS (SELECT 1 FROM edrsr_documents dk WHERE ${[
+                  'dk.doc_id = f.doc_id', `dk.justice_kind IN (${[...PARTIES_JUSTICE_KINDS].join(', ')})`, ...yearLegDocPredicate(leg, 'dk'),
+                ].join(' AND ')})`;
+            const otherConds = [...ftsLegConds, ...(whereClause ? [whereClause] : []), otherKind,
+              yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
+            return `(SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${legConds.join(' AND ')})
+            UNION ALL
+            (SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${otherConds.join(' AND ')})`;
+          }
           return `(SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${legConds.join(' AND ')})`;
         });
     const candBody = `SELECT legs.doc_id, legs.adj_year FROM (
@@ -1535,7 +1576,7 @@ export class EdsrFtsService {
           (SELECT coalesce(json_agg(s), '[]'::json) FROM (
              SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM l
              ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
-    const legSql = (leg: YearLeg) => `
+    const legSql = (leg: YearLeg, extraDocConds: string[] = []) => `
         WITH l AS MATERIALIZED (
           SELECT j.doc_id, j.court_code, j.cause_num, j.justice_kind, j.adjudication_date
           FROM (
@@ -1547,7 +1588,7 @@ export class EdsrFtsService {
               OFFSET 0
             ) m
             JOIN edrsr_documents d ON d.doc_id = m.doc_id
-            WHERE ${[...yearLegDocPredicate(leg), ...docConditions].join(' AND ')}
+            WHERE ${[...yearLegDocPredicate(leg), ...docConditions, ...extraDocConds].join(' AND ')}
             OFFSET 0
           ) j${recheck.length ? `
           WHERE ${recheck.join(' AND ')}` : ''}
@@ -1625,22 +1666,32 @@ export class EdsrFtsService {
           cum.push(before);
           continue; // older legs may still be served from the cache
         }
-        const sql = fromParties ? partiesLegSql(leg) : legSql(leg);
-        const args = fromParties ? partiesParams : params;
-        logger.debug('[EdsrFtsService] countByParty leg SQL', { leg, from_parties: fromParties, sql, params: args });
+        // A covered leg without a justice_kind filter also needs kinds 2/5 (not in
+        // edrsr_parties) from the full-text predicate: a second statement, merged below.
+        const stmts: Array<{ sql: string; args: any[] }> = fromParties
+          ? [{ sql: partiesLegSql(leg), args: partiesParams },
+             ...(partiesPlan!.otherKinds ? [{ sql: legSql(leg, [notPartiesKindSql('d')]), args: params }] : [])]
+          : [{ sql: legSql(leg), args: params }];
         try {
-          const res = await this.queryWithTimeout(dbPool, sql, args, remaining);
-          const row = res.rows[0] ?? {};
-          legRes = {
-            n: Number(row.n ?? 0),
-            causes: Array.isArray(row.causes) ? row.causes.map(String) : [],
-            by_court: (Array.isArray(row.by_court) ? row.by_court : [])
-              .map((r: any) => ({ court_code: Number(r.court_code), count: Number(r.count) })),
-            sample: (Array.isArray(row.sample) ? row.sample : []).map((r: any) => ({
-              doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
-              justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
-            })),
-          };
+          const parts: PartyLegResult[] = [];
+          for (const st of stmts) {
+            const left = PARTY_FTS_BUDGET_MS - (Date.now() - started);
+            if (left < PARTY_LEG_MIN_MS && parts.length > 0) throw Object.assign(new Error('leg budget exhausted'), { code: '57014' });
+            logger.debug('[EdsrFtsService] countByParty leg SQL', { leg, from_parties: fromParties, sql: st.sql, params: st.args });
+            const res = await this.queryWithTimeout(dbPool, st.sql, st.args, Math.max(left, PARTY_LEG_MIN_MS));
+            const row = res.rows[0] ?? {};
+            parts.push({
+              n: Number(row.n ?? 0),
+              causes: Array.isArray(row.causes) ? row.causes.map(String) : [],
+              by_court: (Array.isArray(row.by_court) ? row.by_court : [])
+                .map((r: any) => ({ court_code: Number(r.court_code), count: Number(r.count) })),
+              sample: (Array.isArray(row.sample) ? row.sample : []).map((r: any) => ({
+                doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
+                justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
+              })),
+            });
+          }
+          legRes = mergePartyLegResults(parts);
           // A finished year stays put; the current one still receives decisions.
           const closed = leg.maxYear !== null && leg.maxYear < thisYear;
           if (!fromParties) {
@@ -1786,9 +1837,14 @@ export class EdsrFtsService {
         params.push([...years], keys.key, keys.like, PARTY_ROLE_CODE[constraints.party_role as Exclude<PartyRole, 'any'>]);
         p += 4;
         conditions.push(`(
-          (f.adj_year = ANY($${k}::int[]) AND f.doc_id IN (
-             SELECT pp.doc_id FROM edrsr_parties pp
-             WHERE pp.doc_id = ANY($1) AND pp.role = $${k + 3} AND ${partiesNameMatchSql('pp', `$${k + 1}`, `$${k + 2}`)}))
+          (f.adj_year = ANY($${k}::int[]) AND (
+             f.doc_id IN (
+               SELECT pp.doc_id FROM edrsr_parties pp
+               WHERE pp.doc_id = ANY($1) AND pp.role = $${k + 3} AND ${partiesNameMatchSql('pp', `$${k + 1}`, `$${k + 2}`)})
+             -- kinds edrsr_parties does not hold (2/5, NULL) keep the full-text predicate
+             OR (${ftsConds.join(' AND ')} AND NOT EXISTS (
+               SELECT 1 FROM edrsr_documents dk
+               WHERE dk.doc_id = f.doc_id AND dk.justice_kind IN (${[...PARTIES_JUSTICE_KINDS].join(', ')})))))
           OR (NOT (f.adj_year = ANY($${k}::int[])) AND ${ftsConds.join(' AND ')}))`);
       } else {
         conditions.push(...ftsConds);

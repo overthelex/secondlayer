@@ -22,9 +22,10 @@
 --      doc_id order is random I/O (~0.8-2k docs/s). A chunk that raises (corrupt pglz,
 --      missing TOAST chunk, bad bytes) is retried row by row; rows that still fail go to
 --      edrsr_parties_failed and the chunk is still checkpointed.
---   5. A statement-level trigger on edrsr_fulltext so newly harvested decisions (INSERT) and
---      refetched texts (UPDATE of full_text) get their parties without a separate job. It
---      can never fail the harvest: any error is downgraded to a WARNING.
+--   5. Statement-level triggers on edrsr_fulltext so newly harvested decisions (INSERT),
+--      refetched texts or year fixes (UPDATE) and deletions keep edrsr_parties in step
+--      without a separate job. They can never fail the harvest: an error is downgraded to a
+--      WARNING and the batch is retried row by row.
 --
 -- Nothing here reads the 1.5 TB of full texts: the migration is DDL only and runs in
 -- milliseconds. The backfill is started by hand (scripts/edrsr/backfill-edrsr-parties.sh).
@@ -356,8 +357,10 @@ CREATE TABLE IF NOT EXISTS edrsr_parties_progress (
   started_at  TIMESTAMPTZ DEFAULT now(),
   updated_at  TIMESTAMPTZ DEFAULT now(),
   done_at     TIMESTAMPTZ,
+  rel_blocks  BIGINT,                  -- partition size (blocks) when the window was registered
   PRIMARY KEY (adj_year, blk_lo)
 );
+ALTER TABLE edrsr_parties_progress ADD COLUMN IF NOT EXISTS rel_blocks BIGINT;
 
 CREATE TABLE IF NOT EXISTS edrsr_parties_failed (
   doc_id     BIGINT NOT NULL,
@@ -406,7 +409,10 @@ BEGIN
 END
 $fn$;
 
--- Same for a single row, used when a whole chunk raised. Errors propagate to the caller.
+-- Same for a single row, used when a whole chunk raised, by the trigger's per-row retry and by
+-- the failed-row retry in edrsr_parties_mark_covered. Errors propagate to the caller.
+-- p_year NULL: any partition, and a row without adj_year takes the Kyiv year of its
+-- adjudication_date (old importers inserted (doc_id, full_text) only).
 CREATE OR REPLACE FUNCTION edrsr_parties_extract_doc(p_year int, p_doc_id bigint, p_prefix int DEFAULT 3000)
 RETURNS bigint
 LANGUAGE plpgsql AS
@@ -418,15 +424,21 @@ BEGIN
          (doc_id, role, ord, name_raw, name_norm, name_core, edrpou,
           court_code, justice_kind, adjudication_date, adj_year)
   SELECT f.doc_id, x.role, x.ord, x.name_raw, x.name_norm, x.name_core, x.edrpou,
-         d.court_code, d.justice_kind, d.adjudication_date, p_year
+         d.court_code, d.justice_kind, d.adjudication_date, y.adj_year
     FROM edrsr_fulltext f
     JOIN edrsr_documents d
       ON d.doc_id = f.doc_id
-     AND d.adjudication_date >= make_timestamptz(p_year, 1, 1, 0, 0, 0, 'Europe/Kyiv')
-     AND d.adjudication_date <  make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv')
      AND d.justice_kind IN (1, 3, 4)
+     AND (p_year IS NULL
+          OR (d.adjudication_date >= make_timestamptz(p_year, 1, 1, 0, 0, 0, 'Europe/Kyiv')
+              AND d.adjudication_date < make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv')))
+   CROSS JOIN LATERAL (
+     SELECT coalesce(f.adj_year, extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint) AS adj_year
+   ) y
    CROSS JOIN LATERAL edrsr_extract_parties(substr(f.full_text, 1, p_prefix)) x
-   WHERE f.adj_year = p_year AND f.doc_id = p_doc_id
+   WHERE f.doc_id = p_doc_id
+     AND (p_year IS NULL OR f.adj_year = p_year)
+     AND y.adj_year IS NOT NULL
   ON CONFLICT DO NOTHING;
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
@@ -452,11 +464,20 @@ DECLARE
   t0    timestamptz;
   part  text := 'edrsr_fulltext_p_' || p_year;
 BEGIN
+  IF p_chunk_blocks IS NULL OR p_chunk_blocks <= 0 THEN
+    RAISE EXCEPTION 'p_chunk_blocks must be positive (got %)', p_chunk_blocks;
+  END IF;
+  IF p_blk_lo IS NULL OR p_blk_hi IS NULL OR p_blk_lo < 0 OR p_blk_hi <= p_blk_lo THEN
+    RAISE EXCEPTION 'bad block window [%,%)', p_blk_lo, p_blk_hi;
+  END IF;
   IF to_regclass(part) IS NULL THEN
     RAISE EXCEPTION 'no partition % for year %', part, p_year;
   END IF;
-  INSERT INTO edrsr_parties_progress (adj_year, blk_lo, blk_hi, next_block)
-  VALUES (p_year, p_blk_lo, p_blk_hi, p_blk_lo)
+  -- rel_blocks: the partition's size when this window was first registered. Every row in a
+  -- block past the smallest such snapshot was written after the triggers below existed.
+  INSERT INTO edrsr_parties_progress (adj_year, blk_lo, blk_hi, next_block, rel_blocks)
+  VALUES (p_year, p_blk_lo, p_blk_hi, p_blk_lo,
+          pg_relation_size(part::regclass) / current_setting('block_size')::int)
   ON CONFLICT (adj_year, blk_lo) DO UPDATE
     SET blk_hi = EXCLUDED.blk_hi,
         done_at = CASE WHEN edrsr_parties_progress.next_block >= EXCLUDED.blk_hi
@@ -502,31 +523,63 @@ BEGIN
 END
 $fn$;
 
--- Mark a year as served by the parties table once every window of it is done. Refuses while
--- a window is unfinished, so the read path never switches to a half-built year.
-CREATE OR REPLACE FUNCTION edrsr_parties_mark_covered(p_year int)
+-- Mark a year as served by the parties table. Refuses (so the read path never switches to a
+-- half-built year) unless:
+--   * every window of the year is done and the windows tile [0, max(blk_hi)) without gaps;
+--   * max(blk_hi) reaches the partition size recorded when the first window was registered
+--     (rows in later blocks were written after the triggers existed, so the triggers did
+--     them — the partition growing under live ingestion does not block coverage);
+--   * both triggers are installed and enabled;
+--   * no row of the year is left in edrsr_parties_failed: those are retried here first, and
+--     only p_allow_failed = true accepts the ones that still fail (unreadable texts).
+-- (an earlier draft took only p_year)
+DROP FUNCTION IF EXISTS edrsr_parties_mark_covered(int);
+CREATE OR REPLACE FUNCTION edrsr_parties_mark_covered(p_year int, p_allow_failed boolean DEFAULT false)
 RETURNS edrsr_parties_coverage
 LANGUAGE plpgsql AS
 $fn$
 DECLARE
-  blocks bigint;
-  res edrsr_parties_coverage;
+  snap   bigint;
+  top    bigint;
+  r      record;
+  left_  bigint;
+  res    edrsr_parties_coverage;
 BEGIN
-  blocks := pg_relation_size(('edrsr_fulltext_p_' || p_year)::regclass) / current_setting('block_size')::int;
   IF NOT EXISTS (SELECT 1 FROM edrsr_parties_progress WHERE adj_year = p_year) THEN
     RAISE EXCEPTION 'year % has no backfill windows', p_year;
   END IF;
   IF EXISTS (SELECT 1 FROM edrsr_parties_progress WHERE adj_year = p_year AND done_at IS NULL) THEN
     RAISE EXCEPTION 'year % still has unfinished windows', p_year;
   END IF;
-  -- The windows must tile [0, blocks) without gaps.
+  SELECT min(rel_blocks), max(blk_hi) INTO snap, top FROM edrsr_parties_progress WHERE adj_year = p_year;
   IF (SELECT min(blk_lo) FROM edrsr_parties_progress WHERE adj_year = p_year) <> 0
-     OR (SELECT max(blk_hi) FROM edrsr_parties_progress WHERE adj_year = p_year) < blocks
      OR EXISTS (SELECT 1 FROM (
-          SELECT blk_lo, lag(blk_hi) OVER (ORDER BY blk_lo) AS prev_hi
+          SELECT blk_lo, max(blk_hi) OVER (ORDER BY blk_lo ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS prev_hi
             FROM edrsr_parties_progress WHERE adj_year = p_year) g
          WHERE prev_hi IS NOT NULL AND prev_hi < blk_lo) THEN
-    RAISE EXCEPTION 'year % windows do not cover heap blocks [0,%)', p_year, blocks;
+    RAISE EXCEPTION 'year % windows leave a gap in heap blocks [0,%)', p_year, top;
+  END IF;
+  IF snap IS NULL OR top < snap THEN
+    RAISE EXCEPTION 'year % windows end at block % but the partition had % blocks when the backfill started', p_year, top, snap;
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger
+       WHERE tgrelid = 'edrsr_fulltext'::regclass AND tgenabled <> 'D'
+         AND tgname IN ('trg_edrsr_parties_ins', 'trg_edrsr_parties_upd', 'trg_edrsr_parties_del')) < 3 THEN
+    RAISE EXCEPTION 'edrsr_parties triggers on edrsr_fulltext are missing or disabled';
+  END IF;
+
+  -- Retry the rows that failed (a transient error, or an extractor fixed since).
+  FOR r IN SELECT doc_id FROM edrsr_parties_failed WHERE adj_year = p_year LOOP
+    BEGIN
+      PERFORM edrsr_parties_extract_doc(NULL, r.doc_id);
+      DELETE FROM edrsr_parties_failed WHERE doc_id = r.doc_id;
+    EXCEPTION WHEN others THEN
+      UPDATE edrsr_parties_failed SET error = left(SQLERRM, 500), failed_at = now() WHERE doc_id = r.doc_id;
+    END;
+  END LOOP;
+  SELECT count(*) INTO left_ FROM edrsr_parties_failed WHERE adj_year = p_year;
+  IF left_ > 0 AND NOT p_allow_failed THEN
+    RAISE EXCEPTION 'year % has % rows in edrsr_parties_failed; inspect them, then pass p_allow_failed => true to accept', p_year, left_;
   END IF;
 
   INSERT INTO edrsr_parties_coverage (adj_year, doc_count, party_count, built_at)
@@ -542,12 +595,20 @@ END
 $fn$;
 
 -- ---------------------------------------------------------------------------------------
--- 5. Incremental: new and refetched decisions
+-- 5. Incremental: new, refetched, moved and deleted decisions
 -- ---------------------------------------------------------------------------------------
 
 -- Statement-level with transition tables: one INSERT per harvest batch, not per row (the same
 -- reason 216 moved the stats trigger off FOR EACH ROW). An error never fails the harvest: the
 -- batch is retried row by row and a row that still raises is logged to edrsr_parties_failed.
+--   INSERT  extract every new row.
+--   UPDATE  re-extract rows whose caption (first 3000 chars) or adj_year changed — a refetch
+--           of a damaged text, or a year fix that moves the row to another partition. Their
+--           old parties rows are deleted first, in every year. In a year not covered yet, also
+--           extract an updated row that has no parties: a non-HOT update moves the row to a
+--           new heap block, which may lie past the window the backfill is walking.
+--   DELETE  drop the parties (and failed-log) rows of the deleted decisions.
+-- A row without adj_year takes the Kyiv year of its adjudication_date.
 CREATE OR REPLACE FUNCTION trg_edrsr_parties_from_fulltext()
 RETURNS trigger
 LANGUAGE plpgsql AS
@@ -555,27 +616,39 @@ $fn$
 DECLARE
   r record;
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    DELETE FROM edrsr_parties p USING (SELECT DISTINCT doc_id FROM old_rows) o WHERE p.doc_id = o.doc_id;
+    DELETE FROM edrsr_parties_failed f USING (SELECT DISTINCT doc_id FROM old_rows) o WHERE f.doc_id = o.doc_id;
+    RETURN NULL;
+  END IF;
+
   BEGIN
     IF TG_OP = 'UPDATE' THEN
-      -- Only rows whose caption actually changed (refetch of a damaged text); a tsv-only
-      -- UPDATE leaves the head identical and costs two prefix reads per row, no writes.
-      CREATE TEMP TABLE IF NOT EXISTS _edrsr_parties_changed (doc_id bigint, adj_year smallint) ON COMMIT DROP;
+      CREATE TEMP TABLE IF NOT EXISTS _edrsr_parties_changed (doc_id bigint PRIMARY KEY) ON COMMIT DROP;
       INSERT INTO _edrsr_parties_changed
-      SELECT n.doc_id, n.adj_year
+      SELECT DISTINCT n.doc_id
         FROM new_rows n JOIN old_rows o ON o.doc_id = n.doc_id
-       WHERE substr(n.full_text, 1, 3000) IS DISTINCT FROM substr(o.full_text, 1, 3000);
-      DELETE FROM edrsr_parties p USING _edrsr_parties_changed c
-       WHERE p.doc_id = c.doc_id AND p.adj_year = c.adj_year;
+       WHERE substr(n.full_text, 1, 3000) IS DISTINCT FROM substr(o.full_text, 1, 3000)
+          OR n.adj_year IS DISTINCT FROM o.adj_year
+          -- A non-HOT update writes the row to a new heap block, possibly past the backfill's
+          -- window: in a year not yet covered, extract a row that has no parties yet.
+          OR (NOT EXISTS (SELECT 1 FROM edrsr_parties_coverage c WHERE c.adj_year = n.adj_year)
+              AND NOT EXISTS (SELECT 1 FROM edrsr_parties p WHERE p.doc_id = n.doc_id))
+      ON CONFLICT DO NOTHING;
+      DELETE FROM edrsr_parties p USING _edrsr_parties_changed c WHERE p.doc_id = c.doc_id;
       INSERT INTO edrsr_parties
              (doc_id, role, ord, name_raw, name_norm, name_core, edrpou,
               court_code, justice_kind, adjudication_date, adj_year)
       SELECT n.doc_id, x.role, x.ord, x.name_raw, x.name_norm, x.name_core, x.edrpou,
-             d.court_code, d.justice_kind, d.adjudication_date, n.adj_year
+             d.court_code, d.justice_kind, d.adjudication_date, y.adj_year
         FROM new_rows n
         JOIN _edrsr_parties_changed c ON c.doc_id = n.doc_id
         JOIN edrsr_documents d ON d.doc_id = n.doc_id AND d.justice_kind IN (1, 3, 4)
+       CROSS JOIN LATERAL (
+         SELECT coalesce(n.adj_year, extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint) AS adj_year
+       ) y
        CROSS JOIN LATERAL edrsr_extract_parties(substr(n.full_text, 1, 3000)) x
-       WHERE n.adj_year IS NOT NULL
+       WHERE y.adj_year IS NOT NULL
       ON CONFLICT DO NOTHING;
       TRUNCATE _edrsr_parties_changed;
     ELSE
@@ -583,27 +656,49 @@ BEGIN
              (doc_id, role, ord, name_raw, name_norm, name_core, edrpou,
               court_code, justice_kind, adjudication_date, adj_year)
       SELECT n.doc_id, x.role, x.ord, x.name_raw, x.name_norm, x.name_core, x.edrpou,
-             d.court_code, d.justice_kind, d.adjudication_date, n.adj_year
+             d.court_code, d.justice_kind, d.adjudication_date, y.adj_year
         FROM new_rows n
         JOIN edrsr_documents d ON d.doc_id = n.doc_id AND d.justice_kind IN (1, 3, 4)
+       CROSS JOIN LATERAL (
+         SELECT coalesce(n.adj_year, extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint) AS adj_year
+       ) y
        CROSS JOIN LATERAL edrsr_extract_parties(substr(n.full_text, 1, 3000)) x
-       WHERE n.adj_year IS NOT NULL
+       WHERE y.adj_year IS NOT NULL
       ON CONFLICT DO NOTHING;
     END IF;
   EXCEPTION WHEN others THEN
     RAISE WARNING 'edrsr_parties trigger: batch failed (%), retrying per row', SQLERRM;
-    FOR r IN SELECT n.doc_id, n.adj_year FROM new_rows n WHERE n.adj_year IS NOT NULL LOOP
-      BEGIN
-        IF TG_OP = 'UPDATE' THEN
-          DELETE FROM edrsr_parties WHERE doc_id = r.doc_id AND adj_year = r.adj_year;
-        END IF;
-        PERFORM edrsr_parties_extract_doc(r.adj_year, r.doc_id);
-      EXCEPTION WHEN others THEN
-        INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
-        VALUES (r.doc_id, r.adj_year, left(SQLERRM, 500))
-        ON CONFLICT (doc_id) DO UPDATE SET error = EXCLUDED.error, failed_at = now();
-      END;
-    END LOOP;
+    -- Per row; the UPDATE case only for the rows the batch would have touched. (Two loops:
+    -- an INSERT trigger has no old_rows to name.)
+    IF TG_OP = 'UPDATE' THEN
+      FOR r IN
+        SELECT n.doc_id, n.adj_year
+          FROM new_rows n JOIN old_rows o ON o.doc_id = n.doc_id
+         WHERE substr(n.full_text, 1, 3000) IS DISTINCT FROM substr(o.full_text, 1, 3000)
+            OR n.adj_year IS DISTINCT FROM o.adj_year
+            OR (NOT EXISTS (SELECT 1 FROM edrsr_parties_coverage c WHERE c.adj_year = n.adj_year)
+                AND NOT EXISTS (SELECT 1 FROM edrsr_parties p WHERE p.doc_id = n.doc_id))
+      LOOP
+        BEGIN
+          DELETE FROM edrsr_parties WHERE doc_id = r.doc_id;
+          PERFORM edrsr_parties_extract_doc(NULL, r.doc_id);
+        EXCEPTION WHEN others THEN
+          INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
+          VALUES (r.doc_id, r.adj_year, left(SQLERRM, 500))
+          ON CONFLICT (doc_id) DO UPDATE SET error = EXCLUDED.error, failed_at = now();
+        END;
+      END LOOP;
+    ELSE
+      FOR r IN SELECT n.doc_id, n.adj_year FROM new_rows n LOOP
+        BEGIN
+          PERFORM edrsr_parties_extract_doc(NULL, r.doc_id);
+        EXCEPTION WHEN others THEN
+          INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
+          VALUES (r.doc_id, r.adj_year, left(SQLERRM, 500))
+          ON CONFLICT (doc_id) DO UPDATE SET error = EXCLUDED.error, failed_at = now();
+        END;
+      END LOOP;
+    END IF;
   END;
   RETURN NULL;
 END
@@ -621,5 +716,8 @@ CREATE TRIGGER trg_edrsr_parties_upd
   REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
   FOR EACH STATEMENT EXECUTE FUNCTION trg_edrsr_parties_from_fulltext();
 
-COMMENT ON TABLE edrsr_parties IS
-  'LEXAI-1760: plaintiff/defendant/third-party names extracted from the EDRSR claim caption (edrsr_extract_parties). role 1=позивач, 2=відповідач, 3=третя особа. Backfilled per year by edrsr_backfill_parties_range (scripts/edrsr/backfill-edrsr-parties.sh); new texts via trg_edrsr_parties_ins/upd. A year is served by the read path only once listed in edrsr_parties_coverage.';
+DROP TRIGGER IF EXISTS trg_edrsr_parties_del ON edrsr_fulltext;
+CREATE TRIGGER trg_edrsr_parties_del
+  AFTER DELETE ON edrsr_fulltext
+  REFERENCING OLD TABLE AS old_rows
+  FOR EACH STATEMENT EXECUTE FUNCTION trg_edrsr_parties_from_fulltext();
