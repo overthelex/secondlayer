@@ -16,7 +16,7 @@
  */
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { legislationStems, normalizeApostrophes } from '../../services/legislation-search-utils.js';
+import { legislationPhraseTsquery, legislationStems, normalizeApostrophes } from '../../services/legislation-search-utils.js';
 import { resolveActNumber, pickActNumber, normalizeArticleNumber, type ActNumberMatch } from '../../services/act-number.js';
 import {
   NPA_REPEALED_CODES,
@@ -47,6 +47,22 @@ const FTS_CANDIDATE_CAP = 10000;
  *   TITLE_WEIGHT·title_cov + ts_rank_cd(body, q, 32) + year_adj − amendment + status
  * ts_rank_cd with normalisation 32 lies in [0,1), so a full title match outweighs any
  * body score; act type/recency only break ties.
+ *
+ * Phrase/proximity (LEXAI-2153). AND over a whole act is satisfied by terms 50K chars
+ * apart: «штучний інтелект» matched «штучні острови … інтелектуальної власності» in the
+ * Митний кодекс. Over the reranked pool only (the phrase recheck detoasts every body —
+ * 6.6 s for the 536 AND hits of «штучний інтелект», 25 s for «порядок видачі ліцензій»,
+ * so it can't be the corpus-wide filter), each act gets
+ *   + PHRASE_BONUS if the query phrase (exact word distances) occurs in the act,
+ * and an act is "scattered" when it has neither the phrase, all stems in the title, nor
+ * a body rank ≥ PROXIMITY_MIN (terms only far apart). The phrase/rank are read from the
+ * first BODY_RANK_CHARS; an act with no signal there but a longer body is checked for
+ * the phrase over its FULL text (phraseRegex) before it may be called scattered, so a
+ * phrase on page 200 of a code is never dropped. A regex, not to_tsvector(full body):
+ * tsvector positions saturate at 16383, so `<->` silently fails deep in long acts — on
+ * prod it missed «Проект Закону про штучний інтелект» at char 137K of 4774-20 (and 3
+ * more), which the regex finds. Scattered acts are dropped whenever at
+ * least one non-scattered act exists — the response reports how many.
  */
 export const NPA_RANK = {
   RERANK_POOL: 150,
@@ -60,10 +76,78 @@ export const NPA_RANK = {
   YEAR_MISMATCH_PENALTY: 0.3,
   /** Чинний over everything else when status=«будь-який». */
   IN_FORCE_BONUS: 0.05,
+  /** The query phrase occurs in the body — the same weight as a full title match. */
+  PHRASE_BONUS: 1.0,
+  /**
+   * ts_rank_cd(…, 32) below this = the terms co-occur only far apart. One adjacent
+   * 2-term cover scores ≈0.09; on prod the scattered «штучн…/інтел…» acts scored ≤0.015.
+   */
+  PROXIMITY_MIN: 0.02,
 } as const;
 
 /** Case-insensitive POSIX regex for amendment acts, applied to npa.act.title. */
 const AMENDMENT_TITLE_RE = '^\\s*Про (внесення|затвердження) (до .{0,200})?змін';
+
+/**
+ * Word characters / separators for the phrase regex, matched case-insensitively (~*):
+ * `t.body ~* re` is 161 ms vs 354 ms for `lower(t.body) ~ re` over 41 acts / 24M chars.
+ */
+const RE_WORD = '[0-9a-zа-яіїєґёʼ]';
+const RE_SEP = '[^0-9a-zа-яіїєґёʼ]+';
+/**
+ * A separator that is not a bare hyphen: a non-word run with at least one non-hyphen
+ * character. Used on both sides of every gap token, so a gap token can never be one part
+ * of a hyphenated word (see phraseRegex).
+ */
+const RE_SEP_NOT_HYPHEN = '[^0-9a-zа-яіїєґёʼ]*[^0-9a-zа-яіїєґёʼ-][^0-9a-zа-яіїєґёʼ]*';
+/** One intervening tsvector position: a word, or a dotted number («69.22» is one float token). */
+const RE_GAP_TOKEN = `([0-9]+(\\.[0-9]+)+|${RE_WORD}+)`;
+
+/**
+ * PostgreSQL ARE equivalent of a phrase tsquery, matched case-insensitively against the body (LEXAI-2153).
+ * Two uses: locating the phrase for the snippet (otherwise the snippet anchors on the
+ * first stem alone and shows «штучні острови»), and confirming a phrase that lies
+ * beyond BODY_RANK_CHARS — regex over the full body is ~5× cheaper than to_tsvector
+ * (354 ms vs 1.78 s over 41 acts / 24M chars on prod).
+ *
+ * tsquery `<N>` = positions EXACTLY N apart = N−1 positions in between, so a gap is
+ * exactly N−1 gap tokens. The regex aims never to match where the tsquery would not;
+ * known remaining differences are in the safe direction (regex stricter). Every
+ * intervening token is one position, except a letters-hyphen-letters word: the simple
+ * parser gives «абзац-а» three positions (compound + 2 parts, ts_debug-confirmed) where a
+ * word regex sees two. Gap tokens are therefore separated by RE_SEP_NOT_HYPHEN: an hword
+ * can't be split into gap tokens. Adjacent terms (`<->`) keep the plain separator —
+ * «штучного-інтелекту» is adjacent to the parser too (parts at 2 and 3). A term that
+ * STARTS an hword needs no special case: our stems are always prefixes (`інтел:*`), and a
+ * prefix also matches the compound lexeme, which sits right after the previous word
+ * («штучного інтелекту-системи» → 'штучного':1 'інтелекту-системи':2 'інтелекту':3, so
+ * `штуч:* <-> інтел:*` matches — checked on prod; only an exact `штучного <-> інтелекту`
+ * would not). Each stem must start a word.
+ *
+ * Known remaining differences (regex says no, tsquery says yes):
+ *  - an hword inside a gap (`<4>` across «договір абзац-а закупівлі»);
+ *  - a term starting an hword reached through its PART position instead of the compound
+ *    (`штуч:* <2> інтел:*` on «штучного інтелекту-системи»);
+ *  - a dotted number, URL, e-mail or other multi-part single token inside a gap;
+ *  - a hyphen next to a digit around a gap token («354-1»).
+ */
+export function phraseRegex(phraseTsquery: string): string | null {
+  const m = [...phraseTsquery.matchAll(/(?:^|(<->|<(\d+)>) )([\p{L}\p{N}]+):\*/gu)];
+  if (m.length < 2) return null;
+  let re = `(^|${RE_SEP.slice(0, -1)})`;
+  m.forEach((x, i) => {
+    if (i > 0) {
+      const between = (x[2] ? Number(x[2]) : 1) - 1;
+      // `<N>` is an EXACT distance in tsquery, so exactly N−1 gap tokens, each fenced by
+      // non-hyphen separators on both sides.
+      re += between > 0
+        ? `(${RE_SEP_NOT_HYPHEN}${RE_GAP_TOKEN}){${between}}${RE_SEP_NOT_HYPHEN}`
+        : RE_SEP;
+    }
+    re += `${x[3]}${RE_WORD}*`;
+  });
+  return re;
+}
 
 /** 4-digit years (1900–2099) named in a query — used only for title boosting. */
 export function queryYears(query: string): string[] {
@@ -342,36 +426,48 @@ export class NpaTools extends BaseToolHandler {
     const anchor = stems[0];
     const years = queryYears(folded);
 
-    // AND first. OR-of-prefixes over 429K editions matches almost everything, so it is a
-    // fallback for a thin result set, not the default (same relax pattern as the ГНЕУ search).
-    let rows = await this.ftsCandidates(stems, ' & ', years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
+    const phrase = legislationPhraseTsquery(folded) || null;
+
+    // AND first, with a phrase boost and scattered-match drop (NPA_RANK). OR-of-prefixes
+    // over 429K editions matches almost everything, so it runs only when AND finds
+    // nothing at all (LEXAI-2153) and is flagged in the response.
+    let rows = await this.ftsCandidates(stems, ' & ', phrase, years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
     let relaxed = false;
-    if (rows.length < 3 && stems.length > 1) {
-      const orRows = await this.ftsCandidates(stems, ' | ', years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
-      if (orRows.length > rows.length) { rows = orRows; relaxed = true; }
+    if (rows.length === 0 && stems.length > 1) {
+      rows = await this.ftsCandidates(stems, ' | ', null, years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
+      relaxed = rows.length > 0;
     }
 
     if (rows.length === 0) return this.wrapResponse('У корпусі НПА нічого не знайдено за цим запитом.');
 
     const total = Number(rows[0]._total_count);
+    const scatteredDropped = Number(rows[0]._scattered_dropped || 0);
+    const notes: string[] = [];
+    if (relaxed) notes.push('Жоден акт не містить усіх термінів запиту — застосовано пом’якшений пошук (будь-який з термінів).');
+    if (scatteredDropped > 0) notes.push(`Відкинуто ${scatteredDropped} акт(ів), де терміни запиту трапляються лише окремо, далеко один від одного.`);
     return this.wrapResponse({
       mode: 'fulltext',
       // Candidates are capped before ranking, so the count is a floor, not an exact total.
       total_count_at_least: total,
       capped: total >= FTS_CANDIDATE_CAP,
       returned: rows.length,
-      ...(relaxed ? { note: 'Строгий пошук (усі терміни) дав замало результатів — застосовано пом’якшений пошук (будь-який з термінів).' } : {}),
+      match_mode: relaxed ? 'any_term' : 'all_terms',
+      ...(scatteredDropped > 0 ? { scattered_dropped: scatteredDropped } : {}),
+      ...(notes.length ? { note: notes.join(' ') } : {}),
       searched_over: 'чинні редакції',
       results: rows.map((r: any) => this.shapeAct(r, {
         shown_edition: r.shown_edition,
         is_current: r.shown_is_current,
         relevance: Math.round(Number(r.score) * 1000) / 1000,
+        // phrase: the query phrase occurs in the text; all_terms: every term, not as a
+        // phrase; any_term: relaxed OR fallback.
+        match: relaxed ? 'any_term' : (r.phrase_hit ? 'phrase' : 'all_terms'),
         snippet: stripChrome(r.snippet),
       })),
     });
   }
 
-  private async ftsCandidates(stems: string[], join: string, years: string[], statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, anchor: string, lim: number): Promise<any[]> {
+  private async ftsCandidates(stems: string[], join: string, phrase: string | null, years: string[], statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, anchor: string, lim: number): Promise<any[]> {
     const tsquery = stems.map((s) => `${s}:*`).join(join);
     const values: any[] = [tsquery];
     const { sql: filter, nextIdx } = this.actFilterSql(statusCode, excludeRepealed, docTypeId, values, 2);
@@ -384,6 +480,10 @@ export class NpaTools extends BaseToolHandler {
     const yearsIdx = pi; values.push(years); pi++;
     const poolIdx = pi; values.push(NPA_RANK.RERANK_POOL); pi++;
     const prefixIdx = pi; values.push(NPA_RANK.BODY_RANK_CHARS); pi++;
+    // NULL phrase (single-stem query, OR fallback): no phrase bonus and nothing is
+    // "scattered" — the filter is meaningful only for a strict multi-term query.
+    const phraseIdx = pi; values.push(phrase); pi++;
+    const phraseReIdx = pi; values.push(phrase ? phraseRegex(phrase) : null); pi++;
     const R = NPA_RANK;
 
     // See NPA_RANK. Stage 1 (pre/pool) touches only npa.act; stage 2 (ranked) detoasts
@@ -418,20 +518,55 @@ export class NpaTools extends BaseToolHandler {
          ORDER BY ${R.TITLE_WEIGHT} * title_cov + year_adj - amend_pen + status_bonus DESC, last_ed_d DESC NULLS LAST
          LIMIT $${poolIdx}
       ),
-      ranked AS (
-        SELECT p.*,
-               ${R.TITLE_WEIGHT} * p.title_cov
-                 + ts_rank_cd(to_tsvector('simple', substr(t.body || '', 1, $${prefixIdx})), to_tsquery('simple', $1), 32)
-                 + p.year_adj - p.amend_pen + p.status_bonus AS score
+      scored AS (
+        SELECT p.*, m.body_rank, (m.phrase_hit OR COALESCE(l.late_phrase, false)) AS phrase_hit,
+               ${R.TITLE_WEIGHT} * p.title_cov + m.body_rank
+                 + CASE WHEN m.phrase_hit OR l.late_phrase THEN ${R.PHRASE_BONUS} ELSE 0 END
+                 + p.year_adj - p.amend_pen + p.status_bonus AS score,
+               (l.late_phrase IS NULL OR l.late_phrase) AS focused
           FROM pool p
           JOIN npa.edition_text t ON t.nreg = p.nreg AND t.ed_date = p.ed_date
-         ORDER BY score DESC, p.last_ed_d DESC NULLS LAST
+          -- OFFSET 0 fences the subquery: without it the planner inlines tsv into both uses
+          -- below and tokenises every body twice (measured 707 vs 357 ms over 41 acts).
+          CROSS JOIN LATERAL (
+            SELECT to_tsvector('simple', substr(b.body, 1, $${prefixIdx})) AS tsv, length(b.body) AS body_len
+              FROM (SELECT t.body || '' AS body) b OFFSET 0
+          ) v
+          CROSS JOIN LATERAL (
+            SELECT ts_rank_cd(v.tsv, to_tsquery('simple', $1), 32) AS body_rank,
+                   COALESCE($${phraseIdx}::text IS NOT NULL AND v.tsv @@ to_tsquery('simple', $${phraseIdx}::text), false) AS phrase_hit
+          ) m
+          -- Scattered = positive evidence over the FULL text, not just the ranked prefix.
+          -- NULL: already focused within the prefix (or no phrase to test). Only an act with
+          -- no signal in the prefix AND a body longer than it pays for a full-body regex.
+          CROSS JOIN LATERAL (
+            SELECT CASE
+                     WHEN $${phraseIdx}::text IS NULL OR m.phrase_hit OR p.title_cov >= 1
+                          OR m.body_rank >= ${R.PROXIMITY_MIN} THEN NULL
+                     WHEN v.body_len > $${prefixIdx} THEN (t.body || '') ~* $${phraseReIdx}::text
+                     ELSE false
+                   END AS late_phrase
+            OFFSET 0
+          ) l
+      ),
+      judged AS (
+        SELECT s.*, bool_or(s.focused) OVER () AS _any_focused,
+               count(*) FILTER (WHERE NOT s.focused) OVER () AS _scattered
+          FROM scored s
+      ),
+      ranked AS (
+        SELECT j.*, CASE WHEN j._any_focused THEN j._scattered ELSE 0 END AS _scattered_dropped
+          FROM judged j
+         WHERE j.focused OR NOT j._any_focused
+         ORDER BY j.score DESC, j.last_ed_d DESC NULLS LAST
          LIMIT $${limIdx}
       )
       SELECT r.*,
              to_char(sel.ed_date, 'YYYY-MM-DD') AS shown_edition,
              sel.is_current AS shown_is_current,
-             substr(t.body || '', GREATEST(1, strpos(lower(t.body), $${anchorIdx}) - 150), 400) AS snippet
+             substr(t.body || '', GREATEST(1, COALESCE(
+               NULLIF(CASE WHEN r.phrase_hit THEN regexp_instr(t.body || '', $${phraseReIdx}::text, 1, 1, 0, 'i') END, 0),
+               strpos(lower(t.body), $${anchorIdx})) - 150), 400) AS snippet
         FROM ranked r
         CROSS JOIN LATERAL (
           SELECT e.ed_date, e.is_current
