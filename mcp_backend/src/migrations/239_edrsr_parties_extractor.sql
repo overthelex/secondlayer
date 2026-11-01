@@ -600,23 +600,49 @@ $fn$;
 -- ---------------------------------------------------------------------------------------
 
 -- Log a row the trigger could not extract, under the year mark_covered will retry it in: the
--- row's adj_year, else the Kyiv year of its decision. Never raises (the harvest must not fail
--- because the failure log could not be written).
+-- row's adj_year, else the Kyiv year of its decision. Never raises — the harvest must not fail
+-- because of edrsr_parties — but never loses the failure silently either:
+--   1. upsert into edrsr_parties_failed (adj_year refreshed on conflict);
+--   2. if that write fails, withdraw the coverage of the doc's year (every year when the year
+--      is unknown), so reads of that year fall back to the full-text predicate — which does
+--      not depend on this doc being extracted — and the year must be backfilled/marked again;
+--   3. if even that fails, a WARNING naming the doc in the server log.
+-- Each write is its own subtransaction, so a failure of one does not undo the harvest row.
 CREATE OR REPLACE FUNCTION edrsr_parties_log_failed(p_doc_id bigint, p_adj_year int, p_error text)
 RETURNS void
 LANGUAGE plpgsql AS
 $fn$
+DECLARE
+  y        int := p_adj_year;
+  log_err  text;
 BEGIN
-  INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
-  VALUES (p_doc_id,
-          coalesce(p_adj_year,
-                   (SELECT extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::int
-                      FROM edrsr_documents d WHERE d.doc_id = p_doc_id LIMIT 1)),
-          left(p_error, 500))
-  ON CONFLICT (doc_id) DO UPDATE
-    SET adj_year = EXCLUDED.adj_year, error = EXCLUDED.error, failed_at = now();
-EXCEPTION WHEN others THEN
-  RAISE WARNING 'edrsr_parties: could not log failed doc % (%)', p_doc_id, SQLERRM;
+  IF y IS NULL THEN
+    BEGIN
+      SELECT extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::int INTO y
+        FROM edrsr_documents d WHERE d.doc_id = p_doc_id LIMIT 1;
+    EXCEPTION WHEN others THEN
+      y := NULL;
+    END;
+  END IF;
+
+  BEGIN
+    INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
+    VALUES (p_doc_id, y, left(p_error, 500))
+    ON CONFLICT (doc_id) DO UPDATE
+      SET adj_year = EXCLUDED.adj_year, error = EXCLUDED.error, failed_at = now();
+    RETURN;
+  EXCEPTION WHEN others THEN
+    log_err := SQLERRM;
+  END;
+
+  BEGIN
+    DELETE FROM edrsr_parties_coverage WHERE y IS NULL OR adj_year = y;
+    RAISE WARNING 'edrsr_parties: doc % (year %) failed extraction (%) and could not be logged (%); coverage of % withdrawn',
+      p_doc_id, y, left(p_error, 200), log_err, coalesce(y::text, 'every year');
+  EXCEPTION WHEN others THEN
+    RAISE WARNING 'edrsr_parties: doc % (year %) failed extraction (%); neither the failure log (%) nor the coverage withdrawal (%) could be written — re-extract this doc before trusting year % coverage',
+      p_doc_id, y, left(p_error, 200), log_err, SQLERRM, coalesce(y::text, '?');
+  END;
 END
 $fn$;
 
