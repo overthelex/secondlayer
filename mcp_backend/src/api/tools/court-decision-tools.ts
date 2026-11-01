@@ -1615,6 +1615,9 @@ total_resolved_links=0 означає відсутність даних граф
     });
   }
 
+  /** Courts listed individually in count_cases_by_party.by_court; the rest go to by_court_other. */
+  static readonly BY_COURT_LIMIT = 30;
+
   private async countCasesByParty(args: any): Promise<ToolResult> {
     if (!this.ftsService || !this.db) return this.wrapError('FTS сервіс недоступний для підрахунку справ');
 
@@ -1641,13 +1644,29 @@ total_resolved_links=0 означає відсутність даних граф
         returnCases ? maxCasesToReturn : 0,
       );
 
-      const topCourts = counts.by_court.slice(0, 30);
+      // LEXAI-2177: the list is cut at BY_COURT_LIMIT courts, but the rest is reported as
+      // one bucket so that sum(by_court) + by_court_other.documents == total_documents —
+      // the cut used to drop 37 of 67 courts while the note promised the sums matched.
+      const topCourts = counts.by_court.slice(0, CourtDecisionTools.BY_COURT_LIMIT);
+      const restCourts = counts.by_court.slice(CourtDecisionTools.BY_COURT_LIMIT);
       const courtNames = await this.lookupCourtNames(topCourts.map(c => c.court_code));
       const by_court = topCourts.map(c => ({
         court_code: c.court_code,
         court_name: courtNames.get(c.court_code) || null,
         count: c.count,
       }));
+      // Documents with no court_code are in total but in no court's count; they go into the
+      // remainder too, so the sum guarantee holds whatever the breakdown left out.
+      const listedDocs = topCourts.reduce((s, c) => s + c.count, 0);
+      const restDocs = restCourts.reduce((s, c) => s + c.count, 0);
+      const remainder = counts.total - listedDocs;
+      const by_court_other = remainder > 0
+        ? {
+            courts: restCourts.length,
+            documents: remainder,
+            ...(remainder > restDocs ? { unknown_court_documents: remainder - restDocs } : {}),
+          }
+        : null;
 
       const result: any = {
         party_name: partyName,
@@ -1660,9 +1679,10 @@ total_resolved_links=0 означає відсутність даних граф
         total_documents: counts.total,
         courts_count: counts.by_court.length,
         by_court,
+        ...(by_court_other ? { by_court_other } : {}),
         time_taken_ms: Date.now() - startTime,
         method: 'fts_party_anchor',
-        note: 'total_cases — кількість УНІКАЛЬНИХ справ (за номером справи); total_documents — кількість документів, вона завжди більша, бо одна справа дає документи в кожній інстанції. У by_court рахуються ДОКУМЕНТИ по судах, тому сума by_court дорівнює total_documents, а не total_cases. Назва/роль — це FTS-прив\'язка по тексту рішення, не структурний фільтр сторони; без ролі (any) рахуються лише рішення, де назва стоїть у позиції сторони (за позовом / до / позивач, відповідач, третя особа, заявник, стягувач, боржник, кредитор, скаржник, представник), а згадки в банківських реквізитах (р/р, МФО, «рахунок в АТ …») не рахуються. Повна офіційна назва (напр. «Державний експортно-імпортний банк України» для Укрексімбанку) рахується окремим запитом. Точне визначення ролі — після впровадження parties-таблиці (LEXAI-1760).',
+        note: `total_cases — кількість УНІКАЛЬНИХ справ (за номером справи); total_documents — кількість документів, вона завжди більша, бо одна справа дає документи в кожній інстанції. У by_court рахуються ДОКУМЕНТИ по судах (не більше ${CourtDecisionTools.BY_COURT_LIMIT} судів з найбільшою кількістю; решта судів і документи без коду суду (unknown_court_documents) зведені в by_court_other), тому сума by_court разом з by_court_other.documents дорівнює total_documents, а не total_cases. Назва/роль — це FTS-прив'язка по тексту рішення, не структурний фільтр сторони; без ролі (any) рахуються лише рішення, де назва стоїть у позиції сторони (за позовом / до / позивач, відповідач, третя особа, заявник, стягувач, боржник, кредитор, скаржник, представник), а згадки в банківських реквізитах (р/р, МФО, «рахунок в АТ …») не рахуються. Повна офіційна назва (напр. «Державний експортно-імпортний банк України» для Укрексімбанку) рахується окремим запитом. Точне визначення ролі — після впровадження parties-таблиці (LEXAI-1760).`,
       };
       if (counts.capped) {
         // Never let a truncated aggregate read as an exact count.
@@ -1673,6 +1693,17 @@ total_resolved_links=0 означає відсутність даних граф
           ? `лише за ${counts.counted_from_year} рік і новіші`
           : 'лише за найновіші роки';
         result.note += ` УВАГА: підрахунок зупинено після ${counts.candidate_cap}+ документів — total_cases, courts_count і by_court пораховані ТОЧНО, але ${span}; старіші роки запитаного періоду не перевірялися, тому для всього періоду це НИЖНІ МЕЖІ, а не точні значення. Щоб отримати точний підрахунок за весь період, розбийте його на запити по одному року (date_from/date_to).`;
+      }
+      if (counts.incomplete && counts.pending_years?.length) {
+        // LEXAI-2177: some years did not fit the time budget. What was counted is exact for
+        // those years and cached, so the same call picks up where this one stopped.
+        result.incomplete = true;
+        result.pending_years = counts.pending_years;
+        result.resumable = counts.resumable === true;
+        result.note += ` УВАГА: підрахунок НЕПОВНИЙ — роки ${counts.pending_years.join(', ')} не вклалися в ліміт часу і не враховані; total_cases, total_documents і by_court — НИЖНІ МЕЖІ за запитаний період. ` +
+          (counts.resumable
+            ? 'Пораховані роки збережено в кеші: повторіть той самий запит, і він продовжить з непорахованих років (або звузьте період).'
+            : 'Кеш недоступний, тож повтор запиту рахуватиме все заново: запитайте непораховані роки окремо (date_from/date_to).');
       }
       if (args.date_from) result.date_from = args.date_from;
       if (args.date_to) result.date_to = args.date_to;

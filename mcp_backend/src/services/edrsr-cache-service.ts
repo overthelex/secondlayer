@@ -104,7 +104,34 @@ export class EdsrCacheService {
     }
   }
 
+  // ── Generic JSON (namespaced, caller-chosen TTL) ─────────────────────────
+
+  /** key: edrsr:{ns}:{sha256(key)[0..16]} — e.g. countByParty year legs (LEXAI-2177). */
+  async getCachedJson(ns: string, key: string): Promise<any | null> {
+    try {
+      const raw = await this.cache.get(`edrsr:${ns}:${this.hashKey(key)}`);
+      this.metricsCallback?.(ns, raw ? 'hit' : 'miss');
+      return raw ? JSON.parse(raw) : null;
+    } catch (err: any) {
+      logger.debug('[EdsrCache] getCachedJson error', { ns, error: err.message });
+      this.metricsCallback?.(ns, 'miss');
+      return null;
+    }
+  }
+
+  async setCachedJson(ns: string, key: string, value: any, ttlSeconds: number): Promise<void> {
+    try {
+      await this.cache.set(`edrsr:${ns}:${this.hashKey(key)}`, JSON.stringify(value), ttlSeconds);
+    } catch (err: any) {
+      logger.debug('[EdsrCache] setCachedJson error', { ns, error: err.message });
+    }
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────
+
+  private hashKey(key: string): string {
+    return createHash('sha256').update(key).digest('hex').slice(0, 16);
+  }
 
   private hashFtsQuery(query: string, filters: Record<string, any>, limit: number, offset: number): string {
     const input = JSON.stringify({ q: query, f: filters, l: limit, o: offset });
