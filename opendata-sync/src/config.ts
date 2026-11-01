@@ -122,13 +122,16 @@ const backendWeeklySources: DataSourceSchedule[] = [
     sourceName: 'nipo_designs',
     enabled: true,
   },
+  // LEXAI-2183: dsfmu_terrorism, lustration, wage_debtors and judge_candidates are disabled
+  // in import_source_catalog (migration 237 gives each reason): their data.gov.ua datasets
+  // are frozen or not a usable list. The other sources of that batch moved to the CKAN path.
   {
     name: 'dsfmu_terrorism',
     title: 'ДСФМУ — Перелік терористів',
     cron: '0 6 * * 0', // Sunday 06:00
     target: 'backend',
     sourceName: 'dsfmu_terrorism',
-    enabled: true,
+    enabled: false,
   },
   {
     name: 'lustration',
@@ -136,7 +139,7 @@ const backendWeeklySources: DataSourceSchedule[] = [
     cron: '15 6 * * 0', // Sunday 06:15
     target: 'backend',
     sourceName: 'lustration',
-    enabled: true,
+    enabled: false,
   },
   {
     name: 'state_aid',
@@ -187,7 +190,7 @@ const backendWeeklySources: DataSourceSchedule[] = [
     cron: '15 8 * * 0', // Sunday 08:15
     target: 'backend',
     sourceName: 'wage_debtors',
-    enabled: true,
+    enabled: false,
   },
   {
     name: 'judge_candidates',
@@ -195,7 +198,7 @@ const backendWeeklySources: DataSourceSchedule[] = [
     cron: '30 8 * * 0', // Sunday 08:30
     target: 'backend',
     sourceName: 'judge_candidates',
-    enabled: true,
+    enabled: false,
   },
   // ВРП registers (LEXAI-2117): full snapshot reload, a few hundred to ~3K rows each.
   {
