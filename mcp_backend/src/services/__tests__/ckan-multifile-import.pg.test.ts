@@ -109,9 +109,17 @@ d('CKAN multi-file import on PostgreSQL (LEXAI-2181)', () => {
     svc.sleep = jest.fn(async () => {});
   });
 
-  async function catalogSource(name: string) {
-    const r = await pool.query('SELECT * FROM import_source_catalog WHERE name = $1', [name]);
-    const src = r.rows[0];
+  async function catalogRow(name: string) {
+    return (await pool.query('SELECT * FROM import_source_catalog WHERE name = $1', [name])).rows[0];
+  }
+
+  /**
+   * The catalog row exactly as migration 235 wrote it, except min_files: the fixture has 3
+   * regional files, production requires 20 (asserted below, untouched). Everything else
+   * (pattern, mapping, transforms, unique_key, dedup_order, min_rows_ratio) is production.
+   */
+  async function catalogSourceForFixture(name: string) {
+    const src = await catalogRow(name);
     return { ...src, source_config: { ...src.source_config, min_files: 3 } };
   }
 
@@ -123,8 +131,17 @@ d('CKAN multi-file import on PostgreSQL (LEXAI-2181)', () => {
     const src = (await pool.query(`SELECT source_config FROM import_source_catalog WHERE name = 'invalid_passports'`)).rows[0];
     expect(new RegExp(src.source_config.resource_pattern, 'i').test('mvswantedpassport_v05.json')).toBe(true);
     expect(new RegExp(src.source_config.resource_pattern, 'i').test('mvswantedpassport_shema.json')).toBe(false);
+    expect(src.source_config.min_files).toBe(20);
     const f = (await pool.query(`SELECT source_config FROM import_source_catalog WHERE name = 'invalid_passports_foreign'`)).rows[0];
     expect(f.source_config.min_files).toBe(2);
+  });
+
+  it('the production min_files refuses a dataset with too few files', async () => {
+    const before = (await pool.query(`SELECT count(*)::int n FROM opendata_invalid_passports`)).rows[0].n;
+    await expect(svc.runCkanMultiFileImport(9, await catalogRow('invalid_passports'), new AbortController().signal))
+      .rejects.toThrow(/3 файлів.*≥ 20/);
+    expect(svc.httpGetStream).not.toHaveBeenCalled();
+    expect((await pool.query(`SELECT count(*)::int n FROM opendata_invalid_passports`)).rows[0].n).toBe(before);
   });
 
   it('resolves duplicates by outcome and swaps only what changed', async () => {
@@ -135,7 +152,7 @@ d('CKAN multi-file import on PostgreSQL (LEXAI-2181)', () => {
        ('0101_KP_CHG',  'ГУНП В М. КИЄВІ', 'KP', 'CHG',  'ПАСПОРТ ГРОМАДЯНИНА УКРАЇНИ', 'ВТРАЧЕНО', '2012-01-16', '2012-01-17', '2020-01-01Z'),
        ('0101_KP_GONE', 'ГУНП В М. КИЄВІ', 'KP', 'GONE', 'ПАСПОРТ ГРОМАДЯНИНА УКРАЇНИ', 'ВТРАЧЕНО', '2012-01-16', '2012-01-17', '2020-01-01Z')`,
     );
-    const src = await catalogSource('invalid_passports');
+    const src = await catalogSourceForFixture('invalid_passports');
     await svc.runCkanMultiFileImport(1, src, new AbortController().signal);
 
     const byId = Object.fromEntries((await rows()).map((r: any) => [r.id, r]));
@@ -158,7 +175,7 @@ d('CKAN multi-file import on PostgreSQL (LEXAI-2181)', () => {
     await pool.query(
       `INSERT INTO opendata_invalid_passports (id, d_status) SELECT 'X_' || g, 'OLD' FROM generate_series(1, 100) g`,
     );
-    const src = await catalogSource('invalid_passports');
+    const src = await catalogSourceForFixture('invalid_passports');
     await expect(svc.runCkanMultiFileImport(2, src, new AbortController().signal)).rejects.toThrow(/replace refused/);
     const r = await pool.query(`SELECT count(*)::int n, count(*) FILTER (WHERE d_status = 'OLD')::int old FROM opendata_invalid_passports`);
     expect(r.rows[0]).toEqual({ n: 100, old: 100 });

@@ -718,13 +718,9 @@ export class ImportTaskService {
       if (uniqueKey.length) await this.db.query(`CREATE INDEX ON ${staging} (${uniqueKey.join(', ')})`);
       await this.db.query(`ANALYZE ${staging}`);
 
-      const keyExpr = uniqueKey.length ? `count(DISTINCT (${uniqueKey.join(', ')}))` : 'count(*)';
-      const newRows = Number((await this.db.query(`SELECT ${keyExpr} AS n FROM ${staging}`)).rows[0].n);
-      const curRows = Number((await this.db.query(`SELECT count(*) AS n FROM ${target}`)).rows[0].n);
-      const refusal = replaceGuardError(newRows, curRows, Number(config.min_rows_ratio ?? 0.9));
-      if (refusal) throw new Error(`replace refused: ${refusal}; таблицю не змінено`);
-
-      const stats = await this.swapFromStaging(target, staging, cols, uniqueKey, config.dedup_order);
+      const { newRows, curRows, ...stats } = await this.swapFromStaging(
+        target, staging, cols, uniqueKey, Number(config.min_rows_ratio ?? 0.9), config.dedup_order,
+      );
       logger.info(`[ImportTask ${taskId}] ${target}: ${curRows} -> ${newRows} rows`, {
         raw: rawRows, skipped, deleted: stats.deleted, upserted: stats.upserted,
       });
@@ -796,10 +792,14 @@ export class ImportTaskService {
    * duplicates collapse (highest dedup_order, then the later record wins), keys absent from
    * the source are deleted and only rows that actually changed are rewritten, so an unchanged
    * re-publication does not churn the indexes. Without a key: DELETE + INSERT.
+   *
+   * The replace guard (new rows vs current rows) is evaluated inside the transaction after
+   * the per-table lock is held, so a swap that waited behind another one compares against
+   * the table as that one left it, never against a stale count. A refusal rolls back.
    */
   private async swapFromStaging(
-    target: string, staging: string, cols: string[], uniqueKey: string[], dedupOrder?: string,
-  ): Promise<{ deleted: number; upserted: number }> {
+    target: string, staging: string, cols: string[], uniqueKey: string[], minRowsRatio: number, dedupOrder?: string,
+  ): Promise<{ deleted: number; upserted: number; newRows: number; curRows: number }> {
     const hasImportedAt = (await this.db.query(
       `SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'imported_at'`,
       [target],
@@ -811,10 +811,17 @@ export class ImportTaskService {
       // Second line of defence next to the one-active-task rule in startImport: whatever
       // started them, two swaps into the same table never interleave.
       await client.query(`SELECT pg_advisory_xact_lock(hashtext('import_swap:' || $1))`, [target]);
+
+      const keyExpr = uniqueKey.length ? `count(DISTINCT (${uniqueKey.join(', ')}))` : 'count(*)';
+      const newRows = Number((await client.query(`SELECT ${keyExpr} AS n FROM ${staging}`)).rows[0].n);
+      const curRows = Number((await client.query(`SELECT count(*) AS n FROM ${target}`)).rows[0].n);
+      const refusal = replaceGuardError(newRows, curRows, minRowsRatio);
+      if (refusal) throw new Error(`replace refused: ${refusal}; таблицю не змінено`);
+
       if (!uniqueKey.length) {
         const del = await client.query(`DELETE FROM ${target}`);
         const ins = await client.query(`INSERT INTO ${target} (${colList}) SELECT ${colList} FROM ${staging} ORDER BY _ord`);
-        return { deleted: del.rowCount ?? 0, upserted: ins.rowCount ?? 0 };
+        return { deleted: del.rowCount ?? 0, upserted: ins.rowCount ?? 0, newRows, curRows };
       }
       const keyList = uniqueKey.join(', ');
       const keyMatch = uniqueKey.map(k => `s.${k} = t.${k}`).join(' AND ');
@@ -833,7 +840,7 @@ export class ImportTaskService {
          SELECT DISTINCT ON (${keyList}) ${colList} FROM ${staging} ORDER BY ${order}
          ON CONFLICT (${keyList}) ${conflict}`,
       );
-      return { deleted: del.rowCount ?? 0, upserted: ins.rowCount ?? 0 };
+      return { deleted: del.rowCount ?? 0, upserted: ins.rowCount ?? 0, newRows, curRows };
     });
   }
 

@@ -212,7 +212,12 @@ class FakeDb {
     return { rows: [], rowCount: 0 };
   }
   async transaction(cb: (c: any) => Promise<any>) {
-    const client = { query: async (sql: string) => { this.txQueries.push(sql); return { rows: [], rowCount: 7 }; } };
+    const client = {
+      query: async (sql: string) => {
+        this.txQueries.push(sql);
+        return /count\(/.test(sql) ? this.query(sql) : { rows: [], rowCount: 7 };
+      },
+    };
     return cb(client);
   }
 }
@@ -270,10 +275,13 @@ describe('runCkanMultiFileImport', () => {
     expect(db.staging.map(r => r[7])).toContain('2014-01-01');
     expect(db.txQueries[0]).toMatch(/statement_timeout/);
     expect(db.txQueries[1]).toMatch(/pg_advisory_xact_lock\(hashtext\('import_swap:'/);
-    expect(db.txQueries[2]).toMatch(/DELETE FROM opendata_invalid_passports t WHERE NOT EXISTS/);
+    // Guard counts are taken inside the transaction, after the lock.
+    expect(db.txQueries[2]).toMatch(/count\(DISTINCT \(id\)\) AS n FROM opendata_invalid_passports__staging_1/);
+    expect(db.txQueries[3]).toMatch(/SELECT count\(\*\) AS n FROM opendata_invalid_passports$/);
+    expect(db.txQueries[4]).toMatch(/DELETE FROM opendata_invalid_passports t WHERE NOT EXISTS/);
     // Outcome of the duplicate rule is checked on a real database in ckan-multifile-import.pg.test.ts.
-    expect(db.txQueries[3]).toMatch(/SELECT DISTINCT ON \(id\).*ORDER BY id, insert_date DESC NULLS LAST, _ord DESC/s);
-    expect(db.txQueries[3]).toMatch(/ON CONFLICT \(id\) DO UPDATE SET .*IS DISTINCT FROM/s);
+    expect(db.txQueries[5]).toMatch(/SELECT DISTINCT ON \(id\).*ORDER BY id, insert_date DESC NULLS LAST, _ord DESC/s);
+    expect(db.txQueries[5]).toMatch(/ON CONFLICT \(id\) DO UPDATE SET .*IS DISTINCT FROM/s);
     expect(db.queries.some(q => /DROP TABLE IF EXISTS opendata_invalid_passports__staging_1$/.test(q))).toBe(true);
   });
 
@@ -281,7 +289,10 @@ describe('runCkanMultiFileImport', () => {
     const db = new FakeDb(2_887_669);
     const { promise } = run(db, passportSource(), files);
     await expect(promise).rejects.toThrow(/replace refused/);
-    expect(db.txQueries).toHaveLength(0); // target untouched
+    // Refused inside the swap transaction, after the lock and the counts, before any write.
+    expect(db.txQueries).toHaveLength(4);
+    expect(db.txQueries[1]).toMatch(/pg_advisory_xact_lock/);
+    expect(db.txQueries.some(q => /DELETE|INSERT/.test(q))).toBe(false);
     expect(db.queries[db.queries.length - 1]).toMatch(/DROP TABLE IF EXISTS .*__staging_1/);
   });
 
