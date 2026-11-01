@@ -3,6 +3,13 @@
  * Single source of truth for all 11 NAIS registries from data.gov.ua
  */
 
+import {
+  formatActivityCodes,
+  isActivityCodesTruncated,
+  normalizeEdrpou,
+  normalizeIsoDate,
+} from '../utils/single-tax';
+
 export type FieldMapper = (value: string, record: Record<string, unknown>) => unknown;
 
 export interface RegistryConfig {
@@ -51,6 +58,11 @@ export interface RegistryConfig {
    * The JS fieldMap still provides the raw value; the DB computes the final value.
    */
   columnSqlExpression?: Record<string, string>;
+  /**
+   * CSV-only: return true to drop a source row before mapping (e.g. single tax
+   * payers without a tax number, whose identity DPS withholds).
+   */
+  skipRecord?: (record: Record<string, string>) => boolean;
 }
 
 // Helper: extract nested value from object by dot path
@@ -442,6 +454,45 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     sizeCategory: 'huge',
     csvDelimiter: ',',
     /** Note: header uses ';' but data rows use ',' — the CSV importer must handle this */
+  },
+
+  single_tax_payers: {
+    id: 13,
+    name: 'single_tax_payers',
+    title: 'Реєстр платників єдиного податку (ДПС)',
+    format: 'csv',
+    encoding: 'utf-8',
+    // DPS dataset 559bbd39 (LEXAI-2159). The 2022-02-23 file is the last DPS
+    // published; the table held the 2019 "reestr_edpod.zip" snapshot
+    // (resource 7ae2492a, latest start_date 2020-01-01).
+    datasetUrl: 'https://data.gov.ua/dataset/559bbd39-e820-41f9-b779-dad7320e2c7b/resource/f52ba80c-ef54-46a4-9da1-b75d72244495/download/reestr-platnukiv-edunogo-podatku-2022_02_23.zip',
+    zipFileName: 'reestr-platnukiv-edunogo-podatku-2022_02_23.zip',
+    innerFileName: 'reestr_edpod.csv',
+    tableName: 'single_tax_payers',
+    uniqueKey: 'tin',
+    // 432 tax numbers appear twice in the file; collapse them on the tin index.
+    upsertOnReload: true,
+    recordPath: '',
+    fieldMap: {
+      name: 'name',
+      // DPS writes ЄДРПОУ as a number: "05391695" arrives as "5391695".
+      tin: (_v: string, r: Record<string, unknown>) => normalizeEdrpou(String(r['tin'] ?? '')),
+      start_date: (_v: string, r: Record<string, unknown>) => normalizeIsoDate(String(r['data_n'] ?? '')),
+      rate: (_v: string, r: Record<string, unknown>) => {
+        const v = String(r['stavka'] ?? '').trim().replace(',', '.');
+        return /^\d+(\.\d+)?$/.test(v) ? v : null;
+      },
+      tax_group: 'grup',
+      activity_codes: (_v: string, r: Record<string, unknown>) => formatActivityCodes(String(r['vd'] ?? '')),
+      activity_codes_truncated: (_v: string, r: Record<string, unknown>) => isActivityCodesTruncated(String(r['vd'] ?? '')),
+      end_date: (_v: string, r: Record<string, unknown>) => normalizeIsoDate(String(r['data_k'] ?? '')),
+    },
+    updateFrequency: 'weekly',
+    sizeCategory: 'huge',
+    csvDelimiter: ';',
+    // 1.54M of the 1.73M rows are individual entrepreneurs with the tax number
+    // withheld; without a tin they cannot be looked up or keyed.
+    skipRecord: (r: Record<string, string>) => !String(r['tin'] ?? '').trim(),
   },
 };
 

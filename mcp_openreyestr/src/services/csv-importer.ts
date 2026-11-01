@@ -130,8 +130,8 @@ export async function importCsv(
 
   // For huge registries: truncate and drop indexes for max throughput
   let savedIndexes: IndexDef[] = [];
+  const keepKeyIndex = (indexdef: string) => upsertOnReload && isUniqueKeyIndex(indexdef, uniqueKeys);
   if (isHuge) {
-    const keepKeyIndex = (indexdef: string) => upsertOnReload && isUniqueKeyIndex(indexdef, uniqueKeys);
     if (upsertOnReload) {
       // Check before TRUNCATE: without the key index ON CONFLICT (key) fails on
       // every batch and the table would be left empty.
@@ -146,6 +146,15 @@ export async function importCsv(
         );
       }
     }
+  }
+
+  // The TRUNCATE is deferred until the first batch of kept rows is ready, so a
+  // file that yields no rows (all skipped by skipRecord, wrong file, header
+  // only) leaves the table untouched instead of empty (LEXAI-2159).
+  let prepared = false;
+  async function prepareHugeLoad() {
+    if (!isHuge || prepared) return;
+    prepared = true;
     console.log(`  TRUNCATE ${config.tableName}...`);
     // RESTART IDENTITY bounds sequence growth to a single run. Without it each
     // daily reimport permanently consumed ~N sequence values and the id
@@ -174,6 +183,7 @@ export async function importCsv(
   let totalImported = 0;
   let totalErrors = 0;
   let totalRows = 0;
+  let totalSkipped = 0;
 
   // Get DB column names — skip raw_data for huge registries
   const columns = Object.keys(config.fieldMap);
@@ -243,10 +253,16 @@ export async function importCsv(
       record[headers[i]] = values[i];
     }
 
+    if (config.skipRecord?.(record)) {
+      totalSkipped++;
+      continue;
+    }
+
     batch.push(record);
     totalRows++;
 
     if (batch.length >= batchSize) {
+      await prepareHugeLoad();
       await drainToN(MAX_PENDING);
 
       const batchToProcess = batch;
@@ -264,6 +280,7 @@ export async function importCsv(
 
   // Process remaining batch
   if (batch.length > 0) {
+    await prepareHugeLoad();
     await drainToN(MAX_PENDING);
     pendingBatches.push(processBatch(batch, totalRows - batch.length));
   }
@@ -288,11 +305,17 @@ export async function importCsv(
   }
 
   const elapsed = (Date.now() - start) / 1000;
-  console.log(`\n  CSV import complete: ${totalRows} rows, ${totalImported} imported, ${totalErrors} errors (${elapsed.toFixed(1)}s)`);
+  console.log(`\n  CSV import complete: ${totalRows} rows, ${totalImported} imported, ${totalErrors} errors, ${totalSkipped} skipped (${elapsed.toFixed(1)}s)`);
 
   // Batch failures are swallowed per-batch so one bad batch can't abort the run.
   // But a huge import that read rows and inserted none has already TRUNCATEd the
   // table, so "success" here would leave the registry empty and report OK.
+  if (isHuge && totalRows === 0) {
+    throw new Error(
+      `${config.name}: the file yielded no rows to import (${totalSkipped} skipped) — ` +
+      `table left untouched. Refusing to report success.`
+    );
+  }
   if (isHuge && totalRows > 0 && totalImported === 0) {
     throw new Error(
       `${config.name}: read ${totalRows} rows but imported 0 (${totalErrors} errors) — ` +
