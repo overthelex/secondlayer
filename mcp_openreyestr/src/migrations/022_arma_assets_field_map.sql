@@ -37,6 +37,13 @@ COMMENT ON COLUMN arma_assets.status IS 'ARMA action state (source field state),
 COMMENT ON COLUMN arma_assets.region IS 'Region derived from the court seat; NULL for national courts (ВАКС etc.)';
 COMMENT ON COLUMN arma_assets.manager IS 'Asset manager / realiser from action details (props_2)';
 
+-- Indexes nothing uses any more (prod 2026-11-01: 20 MB + 12 MB + 1.4 MB):
+-- owner_* are not in the open data and stay NULL; case_number search goes
+-- through case_numbers (GIN, 023). DROP INDEX is catalog-only here.
+DROP INDEX IF EXISTS idx_arma_assets_case_number;
+DROP INDEX IF EXISTS idx_arma_assets_owner_name;
+DROP INDEX IF EXISTS idx_arma_assets_owner_edrpou;
+
 -- Indexes are in 023_arma_assets_indexes.sql: the runner sends each file as
 -- one transaction, so building them here would hold the ACCESS EXCLUSIVE lock
 -- of the ALTERs above for the whole index build.

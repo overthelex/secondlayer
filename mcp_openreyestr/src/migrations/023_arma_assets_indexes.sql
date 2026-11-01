@@ -5,7 +5,7 @@
 -- lock: SELECTs keep working, writes to arma_assets wait until the file
 -- commits (~1 min on 725K rows; the table is written only by the importer).
 -- The new columns are still NULL until the re-import, so the builds are cheap
--- except the two trigram indexes.
+-- except the trigram indexes.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -16,3 +16,5 @@ CREATE INDEX IF NOT EXISTS idx_arma_assets_region ON arma_assets(region) WHERE r
 -- trigram GIN on both columns lets the planner BitmapOr them.
 CREATE INDEX IF NOT EXISTS idx_arma_assets_asset_type_trgm ON arma_assets USING gin(asset_type gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_arma_assets_description_trgm ON arma_assets USING gin(asset_description gin_trgm_ops);
+-- description filter is (asset_description ILIKE '%w%' OR asset_props ILIKE '%w%') per word.
+CREATE INDEX IF NOT EXISTS idx_arma_assets_props_trgm ON arma_assets USING gin(asset_props gin_trgm_ops);

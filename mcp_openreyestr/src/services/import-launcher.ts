@@ -79,7 +79,8 @@ export class ImportLauncher {
       clear();
     });
     child.on('exit', (code, signal) => {
-      this.logger.info(`Import finished for ${spec.name}`, { code, signal });
+      if (code === 0) this.logger.info(`Import finished for ${spec.name}`, { code, signal });
+      else this.logger.warn(`Import failed for ${spec.name}`, { code, signal });
       clear();
     });
     return {

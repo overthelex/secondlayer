@@ -28,6 +28,21 @@ describe('ImportLauncher (LEXAI-2161)', () => {
     expect(l.launch(spec, 'arma').status).toBe(202);
   });
 
+  it('logs exit code 0 at info and a non-zero code or a signal at warn', () => {
+    const log = logger();
+    const spawn = jest.fn(() => fakeChild());
+    const l = new ImportLauncher(log, spawn, () => true);
+    l.launch(spec, 'arma');
+    (spawn.mock.results[0].value as any).emit('exit', 0, null);
+    expect(log.info).toHaveBeenCalledWith('Import finished for arma', { code: 0, signal: null });
+    l.launch(spec, 'arma');
+    (spawn.mock.results[1].value as any).emit('exit', 2, null);
+    l.launch(spec, 'arma');
+    (spawn.mock.results[2].value as any).emit('exit', null, 'SIGTERM');
+    expect(log.warn).toHaveBeenCalledWith('Import failed for arma', { code: 2, signal: null });
+    expect(log.warn).toHaveBeenCalledWith('Import failed for arma', { code: null, signal: 'SIGTERM' });
+  });
+
   it('handles a spawn error event without throwing and frees the slot', () => {
     const child = fakeChild();
     const log = logger();
