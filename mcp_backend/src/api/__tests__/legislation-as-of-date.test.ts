@@ -158,7 +158,8 @@ describe('get_npa_act as_of_date (LEXAI-2146)', () => {
       .mockResolvedValueOnce({ rows: [{ article_count: 1275, char_len: 9 }] });
     const tools = new NpaTools(db as any);
     const out = JSON.parse((await tools.executeTool('get_npa_act', { nreg: '435-15', as_of_date: '2026-09-01' }))!.content[0].text);
-    expect(db.query.mock.calls[2][0]).toContain('is_current');
+    // Current-edition branch: only nreg is bound (the temporal one also binds the date).
+    expect(db.query.mock.calls[2][1]).toEqual(['435-15']);
     expect(out.as_of_note).toContain('05.08.2026');
   });
 
@@ -171,7 +172,8 @@ describe('get_npa_act as_of_date (LEXAI-2146)', () => {
       .mockResolvedValueOnce({ rows: [{ article_count: 1275, char_len: 9 }] });
     const tools = new NpaTools(db as any);
     const out = JSON.parse((await tools.executeTool('get_npa_act', { nreg: '435-15', as_of_date: '2099-01-01' }))!.content[0].text);
-    expect(db.query.mock.calls[2][0]).toContain('is_current');
+    // Current-edition branch: only nreg is bound (the temporal one also binds the date).
+    expect(db.query.mock.calls[2][1]).toEqual(['435-15']);
     expect(out.as_of_note).toContain('ще не настала');
   });
 });
