@@ -26,8 +26,15 @@
 import { SectionType } from '../types/index.js';
 import type { DocumentSection } from '../types/index.js';
 
+/**
+ * Text the sectionizer found no structure in. Kept as a section so it is budgeted and
+ * pageable like any other, instead of falling back to the whole full_text.
+ */
+export const UNSECTIONED = 'UNSECTIONED' as const;
+export type CourtSectionType = SectionType | typeof UNSECTIONED;
+
 export interface CourtDecisionSection {
-  type: SectionType;
+  type: CourtSectionType;
   text: string;
   start: number;
   end: number;
@@ -84,6 +91,13 @@ const PRE_REASONING_TYPES = new Set<SectionType>([
   SectionType.PROCEDURAL_HISTORY,
 ]);
 
+/** Types that mean the court's own assessment has begun, whichever marker found them. */
+const REASONING_TYPES = new Set<SectionType>([
+  SectionType.COURT_REASONING,
+  SectionType.MOTIVES,
+  SectionType.LAW_REFERENCES,
+]);
+
 interface Boundary {
   pos: number;
   type: SectionType;
@@ -130,8 +144,8 @@ function locate(fullText: string, section: DocumentSection, from: number): numbe
 /**
  * Turn the core sectionizer's output into contiguous sections that cover `fullText` from the
  * first character to the last, with the resolutive part as a single trailing DECISION.
- * Returns [] when neither the sectionizer nor the extra headings find any structure, so
- * callers keep their unsectioned fallback.
+ * When neither the sectionizer nor the extra headings find any structure, the text comes back
+ * as UNSECTIONED (after the sectionizer's HEADER, if it found one). [] only for empty text.
  */
 export function refineSections(fullText: string, coreSections: DocumentSection[]): CourtDecisionSection[] {
   if (!fullText) return [];
@@ -186,7 +200,21 @@ export function refineSections(fullText: string, coreSections: DocumentSection[]
     bounds.push({ pos: decisionStart, type: SectionType.DECISION, extra: true });
   }
 
-  if (bounds.length === 0) return [];
+  if (bounds.length === 0) {
+    // No structure. Keep a header the sectionizer did find, and the rest as UNSECTIONED.
+    const header = (Array.isArray(coreSections) ? coreSections : []).find(
+      (s) => s && s.type === SectionType.HEADER && typeof s.text === 'string' && s.text.trim(),
+    );
+    const at = header ? fullText.indexOf(header.text.slice(0, 60)) : -1;
+    const headerEnd = header && at >= 0 && at < 200 ? at + header.text.length : -1;
+    if (headerEnd > 0 && fullText.slice(headerEnd).trim().length >= 80) {
+      return [
+        { type: SectionType.HEADER, start: 0, end: headerEnd, text: fullText.slice(0, headerEnd) },
+        { type: UNSECTIONED, start: headerEnd, end: fullText.length, text: fullText.slice(headerEnd) },
+      ];
+    }
+    return [{ type: UNSECTIONED, start: 0, end: fullText.length, text: fullText }];
+  }
 
   bounds.sort((a, b) => a.pos - b.pos || Number(b.extra) - Number(a.extra));
 
@@ -214,13 +242,11 @@ export function refineSections(fullText: string, coreSections: DocumentSection[]
       type = reasoningStarted ? SectionType.COURT_REASONING : SectionType.PROCEDURAL_HISTORY;
     }
     if (reasoningStarted && PRE_REASONING_TYPES.has(type)) continue;
-    if (b.extra && (type === SectionType.COURT_REASONING || type === SectionType.LAW_REFERENCES)) {
-      reasoningStarted = true;
-    }
+    if (REASONING_TYPES.has(type)) reasoningStarted = true;
     kept.push({ ...b, type });
   }
 
-  const raw: Array<{ type: SectionType; start: number; end: number }> = [];
+  const raw: Array<{ type: CourtSectionType; start: number; end: number }> = [];
   if (kept[0].pos > 0) raw.push({ type: SectionType.HEADER, start: 0, end: kept[0].pos });
   for (let i = 0; i < kept.length; i++) {
     const end = i + 1 < kept.length ? kept[i + 1].pos : fullText.length;
@@ -230,7 +256,7 @@ export function refineSections(fullText: string, coreSections: DocumentSection[]
   // A sliver with no body (a bare heading line such as «Короткий зміст рішень судів
   // попередніх інстанцій» right before the next marker) belongs to the section it introduces.
   const SLIVER = 80;
-  const merged: Array<{ type: SectionType; start: number; end: number }> = [];
+  const merged: Array<{ type: CourtSectionType; start: number; end: number }> = [];
   for (let i = 0; i < raw.length; i++) {
     const r = { ...raw[i] };
     const isSliver = r.type !== SectionType.DECISION && fullText.slice(r.start, r.end).trim().length < SLIVER;
@@ -249,14 +275,20 @@ export function refineSections(fullText: string, coreSections: DocumentSection[]
   return merged.map((m) => ({ ...m, text: fullText.slice(m.start, m.end) }));
 }
 
-/** Sectionize with the core sectionizer, then refine. The one entry point both tools use. */
+/**
+ * Sectionize with the core sectionizer, then refine. The one entry point both tools use.
+ *
+ * Always the deterministic (non-LLM) mode: section indices are handed out as continuation
+ * coordinates (`section` + `offset`), so the same text must always yield the same section
+ * map. LLM-assisted sectioning differs per call and per reasoning_budget; text it would have
+ * structured is returned as UNSECTIONED and stays pageable.
+ */
 export async function sectionizeCourtDecision(
   sectionizer: SectionizerLike,
   fullText: string,
-  useLLM = false,
 ): Promise<CourtDecisionSection[]> {
   if (!fullText) return [];
-  const core = await sectionizer.extractSections(fullText, useLLM);
+  const core = await sectionizer.extractSections(fullText, false);
   return refineSections(fullText, Array.isArray(core) ? core : []);
 }
 
@@ -303,9 +335,22 @@ export function continueCall(docId: number | string, section: number, offset: nu
   return { tool: 'get_court_decision', arguments: { doc_id: docId, section, offset } };
 }
 
-export function truncationMarker(docId: number | string, section: number, offset: number, total: number): string {
-  return `\n\n[… ОБРІЗАНО: показано символи 0–${offset} з ${total} цієї секції. Продовження: get_court_decision {"doc_id": ${JSON.stringify(docId)}, "section": ${section}, "offset": ${offset}}]`;
+/**
+ * Marker appended to a cut section: the range shown and the exact call for the rest.
+ * Never longer than MARKER_RESERVE for any realistic doc_id / offsets.
+ */
+export function truncationMarker(
+  docId: number | string,
+  section: number,
+  from: number,
+  to: number,
+  total: number,
+): string {
+  return `\n\n[… ОБРІЗАНО: показано символи ${from}–${to} з ${total} цієї секції. Продовження: get_court_decision {"doc_id": ${JSON.stringify(docId)}, "section": ${section}, "offset": ${to}}]`;
 }
+
+/** Budget held back for each truncation marker, so the formatted response stays in budget. */
+export const MARKER_RESERVE = 256;
 
 export interface BudgetPlanEntry {
   index: number;
@@ -319,17 +364,21 @@ export interface BudgetPlan {
 }
 
 /**
- * Choose which sections to return within `budget` characters.
+ * Choose which sections to return within `budget` characters of FORMATTED output.
  *
  * Every DECISION section is returned first and in full whenever it fits the budget at all;
  * then up to `maxOther` other eligible sections in SECTION_PRIORITY order, each whole if it
  * fits, sliced (at a boundary) if at least MIN_PARTIAL_CHARS remain, otherwise omitted.
+ * `overhead` is what the caller adds around each section (a label, separators); a cut
+ * section also pays MARKER_RESERVE for its truncation marker. The sum of
+ * take + overhead (+ MARKER_RESERVE when cut) over returned sections never exceeds `budget`.
  */
 export function planSectionBudget(
   sections: Array<{ type: string; text: string }>,
-  opts: { budget: number; maxOther?: number; eligible?: (type: string) => boolean },
+  opts: { budget: number; maxOther?: number; eligible?: (type: string) => boolean; overhead?: number },
 ): BudgetPlan {
   const eligible = opts.eligible ?? (() => true);
+  const overhead = Math.max(0, opts.overhead ?? 0);
   const rank = (type: string) => {
     const r = SECTION_PRIORITY.indexOf(type as SectionType);
     return r === -1 ? SECTION_PRIORITY.length : r;
@@ -346,17 +395,25 @@ export function planSectionBudget(
   const maxOther = opts.maxOther ?? Infinity;
   const returned: BudgetPlanEntry[] = [];
   const omitted: BudgetPlan['omitted'] = [];
-  let remaining = Math.max(0, opts.budget);
+  let remaining = Math.max(0, Math.floor(opts.budget));
+
+  /** Characters to take from section i, or 0 to omit it; `minCut` is the smallest useful cut. */
+  const fit = (i: number, minCut: number): number => {
+    const len = sections[i].text.length;
+    if (len + overhead <= remaining) return len;
+    const room = remaining - overhead - MARKER_RESERVE;
+    if (room < minCut) return 0;
+    return cutAtBoundary(sections[i].text, room);
+  };
+  const spend = (i: number, take: number) => {
+    returned.push({ index: i, take });
+    remaining -= take + overhead + (take < sections[i].text.length ? MARKER_RESERVE : 0);
+  };
 
   for (const i of decisions) {
-    const len = sections[i].text.length;
-    const take = len <= remaining ? len : cutAtBoundary(sections[i].text, remaining);
-    if (take <= 0) {
-      omitted.push({ index: i, reason: 'budget' });
-      continue;
-    }
-    returned.push({ index: i, take });
-    remaining -= take;
+    const take = fit(i, 1);
+    if (take <= 0) omitted.push({ index: i, reason: 'budget' });
+    else spend(i, take);
   }
 
   others.forEach((i, n) => {
@@ -364,17 +421,9 @@ export function planSectionBudget(
       omitted.push({ index: i, reason: 'depth' });
       return;
     }
-    const len = sections[i].text.length;
-    if (len <= remaining) {
-      returned.push({ index: i, take: len });
-      remaining -= len;
-    } else if (remaining >= MIN_PARTIAL_CHARS) {
-      const take = cutAtBoundary(sections[i].text, remaining);
-      returned.push({ index: i, take });
-      remaining -= take;
-    } else {
-      omitted.push({ index: i, reason: 'budget' });
-    }
+    const take = fit(i, MIN_PARTIAL_CHARS);
+    if (take <= 0) omitted.push({ index: i, reason: 'budget' });
+    else spend(i, take);
   });
 
   returned.sort((a, b) => a.index - b.index);

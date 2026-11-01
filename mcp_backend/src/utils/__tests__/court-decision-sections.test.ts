@@ -9,7 +9,10 @@ import {
   sectionizeCourtDecision,
   planSectionBudget,
   cutAtBoundary,
+  truncationMarker,
   MIN_PARTIAL_CHARS,
+  MARKER_RESERVE,
+  UNSECTIONED,
 } from '../court-decision-sections.js';
 import { CourtDecisionTools } from '../../api/tools/court-decision-tools.js';
 
@@ -27,8 +30,9 @@ function paragraphs(prefix: string, chars: number, startNo: number): string {
 }
 
 /** A ВС ruling shaped like doc 90458880: ~78K chars, reasoning under a Grand Chamber heading. */
-function buildRuling(opts: { withGuidedBy?: boolean } = {}): string {
+function buildRuling(opts: { withGuidedBy?: boolean; reasoningChars?: number } = {}): string {
   const withGuidedBy = opts.withGuidedBy ?? true;
+  const reasoningChars = opts.reasoningChars ?? 30000;
   return [
     'ПОСТАНОВА\n\n Іменем України\n\n 23 червня 2020 року\n\n м. Київ\n\n Справа № 922/989/18\n\n Велика Палата Верховного Суду у складі судді-доповідача Уркевича В. Ю. розглянула справу за позовом СФГ «Берізка» до ГУ Держгеокадастру\n\n УСТАНОВИЛА:\n\n ІСТОРІЯ СПРАВИ',
     '\n\n Короткий зміст позовних вимог' + paragraphs('Позивач просив визнати право', 2000, 1),
@@ -36,7 +40,7 @@ function buildRuling(opts: { withGuidedBy?: boolean } = {}): string {
     '\n\n Короткий зміст рішень судів попередніх інстанцій',
     '\n\n 22. Рішенням Господарського суду Харківської області від 08 жовтня 2018 року у позові відмовлено. Суд постановив: у позові відмовити.' +
       paragraphs('Апеляційний суд', 30000, 23),
-    '\n\n ПОЗИЦІЯ ВЕЛИКОЇ ПАЛАТИ ВЕРХОВНОГО СУДУ' + paragraphs('Велика Палата вважає', 30000, 200),
+    '\n\n ПОЗИЦІЯ ВЕЛИКОЇ ПАЛАТИ ВЕРХОВНОГО СУДУ' + paragraphs('Велика Палата вважає', reasoningChars, 200),
     '\n\n Висновки за результатами розгляду касаційної скарги\n\n 90. Касаційна скарга підлягає задоволенню.',
     withGuidedBy
       ? '\n\n Керуючись статтями 300-302, 308, 311 Господарського процесуального кодексу України, Велика Палата Верховного Суду'
@@ -73,7 +77,7 @@ function coreLike(text: string): DocumentSection[] {
   });
   return out;
 }
-const fakeSectionizer = { extractSections: async (t: string) => coreLike(t) };
+const fakeSectionizer = { extractSections: jest.fn(async (t: string, _useLLM?: boolean) => coreLike(t)) };
 
 describe('refineSections', () => {
   const text = buildRuling();
@@ -138,9 +142,39 @@ describe('refineSections', () => {
     }
   });
 
-  it('returns [] when there is no structure, so callers keep their unsectioned fallback', () => {
-    expect(refineSections('Короткий текст без жодних заголовків.', [])).toEqual([]);
+  it('returns unstructured text as one UNSECTIONED section (budgeted like the rest), [] only for no text', () => {
+    const t = 'Короткий текст без жодних заголовків.';
+    expect(refineSections(t, [])).toEqual([{ type: UNSECTIONED, start: 0, end: t.length, text: t }]);
     expect(refineSections('', [])).toEqual([]);
+  });
+
+  it('keeps a HEADER-only sectionizer result as HEADER + UNSECTIONED instead of dropping it', () => {
+    const head = 'ПОСТАНОВА Іменем України 23 червня 2020 року Справа № 922/989/18 Велика Палата Верховного Суду';
+    const t = head + '\n\n' + 'Текст без розпізнаних заголовків. '.repeat(50);
+    const s = refineSections(t, [
+      { type: SectionType.HEADER, text: head, start_index: 0, end_index: head.length, confidence: 0.9 },
+    ]);
+    expect(s.map((x) => x.type)).toEqual([SectionType.HEADER, UNSECTIONED]);
+    expect(s.map((x) => x.text).join('')).toBe(t);
+  });
+
+  it('treats a core COURT_REASONING boundary as the start of the assessment, too', () => {
+    const t =
+      'Шапка рішення суду у справі № 1/1 від 01 січня 2020 року, склад суду: головуючий, судді; сторони: позивач і відповідач.' +
+      '\n\n Фактичні обставини справи' + paragraphs('Факт', 600, 1) +
+      '\n\n Суд вважає, що позов підлягає задоволенню' + paragraphs('Оцінка', 600, 50) +
+      '\n\n Короткий зміст рішень цитата всередині мотивування' + paragraphs('Цитата', 600, 90);
+    const factsAt = t.indexOf('\n\n Фактичні');
+    const reasoningAt = t.indexOf('\n\n Суд вважає');
+    const quoteAt = t.indexOf('\n\n Короткий зміст рішень');
+    const core: DocumentSection[] = [
+      { type: SectionType.FACTS, text: t.slice(factsAt, reasoningAt), start_index: factsAt, end_index: reasoningAt, confidence: 0.8 },
+      { type: SectionType.COURT_REASONING, text: t.slice(reasoningAt, quoteAt), start_index: reasoningAt, end_index: quoteAt, confidence: 0.8 },
+      { type: SectionType.PROCEDURAL_HISTORY, text: t.slice(quoteAt), start_index: quoteAt, end_index: t.length, confidence: 0.8 },
+    ];
+    const s = refineSections(t, core);
+    expect(s.map((x) => x.type)).toEqual([SectionType.HEADER, SectionType.FACTS, SectionType.COURT_REASONING]);
+    expect(s[2].end).toBe(t.length);
   });
 
   it('survives LLM-style sections with made-up indices', () => {
@@ -177,8 +211,16 @@ describe('planSectionBudget', () => {
     expect(plan.returned.map((r) => r.index)).toEqual([0, 4, 5]);
     expect(plan.returned[1].take).toBeLessThan(38900);
     expect(plan.omitted.map((o) => o.index)).toEqual([1, 2, 3]);
-    const total = plan.returned.reduce((a, r) => a + r.take, 0);
+    const total = plan.returned.reduce((a, r) => a + r.take + (r.take < s[r.index].text.length ? MARKER_RESERVE : 0), 0);
     expect(total).toBeLessThanOrEqual(40000);
+  });
+
+  it('charges per-section overhead and markers against the budget', () => {
+    const s = [sec(SectionType.COURT_REASONING, 5000), sec(SectionType.DECISION, 900)];
+    const plan = planSectionBudget(s, { budget: 3000, overhead: 24 });
+    const cost = plan.returned.reduce((a, r) => a + r.take + 24 + (r.take < s[r.index].text.length ? MARKER_RESERVE : 0), 0);
+    expect(cost).toBeLessThanOrEqual(3000);
+    expect(plan.returned.find((r) => r.index === 1)?.take).toBe(900);
   });
 
   it('reports sections beyond depth as omitted for depth, not budget', () => {
@@ -191,6 +233,15 @@ describe('planSectionBudget', () => {
     const s = [sec(SectionType.HEADER, 39000 - MIN_PARTIAL_CHARS + 100), sec(SectionType.FACTS, 5000), sec(SectionType.DECISION, 1000)];
     const plan = planSectionBudget(s, { budget: 40000 });
     expect(plan.omitted).toEqual([{ index: 1, reason: 'budget' }]);
+  });
+});
+
+describe('truncationMarker', () => {
+  it('labels the real range and fits in MARKER_RESERVE', () => {
+    const m = truncationMarker(9999999999, 99, 1234567, 1274567, 9999999);
+    expect(m).toContain('показано символи 1234567–1274567 з 9999999');
+    expect(m).toContain('"offset": 1274567');
+    expect(m.length).toBeLessThanOrEqual(MARKER_RESERVE);
   });
 });
 
@@ -246,7 +297,7 @@ describe('get_court_decision (LEXAI-2175)', () => {
     expect(types).toContain('COURT_REASONING');
     expect(types).not.toContain(undefined);
     const total = out.sections.reduce((a: number, s: any) => a + s.text.length, 0);
-    expect(total).toBeLessThan(40000 + 1000);
+    expect(total).toBeLessThanOrEqual(40000);
 
     const cut = out.sections.find((s: any) => s.text_truncated);
     expect(cut).toBeDefined();
@@ -281,22 +332,70 @@ describe('get_court_decision (LEXAI-2175)', () => {
     }
   });
 
-  it('section + offset pages through a section with nothing lost', async () => {
-    const tools = makeTools(text);
+  it('section + offset pages through a section longer than the budget with nothing lost', async () => {
+    const big = buildRuling({ reasoningChars: 90000 });
+    const tools = makeTools(big);
     const first = parse(await tools.executeTool('get_court_decision', { doc_id: 90458880, depth: 5 }));
-    const reasoning = first.sections_index.find((s: any) => s.type === 'COURT_REASONING');
+    const reasoning = first.sections_index.find((x: any) => x.type === 'COURT_REASONING');
+    expect(reasoning.length).toBeGreaterThan(80000);
+    const shown = first.sections.find((x: any) => x.index === reasoning.index);
+    expect(shown.text_truncated).toBe(true);
+
     let offset = 0;
     let assembled = '';
-    for (let i = 0; i < 10; i++) {
+    let pages = 0;
+    for (;;) {
       const page = parse(await tools.executeTool('get_court_decision', { doc_id: 90458880, section: reasoning.index, offset }));
+      pages++;
+      expect(page.offset).toBe(offset);
       expect(page.sections).toHaveLength(1);
-      const s = page.sections[0];
-      assembled += s.text_truncated ? s.text.slice(0, s.text.indexOf('\n\n[… ОБРІЗАНО')) : s.text;
-      if (!page.next_offset) break;
+      const p = page.sections[0];
+      expect(p.text.length).toBeLessThanOrEqual(40000);
+      if (!page.next_offset) {
+        assembled += p.text;
+        break;
+      }
+      expect(p.continue_with.arguments.offset).toBe(page.next_offset);
+      expect(p.text).toContain(`показано символи ${offset}–${page.next_offset} з ${reasoning.length}`);
+      assembled += p.text.slice(0, p.text.indexOf('\n\n[… ОБРІЗАНО'));
+      expect(assembled.length).toBe(page.next_offset);
       offset = page.next_offset;
+      expect(pages).toBeLessThan(10);
     }
-    expect(assembled.length).toBe(reasoning.length);
-    expect(text.slice(reasoning.start, reasoning.start + reasoning.length)).toBe(assembled);
+    expect(pages).toBeGreaterThanOrEqual(3);
+    expect(assembled).toBe(big.slice(reasoning.start, reasoning.start + reasoning.length));
+  });
+
+  it('sections the same way for every reasoning_budget, so paging coordinates are stable', async () => {
+    fakeSectionizer.extractSections.mockClear();
+    const tools = makeTools(text);
+    const std = parse(await tools.executeTool('get_court_decision', { doc_id: 90458880 }));
+    const deep = parse(await tools.executeTool('get_court_decision', { doc_id: 90458880, reasoning_budget: 'deep' }));
+    expect(deep.sections_index).toEqual(std.sections_index);
+    expect(fakeSectionizer.extractSections.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fakeSectionizer.extractSections.mock.calls) expect(call[1]).toBe(false);
+  });
+
+  it('normalizes depth to an integer in 1..5', async () => {
+    const tools = makeTools(text);
+    const cases: Array<[unknown, number]> = [[2.7, 2], ['3', 3], ['abc', 2], [0, 2], [99, 5], [-4, 1]];
+    for (const [given, want] of cases) {
+      const out = parse(await tools.executeTool('get_court_decision', { doc_id: 90458880, depth: given }));
+      expect(out.depth).toBe(want);
+    }
+  });
+
+  it('budgets an unstructured decision instead of returning the whole full_text', async () => {
+    const plain = 'Текст рішення без жодних розпізнаних заголовків і структури. '.repeat(2500);
+    const out = parse(await makeTools(plain).executeTool('get_court_decision', { doc_id: 90458880 }));
+    expect(out.sections_index).toEqual([
+      expect.objectContaining({ index: 0, type: 'UNSECTIONED', length: plain.length, returned: 'partial' }),
+    ]);
+    expect(out.sections).toEqual([]);
+    expect(out.full_text.length).toBeLessThanOrEqual(40000);
+    expect(out.full_text).toContain('ОБРІЗАНО');
+    expect(out.full_text_truncated).toBe(true);
+    expect(out.continue_with.arguments).toEqual({ doc_id: 90458880, section: 0, offset: out.next_offset });
   });
 
   it('rejects a section index that does not exist, in Ukrainian', async () => {
@@ -326,5 +425,14 @@ describe('load_full_texts return_texts (LEXAI-2175)', () => {
     expect(doc.text).toContain('[COURT_REASONING]');
     expect(doc.truncated).toBe(true);
     expect(doc.text).toContain('ОБРІЗАНО');
+  });
+
+  it('never returns more than snippet_chars, labels and markers included', async () => {
+    const tools = makeTools(buildRuling({ reasoningChars: 60000 }));
+    for (const snippet_chars of [500, 1000, 2500, 4000, 20000]) {
+      const out = parse(await tools.executeTool('load_full_texts', { doc_ids: [90458880], return_texts: true, snippet_chars }));
+      expect(out.documents[0].text.length).toBeLessThanOrEqual(snippet_chars);
+      expect(out.documents[0].text).toContain('[DECISION]');
+    }
   });
 });

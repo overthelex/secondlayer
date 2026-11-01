@@ -46,6 +46,8 @@ import {
   cutAtBoundary,
   continueCall,
   truncationMarker,
+  MARKER_RESERVE,
+  UNSECTIONED,
   type CourtDecisionSection,
 } from '../../utils/court-decision-sections.js';
 
@@ -145,7 +147,12 @@ export class CourtDecisionTools extends BaseToolHandler {
               default: 0,
               description: 'Зсув у символах усередині секції section (значення next_offset / continue_with з попередньої відповіді).',
             },
-            reasoning_budget: { type: 'string', enum: ['quick', 'standard', 'deep'], default: 'standard' },
+            reasoning_budget: {
+              type: 'string',
+              enum: ['quick', 'standard', 'deep'],
+              default: 'standard',
+              description: 'Не впливає на розбиття на секції: воно детерміноване, щоб номери section/offset були стабільними між викликами.',
+            },
             include_citations: {
               type: 'boolean',
               default: true,
@@ -495,7 +502,8 @@ total_resolved_links=0 означає відсутність даних граф
   private async getCourtDecision(args: any): Promise<ToolResult> {
     const docIdRaw = args.doc_id ?? args.document_id ?? args.case_id;
     const caseNumber = typeof args.case_number === 'string' ? args.case_number.trim() : '';
-    const depth = Math.min(5, Math.max(1, Number(args.depth || 2)));
+    const depthArg = Number(args.depth);
+    const depth = Math.min(5, Math.max(1, Number.isFinite(depthArg) && depthArg !== 0 ? Math.trunc(depthArg) : 2));
     const budget = args.reasoning_budget || 'standard';
 
     logger.info('[MCP Tool] get_court_decision started', {
@@ -648,7 +656,9 @@ total_resolved_links=0 означає відсутність даних граф
     }
 
     const allSections = fullText
-      ? await sectionizeCourtDecision(this.sectionizer, fullText, budget === 'deep')
+      // Deterministic sectioning regardless of reasoning_budget: section indices are paging
+      // coordinates, so a continuation call must see the same section map.
+      ? await sectionizeCourtDecision(this.sectionizer, fullText)
       : [];
     const docRef = row.doc_id;
 
@@ -677,7 +687,9 @@ total_resolved_links=0 означає відсутність даних граф
         return this.wrapError(`offset ${offset} поза межами секції ${index} (довжина ${s.text.length} символів).`);
       }
       const rest = s.text.slice(offset);
-      const take = cutAtBoundary(rest, RESPONSE_TEXT_BUDGET);
+      const take = rest.length <= RESPONSE_TEXT_BUDGET
+        ? rest.length
+        : cutAtBoundary(rest, RESPONSE_TEXT_BUDGET - MARKER_RESERVE);
       const end = offset + take;
       const more = end < s.text.length;
       sections = [this.renderSection(docRef, index, s, offset, end)];
@@ -700,6 +712,20 @@ total_resolved_links=0 означає відсутність даних граф
           })),
         };
       }
+    }
+
+    // No structure found: the budgeted UNSECTIONED text goes out as full_text (where the chat
+    // compactor's regex fallback looks for it) instead of the whole text bypassing the budget.
+    let unsectionedText: Record<string, unknown> | null = null;
+    const unsectionedAt = sections.findIndex((x) => x.type === UNSECTIONED);
+    if (unsectionedAt >= 0) {
+      const u = sections.splice(unsectionedAt, 1)[0];
+      unsectionedText = {
+        full_text: u.text,
+        full_text_truncated: Boolean(u.text_truncated || u.offset),
+        ...(u.continue_with ? { continue_with: u.continue_with, next_offset: u.next_offset } : {}),
+        full_text_hint: 'Структуру рішення не розпізнано: текст повертається як UNSECTIONED (див. sections_index) частинами до ~40 000 символів. Решту отримайте викликом get_court_decision з section та offset — див. continue_with.',
+      };
     }
 
     const payload: any = {
@@ -725,7 +751,9 @@ total_resolved_links=0 означає відсутність даних граф
       // "Never sends full_text to LLM — extracts key sections instead") and reads it only as a
       // fallback when sections are missing. So keep it whole when there are no sections, and
       // reduce it to a preview when there are. Raw text remains available via load_full_texts.
-      ...(sections.length > 0 && fullText.length > FULL_TEXT_PREVIEW_CHARS
+      ...(unsectionedText
+        ? unsectionedText
+        : sections.length > 0 && fullText.length > FULL_TEXT_PREVIEW_CHARS
         ? {
             full_text_preview: fullText.slice(0, FULL_TEXT_PREVIEW_CHARS),
             full_text_truncated: true,
@@ -770,7 +798,7 @@ total_resolved_links=0 означає відсутність даних граф
     return {
       index,
       type: s.type,
-      text: s.text.slice(from, to) + (more ? truncationMarker(docId, index, to, total) : ''),
+      text: s.text.slice(from, to) + (more ? truncationMarker(docId, index, from, to, total) : ''),
       ...(from > 0 || more
         ? {
             text_truncated: more,
@@ -1358,6 +1386,8 @@ total_resolved_links=0 означає відсутність даних граф
 
     // Key parts: applied norms, court reasoning and the operative part. The operative part is
     // reserved first by planSectionBudget — a head-truncated excerpt used to lose it (LEXAI-2175).
+    // Longest label «[COURT_REASONING]\n» (18) + the «\n\n» joining parts, with headroom.
+    const KEY_PART_OVERHEAD = 24;
     const KEY_SECTION_TYPES = new Set<string>([
       SectionType.LAW_REFERENCES,
       SectionType.MOTIVES,
@@ -1380,18 +1410,21 @@ total_resolved_links=0 означає відсутність даних граф
       let sectionsTruncated = false;
 
       if (fullText) {
-        const sections = await sectionizeCourtDecision(this.sectionizer, fullText, false);
+        const sections = await sectionizeCourtDecision(this.sectionizer, fullText);
+        // snippet_chars caps the formatted excerpt: «[TYPE]\n» labels, the blank line between
+        // parts and every truncation marker are paid for inside the budget.
         const plan = planSectionBudget(sections, {
           budget: snippetChars,
           eligible: (type) => KEY_SECTION_TYPES.has(type),
+          overhead: KEY_PART_OVERHEAD,
         });
         const keyParts = plan.returned.map(({ index, take }) => {
-            const s = sections[index];
-            const cut = take < s.text.length;
-            if (cut) sectionsTruncated = true;
-            return `[${s.type}]\n${s.text.slice(0, take).trim()}` +
-              (cut ? truncationMarker(row.doc_id, index, take, s.text.length) : '');
-          });
+          const s = sections[index];
+          const cut = take < s.text.length;
+          if (cut) sectionsTruncated = true;
+          return `[${s.type}]\n${s.text.slice(0, take).trim()}` +
+            (cut ? truncationMarker(row.doc_id, index, 0, take, s.text.length) : '');
+        });
         if (plan.omitted.length > 0) sectionsTruncated = true;
         if (keyParts.length > 0) {
           excerpt = keyParts.join('\n\n');
@@ -1418,8 +1451,10 @@ total_resolved_links=0 означає відсутність даних граф
         continue;
       }
 
-      // Section excerpts are already fitted (markers included); only the raw fallback is cut here.
+      // Section excerpts are already fitted (labels and markers included); only the raw
+      // fallback is cut here, on a word boundary.
       const truncated = source === 'sections' ? sectionsTruncated : excerpt.length > snippetChars;
+      if (source !== 'sections' && truncated) excerpt = excerpt.slice(0, cutAtBoundary(excerpt, snippetChars));
       out.push({
         doc_id: row.doc_id,
         case_number: row.cause_num || undefined,
@@ -1429,7 +1464,7 @@ total_resolved_links=0 означає відсутність даних граф
         full_text_length: fullText.length,
         excerpt_source: source,
         truncated,
-        text: source !== 'sections' && truncated ? excerpt.slice(0, snippetChars) : excerpt,
+        text: excerpt,
       });
     }
     return out;
