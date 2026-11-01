@@ -6,8 +6,9 @@
  * Usage: node dist/scripts/import-arma.js [--skip-download]
  *
  * JSON structure: { results: [{ columns: [...], items: [...] }] }
- * Item fields: id, description, name, state, docnum, decisiondate, numerdr,
- *              props, props_1, props_2, dateaction, actionincomesum, dectypename
+ * Field mapping: services/arma-mapping.ts (LEXAI-2161). Every row seen in this
+ * run is upserted with all mapped fields; after a clean full pass, rows that
+ * were not seen (stale or mis-mapped by an older importer) are deleted.
  */
 import dotenv from 'dotenv';
 dotenv.config();
@@ -18,10 +19,14 @@ import * as path from 'path';
 import https from 'https';
 import http from 'http';
 import crypto from 'crypto';
+import { mapArmaItem, repairArmaLine } from '../services/arma-mapping';
 
 const ARMA_URL = 'https://data.gov.ua/dataset/d6cc6909-4098-47bc-a2e4-96182f446982/resource/02435739-9481-40ca-b40f-6379b6ed5949/download/edra_opendata.json';
 const DATA_DIR = process.env.NAIS_DATA_DIR || path.join(__dirname, '../../data/nais');
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 1000;
+const LOCK_KEY = 21610001; // pg advisory lock: one ARMA import at a time
+/** Refuse to delete stale rows if this run saw fewer than this share of the current rows. */
+const MIN_SEEN_RATIO = 0.8;
 
 function downloadFile(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -55,14 +60,6 @@ function downloadFile(url: string, dest: string): Promise<void> {
   });
 }
 
-function parseDate(s: string | null | undefined): string | null {
-  if (!s || typeof s !== 'string') return null;
-  const dmy = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
-  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-  return null;
-}
-
 /**
  * Stream-parse the ARMA JSON file.
  * Structure: { results: [{ columns: [...], items: [ {item}, {item}, ... ] }] }
@@ -70,6 +67,8 @@ function parseDate(s: string | null | undefined): string | null {
  * Each item is on its own line (or close to it).
  * Strategy: skip to "items": line, then parse each {...} object between commas.
  */
+export const parseStats = { parseErrors: 0 };
+
 async function* readItemsFromFile(filePath: string): AsyncGenerator<any> {
   const readline = await import('readline');
   const rl = readline.createInterface({
@@ -102,11 +101,20 @@ async function* readItemsFromFile(filePath: string): AsyncGenerator<any> {
     if (jsonStr.endsWith(',')) jsonStr = jsonStr.slice(0, -1);
     if (!jsonStr.startsWith('{')) continue;
 
+    let item: any;
     try {
-      yield JSON.parse(jsonStr);
+      item = JSON.parse(jsonStr);
     } catch {
-      // Skip malformed lines
+      // ~3% of lines carry a decimal comma in actionincomesum (583526,51).
+      try {
+        item = JSON.parse(repairArmaLine(jsonStr));
+      } catch {
+        parseStats.parseErrors++;
+        if (parseStats.parseErrors <= 5) console.error(`\n  Unparseable line: ${jsonStr.substring(0, 200)}`);
+        continue;
+      }
     }
+    yield item;
   }
 }
 
@@ -135,65 +143,72 @@ async function importArma() {
     user: process.env.POSTGRES_USER || 'openreyestr',
     password: process.env.POSTGRES_PASSWORD,
     database: process.env.POSTGRES_DB || 'openreyestr',
-    max: 5,
+    max: 2,
   });
+
+  const lockClient = await pool.connect();
+  const lock = await lockClient.query('SELECT pg_try_advisory_lock($1) AS ok', [LOCK_KEY]);
+  if (!lock.rows[0]?.ok) {
+    console.error('Another ARMA import holds the lock — exiting');
+    lockClient.release();
+    await pool.end();
+    process.exit(1);
+  }
+
+  const runStart: Date = (await pool.query('SELECT clock_timestamp() AS t')).rows[0].t;
+  const before = Number((await pool.query('SELECT COUNT(*) AS n FROM arma_assets')).rows[0].n);
 
   let imported = 0;
   let updated = 0;
-  let errors = 0;
+  let batchErrors = 0;
   let total = 0;
   let batch: any[] = [];
 
   async function flushBatch(records: any[]) {
-    const client = await pool.connect();
+    // One row per content hash: ON CONFLICT cannot touch the same row twice in a statement.
+    const rows = new Map<string, any>();
+    for (const record of records) {
+      const hash = crypto.createHash('md5').update(JSON.stringify(record)).digest('hex');
+      rows.set(hash, { ...mapArmaItem(record), content_hash: hash, source_url: ARMA_URL });
+    }
     try {
-      await client.query('BEGIN');
-      for (const record of records) {
-        try {
-          const hash = crypto.createHash('md5').update(JSON.stringify(record)).digest('hex');
-
-          // ARMA fields mapping
-          const caseNumber = record.docnum || null;
-          const caseDate = parseDate(record.decisiondate);
-          const assetType = record.dectypename || null;
-          const assetDesc = record.description || null;
-          const ownerName = record.name || null;
-          const numerdr = record.numerdr || null;
-          const region = null; // Not directly in data
-          const status = record.state || null;
-          const arrestDate = parseDate(record.dateaction);
-          const actionSum = record.actionincomesum || null;
-
-          // props_1 often contains court info: "Найменування суду: ...; ПІБ судді: ..."
-          const courtName = record.props_1 ? (record.props_1.match(/Найменування суду:\s*([^;]+)/)?.[1]?.trim() || null) : null;
-          const judgeName = record.props_1 ? (record.props_1.match(/ПІБ судді:\s*([^;]+)/)?.[1]?.trim() || null) : null;
-
-          const result = await client.query(
-            `INSERT INTO arma_assets (case_number, case_date, court_name, asset_type, asset_description,
-              owner_name, owner_type, owner_edrpou, region, status, arrest_date, transfer_date, manager,
-              source_url, content_hash)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-             ON CONFLICT (content_hash) DO UPDATE SET
-               updated_at = CURRENT_TIMESTAMP
-             RETURNING (xmax = 0) AS is_insert`,
-            [caseNumber, caseDate, courtName, assetType, assetDesc,
-             ownerName, null, numerdr, region, status, arrestDate, null, judgeName,
-             ARMA_URL, hash]
-          );
-
-          if (result.rows[0]?.is_insert) imported++;
-          else updated++;
-        } catch (err) {
-          errors++;
-          if (errors <= 5) console.error(`\n  Error:`, (err as Error).message?.substring(0, 200));
-        }
+      const result = await pool.query(
+        `INSERT INTO arma_assets (asset_id, case_number, case_numbers, criminal_proceeding_number, case_date,
+           court_name, judge_name, investigation_body, region, decision_type, asset_type, asset_description,
+           asset_props, action_name, action_date, action_details, action_income_sum, status, arrest_date,
+           transfer_date, manager, owner_name, owner_type, owner_edrpou, source_url, content_hash, updated_at)
+         SELECT asset_id, case_number, case_numbers, criminal_proceeding_number, case_date,
+           court_name, judge_name, investigation_body, region, decision_type, asset_type, asset_description,
+           asset_props, action_name, action_date, action_details, action_income_sum, status, arrest_date,
+           transfer_date, manager, NULL, NULL, NULL, source_url, content_hash, clock_timestamp()
+         FROM jsonb_to_recordset($1::jsonb) AS x(
+           asset_id text, case_number text, case_numbers text[], criminal_proceeding_number text, case_date date,
+           court_name text, judge_name text, investigation_body text, region text, decision_type text,
+           asset_type text, asset_description text, asset_props text, action_name text, action_date date,
+           action_details text, action_income_sum numeric, status text, arrest_date date, transfer_date date,
+           manager text, source_url text, content_hash text)
+         ON CONFLICT (content_hash) DO UPDATE SET
+           asset_id = EXCLUDED.asset_id, case_number = EXCLUDED.case_number, case_numbers = EXCLUDED.case_numbers,
+           criminal_proceeding_number = EXCLUDED.criminal_proceeding_number, case_date = EXCLUDED.case_date,
+           court_name = EXCLUDED.court_name, judge_name = EXCLUDED.judge_name,
+           investigation_body = EXCLUDED.investigation_body, region = EXCLUDED.region,
+           decision_type = EXCLUDED.decision_type, asset_type = EXCLUDED.asset_type,
+           asset_description = EXCLUDED.asset_description, asset_props = EXCLUDED.asset_props,
+           action_name = EXCLUDED.action_name, action_date = EXCLUDED.action_date,
+           action_details = EXCLUDED.action_details, action_income_sum = EXCLUDED.action_income_sum,
+           status = EXCLUDED.status, arrest_date = EXCLUDED.arrest_date, transfer_date = EXCLUDED.transfer_date,
+           manager = EXCLUDED.manager, owner_name = NULL, owner_type = NULL, owner_edrpou = NULL,
+           source_url = EXCLUDED.source_url, updated_at = EXCLUDED.updated_at
+         RETURNING (xmax = 0) AS is_insert`,
+        [JSON.stringify([...rows.values()])]
+      );
+      for (const r of result.rows) {
+        if (r.is_insert) imported++;
+        else updated++;
       }
-      await client.query('COMMIT');
     } catch (err) {
-      await client.query('ROLLBACK');
-      console.error('Batch failed:', err);
-    } finally {
-      client.release();
+      batchErrors++;
+      console.error('\n  Batch failed:', (err as Error).message?.substring(0, 300));
     }
   }
 
@@ -204,21 +219,32 @@ async function importArma() {
     if (batch.length >= BATCH_SIZE) {
       await flushBatch(batch);
       batch = [];
-      process.stdout.write(`\r  Records: ${total} | New: ${imported} | Updated: ${updated} | Errors: ${errors}`);
+      process.stdout.write(`\r  Records: ${total} | New: ${imported} | Updated: ${updated} | Batch errors: ${batchErrors}`);
     }
   }
 
-  // Flush remaining
   if (batch.length > 0) {
     await flushBatch(batch);
   }
 
-  console.log(`\n\nDone: ${imported} new, ${updated} updated, ${errors} errors (${total} total parsed)`);
+  const seen = imported + updated;
+  console.log(`\n\nDone: ${imported} new, ${updated} updated, ${seen} distinct rows, ${total} items parsed, ` +
+    `${parseStats.parseErrors} unparseable lines, ${batchErrors} failed batches (rows before: ${before})`);
+
+  if (parseStats.parseErrors === 0 && batchErrors === 0 && seen >= before * MIN_SEEN_RATIO && seen > 0) {
+    const del = await pool.query('DELETE FROM arma_assets WHERE updated_at < $1', [runStart]);
+    console.log(`Deleted ${del.rowCount} rows not present in the current source file`);
+  } else {
+    console.warn('Stale rows kept: run was not clean or saw too few rows');
+  }
 
   const count = await pool.query('SELECT COUNT(*) FROM arma_assets');
   console.log(`Total in database: ${count.rows[0].count}`);
 
+  await lockClient.query('SELECT pg_advisory_unlock($1)', [LOCK_KEY]);
+  lockClient.release();
   await pool.end();
+  if (parseStats.parseErrors > 0 || batchErrors > 0) process.exit(2);
 }
 
 importArma().catch(e => { console.error(e); process.exit(1); });

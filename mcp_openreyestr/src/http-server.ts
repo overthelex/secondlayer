@@ -28,6 +28,7 @@ class HTTPOpenReyestrServer {
   private mcpAPI: MCPOpenReyestrAPI;
   private metricsService: MetricsService;
   private prozorroImport: ChildProcess | null = null;
+  private armaImport: ChildProcess | null = null;
 
   constructor() {
     this.app = express();
@@ -458,6 +459,30 @@ class HTTPOpenReyestrServer {
         child.stderr?.on('data', (d: Buffer) => logger.warn(`[prozorro] ${d.toString().trimEnd()}`));
         child.on('exit', (code) => logger.info('ProZorro import finished', { code }));
         res.status(202).json({ status: 'accepted', message: 'ProZorro incremental import started', registry, pid: child.pid });
+        return;
+      }
+
+      // ARMA seized assets is a single data.gov.ua JSON file with its own
+      // importer (field map: services/arma-mapping.ts, LEXAI-2161). The script
+      // downloads the file, upserts every row, deletes rows it did not see and
+      // holds a pg advisory lock against overlapping runs.
+      if (registry === 'arma') {
+        if (this.armaImport && this.armaImport.exitCode === null) {
+          res.status(409).json({ error: 'ARMA import already running', pid: this.armaImport.pid });
+          return;
+        }
+        const { spawn } = await import('child_process');
+        const path = await import('path');
+        const child = spawn(
+          process.execPath,
+          [path.join(__dirname, 'scripts', 'import-arma.js')],
+          { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NAIS_DATA_DIR: process.env.NAIS_DATA_DIR || '/tmp/nais-sync' } },
+        );
+        this.armaImport = child;
+        child.stdout?.on('data', (d: Buffer) => logger.info(`[arma] ${d.toString().trimEnd()}`));
+        child.stderr?.on('data', (d: Buffer) => logger.warn(`[arma] ${d.toString().trimEnd()}`));
+        child.on('exit', (code) => logger.info('ARMA import finished', { code }));
+        res.status(202).json({ status: 'accepted', message: 'ARMA seized assets import started', registry, pid: child.pid });
         return;
       }
 
