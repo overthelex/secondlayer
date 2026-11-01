@@ -33,6 +33,7 @@ jest.mock('../../api/tool-registry.js', () => ({
   ToolRegistry: jest.fn().mockImplementation(() => ({
     registerHandler: mockRegisterHandler,
     getHandler: jest.fn(),
+    prewarmRemoteToolDefinitions: jest.fn(), registerRemoteResultTransform: jest.fn(),
   })),
 }));
 
@@ -456,6 +457,7 @@ describe('createToolServices', () => {
       (ToolRegistry as jest.Mock).mockImplementationOnce(() => ({
         registerHandler: mockRegisterHandler,
         getHandler: jest.fn(),
+        prewarmRemoteToolDefinitions: jest.fn(), registerRemoteResultTransform: jest.fn(),
       }));
       const s = createToolServices(coreServices, costTracker, llmAdapter);
       expect(s.edsrVectorizer).toBeUndefined();

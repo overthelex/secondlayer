@@ -13,6 +13,7 @@ import { logger } from '../utils/logger.js';
 import { BaseToolHandler, ToolResult, ToolDefinition as BaseToolDefinition, StreamEventCallback } from './base-tool-handler.js';
 import { RemoteServiceClient } from '../services/remote-service-client.js';
 import { gatedRegistryOf, hasJudgmentAccessMark } from '../services/uk-judgment-access.js';
+import { checkToolArgs } from './tool-args-validator.js';
 
 export interface ToolDefinition {
   name: string;
@@ -64,6 +65,19 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
 };
 const DEFAULT_TOOL_TIMEOUT_MS = 60_000;
 
+type RemoteService = 'rada' | 'openreyestr';
+const REMOTE_SERVICES: Array<{ service: RemoteService; prefix: string; label: string }> = [
+  { service: 'rada', prefix: 'rada_', label: 'RADA' },
+  { service: 'openreyestr', prefix: 'openreyestr_', label: 'OpenReyestr' },
+];
+/** After a failed remote definitions fetch, don't retry for this long. */
+const REMOTE_DEFS_RETRY_MS = 30_000;
+/**
+ * Upper bound a tool call waits for its service's schema before the argument check fails
+ * open. RemoteServiceClient's own request timeout is 5 s; this is a backstop.
+ */
+const REMOTE_SCHEMA_WAIT_MS = 6_000;
+
 /**
  * Find Case Law licence backstop: only a transport that ran checkJudgmentAccess may
  * reach the judgments. See services/uk-judgment-access.ts.
@@ -81,8 +95,14 @@ export class ToolRegistry {
   private routes: Map<string, ToolRoute>;
   private handlers: BaseToolHandler[] = [];
   private handlerMap: Map<string, BaseToolHandler> = new Map();
-  private remoteToolDefs: ToolDefinition[] = [];
-  private remoteToolDefsLoaded = false;
+  /**
+   * Remote (rada_* / openreyestr_*) tool definitions, per service. Only a completed,
+   * non-empty fetch is cached; a failed one is retried after REMOTE_DEFS_RETRY_MS, and
+   * concurrent callers share the single in-flight request (LEXAI-2164).
+   */
+  private remoteDefsCache: Map<RemoteService, ToolDefinition[]> = new Map();
+  private remoteDefsInFlight: Map<RemoteService, Promise<ToolDefinition[] | null>> = new Map();
+  private remoteDefsFailedAt: Map<RemoteService, number> = new Map();
   private remoteClient: RemoteServiceClient;
   /** Post-processors for proxied tool results, keyed by client tool name. */
   private remoteResultTransforms: Map<string, (result: any) => Promise<any>> = new Map();
@@ -163,6 +183,46 @@ export class ToolRegistry {
   }
 
   /**
+   * Input schema for a tool: local handler definition, else the cached remote
+   * (rada_* / openreyestr_*) definition. Undefined when unknown.
+   */
+  async getToolInputSchema(name: string): Promise<any | undefined> {
+    const handler = this.handlerMap.get(name);
+    if (handler) {
+      return handler.getToolDefinitions().find(d => d.name === name)?.inputSchema;
+    }
+    const route = this.routes.get(name);
+    if (!route || route.local || route.service === 'backend') return undefined;
+    // Only the service that owns the tool, bounded in time; fail open on timeout/failure.
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<null>(resolve => {
+      timer = setTimeout(() => resolve(null), REMOTE_SCHEMA_WAIT_MS);
+    });
+    try {
+      const defs = await Promise.race([this.loadRemoteDefinitions(route.service), timeout]);
+      if (!defs) {
+        // Logged once per failed fetch in loadRemoteDefinitions; per call only at debug.
+        logger.debug('[ToolRegistry] Remote schema unavailable, argument check skipped', { tool: name, service: route.service });
+        return undefined;
+      }
+      return defs.find(d => d.name === name)?.inputSchema;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Reject arguments that are not in the tool's inputSchema (LEXAI-2164). Returns an
+   * error ToolResult to send to the client, or null when the call may proceed. Used by
+   * the external transports; tools without a known/closed schema always pass.
+   */
+  async validateToolArgs(name: string, args: unknown, transport: string): Promise<ToolResult | null> {
+    const schema = await this.getToolInputSchema(name);
+    if (!schema) return null;
+    return checkToolArgs(name, schema, args, transport);
+  }
+
+  /**
    * Execute a tool on a remote service via HTTP proxy.
    */
   private async executeRemoteTool(route: ToolRoute, args: any): Promise<any> {
@@ -230,56 +290,83 @@ export class ToolRegistry {
   }
 
   /**
-   * Get all tool definitions: local + remote (fetched and cached).
-   * Remote tool defs are fetched once on first call, then cached.
+   * Get all tool definitions: local + remote (fetched in parallel and cached per service).
+   * A service whose definitions are unavailable is simply absent from the list.
    */
   async getAllToolDefinitions(): Promise<ToolDefinition[]> {
     const local = this.getLocalToolDefinitions();
-
-    if (!this.remoteToolDefsLoaded) {
-      await this.fetchRemoteToolDefinitions();
-    }
-
-    return [...local, ...this.remoteToolDefs];
+    const remote = await Promise.all(REMOTE_SERVICES.map(r => this.loadRemoteDefinitions(r.service)));
+    return [...local, ...remote.flatMap(defs => defs ?? [])];
   }
 
   /**
-   * Fetch tool definitions from remote services (RADA, OpenReyestr) and cache them.
+   * Start fetching remote definitions in the background (called at startup) so the first
+   * tool call does not pay for the fetch. Never throws.
    */
-  private async fetchRemoteToolDefinitions(): Promise<void> {
-    this.remoteToolDefsLoaded = true;
-    const defs: ToolDefinition[] = [];
-
-    // Fetch RADA tools
-    const radaConfig = this.remoteClient.getServiceConfig('rada');
-    if (radaConfig.baseUrl && radaConfig.apiKey) {
-      const tools = await this.remoteClient.fetchRemoteToolDefinitions(radaConfig.baseUrl, radaConfig.apiKey);
-      for (const tool of tools) {
-        defs.push({
-          name: `rada_${tool.name}`,
-          description: `[RADA] ${tool.description}`,
-          inputSchema: tool.inputSchema,
-        });
-      }
-      logger.info('[ToolRegistry] Fetched RADA tool definitions', { count: tools.length });
+  prewarmRemoteToolDefinitions(): void {
+    for (const r of REMOTE_SERVICES) {
+      this.loadRemoteDefinitions(r.service).catch(() => undefined);
     }
-
-    // Fetch OpenReyestr tools
-    const orConfig = this.remoteClient.getServiceConfig('openreyestr');
-    if (orConfig.baseUrl && orConfig.apiKey) {
-      const tools = await this.remoteClient.fetchRemoteToolDefinitions(orConfig.baseUrl, orConfig.apiKey);
-      for (const tool of tools) {
-        defs.push({
-          name: `openreyestr_${tool.name}`,
-          description: `[OpenReyestr] ${tool.description}`,
-          inputSchema: tool.inputSchema,
-        });
-      }
-      logger.info('[ToolRegistry] Fetched OpenReyestr tool definitions', { count: tools.length });
-    }
-
-    this.remoteToolDefs = defs;
   }
+
+  /**
+   * Definitions of one remote service: the cached ones, the shared in-flight fetch, or a
+   * new fetch. Resolves to null when the service is not configured, the fetch failed, or a
+   * recent failure is still inside its retry backoff. Never rejects.
+   */
+  private loadRemoteDefinitions(service: RemoteService): Promise<ToolDefinition[] | null> {
+    const cached = this.remoteDefsCache.get(service);
+    if (cached) return Promise.resolve(cached);
+    const inFlight = this.remoteDefsInFlight.get(service);
+    if (inFlight) return inFlight;
+    const failedAt = this.remoteDefsFailedAt.get(service);
+    if (failedAt !== undefined && Date.now() - failedAt < REMOTE_DEFS_RETRY_MS) {
+      return Promise.resolve(null);
+    }
+
+    const promise = this.fetchRemoteServiceDefinitions(service)
+      .catch((err: any) => {
+        logger.warn('[ToolRegistry] Remote tool definitions fetch failed', { service, error: err?.message });
+        return null;
+      })
+      .then(defs => {
+        if (defs && defs.length > 0) {
+          this.remoteDefsCache.set(service, defs);
+          this.remoteDefsFailedAt.delete(service);
+        } else {
+          // Failed, empty (RemoteServiceClient returns [] on error) or not configured:
+          // don't cache, retry after the backoff. Warn once per failed fetch (calls in the
+          // backoff window log at debug only); an unconfigured service is not a failure.
+          this.remoteDefsFailedAt.set(service, Date.now());
+          const log = defs === null ? logger.debug.bind(logger) : logger.warn.bind(logger);
+          log('[ToolRegistry] Remote tool definitions unavailable; argument check and tools/list skip this service until retry', {
+            service,
+            retryInMs: REMOTE_DEFS_RETRY_MS,
+          });
+        }
+        return defs && defs.length > 0 ? defs : null;
+      })
+      .finally(() => {
+        this.remoteDefsInFlight.delete(service);
+      });
+    this.remoteDefsInFlight.set(service, promise);
+    return promise;
+  }
+
+  /** Fetch one remote service's definitions, prefixed. Null when the service is not configured. */
+  private async fetchRemoteServiceDefinitions(service: RemoteService): Promise<ToolDefinition[] | null> {
+    const meta = REMOTE_SERVICES.find(r => r.service === service)!;
+    const config = this.remoteClient.getServiceConfig(service);
+    if (!config.baseUrl || !config.apiKey) return null;
+    const tools = await this.remoteClient.fetchRemoteToolDefinitions(config.baseUrl, config.apiKey);
+    logger.info(`[ToolRegistry] Fetched ${meta.label} tool definitions`, { count: tools.length });
+    return tools.map(tool => ({
+      name: `${meta.prefix}${tool.name}`,
+      description: `[${meta.label}] ${tool.description}`,
+      inputSchema: tool.inputSchema,
+    }));
+  }
+
 
   // ========================= Route Management =========================
 

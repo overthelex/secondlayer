@@ -227,6 +227,17 @@ export function createMCPSSERoutes(deps: {
           };
         }
 
+        // LEXAI-2164: reject arguments the tool's schema does not know instead of letting
+        // the handler silently drop them (an unfiltered search answered as if filtered).
+        // Before limits/billing, so a rejected call costs nothing.
+        const argsRejection = await deps.toolRegistry.validateToolArgs(toolName, args, 'mcp');
+        if (argsRejection) {
+          return {
+            content: [{ type: 'text', text: argsRejection.content[0].text }],
+            isError: true,
+          };
+        }
+
         // Per-account call limits (mcp_usage_limits): concurrency, per-minute/hour/day and a
         // daily quota of full decision texts. Checked per call, so they hold for API keys and
         // OAuth alike and across all of the account's sessions.

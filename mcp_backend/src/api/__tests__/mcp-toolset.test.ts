@@ -194,6 +194,7 @@ describe('MCPSSEServer under MCP_TOOLSET=ch', () => {
     getLocalToolDefinitions: jest.fn().mockReturnValue(localToolDefs),
     getAllToolDefinitions: jest.fn().mockResolvedValue(localToolDefs),
     executeTool: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] }),
+    validateToolArgs: jest.fn().mockResolvedValue(null),
   };
   const fakeCostTracker = {
     createTrackingRecord: jest.fn(),

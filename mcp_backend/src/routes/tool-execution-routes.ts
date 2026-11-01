@@ -224,6 +224,71 @@ async function handleStreamingToolCall(
   }
 }
 
+/**
+ * LEXAI-2164: reject arguments a tool's inputSchema does not know, instead of letting the
+ * handler drop them silently and answer an unfiltered query as if it were the filtered one.
+ * Covers local and proxied (rada_*, openreyestr_*) tools. Mounted after auth and BEFORE
+ * usage limits and the balance check, so a rejected call is neither counted nor billed.
+ *
+ * Single and streaming calls: HTTP 400 { success:false, error:'Invalid arguments', message }.
+ * Batch: every call is validated up front; if any is invalid, none runs and the response is
+ * HTTP 400 { success:false, error:'Invalid arguments', message, invalid:[{ index, name, message }] }.
+ * Tools outside the deployment toolset are skipped here, so this never describes a hidden
+ * tool's parameters: a single/stream call to one gets the handler's 404, and in a batch
+ * (with no invalid calls) such a call gets a per-call "Not available" entry in the usual
+ * HTTP 200 response.
+ */
+export function createToolArgsValidationMiddleware(toolRegistry: Pick<ToolRegistry, 'validateToolArgs'>) {
+  return async (req: Request, res: Response, next: (err?: any) => void): Promise<void> => {
+    try {
+      const rawName = (req.params as any)?.toolName;
+      const toolName = Array.isArray(rawName) ? rawName[0] : rawName;
+      const body = req.body || {};
+
+      if (!toolName) {
+        // /batch
+        const calls = body.calls;
+        if (!Array.isArray(calls)) return next();
+        // Validate in parallel: each call may wait on a different remote schema.
+        const checked = await Promise.all(calls.map(async (call: any, index: number) => {
+          if (!call || typeof call.name !== 'string' || !isToolInToolset(call.name)) return null;
+          const rejection = await toolRegistry.validateToolArgs(call.name, call.arguments || {}, 'rest-batch');
+          return rejection ? { index, name: call.name as string, message: rejection.content[0].text } : null;
+        }));
+        const invalid = checked.filter((c): c is { index: number; name: string; message: string } => c !== null);
+        if (invalid.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid arguments',
+            message: 'Пакет не виконано: деякі виклики містять невідомі параметри.',
+            invalid,
+          });
+          return;
+        }
+        return next();
+      }
+
+      if (!isToolInToolset(toolName)) return next();
+      const args = body.arguments || body;
+      const transport = req.path.endsWith('/stream') ? 'rest-stream' : 'rest';
+      const rejection = await toolRegistry.validateToolArgs(toolName, args, transport);
+      if (rejection) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid arguments',
+          message: rejection.content[0].text,
+        });
+        return;
+      }
+      next();
+    } catch (err: any) {
+      // The check must never take the endpoint down: fail open.
+      logger.warn('[ToolArgs] Argument validation failed, allowing call', { error: err?.message });
+      next();
+    }
+  };
+}
+
 export function createToolExecutionRoutes(deps: {
   toolRegistry: ToolRegistry;
   // Needed only by the Find Case Law licence gate; see services/uk-judgment-access.
@@ -252,6 +317,7 @@ export function createToolExecutionRoutes(deps: {
   // GET / — List available tools
   // Per-account call limits (mcp_usage_limits), the same as on the MCP transports.
   const usageLimits = mcpUsageLimitMiddleware(deps.db);
+  const validateArgs = createToolArgsValidationMiddleware(deps.toolRegistry);
 
   router.get('/', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
     try {
@@ -301,7 +367,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /batch — Batch tool calls (must be before /:toolName)
-  router.post('/batch', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.post('/batch', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { calls } = req.body;
 
@@ -412,7 +478,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName/stream — Dedicated SSE streaming endpoint
-  router.post('/:toolName/stream', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName/stream', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const streamRequestId = `stream-${uuidv4()}`;
     const streamStartTime = Date.now();
 
@@ -496,7 +562,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName — Execute MCP tool (with SSE support and cost tracking)
-  router.post('/:toolName', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const requestId = uuidv4();
     const startTime = Date.now();
 
