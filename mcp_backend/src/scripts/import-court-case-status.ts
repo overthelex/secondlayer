@@ -62,6 +62,8 @@ const DEFAULT_DIR = path.join(os.tmpdir(), 'court_case_status');
 const TABLE = 'opendata_court_case_status';
 const LOADS_TABLE = 'opendata_court_case_status_loads';
 const BATCH_SIZE = 500;
+/** pg_advisory_xact_lock key serialising guard checks + swap between importer runs. */
+const SWAP_LOCK_KEY = 21820001;
 
 async function download(dir: string): Promise<string> {
   const res = await fetch(CKAN_PACKAGE_SHOW);
@@ -98,10 +100,15 @@ async function readLastLoad(client: PoolClient): Promise<LoadRecord | null> {
   const exists = (await client.query(`SELECT to_regclass($1) AS t`, [LOADS_TABLE])).rows[0].t;
   if (!exists) throw new Error(`${LOADS_TABLE} is missing: apply migration 234_court_case_status_loads.sql first`);
   const res = await client.query(
-    `SELECT file_count, total_rows, source_name FROM ${LOADS_TABLE} ORDER BY loaded_at DESC, id DESC LIMIT 1`,
+    `SELECT file_count, total_rows, source_name, court_counts FROM ${LOADS_TABLE}
+      ORDER BY loaded_at DESC, id DESC LIMIT 1`,
   );
   const r = res.rows[0];
-  return r ? { fileCount: Number(r.file_count), totalRows: Number(r.total_rows), sourceName: r.source_name } : null;
+  if (!r) return null;
+  const courtCounts = new Map<string, number>(
+    Object.entries((r.court_counts || {}) as Record<string, unknown>).map(([k, v]) => [k, Number(v)]),
+  );
+  return { fileCount: Number(r.file_count), totalRows: Number(r.total_rows), sourceName: r.source_name, courtCounts };
 }
 
 async function main(): Promise<void> {
@@ -185,12 +192,20 @@ async function main(): Promise<void> {
     }
     if (!client) return;
 
+    // Guard reads, swap and load record run in one transaction under an advisory lock, so a
+    // concurrent run cannot swap or record a load between our checks and our swap. A dry run
+    // only reads and takes no lock.
+    if (!dryRun) {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock($1)', [SWAP_LOCK_KEY]);
+    }
     const current = new Map<string, number>();
     const curRes = await client.query(`SELECT court_name, count(*) AS n FROM ${TABLE} GROUP BY court_name`);
     for (const r of curRes.rows) current.set(r.court_name || '', Number(r.n));
     const cur = [...current.values()].reduce((a, b) => a + b, 0);
     const lastLoad = await readLastLoad(client);
     if (!lastLoad) console.log(`No previous load recorded in ${LOADS_TABLE}: file-count check skipped`);
+    else console.log(`Last load: ${lastLoad.sourceName || '?'} (${lastLoad.fileCount} files, ${lastLoad.totalRows} rows)`);
     const guard = evaluateSnapshotGuards({ current, next: courts, fileCount, lastLoad });
     if (!guard.ok) {
       const lines = guard.problems.map((p) => `  - ${p}`).join('\n');
@@ -212,7 +227,6 @@ async function main(): Promise<void> {
     if (dryRun) { console.log(`[dry-run] ${TABLE} not changed`); return; }
 
     const source = path.basename(input);
-    await client.query('BEGIN');
     await client.query(`DELETE FROM ${TABLE}`);
     await client.query(`INSERT INTO ${TABLE} (${cols}) SELECT ${cols} FROM stage_case_status`);
     await client.query(
@@ -223,6 +237,7 @@ async function main(): Promise<void> {
     await client.query('COMMIT');
     console.log(`Replaced ${cur} rows with ${rows}; load recorded in ${LOADS_TABLE}. Run VACUUM ANALYZE ${TABLE}.`);
   } catch (err) {
+    // Also ends the guard transaction on a refusal: the table and the load log stay as they were.
     if (stage) await stage.query('ROLLBACK').catch(() => {});
     throw err;
   } finally {

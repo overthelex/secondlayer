@@ -1,5 +1,6 @@
 import {
   compareCourtCounts,
+  courtBaseline,
   evaluateSnapshotGuards,
   snapshotDateFromName,
   MIN_ROWS_VANISHED,
@@ -62,14 +63,14 @@ describe('evaluateSnapshotGuards (LEXAI-2182)', () => {
   it('refuses fewer files than the last successful load', () => {
     const r = evaluateSnapshotGuards({
       current, next: counts({ A: 1010, B: 990 }), fileCount: 26,
-      lastLoad: { fileCount: 30, totalRows: 2000, sourceName: 'stan-rozglyadu-sprav-vid-30-10-2026.zip' },
+      lastLoad: { fileCount: 30, totalRows: 2000, sourceName: 'stan-rozglyadu-sprav-vid-30-10-2026.zip', courtCounts: counts({}) },
     });
     expect(r.ok).toBe(false);
     expect(r.problems).toEqual(['snapshot has 26 files, last successful load (stan-rozglyadu-sprav-vid-30-10-2026.zip) had 30']);
   });
 
   it('accepts the same or more files than the last load', () => {
-    const lastLoad = { fileCount: 30, totalRows: 2000, sourceName: null };
+    const lastLoad = { fileCount: 30, totalRows: 2000, sourceName: null, courtCounts: counts({}) };
     expect(evaluateSnapshotGuards({ current, next: current, fileCount: 30, lastLoad }).ok).toBe(true);
     expect(evaluateSnapshotGuards({ current, next: current, fileCount: 31, lastLoad }).ok).toBe(true);
   });
@@ -87,16 +88,61 @@ describe('evaluateSnapshotGuards (LEXAI-2182)', () => {
     const r = evaluateSnapshotGuards({ current: counts({ '': 200, A: 10000 }), next: counts({ '': 20, A: 10000 }), fileCount: 1, lastLoad: null });
     expect(r.problems).toEqual(['(без назви суду): 200 → 20 rows (−90%)']);
   });
+
+  it('requires a court the table already lost but the last load had (repeat of 31.10.2026)', () => {
+    // The table holds the partial 31.10 load (no КГС); the seeded 30.10 baseline still has it.
+    const lastLoad = {
+      fileCount: 26, totalRows: 2000, sourceName: 'stan-rozglyadu-sprav-vid-30-10-2026.zip',
+      courtCounts: counts({ A: 1000, 'Касаційний господарський суд': 328, 'Касаційний адміністративний суд': 1147 }),
+    };
+    const r = evaluateSnapshotGuards({
+      current: counts({ A: 1000, 'Касаційний адміністративний суд': 1 }),
+      next: counts({ A: 1000, 'Касаційний адміністративний суд': 1 }),
+      fileCount: 26,
+      lastLoad,
+    });
+    expect(r.problems).toEqual([
+      'Касаційний адміністративний суд: 1147 → 1 rows (−99%)',
+      'Касаційний господарський суд: 328 → 0 rows (vanished)',
+    ]);
+  });
+
+  it('passes once the snapshot restores the courts of the last load', () => {
+    const lastLoad = { fileCount: 30, totalRows: 1328, sourceName: null, courtCounts: counts({ A: 1000, B: 328 }) };
+    expect(evaluateSnapshotGuards({
+      current: counts({ A: 1000 }), next: counts({ A: 1005, B: 330 }), fileCount: 30, lastLoad,
+    })).toEqual({ ok: true, problems: [] });
+  });
+});
+
+describe('courtBaseline', () => {
+  it('takes the larger count per court from the table and the last load', () => {
+    expect(courtBaseline(counts({ A: 10, B: 5 }), counts({ A: 7, B: 9, C: 3 })))
+      .toEqual(counts({ A: 10, B: 9, C: 3 }));
+  });
+
+  it('is the table counts when no load is recorded', () => {
+    expect(courtBaseline(counts({ A: 10 }), null)).toEqual(counts({ A: 10 }));
+  });
 });
 
 describe('snapshotDateFromName', () => {
   it('reads DD-MM-YYYY from the ДСА file name', () => {
     expect(snapshotDateFromName('stan-rozglyadu-sprav-vid-31-10-2026.zip')).toBe('2026-10-31');
-    expect(snapshotDateFromName('/tmp/court_case_status/stan-rozglyadu-sprav-vid-01.11.2026.zip')).toBe('2026-11-01');
+    expect(snapshotDateFromName('/tmp/court_case_status/stan-rozglyadu-sprav-vid-01-11-2026.zip')).toBe('2026-11-01');
   });
 
   it('returns null without a valid date', () => {
     expect(snapshotDateFromName('export.zip')).toBeNull();
     expect(snapshotDateFromName('stan-rozglyadu-sprav-vid-31-02-2026.zip')).toBeNull();
+  });
+
+  it('matches only the anchored ДСА basename with the year right before .zip', () => {
+    expect(snapshotDateFromName('/tmp/30-10-2026/export.zip')).toBeNull();
+    expect(snapshotDateFromName('copy-stan-rozglyadu-sprav-vid-31-10-2026.zip')).toBeNull();
+    expect(snapshotDateFromName('stan-rozglyadu-sprav-vid-31-10-2026-v2.zip')).toBeNull();
+    expect(snapshotDateFromName('stan-rozglyadu-sprav-vid-31-10-2026.zip.part')).toBeNull();
+    expect(snapshotDateFromName('stan-rozglyadu-sprav-vid-31.10.2026.zip')).toBeNull();
+    expect(snapshotDateFromName('/data/stan-rozglyadu-sprav-vid-31-10-2026')).toBeNull();
   });
 });

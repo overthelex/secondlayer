@@ -8,7 +8,9 @@
  * compare the snapshot with the table per court and with the last successful load, and the
  * importer refuses the swap when any of them fails (unless --force).
  *
- * Rule per court (current = rows in the table, next = rows in the snapshot):
+ * Rule per court (current = rows in the table, or in the last recorded load if that is
+ * larger, so a court already lost from the table by a bad load is still required;
+ * next = rows in the snapshot):
  *   * vanished: current ≥ MIN_ROWS_VANISHED and next = 0;
  *   * dropped:  current ≥ MIN_ROWS_DROP and next < current × (1 − MAX_COURT_DROP).
  * A court with fewer than MIN_ROWS_VANISHED rows may disappear (renamed or merged court,
@@ -61,7 +63,20 @@ export function compareCourtCounts(
   return problems.sort((a, b) => b.current - a.current);
 }
 
-export interface LoadRecord { fileCount: number; totalRows: number; sourceName: string | null }
+export interface LoadRecord {
+  fileCount: number;
+  totalRows: number;
+  sourceName: string | null;
+  /** Per-court row counts of that load. */
+  courtCounts: Map<string, number>;
+}
+
+/** Per court, the larger of the table's count and the last recorded load's count. */
+export function courtBaseline(current: Map<string, number>, last: Map<string, number> | null): Map<string, number> {
+  const out = new Map(current);
+  for (const [court, n] of last || []) out.set(court, Math.max(out.get(court) || 0, n));
+  return out;
+}
 
 export interface SnapshotGuardInput {
   /** Per-court row counts in the table now. */
@@ -90,18 +105,20 @@ export function evaluateSnapshotGuards(input: SnapshotGuardInput, opts: CourtCou
     problems.push(`snapshot has ${input.fileCount} files, last successful load` +
       `${last.sourceName ? ` (${last.sourceName})` : ''} had ${last.fileCount}`);
   }
-  for (const p of compareCourtCounts(input.current, input.next, opts)) {
+  const baseline = courtBaseline(input.current, last?.courtCounts ?? null);
+  for (const p of compareCourtCounts(baseline, input.next, opts)) {
     const name = p.court || '(без назви суду)';
     problems.push(p.kind === 'vanished'
       ? `${name}: ${p.current} → 0 rows (vanished)`
-      : `${name}: ${p.current} → ${p.next} rows (−${Math.round((1 - p.next / p.current) * 100)}%)`);
+      : `${name}: ${p.current} → ${p.next} rows (−${Math.floor((1 - p.next / p.current) * 100)}%)`);
   }
   return { ok: problems.length === 0, problems };
 }
 
-/** Snapshot date from «stan-rozglyadu-sprav-vid-DD-MM-YYYY.zip» as YYYY-MM-DD, else null. */
+/** Snapshot date of a ДСА ZIP named «stan-rozglyadu-sprav-vid-DD-MM-YYYY.zip» (any directory) as YYYY-MM-DD, else null. */
 export function snapshotDateFromName(name: string): string | null {
-  const m = /(\d{2})[-.](\d{2})[-.](\d{4})(?!.*\d{2}[-.]\d{2}[-.]\d{4})/.exec(name);
+  const base = name.split(/[\\/]/).pop() || '';
+  const m = /^stan-rozglyadu-sprav-vid-(\d{2})-(\d{2})-(\d{4})\.zip$/i.exec(base);
   if (!m || !isCalendarDate(Number(m[1]), Number(m[2]), Number(m[3]))) return null;
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
