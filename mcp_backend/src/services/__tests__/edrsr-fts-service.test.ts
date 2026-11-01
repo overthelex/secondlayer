@@ -10,7 +10,10 @@ import {
   EdsrFtsService, buildPartyRoleRegex, buildPartyAnyRoleRegex, partySplitToken, partyAnyRoleRecheckSql,
   PARTY_WINDOW_BEFORE, PARTY_WINDOW_AFTER,
   buildYearLegs, yearLegPredicate, kyivDayBoundsSql, partyNameTokenCount,
+  partyNorm, partyCore, partyNameKeys, partiesLegCovered,
 } from '../edrsr-fts-service';
+
+const COVERAGE_SQL = 'edrsr_parties_coverage';
 
 const findRegexParam = (params: any[]): string | undefined =>
   params.find((p) => typeof p === 'string' && (p.includes('(?:до|проти)') || p.includes('за[[:space:]]+позов')));
@@ -20,6 +23,23 @@ const makeDb = () => {
   const db = {
     calls,
     query: jest.fn((sql: string, params: any[]) => {
+      // The edrsr_parties_coverage lookup (LEXAI-1760) answers "no year covered" and is not
+      // recorded, so calls[0] stays the search statement.
+      if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [] });
+      calls.push({ sql, params });
+      return Promise.resolve({ rows: [] });
+    }),
+  };
+  return db;
+};
+
+/** Like makeDb, but edrsr_parties_coverage lists `years`. */
+const makeCoveredDb = (years: number[]) => {
+  const calls: { sql: string; params: any[] }[] = [];
+  const db = {
+    calls,
+    query: jest.fn((sql: string, params: any[]) => {
+      if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: years.map((adj_year) => ({ adj_year })) });
       calls.push({ sql, params });
       return Promise.resolve({ rows: [] });
     }),
@@ -1005,7 +1025,8 @@ describe('EdsrFtsService.searchFulltext party leg (LEXAI-2085)', () => {
     expect(res.results).toEqual([]);
     expect(cache.setCachedFtsResults).not.toHaveBeenCalled();
     // The party leg runs under its own bounded statement_timeout, below the 120 s tool cap.
-    const timeoutStmt = clientCalls.find((q) => /^SET LOCAL statement_timeout = \d+$/.test(q))!;
+    // (the last one: the edrsr_parties_coverage lookup runs first under its own 5 s bound)
+    const timeoutStmt = clientCalls.filter((q) => /^SET LOCAL statement_timeout = \d+$/.test(q)).pop()!;
     const ms = Number(timeoutStmt.split('= ')[1]);
     expect(ms).toBeGreaterThan(8000);
     expect(ms).toBeLessThanOrEqual(20_000);
@@ -1056,25 +1077,235 @@ describe('Kyiv-local date bounds (LEXAI-2110)', () => {
     expect(sql).not.toMatch(/adjudication_date (>=|<=) \$\d+(?!::)/);
   });
 
-  it('countByPartyFast compares date_from/date_to as Kyiv calendar days', async () => {
+  it('a parties leg (LEXAI-1760) compares date_from/date_to as Kyiv calendar days', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    await svc.countByParty('Нова Пошта', 'defendant', db, { date_from: '2025-01-01', date_to: '2025-03-31' });
+    const leg = db.calls.find((c) => c.sql.includes('FROM edrsr_parties p'))!;
+    expect(leg).toBeDefined();
+    const iFrom = leg.params.indexOf('2025-01-01') + 1;
+    const iTo = leg.params.indexOf('2025-03-31') + 1;
+    expect(leg.sql).toContain(`d.adjudication_date >= ($${iFrom}::date)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+    expect(leg.sql).toContain(`d.adjudication_date < ($${iTo}::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+  });
+});
+});
+
+describe('party name keys (LEXAI-1760, mirror of edrsr_party_norm / edrsr_party_core)', () => {
+  it('normalises like the SQL helper', () => {
+    expect(partyNorm('  ТОВ «Нова   Пошта» ')).toBe('тов нова пошта');
+    expect(partyNorm('Кам’янська ʼрада`')).toBe("кам'янська 'рада'");
+    expect(partyNorm('«»')).toBeNull();
+  });
+
+  it('takes the innermost quoted name as the core', () => {
+    expect(partyCore('ТОВ «Нова Пошта»')).toBe('нова пошта');
+    expect(partyCore('АТ «Комерційний банк «ПриватБанк»»')).toBe('приватбанк');
+    expect(partyCore('ТОВ «Фінансова компанія «Європейська агенція з повернення боргів»'))
+      .toBe('європейська агенція з повернення боргів');
+    expect(partyCore('Головне управління ДПС у Київській області')).toBeNull();
+  });
+
+  it('strips typed legal forms from an unquoted name', () => {
+    expect(partyNameKeys('Нова Пошта')?.key).toBe('нова пошта');
+    expect(partyNameKeys('ТОВ Нова Пошта')?.key).toBe('нова пошта');
+    expect(partyNameKeys('АТ КБ ПриватБанк')?.key).toBe('приватбанк');
+    expect(partyNameKeys('Акціонерне товариство Комерційний банк ПриватБанк')?.key).toBe('приватбанк');
+    expect(partyNameKeys('Товариство з обмеженою відповідальністю «Нова Пошта»')?.key).toBe('нова пошта');
+  });
+
+  it('builds a whole-word suffix LIKE with wildcards escaped, and refuses a too-short key', () => {
+    expect(partyNameKeys('ДПС у Київській області')?.like).toBe('% дпс у київській області');
+    expect(partyNameKeys('Ліга 100%_')?.like).toBe('% ліга 100');
+    expect(partyNameKeys('ТОВ «А»')).toBeNull();
+    expect(partyNameKeys('ТОВ')).toBeNull();
+  });
+});
+
+describe('partiesLegCovered (LEXAI-1760)', () => {
+  const cov = new Set([2023, 2024, 2025, 2026]);
+  it('covers a single-year leg only when that year is listed', () => {
+    expect(partiesLegCovered({ minYear: 2024, maxYear: 2024 }, cov, 2026)).toBe(true);
+    expect(partiesLegCovered({ minYear: 2022, maxYear: 2022 }, cov, 2026)).toBe(false);
+  });
+  it('never covers a leg open downward; an upward-open leg needs every year up to now', () => {
+    expect(partiesLegCovered({ minYear: null, maxYear: 2005 }, cov, 2026)).toBe(false);
+    expect(partiesLegCovered({ minYear: 2026, maxYear: null }, cov, 2026)).toBe(true);
+    expect(partiesLegCovered({ minYear: 2026, maxYear: null }, cov, 2027)).toBe(false);
+    expect(partiesLegCovered({ minYear: 2024, maxYear: 2024 }, new Set(), 2026)).toBe(false);
+  });
+});
+
+describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
+  const legMark = 'WITH l AS MATERIALIZED';
+
+  it('countByParty serves covered years from edrsr_parties and the rest from full text, open-ended', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2024, 2025]);
+    // No date_to: the newest leg is open upward from this year — not covered unless it is.
+    const res = await svc.countByParty('ТОВ «Нова Пошта»', 'defendant', db, { date_from: '2023-01-01', justice_kind: 3 });
+    const legs = db.calls.filter((c) => c.sql.includes(legMark));
+    const thisYear = new Date().getFullYear();
+    const years: number[] = [];
+    for (let y = Math.max(thisYear, 2023); y >= 2023; y--) years.push(y);
+    expect(legs).toHaveLength(years.length);
+    legs.forEach((leg, i) => {
+      const y = years[i];
+      const fromParties = y === 2024 || y === 2025;
+      expect(leg.sql.includes('FROM edrsr_parties p')).toBe(fromParties);
+      expect(leg.sql.includes('full_text ~*')).toBe(!fromParties);
+      if (fromParties) {
+        expect(leg.sql).toContain(`p.adj_year = ${y}`);
+        expect(leg.sql).toContain('p.role = $3');
+        expect(leg.sql).toContain('p.name_core = $1');
+        expect(leg.params.slice(0, 3)).toEqual(['нова пошта', '% нова пошта', 2]);
+        // only its own parameters: keys, role, date_from, justice_kind
+        expect(leg.params).toEqual(['нова пошта', '% нова пошта', 2, '2023-01-01', 3]);
+      } else {
+        expect(leg.params).toContain('ТОВ «Нова Пошта»');
+      }
+    });
+    expect(res.total).toBe(0);
+  });
+
+  it('countByParty keeps the full-text path for role any and for an uncovered justice kind', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    await svc.countByParty('Нова Пошта', 'any', db, { date_from: '2025-01-01', date_to: '2025-12-31' });
+    await svc.countByParty('Нова Пошта', 'plaintiff', db, { date_from: '2025-01-01', date_to: '2025-12-31', justice_kind: 2 });
+    expect(db.calls.some((c) => c.sql.includes('FROM edrsr_parties'))).toBe(false);
+  });
+
+  it('countByParty answers a plaintiff count from a parties leg with role code 1', async () => {
     const svc = new EdsrFtsService();
     const calls: { sql: string; params: any[] }[] = [];
     const db = {
       query: jest.fn((sql: string, params: any[]) => {
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2025 }] });
         calls.push({ sql, params });
-        if (sql.includes('edrsr_parties_coverage')) return Promise.resolve({ rows: [{ adj_year: 2025 }] });
-        return Promise.resolve({ rows: [] });
+        return Promise.resolve({ rows: [{ n: 3, causes: ['a', 'b'], by_court: [{ court_code: 7, count: 3 }] }] });
       }),
     };
-    await svc.countByParty('Нова Пошта', 'defendant', db, { date_from: '2025-01-01', date_to: '2025-03-31' });
-    const count = calls.find((c) => c.sql.includes('FROM edrsr_parties') && c.sql.includes('GROUP BY court_code'))!;
-    expect(count).toBeDefined();
-    const iFrom = count.params.indexOf('2025-01-01') + 1;
-    const iTo = count.params.indexOf('2025-03-31') + 1;
-    expect(count.sql).toContain(`adjudication_date >= ($${iFrom}::date)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
-    expect(count.sql).toContain(`adjudication_date < ($${iTo}::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
-    // The joined statements qualify the same bound with the parties alias.
-    const cases = calls.find((c) => c.sql.includes('distinct_cases'))!;
-    expect(cases.sql).toContain(`p.adjudication_date >= ($${iFrom}::date)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
+    const res = await svc.countByParty('ПриватБанк', 'plaintiff', db, { date_from: '2025-01-01', date_to: '2025-12-31', justice_kind: 3 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].sql).toContain('FROM edrsr_parties p');
+    expect(calls[0].sql).toContain('d.justice_kind = $6');
+    expect(calls[0].params).toEqual(['приватбанк', '% приватбанк', 1, '2025-01-01', '2025-12-31', 3]);
+    expect(res).toMatchObject({ total: 3, distinct_cases: 2, by_court: [{ court_code: 7, count: 3 }] });
+  });
+
+  it('searchFulltext mixes parties legs and full-text legs, binding each parameter it uses', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    await svc.searchFulltext('стягнення боргу', db, {
+      party_name: 'Нова Пошта', party_role: 'defendant', date_from: '2024-01-01', date_to: '2025-12-31',
+    });
+    const { sql, params } = db.calls[0];
+    // 2025 leg: topical tsv + parties semi-join; 2024 leg: name/role tsv + claim-clause regex.
+    expect(sql).toMatch(/f\.doc_id IN \(SELECT p\.doc_id FROM edrsr_parties p WHERE p\.adj_year = 2025 AND p\.role = \$4/);
+    expect(sql).toContain('f.full_text ~*');
+    expect(params.slice(0, 4)).toEqual(['стягнення боргу', 'нова пошта', '% нова пошта', 2]);
+    expect(params).toContain('Нова Пошта');
+    for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
+  });
+
+  it('searchFulltext drops the full-text party parameters when every leg is covered for a parties kind', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    await svc.searchFulltext('стягнення боргу', db, {
+      party_name: 'Нова Пошта', party_role: 'plaintiff', date_from: '2025-01-01', date_to: '2025-12-31', justice_kind: 3,
+    });
+    const { sql, params } = db.calls[0];
+    expect(sql).not.toContain('f.full_text ~*');
+    expect(sql).not.toContain('phraseto_tsquery');
+    expect(params).not.toContain('Нова Пошта');
+    expect(params.slice(0, 4)).toEqual(['стягнення боргу', 'нова пошта', '% нова пошта', 1]);
+    for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
+  });
+
+  it('countByParty without a justice kind adds the kinds 2/5 from full text to a covered leg', async () => {
+    const svc = new EdsrFtsService();
+    const calls: { sql: string; params: any[] }[] = [];
+    const db = {
+      query: jest.fn((sql: string, params: any[]) => {
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2025 }] });
+        calls.push({ sql, params });
+        return Promise.resolve({ rows: [sql.includes('FROM edrsr_parties p')
+          ? { n: 3, causes: ['a', 'b'], by_court: [{ court_code: 7, count: 3 }], sample: [{ doc_id: 1 }] }
+          : { n: 2, causes: ['b', 'c'], by_court: [{ court_code: 7, count: 1 }, { court_code: 9, count: 1 }], sample: [{ doc_id: 2 }] }] });
+      }),
+    };
+    const res = await svc.countByParty('ПриватБанк', 'plaintiff', db, { date_from: '2025-01-01', date_to: '2025-12-31' });
+    const legs = calls.filter((c) => c.sql.includes(legMark));
+    expect(legs).toHaveLength(2);
+    expect(legs[0].sql).toContain('FROM edrsr_parties p');
+    expect(legs[0].params).toEqual(['приватбанк', '% приватбанк', 1, '2025-01-01', '2025-12-31']);
+    // the other-kinds leg: full-text predicate, restricted to the kinds edrsr_parties lacks
+    expect(legs[1].sql).not.toContain('FROM edrsr_parties');
+    expect(legs[1].sql).toContain('full_text ~*');
+    expect(legs[1].sql).toContain('coalesce(d.justice_kind, 0) NOT IN (1, 3, 4)');
+    expect(legs[1].params).toContain('ПриватБанк');
+    for (const leg of legs) for (let i = 1; i <= leg.params.length; i++) expect(leg.sql).toContain(`$${i}`);
+    expect(res).toMatchObject({
+      total: 5, distinct_cases: 3,
+      by_court: [{ court_code: 7, count: 4 }, { court_code: 9, count: 1 }],
+    });
+  });
+
+  it('searchFulltext without a justice kind keeps kinds 2/5 on the full-text predicate in a covered leg', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    // no metadata filter (no dates): the documents table is consulted only for the kind
+    await svc.searchFulltext('стягнення боргу', db, { party_name: 'Нова Пошта', party_role: 'plaintiff' });
+    const { sql, params } = db.calls[0];
+    expect(sql).toContain('FROM edrsr_parties p WHERE p.adj_year = 2025');
+    expect(sql).toContain('f.full_text ~*');
+    expect(sql).toContain('dk.justice_kind IN (1, 3, 4)');
+    // The two branches split by kind alone: the other-kinds branch excludes exactly the kinds
+    // the parties table can hold, with no date predicate that a doc with a missing or
+    // different metadata date could fail — so no decision can come out of both branches.
+    const notExists = sql.match(/NOT EXISTS \(SELECT 1 FROM edrsr_documents dk WHERE ([^)]*\))\)/);
+    expect(notExists).not.toBeNull();
+    expect(notExists![1]).toBe('dk.doc_id = f.doc_id AND dk.justice_kind IN (1, 3, 4)');
+    expect(sql).not.toContain('dk.adjudication_date');
+    const branches = sql.split('UNION ALL').filter((b) => b.includes('p.adj_year = 2025') || b.includes('NOT EXISTS'));
+    expect(branches).toHaveLength(2);
+    const [partiesBranch, otherBranch] = branches;
+    expect(partiesBranch).toContain('FROM edrsr_parties p');
+    expect(partiesBranch).not.toContain('NOT EXISTS');
+    expect(otherBranch).not.toContain('FROM edrsr_parties');
+    expect(otherBranch).toContain('f.full_text ~*');
+    expect(params).toContain('Нова Пошта');
+    for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
+  });
+
+  it('searchFulltext with the documents join (dates) filters the other kinds on d.justice_kind', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    await svc.searchFulltext('стягнення боргу', db, {
+      party_name: 'Нова Пошта', party_role: 'plaintiff', date_from: '2025-01-01', date_to: '2025-12-31',
+    });
+    const { sql, params } = db.calls[0];
+    expect(sql).toContain('coalesce(d.justice_kind, 0) NOT IN (1, 3, 4)');
+    for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
+  });
+
+  it('filterDocIdsByConstraints checks covered years against edrsr_parties, others by regex', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2024, 2025]);
+    await svc.filterDocIdsByConstraints([1, 2, 3], { party_name: 'Нова Пошта', party_role: 'defendant' }, db);
+    const { sql, params } = db.calls[0];
+    expect(sql).toContain('f.adj_year = ANY($4::int[])');
+    expect(sql).toContain('FROM edrsr_parties pp');
+    expect(sql).toContain('f.full_text ~*');
+    // in a covered year, kinds the parties table lacks are still checked by the full text
+    expect(sql).toMatch(/OR \(f\.tsv @@ .* AND f\.full_text ~\* \$3 AND NOT EXISTS \(\s*SELECT 1 FROM edrsr_documents dk\s*WHERE dk\.doc_id = f\.doc_id AND dk\.justice_kind IN \(1, 3, 4\)\)\)/s);
+    // structured lookup pinned to the candidate's own partition
+    expect(sql).toContain('pp.doc_id = ANY($1) AND pp.adj_year = f.adj_year');
+    // a candidate without adj_year stays on the full-text predicate instead of vanishing
+    expect(sql).toContain('(f.adj_year IS NULL OR NOT (f.adj_year = ANY($4::int[])))');
+    expect(params[3]).toEqual([2024, 2025]);
+    expect(params.slice(4)).toEqual(['нова пошта', '% нова пошта', 2]);
+    for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
   });
 });
