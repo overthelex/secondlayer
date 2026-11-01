@@ -1,5 +1,13 @@
 import type { ICachePort } from '../domain/ports/index.js';
-import { LegislationService, normalizeRadaId, parseKmuPrefix } from '../services/legislation-service';
+import {
+  LegislationService,
+  normalizeRadaId,
+  parseKmuPrefix,
+  PARTIALLY_REPEALED_ACT_PENALTY,
+  REPEALED_ACT_PENALTY,
+  RepealedActMode,
+} from '../services/legislation-service';
+import { ActStatus, actStatusField, buildStatusWarning } from '../services/legislation-act-status.js';
 import { LegislationRenderer } from '../services/legislation-renderer';
 import { LegalPatternStore } from '../services/legal-pattern-store.js';
 import { logger } from '../utils/logger';
@@ -15,6 +23,8 @@ export interface LegislationToolArgs {
   include_court_practice?: boolean;
   theme?: 'light' | 'dark';
   as_of_date?: string;
+  /** search_legislation: include acts that are no longer in force (ranked below current law). */
+  include_repealed?: boolean;
 }
 
 /** Per-request dedup cache for search_legislation — prevents repeated searches returning same rada_id */
@@ -95,6 +105,46 @@ export class LegislationTools extends BaseToolHandler {
     return this.service;
   }
 
+  /** Act statuses; never fails the tool (no status = legacy response). */
+  private async statusesFor(radaIds: Array<string | null | undefined>): Promise<Map<string, ActStatus>> {
+    try {
+      const map = await this.service.getActStatuses(radaIds);
+      return map instanceof Map ? map : new Map();
+    } catch (err: any) {
+      logger.warn('[MCP Tool] act status lookup failed', { error: err?.message });
+      return new Map();
+    }
+  }
+
+  private async statusOf(radaId: string | null | undefined): Promise<ActStatus | undefined> {
+    if (!radaId) return undefined;
+    return (await this.statusesFor([radaId])).get(String(radaId).toLowerCase());
+  }
+
+  /**
+   * Prepend the act's status (and a Ukrainian warning when it is not in force)
+   * to a single-act response, so the caveat precedes the text (LEXAI-2147).
+   */
+  private withActStatus(response: Record<string, any>, status: ActStatus | undefined, asOfDate?: string): any {
+    if (!status) return response;
+    const warning = buildStatusWarning(status, asOfDate);
+    return { ...(warning ? { warning } : {}), act_status: actStatusField(status), ...response };
+  }
+
+  /** Per-hit status for multi-act lists (search results). */
+  private hitStatus(radaId: string | null | undefined, statuses: Map<string, ActStatus>): Record<string, any> {
+    const s = radaId ? statuses.get(String(radaId).toLowerCase()) : undefined;
+    if (!s) return {};
+    const warning = buildStatusWarning(s);
+    return { act_status: actStatusField(s), ...(warning ? { warning } : {}) };
+  }
+
+  private async annotateHits<T extends { rada_id?: string }>(hits: T[]): Promise<T[]> {
+    if (hits.length === 0) return hits;
+    const statuses = await this.statusesFor(hits.map(h => h.rada_id));
+    return hits.map(h => ({ ...h, ...this.hitStatus(h.rada_id, statuses) }));
+  }
+
   /**
    * Устанавливает Redis клиент для AI-классификации законодательства
    */
@@ -136,7 +186,7 @@ export class LegislationTools extends BaseToolHandler {
           })),
           resolved_from: { query, method: 'vector_search' },
         };
-        return response;
+        return this.withActStatus(response, await this.statusOf(normalizeRadaId(radaId)), args.as_of_date);
       }
 
       return {
@@ -216,7 +266,7 @@ export class LegislationTools extends BaseToolHandler {
       });
     }
 
-    return response;
+    return this.withActStatus(response, await this.statusOf(article.rada_id), args.as_of_date);
   }
 
   async getLegislationArticles(args: LegislationToolArgs): Promise<any> {
@@ -276,7 +326,11 @@ export class LegislationTools extends BaseToolHandler {
       );
     }
 
-    return response;
+    return this.withActStatus(
+      response,
+      await this.statusOf(articles[0]?.rada_id || args.rada_id),
+      args.as_of_date
+    );
   }
 
   async searchLegislation(args: LegislationToolArgs): Promise<any> {
@@ -285,6 +339,14 @@ export class LegislationTools extends BaseToolHandler {
     }
 
     const limit = args.limit || 10;
+    const includeRepealed = args.include_repealed === true;
+    // Unscoped search hides acts that are no longer in force unless asked; an
+    // explicit rada_id is the caller's choice and is served (with a warning).
+    const repealedMode: RepealedActMode = includeRepealed ? 'demote' : 'exclude';
+    const unscopedOpts = { repealed: repealedMode };
+    // A guessed act (AI/regexp, not the caller's rada_id) gets the same filter
+    // when we search inside it as a fallback.
+    const guessedScopeOpts = { repealed: args.rada_id ? 'keep' as const : repealedMode };
 
     // Dedup: if a recent search already found articles from the same rada_id, return cached
     const now = Date.now();
@@ -335,6 +397,56 @@ export class LegislationTools extends BaseToolHandler {
         }
       }
 
+      const refStatus = await this.statusOf(resolvedRadaId);
+
+      // The AI classifier picks a law from the query's vocabulary, not its legal
+      // status: «штрафні санкції … господарського зобов'язання» resolves to ГК
+      // ст. 230 although ГК lost force on 28.08.2025 and the rule now lives in
+      // ЦК ст. 549-552. A topical (AI) guess pointing at a repealed act must not
+      // pin the whole answer to it — search current law instead and keep the
+      // guess only as a labelled pointer. An explicit regexp citation
+      // («ст. 230 ГК») is still served, with the warning.
+      if (refStatus?.repealed && directRef.source === 'ai' && !includeRepealed && !args.rada_id) {
+        try {
+          const current = await this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts);
+          if (current.length > 0) {
+            logger.info('[MCP Tool] search_legislation: AI reference points at a repealed act, serving current law', {
+              rada_id: resolvedRadaId,
+              ai_article: directRef.articleNumber,
+              confidence: directRef.confidence,
+              repealed_from: refStatus.repealed_from,
+            });
+            const hits = await this.annotateHits(current.map(a => ({
+              rada_id: a.rada_id,
+              article_number: a.article_number,
+              title: a.title,
+              full_text: capText(a.full_text),
+              url: a.url,
+              npa_title: a.npa_title,
+              section_number: a.section_number,
+              section_title: a.section_title,
+              chapter_number: a.chapter_number,
+              chapter_title: a.chapter_title,
+            })));
+            return {
+              query: args.query,
+              repealed_reference: {
+                rada_id: resolvedRadaId,
+                article_number: directRef.articleNumber || undefined,
+                source: directRef.source,
+                confidence: directRef.confidence,
+                act_status: actStatusField(refStatus),
+              },
+              total_found: hits.length,
+              articles: hits,
+              note: `${buildStatusWarning(refStatus)} Запит спершу зіставлено з ${resolvedRadaId}${directRef.articleNumber ? ` ст. ${directRef.articleNumber}` : ''}, тому показано чинні норми за семантичним пошуком. Для тексту акта, що втратив чинність, передайте include_repealed:true або використайте get_legislation_section.`,
+            };
+          }
+        } catch (err: any) {
+          logger.warn('[MCP Tool] search_legislation current-law search failed', { error: err?.message });
+        }
+      }
+
       // If we have an article/punkt number, fetch it directly
       if (directRef.articleNumber) {
         const article = await this.service.getArticle(resolvedRadaId, directRef.articleNumber);
@@ -345,8 +457,8 @@ export class LegislationTools extends BaseToolHandler {
           // (сам факт "стаття відсутня" — сильний сигнал, що і закон може бути не той).
           try {
             const [scoped, unscoped] = await Promise.all([
-              this.service.findRelevantArticles(args.query, resolvedRadaId, limit),
-              this.service.findRelevantArticles(args.query, undefined, limit),
+              this.service.findRelevantArticles(args.query, resolvedRadaId, limit, undefined, guessedScopeOpts),
+              this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts),
             ]);
             const seen = new Set<string>();
             const fallbackArticles: any[] = [];
@@ -385,7 +497,7 @@ export class LegislationTools extends BaseToolHandler {
                   not_found: true,
                 },
                 total_found: fallbackArticles.length,
-                articles: fallbackArticles,
+                articles: await this.annotateHits(fallbackArticles),
                 note: `Стаття ${directRef.articleNumber} не знайдена в ${resolvedRadaId} — показано релевантні статті за семантичним пошуком.`,
               };
             }
@@ -436,7 +548,10 @@ export class LegislationTools extends BaseToolHandler {
           args.query,
           `${article.title || ''} ${article.full_text || ''}`
         );
+        // A (fully or partially) repealed act is never the whole answer: always add current law.
+        const refRepealed = Boolean(refStatus?.repealed || refStatus?.partially_repealed);
         const trusted =
+          !refRepealed &&
           (directRef.confidence ?? 0) >= AI_REF_TRUSTED_CONFIDENCE &&
           grounding >= ARTICLE_GROUNDING_MIN_RATIO;
 
@@ -459,11 +574,11 @@ export class LegislationTools extends BaseToolHandler {
             // so also search UNSCOPED across all legislation, not only within the guessed act
             // (a scoped-only fallback returns nothing when the wrong law was picked, leaving a
             // single wrong answer). When the law is suspect, prefer globally-relevant hits.
-            const lawMayBeWrong = grounding < ARTICLE_GROUNDING_MIN_RATIO;
+            const lawMayBeWrong = grounding < ARTICLE_GROUNDING_MIN_RATIO || refRepealed;
             const [scoped, unscoped] = await Promise.all([
-              this.service.findRelevantArticles(args.query, resolvedRadaId, limit),
+              this.service.findRelevantArticles(args.query, resolvedRadaId, limit, undefined, guessedScopeOpts),
               lawMayBeWrong
-                ? this.service.findRelevantArticles(args.query, undefined, limit)
+                ? this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts)
                 : Promise.resolve([] as any[]),
             ]);
             const supplemental = lawMayBeWrong ? [...unscoped, ...scoped] : [...scoped, ...unscoped];
@@ -492,8 +607,9 @@ export class LegislationTools extends BaseToolHandler {
             response.total_found = response.articles.length;
             if (response.articles.length > 1) {
               response.resolved_reference.supplemented = true;
-              response.note =
-                'AI-визначена стаття могла не повністю відповідати запиту — додано релевантні статті за семантичним пошуком. Перевірте, яка стаття відповідає питанню.';
+              response.note = refRepealed
+                ? `Визначена стаття належить акту, що ${refStatus?.repealed ? 'втратив' : 'частково втратив'} чинність, — додано чинні норми за семантичним пошуком.`
+                : 'AI-визначена стаття могла не повністю відповідати запиту — додано релевантні статті за семантичним пошуком. Перевірте, яка стаття відповідає питанню.';
             }
             logger.info('[MCP Tool] search_legislation supplemented low-grounding AI reference', {
               rada_id: resolvedRadaId,
@@ -517,14 +633,30 @@ export class LegislationTools extends BaseToolHandler {
           });
         }
 
-        return response;
+        response.articles = await this.annotateHits(response.articles);
+        // An AI guess is only a guess: do not force a repealed article to the top
+        // of the combined list (include_repealed:true path). An explicit citation
+        // («ст. 230 ГК») stays first — the caller asked for exactly that article.
+        if (refRepealed && directRef.source !== 'regexp') {
+          const weight = (a: any) => (a.act_status?.repealed
+            ? REPEALED_ACT_PENALTY
+            : a.act_status?.partially_repealed
+              ? PARTIALLY_REPEALED_ACT_PENALTY
+              : 1);
+          response.articles = response.articles
+            .map((a: any, i: number) => ({ a, i }))
+            .sort((x: any, y: any) => weight(y.a) - weight(x.a) || x.i - y.i)
+            .map((x: any) => x.a);
+        }
+        const refWarning = buildStatusWarning(refStatus);
+        return refWarning ? { warning: refWarning, ...response } : response;
       }
 
       // No article number — return legislation structure/overview
       await this.service.ensureLegislationExists(resolvedRadaId);
       const structure = await this.service.getLegislationStructure(resolvedRadaId);
       if (structure) {
-        return {
+        return this.withActStatus({
           query: args.query,
           resolved_reference: {
             rada_id: resolvedRadaId,
@@ -547,28 +679,41 @@ export class LegislationTools extends BaseToolHandler {
             full_text: capText(a.full_text),
             url: `https://zakon.rada.gov.ua/laws/show/${resolvedRadaId}#n${a.article_number}`,
           })),
-        };
+        }, refStatus);
       }
     }
 
+    const searchStats = { excluded_repealed: 0 };
     const articles = await this.service.findRelevantArticles(
       args.query,
       args.rada_id,
-      limit
+      limit,
+      undefined,
+      args.rada_id ? { repealed: 'keep' } : { ...unscopedOpts, stats: searchStats }
     );
+    const excludedRepealed = searchStats.excluded_repealed;
 
     if (articles.length === 0) {
       return {
         query: args.query,
         total_found: 0,
         articles: [],
-        suggestion: 'Try a different search query or check if the legislation is loaded',
+        ...(excludedRepealed > 0 ? { excluded_repealed: excludedRepealed } : {}),
+        suggestion: excludedRepealed > 0
+          ? `Знайдено лише норми актів, що втратили чинність (${excludedRepealed} збігів), — їх не показано. Передайте include_repealed:true, щоб їх побачити, або уточніть запит для пошуку чинних норм.`
+          : 'Try a different search query or check if the legislation is loaded',
       };
     }
 
     const response: any = {
       query: args.query,
       total_found: articles.length,
+      ...(excludedRepealed > 0
+        ? {
+            excluded_repealed: excludedRepealed,
+            note: `${excludedRepealed} збіг(ів) з актів, що втратили чинність, не показано; передайте include_repealed:true, щоб включити їх (нижче за чинні).`,
+          }
+        : {}),
       articles: articles.map(a => ({
         rada_id: a.rada_id,
         article_number: a.article_number,
@@ -582,6 +727,8 @@ export class LegislationTools extends BaseToolHandler {
         chapter_title: a.chapter_title,
       })),
     };
+
+    response.articles = await this.annotateHits(response.articles);
 
     // Supplement with court practice references if requested
     if (args.include_court_practice && this.patternStore) {
@@ -666,7 +813,11 @@ export class LegislationTools extends BaseToolHandler {
       };
     }
 
+    const structStatus = await this.statusOf(structure.rada_id || radaId);
+    const structWarning = buildStatusWarning(structStatus);
     const base = {
+      ...(structWarning ? { warning: structWarning } : {}),
+      ...(structStatus ? { act_status: actStatusField(structStatus) } : {}),
       rada_id: structure.rada_id,
       title: structure.title,
       short_title: structure.short_title,
@@ -709,7 +860,7 @@ export class LegislationTools extends BaseToolHandler {
       {
         name: 'get_legislation_section',
         annotations: { title: 'Стаття закону', readOnlyHint: true, idempotentHint: true },
-        description: 'Отримати точний фрагмент/статтю за посиланням (наприклад, "ст. 625 ЦК") або за (rada_id + article_number). Повертає повний текст статті та посилання на джерело.',
+        description: 'Отримати точний фрагмент/статтю за посиланням (наприклад, "ст. 625 ЦК") або за (rada_id + article_number). Повертає повний текст статті, посилання на джерело та статус акта (act_status). Якщо акт втратив чинність, відповідь містить поле warning — така норма НЕ є чинною.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -719,7 +870,7 @@ export class LegislationTools extends BaseToolHandler {
             },
             rada_id: {
               type: 'string',
-              description: 'ID законодавчого акту (наприклад, "254к/96-вр" для Конституції, "435-15" для ЦК, "436-15" для ГК, "2755-17" для ПКУ, "1618-15" для ЦПК, "2341-14" для КК)',
+              description: 'ID законодавчого акту (наприклад, "254к/96-вр" для Конституції, "435-15" для ЦК, "2755-17" для ПКУ, "1618-15" для ЦПК, "2341-14" для КК)',
             },
             article_number: {
               type: 'string',
@@ -805,6 +956,11 @@ export class LegislationTools extends BaseToolHandler {
               type: 'boolean',
               default: false,
               description: 'Додати посилання з судової практики (які статті згадуються в аналогічних справах)',
+            },
+            include_repealed: {
+              type: 'boolean',
+              default: false,
+              description: 'Включити акти, що втратили чинність (наприклад, Господарський кодекс 436-15 з 28.08.2025). За замовчуванням false — показується лише чинне законодавство; з true такі акти ранжуються нижче чинних і позначаються warning.',
             },
           },
           required: ['query'],

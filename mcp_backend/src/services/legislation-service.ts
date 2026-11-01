@@ -14,6 +14,31 @@ import {
   applyLegislationBoosts,
   MIN_VECTOR_SCORE_HYBRID,
 } from './legislation-search-utils';
+import { ActStatusResolver, ActStatus } from './legislation-act-status.js';
+
+/**
+ * How findRelevantArticles treats hits from acts that are no longer in force
+ * (LEXAI-2147): 'keep' = legacy behaviour, 'demote' = keep but rank below
+ * current law, 'exclude' = drop them.
+ */
+export type RepealedActMode = 'keep' | 'demote' | 'exclude';
+
+/** Score multiplier for fully repealed acts (status 1) in 'demote' mode. */
+export const REPEALED_ACT_PENALTY = 0.5;
+/** Score multiplier for partially repealed acts (status 9) in 'demote' and 'exclude' modes. */
+export const PARTIALLY_REPEALED_ACT_PENALTY = 0.75;
+
+/**
+ * Ranking weight for a hit from an act with this status: null = drop it.
+ * Only a full repeal (status 1) is ever dropped; status 9 keeps some
+ * provisions in force, so it is demoted, not hidden.
+ */
+export function repealedActWeight(status: ActStatus | undefined, mode: RepealedActMode): number | null {
+  if (!status || mode === 'keep') return 1;
+  if (status.repealed) return mode === 'exclude' ? null : REPEALED_ACT_PENALTY;
+  if (status.partially_repealed) return PARTIALLY_REPEALED_ACT_PENALTY;
+  return 1;
+}
 
 export interface LegislationReference {
   rada_id: string;
@@ -339,6 +364,7 @@ export class LegislationService {
   private embeddingService: IEmbeddingPort;
   private db: IDatabase;
   private classifier: LegislationClassifier | null = null;
+  private statusResolver: ActStatusResolver;
 
   // bge-m3 migration (LEXAI-1807): when LEGISLATION_VECTOR_BACKEND=bge, the vector leg
   // embeds queries with bge-m3 (TEI) and searches the bge collection. Default 'voyage'
@@ -372,6 +398,16 @@ export class LegislationService {
     this.adapter = adapter || new RadaLegislationAdapter(db);
     this.embeddingService = embeddingService;
     this.classifier = classifier || new LegislationClassifier(redis, llm);
+    this.statusResolver = new ActStatusResolver(db);
+  }
+
+  /**
+   * Rada legal status (npa.act.status_code) for the given acts, keyed by
+   * lower-case rada_id. `legislation.status` is always 'active' and must not be
+   * used (LEXAI-2147). Never throws; unknown acts are simply absent.
+   */
+  async getActStatuses(radaIds: Array<string | null | undefined>): Promise<Map<string, ActStatus>> {
+    return this.statusResolver.getStatuses(radaIds);
   }
 
   getAdapter(): RadaLegislationAdapter {
@@ -1421,7 +1457,20 @@ export class LegislationService {
    * The fused candidates are re-scored with an article-number-token boost, a transitional-
    * provision nudge, and a mega-record demotion, then the top `limit` are returned.
    */
-  async findRelevantArticles(query: string, radaId?: string, limit: number = 5, asOfDate?: string): Promise<LegislationReference[]> {
+  async findRelevantArticles(
+    query: string,
+    radaId?: string,
+    limit: number = 5,
+    asOfDate?: string,
+    opts: {
+      repealed?: RepealedActMode;
+      /** Filled in when 'exclude' drops hits, so the caller can say why a page is short or empty. */
+      stats?: { excluded_repealed: number };
+    } = {}
+  ): Promise<LegislationReference[]> {
+    const repealedMode: RepealedActMode = opts.repealed ?? 'keep';
+    const stats = opts.stats;
+    if (stats) stats.excluded_repealed = 0;
     const toReference = (row: any): LegislationReference => ({
       rada_id: row.rada_id,
       article_number: row.article_number,
@@ -1438,16 +1487,34 @@ export class LegislationService {
     });
 
     const textFallback = async (): Promise<LegislationReference[]> => {
-      const textResults = await this.searchLegislation(query, radaId, limit);
-      return textResults.flatMap(r => r.articles.map((a: any) => toReference({
+      // This is now the final retrieval path: drop any count the hybrid pass
+      // made so a candidate excluded there is not counted a second time here.
+      if (stats) stats.excluded_repealed = 0;
+      // Oversample when statuses may drop or reorder hits, so the page still fills.
+      const fetchLimit = repealedMode === 'keep' ? limit : limit * 3;
+      const textResults = await this.searchLegislation(query, radaId, fetchLimit);
+      const refs = textResults.flatMap(r => r.articles.map((a: any) => toReference({
         ...a,
         rada_id: r.rada_id,
         npa_title: r.legislation_title,
       })));
+      if (repealedMode === 'keep' || refs.length === 0) return refs.slice(0, limit);
+      const statuses = await this.getActStatuses(refs.map(r => r.rada_id));
+      const weighted: Array<{ ref: LegislationReference; w: number; i: number }> = [];
+      refs.forEach((ref, i) => {
+        const w = repealedActWeight(statuses.get(String(ref.rada_id).toLowerCase()), repealedMode);
+        if (w === null) { if (stats) stats.excluded_repealed++; return; }
+        weighted.push({ ref, w, i });
+      });
+      // Text results carry no score: demote = stable sort by weight (current law first).
+      weighted.sort((a, b) => b.w - a.w || a.i - b.i);
+      return weighted.slice(0, limit).map(x => x.ref);
     };
 
     try {
-      const candidateLimit = Math.max(limit * 4, 24);
+      // Excluding repealed acts can empty a large share of the candidate pool
+      // (one repealed code may own most of it), so oversample.
+      const candidateLimit = repealedMode === 'exclude' ? Math.max(limit * 6, 40) : Math.max(limit * 4, 24);
       const filter: any = { document_type: 'legislation' };
       if (radaId) filter.rada_id = radaId;
 
@@ -1495,6 +1562,24 @@ export class LegislationService {
       }
 
       const fused = fuseRankLists(vectorKeys, ftsKeys);
+
+      // Legal status per act behind the candidates — one cached PK lookup on npa.act.
+      let actStatuses = new Map<string, ActStatus>();
+      if (repealedMode !== 'keep' && fused.size > 0) {
+        const ids = new Set<string>();
+        for (const key of fused.keys()) {
+          const rid = ftsRowByKey.get(key)?.rada_id ?? vectorBest.get(key)?.radaId;
+          if (rid) ids.add(String(rid).toLowerCase());
+        }
+        actStatuses = await this.getActStatuses([...ids]);
+        for (const key of [...fused.keys()]) {
+          if (repealedActWeight(actStatuses.get(key.slice(0, key.indexOf(':'))), repealedMode) === null) {
+            fused.delete(key);
+            if (stats) stats.excluded_repealed++;
+          }
+        }
+      }
+
       if (fused.size === 0) {
         logger.warn('[LegislationService] hybrid search returned 0 candidates, falling back to text search', {
           query: query.substring(0, 50),
@@ -1560,11 +1645,12 @@ export class LegislationService {
           const row = ftsRowByKey.get(key) || fetchedByKey.get(key);
           if (!row) return null;
           const isTransitional = Boolean(row.metadata?.is_transitional) || /^\s*п\./i.test(row.article_number || '');
-          const score = applyLegislationBoosts(base, {
+          let score = applyLegislationBoosts(base, {
             article_number: row.article_number,
             full_text_length: (row.full_text || '').length,
             is_transitional: isTransitional,
           }, numberTokens);
+          score *= repealedActWeight(actStatuses.get(String(row.rada_id).toLowerCase()), repealedMode) ?? 1;
           return { row, score };
         })
         .filter((x): x is { row: any; score: number } => x !== null)
