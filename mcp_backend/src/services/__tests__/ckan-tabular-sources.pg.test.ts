@@ -153,10 +153,11 @@ d('moved catalog sources on PostgreSQL (LEXAI-2183)', () => {
     pool = new Pool({ connectionString: PG_URL, max: 4, options: `-c search_path=${schema}` });
     await pool.query(handMadeTables);
     for (const f of ['110_import_tasks.sql', '117_tier1_opendata_tables.sql', '125_add_missing_sync_sources.sql',
-      '235_invalid_passports_ckan_sources.sql', '237_moved_catalog_sources_ckan.sql']) {
+      '235_invalid_passports_ckan_sources.sql', '237_moved_catalog_sources_ckan.sql', '238_nazk_api_download_timeout.sql']) {
       await pool.query(migration(f));
     }
     await pool.query(migration('237_moved_catalog_sources_ckan.sql')); // idempotent
+    await pool.query(migration('238_nazk_api_download_timeout.sql')); // idempotent
     body = files(await stateAidXlsx());
   });
 
@@ -190,6 +191,8 @@ d('moved catalog sources on PostgreSQL (LEXAI-2183)', () => {
   it('migrates six sources to ckan_package and disables four with a reason', async () => {
     await pool.query(`UPDATE import_source_catalog SET default_threads_per_ip = 5, rate_limit_ms = 1100 WHERE name = 'state_aid'`);
     await pool.query(migration('237_moved_catalog_sources_ckan.sql')); // re-run resets them
+    // 237 rewrites source_config whole; 238 runs after it on every database (migration order).
+    await pool.query(migration('238_nazk_api_download_timeout.sql'));
     const r = await pool.query(`SELECT name, enabled, source_config, default_threads_per_ip, rate_limit_ms FROM import_source_catalog
       WHERE name IN ('advocates','court_schedule','nazk_corruption_offenders','nazk_declaration_checks','large_taxpayers','state_aid',
                      'dsfmu_terrorism','judge_candidates','lustration','wage_debtors') ORDER BY name`);
@@ -206,6 +209,9 @@ d('moved catalog sources on PostgreSQL (LEXAI-2183)', () => {
     }
     expect(by.court_schedule.source_config.csv_delimiter).toBe('\t');
     expect(by.nazk_corruption_offenders.source_config.skip_unchanged).toBe(false);
+    // 238: НАЗК's API is silent for ~163 s before the first byte.
+    expect(by.nazk_corruption_offenders.source_config.download_timeout_ms).toBe(600000);
+    expect(by.court_schedule.source_config.download_timeout_ms).toBeUndefined();
   });
 
   it('advocates: newest register JSON, statusDescription joined, addresses as jsonb', async () => {

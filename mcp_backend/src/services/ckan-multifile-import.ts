@@ -59,6 +59,27 @@ export function selectCkanResources(packageShow: any, pattern: string, format?: 
   return picked.sort((a, b) => key(a).localeCompare(key(b)));
 }
 
+/** Default for source_config.download_timeout_ms: socket idle time before a download is abandoned. */
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
+/** Upper bound for download_timeout_ms, so a typo cannot park a task for hours. */
+export const MAX_DOWNLOAD_TIMEOUT_MS = 30 * 60_000;
+
+/**
+ * source_config.download_timeout_ms -> the idle timeout for a resource download (LEXAI-2183).
+ * It bounds silence on the socket, not the whole transfer: НАЗК's getAllData API sends its
+ * first byte only after ~163 s and then streams 55 MB in ~5 s, so the 60 s default failed
+ * every attempt. Missing -> the default; anything that is not a whole number of ms in
+ * 1 s .. 30 min throws before any download.
+ */
+export function resolveDownloadTimeoutMs(value: unknown): number {
+  if (value === undefined || value === null) return DEFAULT_DOWNLOAD_TIMEOUT_MS;
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1_000 || n > MAX_DOWNLOAD_TIMEOUT_MS) {
+    throw new Error(`download_timeout_ms must be a whole number of ms between 1000 and ${MAX_DOWNLOAD_TIMEOUT_MS}, got ${JSON.stringify(value)}`);
+  }
+  return n;
+}
+
 /** CKAN timestamps are naive UTC ("2026-05-01T01:00:05.496043"). */
 export function parseCkanTimestamp(ts: string | null | undefined): number {
   if (!ts) return NaN;

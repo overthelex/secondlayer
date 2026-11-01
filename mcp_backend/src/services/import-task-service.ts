@@ -14,6 +14,7 @@ import { logger } from '../utils/logger.js';
 import { normalizeApostrophes } from './legislation-search-utils.js';
 import {
   CkanResource, CsvStreamParser, JsonArrayStreamParser, TabularOptions, VALUE_TRANSFORMS, latestCkanResource,
+  resolveDownloadTimeoutMs,
   packageShowUrl, replaceGuardError, resourcesUnchangedSince, selectCkanResources, validateTransforms, xlsxRecords,
 } from './ckan-multifile-import.js';
 
@@ -27,6 +28,8 @@ const XLSX_MAX_BYTES = 50 * 1024 * 1024;
 interface ResourceParseOptions extends TabularOptions {
   format: CkanFormat;
   delimiter: string;
+  /** Socket idle timeout for the resource download (source_config.download_timeout_ms). */
+  downloadTimeoutMs: number;
 }
 import { StringDecoder } from 'string_decoder';
 import type { IncomingMessage } from 'http';
@@ -656,6 +659,7 @@ export class ImportTaskService {
    *   dedup_order       column whose highest value wins among duplicates (then the later record)
    *   min_rows_ratio    refuse the swap if new rows < ratio × current rows (default 0.9)
    *   skip_unchanged    skip the run when no resource changed since the last successful load
+   *   download_timeout_ms  socket idle timeout per resource download (default 60000, max 30 min)
    *
    * Every file is streamed into an UNLOGGED staging table; only when all of them loaded and
    * the guard passes is the target brought to the staging content in ONE transaction
@@ -686,6 +690,7 @@ export class ImportTaskService {
       delimiter: String(config.csv_delimiter ?? ','),
       headerRow: config.header_row != null ? Number(config.header_row) : undefined,
       skipRows: config.skip_rows != null ? Number(config.skip_rows) : undefined,
+      downloadTimeoutMs: resolveDownloadTimeoutMs(config.download_timeout_ms),
     };
 
     const pkgUrl = packageShowUrl(String(config.ckan_package), config.ckan_api);
@@ -808,7 +813,7 @@ export class ImportTaskService {
       }
     };
 
-    const stream = await this.httpGetStream(res.url, signal, 60_000);
+    const stream = await this.httpGetStream(res.url, signal, parseOpts.downloadTimeoutMs);
     if (parseOpts.format === 'xlsx') {
       const parts: Buffer[] = [];
       let size = 0;
@@ -928,7 +933,7 @@ export class ImportTaskService {
         resolve(res);
       });
       req.on('error', reject);
-      req.on('timeout', () => req.destroy(new Error('Request timeout')));
+      req.on('timeout', () => req.destroy(new Error(`Request timeout (no data for ${Math.round(idleTimeoutMs / 1000)} s)`)));
       const onAbort = () => req.destroy(new Error('Aborted'));
       signal.addEventListener('abort', onAbort, { once: true });
       req.on('close', () => signal.removeEventListener('abort', onAbort));
