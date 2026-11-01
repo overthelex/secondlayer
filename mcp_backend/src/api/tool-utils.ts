@@ -283,6 +283,52 @@ export interface CauseNumberResolution {
 }
 
 /**
+ * Smallest string that sorts after every "<base>-<suffix>" spelling: drop trailing 9s and
+ * slashes, then bump the last digit ("352/923/16" → "352/923/17", "352/923/19" →
+ * "352/923/2", "352/923/99" → "352/924"). Only digits are compared at the decisive position,
+ * so the bound holds both under C ordering and under en_US.utf8, where glibc ignores the
+ * punctuation at the first level. Checked on prod: 0 of 16,977 sampled suffixed cause_nums
+ * (184 with a year ending in 9) fell outside [base, successor). Null when nothing is left
+ * to bump.
+ */
+export function causeNumRangeEnd(base: string): string | null {
+  const t = base.replace(/[9/]*$/, '');
+  if (!t || !/\d$/.test(t)) return null;
+  return t.slice(0, -1) + String.fromCharCode(t.charCodeAt(t.length - 1) + 1);
+}
+
+/**
+ * True when edrsr_case_index holds any "<base>-<anything>" spelling of `bare` (either year
+ * spelling). A btree range on the primary key bounds the scan (0.3ms measured on prod,
+ * against 240ms for a bare `LIKE 'base-%'`, which en_US.utf8 cannot serve from the index);
+ * the LIKE inside the range keeps the answer exact. Fails closed: if the check cannot run,
+ * a sibling is assumed, so a typed suffix is never dropped on a guess.
+ */
+async function hasSuffixedSibling(bare: string, dbPool: any): Promise<boolean> {
+  try {
+    for (const base of generateCaseNumberVariations(bare)) {
+      if (!/^\d+\/\d+\/\d{2,4}$/.test(base)) continue;
+      const hi = causeNumRangeEnd(base);
+      if (!hi) return true;
+      const { rows } = await dbPool.query(
+        `SELECT 1 FROM edrsr_case_index
+          WHERE cause_num >= $1 AND cause_num < $2 AND cause_num LIKE $3
+          LIMIT 1`,
+        [base, hi, `${base}-%`],
+      );
+      if (rows.length > 0) return true;
+    }
+    return false;
+  } catch (error: any) {
+    logger.warn('[tool-utils] suffixed-sibling check failed; not dropping the typed suffix', {
+      bare,
+      error: error?.message,
+    });
+    return true;
+  }
+}
+
+/**
  * Resolve a user- or model-supplied case number to the spelling EDRSR actually uses.
  *
  * Looks the candidates up by equality against `edrsr_case_index` (cause_num is its primary
@@ -324,7 +370,28 @@ export async function resolveCauseNumber(caseNumber: string, dbPool: any): Promi
       ? all.filter((m: { cause_num: string }) => (m.cause_num.match(ASKED_SUFFIX_RE)?.[1] ?? null) === askedSuffix)
       : all;
 
-    if (matches.length === 0) return empty;
+    if (matches.length === 0) {
+      // Reverse direction (LEXAI-2176): the caller typed a procedural suffix, but EDRSR
+      // stores this case without one (e.g. 120/15617/23). Dropping the suffix does not
+      // swap it for another, so it is allowed — but only for a measured procedural suffix
+      // (an unmeasured tail like -XYZ stays a statement about which case is meant), and
+      // only when the base carries no differently-suffixed case that could be the one
+      // asked about. `all` only probed the measured suffix list, so the sibling check asks
+      // the index for EVERY suffix on the base (e.g. -кр, which the list does not carry).
+      const typed = askedSuffix?.slice(1) ?? '';
+      if (askedSuffix && CAUSE_NUM_SUFFIXES.includes(typed)) {
+        const bare = all.filter((m: { cause_num: string }) => !ASKED_SUFFIX_RE.test(m.cause_num));
+        const otherSuffixed = all.length - bare.length;
+        if (
+          bare.length === 1 &&
+          otherSuffixed === 0 &&
+          !(await hasSuffixedSibling(bare[0].cause_num, dbPool))
+        ) {
+          return { resolved: bare[0].cause_num, matches: bare, ambiguous: false };
+        }
+      }
+      return empty;
+    }
     if (matches.some((m: { cause_num: string }) => m.cause_num === input)) {
       return { resolved: input, matches, ambiguous: false };
     }
@@ -337,6 +404,73 @@ export async function resolveCauseNumber(caseNumber: string, dbPool: any): Promi
     });
     return empty;
   }
+}
+
+/** Response fields describing a case-number fallback, spelled like get_case_documents_chain's. */
+export interface CauseNumberFallbackInfo {
+  requested_case_number: string;
+  resolved_case_number?: string;
+  ambiguous_case_number?: { requested: string; candidates: string[] };
+  case_number_note: string;
+}
+
+export interface CauseNumberLookup<T> {
+  result: T;
+  /** The cause_num spelling that produced `result`. */
+  causeNumber: string;
+  /** Set only when the exact spelling found nothing and a variant was tried or is ambiguous. */
+  fallback?: CauseNumberFallbackInfo;
+}
+
+/**
+ * Run a cause_num lookup exact-first, falling back to the corpus spelling only on a miss.
+ *
+ * Exact always wins: `run` is called with the caller's spelling, and resolveCauseNumber is
+ * consulted only when that returns nothing — so the hot path costs no extra query, and a
+ * stale edrsr_case_index can never override a real exact hit. On a miss, the one variant
+ * resolveCauseNumber settles on (suffix completed, e.g. 352/923/16 → 352/923/16-ц, or a
+ * measured suffix dropped when the case is stored bare) is tried, and the response is told
+ * which variant matched. An ambiguous base returns the empty exact result plus the
+ * candidates, never a merge of two cases.
+ */
+export async function lookupWithCauseNumberFallback<T>(
+  caseNumber: string,
+  dbPool: any,
+  run: (causeNumber: string) => Promise<T>,
+  isEmpty: (result: T) => boolean,
+): Promise<CauseNumberLookup<T>> {
+  const requested = String(caseNumber || '').trim();
+  const exact = await run(requested);
+  if (!isEmpty(exact) || !requested) return { result: exact, causeNumber: requested };
+
+  const resolution = await resolveCauseNumber(requested, dbPool);
+  if (resolution.resolved && resolution.resolved !== requested) {
+    const variant = await run(resolution.resolved);
+    if (!isEmpty(variant)) {
+      return {
+        result: variant,
+        causeNumber: resolution.resolved,
+        fallback: {
+          requested_case_number: requested,
+          resolved_case_number: resolution.resolved,
+          case_number_note: `Справу з номером ${requested} в ЄДРСР не знайдено; показано результати для варіанта номера ${resolution.resolved}.`,
+        },
+      };
+    }
+  }
+  if (resolution.ambiguous) {
+    const candidates = resolution.matches.map((m) => m.cause_num);
+    return {
+      result: exact,
+      causeNumber: requested,
+      fallback: {
+        requested_case_number: requested,
+        ambiguous_case_number: { requested, candidates },
+        case_number_note: `Номер справи ${requested} відповідає кільком різним справам (${candidates.join(', ')}). Уточніть номер повністю.`,
+      },
+    };
+  }
+  return { result: exact, causeNumber: requested };
 }
 
 /**
