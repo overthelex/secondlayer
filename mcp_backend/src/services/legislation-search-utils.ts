@@ -113,9 +113,51 @@ export function normalizeApostrophes(text: string): string {
  */
 export function legislationStems(query: string): string[] {
   const tokens = (String(query || '').toLowerCase().match(/[\p{L}\p{N}]+/gu) || [])
-    .filter((t) => t.length >= 3 && !UK_STOPWORDS.has(t) && !/^\d+$/.test(t))
+    .filter(isContentToken)
     .slice(0, 10);
   return [...new Set(tokens.map(stemToPrefix).filter(Boolean))];
+}
+
+/** True for a token legislationStems keeps (content word, not a stopword or a bare number). */
+function isContentToken(t: string): boolean {
+  return t.length >= 3 && !UK_STOPWORDS.has(t) && !/^\d+$/.test(t);
+}
+
+/**
+ * Phrase tsquery over the same prefix stems as legislationStems, with the exact word
+ * distances of the query («штучний інтелект» → "штуч:* <-> інтел:*", «договір про
+ * закупівлю» → "дого:* <2> закуп:*"). LEXAI-2153: an AND query is satisfied by
+ * «штучні острови … інтелектуальної власності» 50K chars apart; the phrase is the
+ * signal that the document is actually about the queried term.
+ *
+ * Positions mirror PostgreSQL's 'simple' parser: every word, short word, stopword and
+ * number takes one position, and a hyphenated word takes one extra position for the
+ * compound token, emitted before its parts ('науково-технічний':1 'науково':2 'технічний':3).
+ * Returns '' when the query has fewer than two content words — there is no phrase.
+ */
+export function legislationPhraseTsquery(query: string): string {
+  const groups = String(query || '').toLowerCase().match(/[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*/gu) || [];
+  let pos = 0;
+  const parts: Array<{ pos: number; stem: string }> = [];
+  for (const g of groups) {
+    const words = g.split('-').filter(Boolean);
+    if (words.length > 1) pos++; // the compound token itself
+    for (const w of words) {
+      pos++;
+      if (!isContentToken(w)) continue;
+      const stem = stemToPrefix(w);
+      if (stem) parts.push({ pos, stem });
+    }
+  }
+  const kept = parts.slice(0, 10);
+  if (kept.length < 2) return '';
+  return kept
+    .map((p, i) => {
+      if (i === 0) return `${p.stem}:*`;
+      const d = p.pos - kept[i - 1].pos;
+      return `${d === 1 ? '<->' : `<${d}>`} ${p.stem}:*`;
+    })
+    .join(' ');
 }
 
 /**

@@ -16,7 +16,7 @@
  */
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { legislationStems, normalizeApostrophes } from '../../services/legislation-search-utils.js';
+import { legislationPhraseTsquery, legislationStems, normalizeApostrophes } from '../../services/legislation-search-utils.js';
 import { resolveActNumber, pickActNumber, normalizeArticleNumber, type ActNumberMatch } from '../../services/act-number.js';
 import {
   NPA_REPEALED_CODES,
@@ -47,6 +47,16 @@ const FTS_CANDIDATE_CAP = 10000;
  *   TITLE_WEIGHT·title_cov + ts_rank_cd(body, q, 32) + year_adj − amendment + status
  * ts_rank_cd with normalisation 32 lies in [0,1), so a full title match outweighs any
  * body score; act type/recency only break ties.
+ *
+ * Phrase/proximity (LEXAI-2153). AND over a whole act is satisfied by terms 50K chars
+ * apart: «штучний інтелект» matched «штучні острови … інтелектуальної власності» in the
+ * Митний кодекс. Over the reranked pool only (the phrase recheck detoasts every body —
+ * 6.6 s for the 536 AND hits of «штучний інтелект», 25 s for «порядок видачі ліцензій»,
+ * so it can't be the corpus-wide filter), each act gets
+ *   + PHRASE_BONUS if the query phrase (exact word distances) occurs in the ranked prefix,
+ * and an act is "scattered" when it has neither the phrase, all stems in the title, nor
+ * a body rank ≥ PROXIMITY_MIN (terms only far apart). Scattered acts are dropped whenever
+ * at least one non-scattered act exists — the response reports how many.
  */
 export const NPA_RANK = {
   RERANK_POOL: 150,
@@ -60,10 +70,30 @@ export const NPA_RANK = {
   YEAR_MISMATCH_PENALTY: 0.3,
   /** Чинний over everything else when status=«будь-який». */
   IN_FORCE_BONUS: 0.05,
+  /** The query phrase occurs in the body — the same weight as a full title match. */
+  PHRASE_BONUS: 1.0,
+  /**
+   * ts_rank_cd(…, 32) below this = the terms co-occur only far apart. One adjacent
+   * 2-term cover scores ≈0.09; on prod the scattered «штучн…/інтел…» acts scored ≤0.015.
+   */
+  PROXIMITY_MIN: 0.02,
 } as const;
 
 /** Case-insensitive POSIX regex for amendment acts, applied to npa.act.title. */
 const AMENDMENT_TITLE_RE = '^\\s*Про (внесення|затвердження) (до .{0,200})?змін';
+
+/**
+ * PostgreSQL ARE locating the start of the query phrase in lower(body), for the snippet:
+ * the first two stems of the phrase tsquery with up to (distance) words between them.
+ * Without it the snippet anchors on the first stem alone and shows «штучні острови»
+ * for an act that does mention «штучного інтелекту» further down (LEXAI-2153).
+ */
+export function phraseSnippetRegex(phraseTsquery: string): string | null {
+  const m = phraseTsquery.match(/^([\p{L}\p{N}]+):\* (?:<->|<(\d+)>) ([\p{L}\p{N}]+):\*/u);
+  if (!m) return null;
+  const gap = m[2] ? Number(m[2]) : 1;
+  return `${m[1]}\\S*(\\s+\\S+){0,${gap}}\\s+${m[3]}`;
+}
 
 /** 4-digit years (1900–2099) named in a query — used only for title boosting. */
 export function queryYears(query: string): string[] {
@@ -342,36 +372,48 @@ export class NpaTools extends BaseToolHandler {
     const anchor = stems[0];
     const years = queryYears(folded);
 
-    // AND first. OR-of-prefixes over 429K editions matches almost everything, so it is a
-    // fallback for a thin result set, not the default (same relax pattern as the ГНЕУ search).
-    let rows = await this.ftsCandidates(stems, ' & ', years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
+    const phrase = legislationPhraseTsquery(folded) || null;
+
+    // AND first, with a phrase boost and scattered-match drop (NPA_RANK). OR-of-prefixes
+    // over 429K editions matches almost everything, so it runs only when AND finds
+    // nothing at all (LEXAI-2153) and is flagged in the response.
+    let rows = await this.ftsCandidates(stems, ' & ', phrase, years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
     let relaxed = false;
-    if (rows.length < 3 && stems.length > 1) {
-      const orRows = await this.ftsCandidates(stems, ' | ', years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
-      if (orRows.length > rows.length) { rows = orRows; relaxed = true; }
+    if (rows.length === 0 && stems.length > 1) {
+      rows = await this.ftsCandidates(stems, ' | ', null, years, statusCode, excludeRepealed, docTypeId, asOfDate, anchor, lim);
+      relaxed = rows.length > 0;
     }
 
     if (rows.length === 0) return this.wrapResponse('У корпусі НПА нічого не знайдено за цим запитом.');
 
     const total = Number(rows[0]._total_count);
+    const scatteredDropped = Number(rows[0]._scattered_dropped || 0);
+    const notes: string[] = [];
+    if (relaxed) notes.push('Жоден акт не містить усіх термінів запиту — застосовано пом’якшений пошук (будь-який з термінів).');
+    if (scatteredDropped > 0) notes.push(`Відкинуто ${scatteredDropped} акт(ів), де терміни запиту трапляються лише окремо, далеко один від одного.`);
     return this.wrapResponse({
       mode: 'fulltext',
       // Candidates are capped before ranking, so the count is a floor, not an exact total.
       total_count_at_least: total,
       capped: total >= FTS_CANDIDATE_CAP,
       returned: rows.length,
-      ...(relaxed ? { note: 'Строгий пошук (усі терміни) дав замало результатів — застосовано пом’якшений пошук (будь-який з термінів).' } : {}),
+      match_mode: relaxed ? 'any_term' : 'all_terms',
+      ...(scatteredDropped > 0 ? { scattered_dropped: scatteredDropped } : {}),
+      ...(notes.length ? { note: notes.join(' ') } : {}),
       searched_over: 'чинні редакції',
       results: rows.map((r: any) => this.shapeAct(r, {
         shown_edition: r.shown_edition,
         is_current: r.shown_is_current,
         relevance: Math.round(Number(r.score) * 1000) / 1000,
+        // phrase: the query phrase occurs in the text; all_terms: every term, not as a
+        // phrase; any_term: relaxed OR fallback.
+        match: relaxed ? 'any_term' : (r.phrase_hit ? 'phrase' : 'all_terms'),
         snippet: stripChrome(r.snippet),
       })),
     });
   }
 
-  private async ftsCandidates(stems: string[], join: string, years: string[], statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, anchor: string, lim: number): Promise<any[]> {
+  private async ftsCandidates(stems: string[], join: string, phrase: string | null, years: string[], statusCode: number | null, excludeRepealed: boolean, docTypeId: number | null, asOfDate: string | undefined, anchor: string, lim: number): Promise<any[]> {
     const tsquery = stems.map((s) => `${s}:*`).join(join);
     const values: any[] = [tsquery];
     const { sql: filter, nextIdx } = this.actFilterSql(statusCode, excludeRepealed, docTypeId, values, 2);
@@ -384,6 +426,10 @@ export class NpaTools extends BaseToolHandler {
     const yearsIdx = pi; values.push(years); pi++;
     const poolIdx = pi; values.push(NPA_RANK.RERANK_POOL); pi++;
     const prefixIdx = pi; values.push(NPA_RANK.BODY_RANK_CHARS); pi++;
+    // NULL phrase (single-stem query, OR fallback): no phrase bonus and nothing is
+    // "scattered" — the filter is meaningful only for a strict multi-term query.
+    const phraseIdx = pi; values.push(phrase); pi++;
+    const snipReIdx = pi; values.push(phrase ? phraseSnippetRegex(phrase) : null); pi++;
     const R = NPA_RANK;
 
     // See NPA_RANK. Stage 1 (pre/pool) touches only npa.act; stage 2 (ranked) detoasts
@@ -418,20 +464,41 @@ export class NpaTools extends BaseToolHandler {
          ORDER BY ${R.TITLE_WEIGHT} * title_cov + year_adj - amend_pen + status_bonus DESC, last_ed_d DESC NULLS LAST
          LIMIT $${poolIdx}
       ),
-      ranked AS (
-        SELECT p.*,
-               ${R.TITLE_WEIGHT} * p.title_cov
-                 + ts_rank_cd(to_tsvector('simple', substr(t.body || '', 1, $${prefixIdx})), to_tsquery('simple', $1), 32)
-                 + p.year_adj - p.amend_pen + p.status_bonus AS score
+      scored AS (
+        SELECT p.*, m.body_rank, m.phrase_hit,
+               ${R.TITLE_WEIGHT} * p.title_cov + m.body_rank
+                 + CASE WHEN m.phrase_hit THEN ${R.PHRASE_BONUS} ELSE 0 END
+                 + p.year_adj - p.amend_pen + p.status_bonus AS score,
+               ($${phraseIdx}::text IS NULL OR m.phrase_hit OR p.title_cov >= 1
+                 OR m.body_rank >= ${R.PROXIMITY_MIN}) AS focused
           FROM pool p
           JOIN npa.edition_text t ON t.nreg = p.nreg AND t.ed_date = p.ed_date
-         ORDER BY score DESC, p.last_ed_d DESC NULLS LAST
+          -- OFFSET 0 fences the subquery: without it the planner inlines tsv into both uses
+          -- below and tokenises every body twice (measured 707 vs 357 ms over 41 acts).
+          CROSS JOIN LATERAL (SELECT to_tsvector('simple', substr(t.body || '', 1, $${prefixIdx})) AS tsv OFFSET 0) v
+          CROSS JOIN LATERAL (
+            SELECT ts_rank_cd(v.tsv, to_tsquery('simple', $1), 32) AS body_rank,
+                   COALESCE($${phraseIdx}::text IS NOT NULL AND v.tsv @@ to_tsquery('simple', $${phraseIdx}::text), false) AS phrase_hit
+          ) m
+      ),
+      judged AS (
+        SELECT s.*, bool_or(s.focused) OVER () AS _any_focused,
+               count(*) FILTER (WHERE NOT s.focused) OVER () AS _scattered
+          FROM scored s
+      ),
+      ranked AS (
+        SELECT j.*, CASE WHEN j._any_focused THEN j._scattered ELSE 0 END AS _scattered_dropped
+          FROM judged j
+         WHERE j.focused OR NOT j._any_focused
+         ORDER BY j.score DESC, j.last_ed_d DESC NULLS LAST
          LIMIT $${limIdx}
       )
       SELECT r.*,
              to_char(sel.ed_date, 'YYYY-MM-DD') AS shown_edition,
              sel.is_current AS shown_is_current,
-             substr(t.body || '', GREATEST(1, strpos(lower(t.body), $${anchorIdx}) - 150), 400) AS snippet
+             substr(t.body || '', GREATEST(1, COALESCE(
+               NULLIF(CASE WHEN r.phrase_hit THEN regexp_instr(lower(t.body), $${snipReIdx}::text) END, 0),
+               strpos(lower(t.body), $${anchorIdx})) - 150), 400) AS snippet
         FROM ranked r
         CROSS JOIN LATERAL (
           SELECT e.ed_date, e.is_current
