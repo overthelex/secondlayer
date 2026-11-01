@@ -663,6 +663,17 @@ describe('EdsrFtsService.countByParty', () => {
     expect(res.incomplete).toBeUndefined();
   });
 
+  it('drops counted_from_year when a newer leg before the cap is still pending', async () => {
+    const svc = new EdsrFtsService();
+    // 2026 times out, 2025 alone reaches the cap, 2024 is skipped: "exact from 2025 onward"
+    // would wrongly cover the uncounted 2026.
+    const db = makeCountDb([pgTimeout(), { n: 30000 }]);
+    const res = await svc.countByParty('X', undefined, db, { date_from: '2024-01-01', date_to: '2026-12-31' });
+    expect(res.capped).toBe(true);
+    expect(res.counted_from_year).toBeUndefined();
+    expect(res.pending_years).toEqual([2026]);
+  });
+
   it('a capped result can never be zero, and a full scan is never capped', async () => {
     const svc = new EdsrFtsService();
     // Every year scanned, the last one pushing the total past the threshold: nothing was
@@ -712,6 +723,8 @@ describe('EdsrFtsService.countByParty', () => {
     expect(res.incomplete).toBe(true);
     expect(res.pending_years).toEqual([2025]);
     expect(res.capped).toBeUndefined();
+    // No cache wired: a repeat would start over, and the result says so.
+    expect(res.resumable).toBe(false);
   });
 
   it('stops starting legs when the wall-clock budget is spent', async () => {
@@ -744,6 +757,7 @@ describe('EdsrFtsService.countByParty', () => {
     const first = makeCountDb([{ n: 474, causes: causes(165) }, pgTimeout(), { n: 300, causes: causes(100, 'z') }]);
     const r1 = await svc.countByParty('Укрексімбанк', undefined, first, range);
     expect(r1.pending_years).toEqual([2025]);
+    expect(r1.resumable).toBe(true);
 
     const second = makeCountDb([{ n: 339, causes: causes(52, 'y') }]);
     const r2 = await svc.countByParty('Укрексімбанк', undefined, second, range);

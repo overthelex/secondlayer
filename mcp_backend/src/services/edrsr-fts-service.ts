@@ -279,6 +279,8 @@ export interface PartyCaseCount {
    */
   incomplete?: boolean;
   pending_years?: number[];
+  /** Present with `incomplete`: whether finished legs were cached, i.e. a repeat resumes. */
+  resumable?: boolean;
 }
 
 // Stop threshold for the countByParty FTS fallback (the path taken whenever the structured
@@ -1543,6 +1545,7 @@ export class EdsrFtsService {
     const courtCounts = new Map<number, number>();
     const samples: NonNullable<PartyCaseCount['sample']> = [];
     const pending: YearLeg[] = [];
+    let firstPending = -1;
     let counted = 0;
     let firstSkipped = -1;
     let cacheHits = 0;
@@ -1565,6 +1568,7 @@ export class EdsrFtsService {
         const remaining = PARTY_FTS_BUDGET_MS - (Date.now() - started);
         if (remaining < PARTY_LEG_MIN_MS) {
           pending.push(leg);
+          if (firstPending < 0) firstPending = i;
           cum.push(before);
           continue; // older legs may still be served from the cache
         }
@@ -1590,6 +1594,7 @@ export class EdsrFtsService {
           if (err.code === '57014') {
             logger.warn('[EdsrFtsService] countByParty leg timed out', { party_name: partyName, leg, remaining_ms: remaining });
             pending.push(leg);
+            if (firstPending < 0) firstPending = i;
             cum.push(before);
             continue;
           }
@@ -1616,7 +1621,10 @@ export class EdsrFtsService {
       .map(([court_code, count]) => ({ court_code, count }))
       .sort((a, b) => b.count - a.count || a.court_code - b.court_code);
     const capped = firstSkipped > 0;
-    const countedFromYear = capped ? legs[firstSkipped - 1].minYear : null;
+    // "Exact from counted_from_year onward" holds only if every leg newer than the skipped
+    // ones finished; a pending leg among them would sit inside that range uncounted.
+    const countedFromYear = capped && (firstPending < 0 || firstPending > firstSkipped)
+      ? legs[firstSkipped - 1].minYear : null;
     const legYear = (leg: YearLeg) => (leg.minYear ?? leg.maxYear) as number;
 
     let sample: PartyCaseCount['sample'];
@@ -1638,7 +1646,7 @@ export class EdsrFtsService {
       by_court,
       ...(sample ? { sample } : {}),
       ...(capped ? { capped: true, candidate_cap: cap, ...(countedFromYear !== null ? { counted_from_year: countedFromYear } : {}) } : {}),
-      ...(pending.length ? { incomplete: true, pending_years: pending.map(legYear) } : {}),
+      ...(pending.length ? { incomplete: true, pending_years: pending.map(legYear), resumable: this.edsrCache !== null } : {}),
     };
   }
 
