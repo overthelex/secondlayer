@@ -113,12 +113,12 @@ describe('comparePracticeProContra — LLM holding classification', () => {
 
   it('applies court_level=SC filter — non-99* candidates never reach classification', async () => {
     const tools = makeTools({
-      // 9921 and 9901 are Supreme Court (99*); 1370 is a first-instance court.
+      // 9921 and 9901 are Supreme Court (99*: КАС ВС and the generic 2017-18 «Верховний Суд» code); 1370 is a first-instance court.
       hits: [hit(101, 9921, 'frag A'), hit(102, 1370, 'frag B'), hit(103, 9901, 'frag C')],
       classifications: [
         { doc_id: 101, stance: 'supports', quote: 'ВС за', confidence: 0.9 },
         { doc_id: 102, stance: 'opposes', quote: 'перша інстанція проти', confidence: 0.8 },
-        { doc_id: 103, stance: 'opposes', quote: 'ВП проти', confidence: 0.8 },
+        { doc_id: 103, stance: 'opposes', quote: 'ВС проти', confidence: 0.8 },
       ],
     });
     const out = await run(tools, { procedure_code: 'cac', query: 'теза', court_level: 'SC' });

@@ -47,7 +47,7 @@ export class EdsrExtendedTools extends BaseToolHandler {
           properties: {
             court_code: {
               type: 'number',
-              description: 'Код суду (edrsr_courts.court_code). Приклади: 2605=Оболонський районний м.Києва, 1070=Київський окружний адмін, 9901=Верховний Суд',
+              description: 'Код суду (edrsr_courts.court_code). Приклади: 2605=Оболонський районний м.Києва, 1070=Київський окружний адмін, 9951=Велика Палата ВС, 9911/9921/9931/9941=КГС/КАС/КЦС/ККС ВС (9901=Верховний Суд, лише рішення 2017–2018)',
             },
             fts_query: {
               type: 'string',

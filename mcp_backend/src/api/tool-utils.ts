@@ -453,11 +453,26 @@ export function mapProcedureCodeToJusticeKind(code: string | null): number | nul
 }
 
 /**
+ * EDRSR court_code of «Велика Палата Верховного Суду» (edrsr_courts; LEXAI-2172).
+ * NOT 9901: 9901 is the generic «Верховний Суд» code, used only for ~16.5K decisions
+ * dated 2017-01..2018-01 (the transition period), never for the Grand Chamber.
+ */
+export const GRAND_CHAMBER_COURT_CODE = 9951;
+
+/** court_level → single court_code it pins (GrandChamber → 9951), else undefined. */
+export function courtLevelCourtCode(courtLevel?: string | null): number | undefined {
+  return courtLevel === 'GrandChamber' ? GRAND_CHAMBER_COURT_CODE : undefined;
+}
+
+/**
  * Build where-filter conditions for court instance filtering.
  * instance_code: 1=cassation (ВС), 2=appellate, 3=first instance
  */
 export function buildSupremeCourtWhereFilter(courtLevel: string): any[] {
-  if (courtLevel === 'SC' || courtLevel === 'GrandChamber') {
+  if (courtLevel === 'GrandChamber') {
+    return [{ field: 'court_code', operator: '=', value: GRAND_CHAMBER_COURT_CODE }];
+  }
+  if (courtLevel === 'SC') {
     return [{ field: 'instance_code', operator: '=', value: 1 }];
   }
   if (courtLevel === 'AC') {

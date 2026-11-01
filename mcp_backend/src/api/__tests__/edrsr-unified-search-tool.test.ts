@@ -748,20 +748,81 @@ describe('EdsrUnifiedSearchTool', () => {
       expect(filters.instance_code).toBe(1);
     });
 
-    it('maps court_level=GrandChamber to instance_code=1 in structured WHERE', async () => {
+    // LEXAI-2172: GrandChamber used to map to instance_code=1 only (= the whole cassation
+    // instance, same 1266 hits as SC). Велика Палата ВС is court_code 9951 in edrsr_courts;
+    // 9901 is the generic «Верховний Суд» code of 2017-2018 decisions.
+    it('maps court_level=GrandChamber to court_code=9951 in structured WHERE (not instance_code)', async () => {
       db = makeDb((sql) => {
         if (sql.includes('COUNT(*)')) return { rows: [{ total: 0 }] };
         return { rows: [] };
       });
       tool = new EdsrUnifiedSearchTool(db);
 
-      await tool.executeTool('search_court_decisions', {
-        mode: 'structured', cause_num: '910/1/23', court_level: 'GrandChamber',
+      const result = await tool.executeTool('search_court_decisions', {
+        mode: 'structured', court_level: 'GrandChamber', date_from: '2026-10-01', judgment_code: 2,
       });
 
-      const instanceCall = calls.find(c => c.sql.includes('c.instance_code'));
-      expect(instanceCall).toBeTruthy();
-      expect(instanceCall!.params).toContain(1);
+      const courtCall = calls.find(c => c.sql.includes('d.court_code ='));
+      expect(courtCall).toBeTruthy();
+      expect(courtCall!.params).toContain(9951);
+      expect(courtCall!.params).not.toContain(9901);
+      expect(calls.some(c => c.sql.includes('c.instance_code'))).toBe(false);
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+      expect(parsed.query.court_code).toBe(9951);
+      expect(parsed.query.instance_code).toBeUndefined();
+    });
+
+    it('maps court_level=GrandChamber to court_code=9951 in fulltext FTS filters', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+
+      await tool.executeTool('search_court_decisions', {
+        mode: 'fulltext', query: 'податок нерухомість', court_level: 'GrandChamber',
+      });
+
+      const filters = mockFtsService.searchFulltext.mock.calls[0][2];
+      expect(filters.court_code).toBe(9951);
+      expect(filters.instance_code).toBeUndefined();
+    });
+
+    it('pushes court_level=GrandChamber onto the Qdrant leg as court_code=9951 (semantic)', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      mockVectorizer.semanticSearch = jest.fn(() => Promise.resolve([]));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+
+      await tool.executeTool('search_court_decisions', {
+        mode: 'semantic', query: 'тест', court_level: 'GrandChamber',
+      });
+
+      const vf = (mockVectorizer.semanticSearch as jest.Mock).mock.calls[0][1] as any;
+      expect(vf.court_code).toBe(9951);
+      expect(vf.court_codes).toBeUndefined();
+    });
+
+    it('pushes court_level=GrandChamber onto both hybrid legs as court_code=9951', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      mockVectorizer.semanticSearch = jest.fn(() => Promise.resolve([]));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService, mockVectorizer);
+
+      await tool.executeTool('search_court_decisions', {
+        mode: 'hybrid', query: 'тест', court_level: 'GrandChamber',
+      });
+
+      expect(mockFtsService.searchFulltext.mock.calls[0][2].court_code).toBe(9951);
+      expect(((mockVectorizer.semanticSearch as jest.Mock).mock.calls[0][1] as any).court_code).toBe(9951);
+    });
+
+    it('explicit court_code wins over court_level=GrandChamber (falls back to instance_code=1)', async () => {
+      db = makeDb(() => ({ rows: [] }));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+
+      await tool.executeTool('search_court_decisions', {
+        mode: 'fulltext', query: 'тест', court_level: 'GrandChamber', court_code: 9911,
+      });
+
+      const filters = mockFtsService.searchFulltext.mock.calls[0][2];
+      expect(filters.court_code).toBe(9911);
+      expect(filters.instance_code).toBe(1);
     });
 
     it('explicit instance_code wins over court_level', async () => {

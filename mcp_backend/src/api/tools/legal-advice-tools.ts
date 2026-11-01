@@ -22,7 +22,7 @@ import { SectionType } from '../../types/index.js';
 import { logger } from '../../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../../utils/html-parser.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate } from '../tool-utils.js';
+import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate, GRAND_CHAMBER_COURT_CODE } from '../tool-utils.js';
 
 /** Max cases to enrich with precedent status per search (cost/latency guard) */
 const MAX_SHEPARDIZATION_BATCH = 15;
@@ -93,6 +93,7 @@ export class LegalAdviceTools extends BaseToolHandler {
       if (jk !== null) f.justice_kind = jk;
     }
     if (courtLevel && courtLevel !== 'all') f.instance_code = 1; // Supreme Court = cassation
+    if (courtLevel === 'GrandChamber') f.court_code = GRAND_CHAMBER_COURT_CODE; // ВП ВС = 9951
     return f;
   }
 
@@ -135,7 +136,7 @@ export class LegalAdviceTools extends BaseToolHandler {
               type: 'string',
               enum: ['all', 'SC', 'GrandChamber'],
               default: 'all',
-              description: 'Фільтр за рівнем суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС)',
+              description: 'Фільтр за рівнем суду: all (всі), SC (Верховний Суд: КЦС/КГС/КАС/ККС), GrandChamber (Велика Палата ВС, код суду 9951)',
             },
             procedure_code: {
               type: 'string',
@@ -379,9 +380,16 @@ export class LegalAdviceTools extends BaseToolHandler {
       count_all: args.count_all || false,
     });
 
+    // court_level / procedure_code filters apply to every path, incl. count_all and the
+    // case-number shortcut (LEXAI-2172: GrandChamber → court_code 9951).
+    const levelFilters = this.buildEdsrFilters(
+      args.court_level ? String(args.court_level) : undefined,
+      args.procedure_code ? String(args.procedure_code) : undefined,
+    );
+
     if (args.count_all === true) {
       if (!this.ftsService || !this.db) throw new Error('FTS сервіс недоступний');
-      const countResult = await countAllResults(this.ftsService, this.db, query);
+      const countResult = await countAllResults(this.ftsService, this.db, query, levelFilters);
       return this.wrapResponse({
         query,
         count_all_mode: true,
@@ -425,7 +433,7 @@ export class LegalAdviceTools extends BaseToolHandler {
 
         const requestedDisplay = Math.min(50, Math.max(1, Number(args.limit || 10)));
         const ftsResp = await this.ftsService.searchFulltext(
-          smartQuery, this.db, {}, Math.max(requestedDisplay * 2, 20), 0,
+          smartQuery, this.db, levelFilters, Math.max(requestedDisplay * 2, 20), 0,
         );
         const similarCasesForDisplay = this.mapFtsResults(
           ftsResp.results.filter((r) => r.doc_id !== sourceCase.doc_id),
@@ -514,9 +522,9 @@ export class LegalAdviceTools extends BaseToolHandler {
     }
 
     let filtered = this.mapFtsResults(rows);
-    // Grand Chamber lives under a single court_code (9901).
+    // Grand Chamber lives under a single court_code (9951; also pushed into the FTS filter).
     if (courtLevel === 'GrandChamber') {
-      filtered = filtered.filter((d: any) => String(d?.court_code || '') === '9901');
+      filtered = filtered.filter((d: any) => String(d?.court_code || '') === String(GRAND_CHAMBER_COURT_CODE));
     }
     filtered = filtered.slice(0, limit);
 

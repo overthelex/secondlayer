@@ -35,6 +35,8 @@ import {
   mapProcedureCodeToJusticeKind,
   safeParseJsonFromToolResult,
   formatCourtDate,
+  GRAND_CHAMBER_COURT_CODE,
+  courtLevelCourtCode,
 } from '../tool-utils.js';
 
 /**
@@ -144,7 +146,8 @@ function parseClassifications(content: string | undefined | null): any[] {
 
 /**
  * True when a court_code belongs to the requested instance level. Supreme Court cassation
- * courts are numbered 99*, the Grand Chamber is 9901. No filter → always true.
+ * courts are numbered 99*, the Grand Chamber is 9951 (9901 is the generic «Верховний Суд»
+ * code of 2017-01..2018-01 decisions, not the Grand Chamber; LEXAI-2172). No filter → true.
  */
 /**
  * Sentences every decision ends with: how, where and by when it can be appealed, when it takes
@@ -224,7 +227,7 @@ function isCourtLevelMatch(courtCode: any, filter?: 'SC' | 'GrandChamber'): bool
   if (!filter) return true;
   const code = String(courtCode ?? '');
   if (!code.startsWith('99')) return false;
-  return filter === 'GrandChamber' ? code === '9901' : true;
+  return filter === 'GrandChamber' ? code === String(GRAND_CHAMBER_COURT_CODE) : true;
 }
 
 // Per-step soft budgets for the pro/contra holding-classification path. The registry caps
@@ -319,7 +322,7 @@ export class ProceduralTools extends BaseToolHandler {
             court_level: {
               type: 'string',
               enum: ['SC', 'GrandChamber'],
-              description: 'Обмежити практику інстанцією: SC — лише Верховний Суд (касаційні суди, код суду 99*), GrandChamber — лише Велика Палата ВС (9901). Використовуйте, коли потрібне саме цитування ВС. За замовчуванням — усі інстанції.',
+              description: 'Обмежити практику інстанцією: SC — лише Верховний Суд (касаційні суди, код суду 99*), GrandChamber — лише Велика Палата ВС (код суду 9951). Використовуйте, коли потрібне саме цитування ВС. За замовчуванням — усі інстанції.',
             },
             time_range: {
               oneOf: [
@@ -350,7 +353,7 @@ export class ProceduralTools extends BaseToolHandler {
             court_level: {
               type: 'string',
               enum: ['SC', 'GrandChamber'],
-              description: 'Обмежити пошук інстанцією: SC — лише Верховний Суд (касаційні суди, код суду 99*), GrandChamber — лише Велика Палата ВС (9901). Використовуйте, коли питання саме про позицію Верховного Суду. За замовчуванням — усі інстанції.',
+              description: 'Обмежити пошук інстанцією: SC — лише Верховний Суд (касаційні суди, код суду 99*), GrandChamber — лише Велика Палата ВС (код суду 9951). Використовуйте, коли питання саме про позицію Верховного Суду. За замовчуванням — усі інстанції.',
             },
             time_range: {
               oneOf: [
@@ -558,13 +561,16 @@ export class ProceduralTools extends BaseToolHandler {
     }
     // Supreme Court / Grand Chamber == cassation instance in the EDRSR court table.
     if (courtLevel === 'SC' || courtLevel === 'GrandChamber') filters.instance_code = 1;
+    // Grand Chamber: pin its court_code (9951) in the query itself, not only post-filter.
+    const gcCode = courtLevelCourtCode(courtLevel);
+    if (gcCode) filters.court_code = gcCode;
 
     const ftsResp = await this.ftsService.searchFulltext(query, this.db, filters, Math.max(limit, 20), 0);
 
-    // Grand Chamber lives under a single court_code (9901); narrow when explicitly requested.
+    // Grand Chamber lives under a single court_code (9951); keep the post-filter as a guard.
     let rows = ftsResp.results;
     if (courtLevel === 'GrandChamber') {
-      rows = rows.filter((r) => String(r.court_code || '') === '9901');
+      rows = rows.filter((r) => String(r.court_code || '') === String(GRAND_CHAMBER_COURT_CODE));
     }
 
     const results = rows.slice(0, limit).map((r) => ({
@@ -713,18 +719,25 @@ export class ProceduralTools extends BaseToolHandler {
     const ftsSearch = async (suffix: string) => {
       if (!this.ftsService || !this.db) return { results: [], instanceLabel: '' };
 
+      // Honour court_level here too: SC/GrandChamber → cassation only, GrandChamber also
+      // pinned to court_code 9951 (LEXAI-2172).
+      const fallbackGcCode = courtLevelCourtCode(courtLevelFilter);
       const baseFilters: EdsrFtsFilters = {
         ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
         ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
         ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+        ...(fallbackGcCode ? { court_code: fallbackGcCode } : {}),
       };
 
       const bareQuery = trimFtsQuery(query, 3);
-      for (const inst of [
-        { code: 1, label: 'Верховний Суд' },
-        { code: 2, label: 'апеляційні суди' },
-        { code: 3, label: 'суди першої інстанції' },
-      ] as const) {
+      const fallbackInstances: ReadonlyArray<{ code: number; label: string }> = courtLevelFilter
+        ? [{ code: 1, label: courtLevelFilter === 'GrandChamber' ? 'Велика Палата ВС' : 'Верховний Суд' }]
+        : [
+            { code: 1, label: 'Верховний Суд' },
+            { code: 2, label: 'апеляційні суди' },
+            { code: 3, label: 'суди першої інстанції' },
+          ];
+      for (const inst of fallbackInstances) {
         const resp = await this.ftsService.searchFulltext(
           `${bareQuery} ${suffix}`, this.db,
           { ...baseFilters, instance_code: inst.code }, limit,
@@ -865,10 +878,14 @@ export class ProceduralTools extends BaseToolHandler {
     const seedReserve = canSeed ? Math.min(8, Math.floor(maxN / 3)) : 0;
     const noTimeRange = !timeRangeParsed.date_from && !timeRangeParsed.date_to;
     const defaultFrom = noTimeRange ? currentCodeDateFrom(justiceKind) : undefined;
+    // GrandChamber is a single court (9951): push it into every leg's query instead of
+    // post-filtering a cassation-wide pool where ВП decisions are a small minority (LEXAI-2172).
+    const gcCourtCode = courtLevelCourtCode(courtLevelFilter);
     const ftsFilters: EdsrFtsFilters = {
       ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
       ...(timeRangeParsed.date_from || defaultFrom ? { date_from: timeRangeParsed.date_from || defaultFrom } : {}),
       ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+      ...(gcCourtCode ? { court_code: gcCourtCode } : {}),
     };
     const ftsCandidates = async (instanceCode: number, n: number): Promise<Candidate[]> => {
       const resp = await this.ftsService!.searchFulltext(
@@ -900,6 +917,7 @@ export class ProceduralTools extends BaseToolHandler {
           ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
           ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
           ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+          ...(gcCourtCode ? { court_code: gcCourtCode } : {}),
         };
         const overfetch = courtLevelFilter ? Math.max(maxN * 8, 200) : maxN * 3;
         const hits = await this.edsrVectorizer.semanticSearch(query, semFilters, overfetch);
@@ -1176,12 +1194,13 @@ export class ProceduralTools extends BaseToolHandler {
     if (!factsText) throw new Error('facts_text parameter is required');
 
     // Optional instance filter: SC = Supreme Court (cassation courts, court_code 99*),
-    // GrandChamber = Велика Палата (9901). Lets the orchestrator answer "what does the
+    // GrandChamber = Велика Палата (court_code 9951, pushed into the Qdrant/FTS filters). Lets the orchestrator answer "what does the
     // Supreme Court say" instead of being crowded out by long first-instance texts that
     // dominate pure cosine ranking.
     const courtLevelFilter: 'SC' | 'GrandChamber' | undefined =
       args.court_level === 'SC' || args.court_level === 'GrandChamber' ? args.court_level : undefined;
     const matchesCourtLevel = (courtCode: any): boolean => isCourtLevelMatch(courtCode, courtLevelFilter);
+    const gcCourtCode = courtLevelCourtCode(courtLevelFilter);
 
     const timeRangeParsed = parseTimeRangeToDates(args.time_range);
     const justiceKind = mapProcedureCodeToJusticeKind(procedureCode);
@@ -1210,6 +1229,8 @@ export class ProceduralTools extends BaseToolHandler {
         ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
         ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
         ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+        // GrandChamber → court_code 9951 on the Qdrant court_code payload index (LEXAI-2172).
+        ...(gcCourtCode ? { court_code: gcCourtCode } : {}),
       };
       // Over-fetch chunks, then dedupe to distinct cases (a case may match on
       // several chunks; we want the top distinct decisions). When restricting to a
@@ -1272,12 +1293,13 @@ export class ProceduralTools extends BaseToolHandler {
         ...(justiceKind !== null ? { justice_kind: justiceKind } : {}),
         ...(timeRangeParsed.date_from ? { date_from: timeRangeParsed.date_from } : {}),
         ...(timeRangeParsed.date_to ? { date_to: timeRangeParsed.date_to } : {}),
+        ...(gcCourtCode ? { court_code: gcCourtCode } : {}),
       };
 
       // When the caller asked for Supreme Court only, restrict the FTS fallback to
       // instance_code=1 (Верховний Суд) rather than walking down to first instance.
       const instances = courtLevelFilter
-        ? ([{ code: 1, label: 'Верховний Суд' }] as const)
+        ? ([{ code: 1, label: courtLevelFilter === 'GrandChamber' ? 'Велика Палата ВС' : 'Верховний Суд' }] as const)
         : ([
             { code: 1, label: 'Верховний Суд' },
             { code: 2, label: 'апеляційні суди' },
