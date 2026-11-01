@@ -406,21 +406,45 @@ describe('partyNameTokenCount', () => {
   });
 });
 
-/** A db whose single FTS statement answers with the given row. */
-const makeCountDb = (row: any) => {
+/** One year leg's answer, as the per-leg statement returns it (LEXAI-2177). */
+type LegRow = { n: number; causes?: string[]; by_court?: Array<{ court_code: number; count: number }>; sample?: any[] };
+const LEG_MARK = 'WITH l AS MATERIALIZED';
+
+/**
+ * A db whose year-leg statements answer, in call order (newest year first), with `legs`;
+ * legs beyond the list count 0. An entry may be an Error to reject that leg with.
+ */
+const makeCountDb = (legs: Array<LegRow | Error>) => {
+  let k = 0;
   const db = {
     calls: [] as { sql: string; params: any[] }[],
     query: jest.fn((sql: string, params: any[]) => {
       db.calls.push({ sql, params });
-      return Promise.resolve({ rows: sql.includes('cand AS MATERIALIZED') ? [row] : [] });
+      if (!sql.includes(LEG_MARK)) return Promise.resolve({ rows: [] });
+      const leg = legs[k++] ?? { n: 0 };
+      if (leg instanceof Error) return Promise.reject(leg);
+      return Promise.resolve({ rows: [{ causes: [], by_court: [], ...leg }] });
     }),
   };
   return db;
 };
+const legCalls = (db: { calls: { sql: string; params: any[] }[] }) => db.calls.filter((x) => x.sql.includes(LEG_MARK));
 const ftsCall = (db: { calls: { sql: string; params: any[] }[] }) => {
-  const c = db.calls.find((x) => x.sql.includes('cand AS MATERIALIZED'));
-  if (!c) throw new Error('no candidate-CTE query was issued');
+  const c = legCalls(db)[0];
+  if (!c) throw new Error('no year-leg query was issued');
   return c;
+};
+const pgTimeout = () => Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' });
+const causes = (n: number, prefix = 'c') => Array.from({ length: n }, (_, i) => `${prefix}${i}`);
+
+/** In-memory stand-in for EdsrCacheService's generic JSON methods. */
+const makeLegCache = () => {
+  const store = new Map<string, any>();
+  return {
+    store,
+    getCachedJson: jest.fn((ns: string, key: string) => Promise.resolve(store.has(`${ns}|${key}`) ? JSON.parse(store.get(`${ns}|${key}`)) : null)),
+    setCachedJson: jest.fn((ns: string, key: string, v: any, _ttl: number) => { store.set(`${ns}|${key}`, JSON.stringify(v)); return Promise.resolve(); }),
+  };
 };
 
 describe('EdsrFtsService.countByParty', () => {
@@ -435,27 +459,27 @@ describe('EdsrFtsService.countByParty', () => {
     // BaseDatabase: connect() pings and resolves to nothing; getPool() is the real pool.
     const wrapper = { query: jest.fn(), connect: jest.fn(() => Promise.resolve(undefined)), getPool: () => pool };
 
-    await svc.countByParty('Нова Пошта', 'defendant', wrapper);
+    await svc.countByParty('Нова Пошта', 'defendant', wrapper, { date_from: '2025-01-01' });
     expect(clientCalls.some((q) => /^SET LOCAL statement_timeout = \d+$/.test(q))).toBe(true);
     expect(wrapper.query).not.toHaveBeenCalled();
   });
 
-  it('runs the count under a statement_timeout and turns a timeout into advice', async () => {
+  it('runs each leg under a statement_timeout and turns a total timeout into advice', async () => {
     const svc = new EdsrFtsService();
     const clientCalls: string[] = [];
     const client = {
       query: jest.fn((sql: string) => {
         clientCalls.push(sql);
-        if (sql.includes('cand AS MATERIALIZED')) {
-          return Promise.reject(Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }));
-        }
+        if (sql.includes(LEG_MARK)) return Promise.reject(pgTimeout());
         return Promise.resolve({ rows: [] });
       }),
       release: jest.fn(),
     };
     const db = { query: jest.fn(), connect: jest.fn(() => Promise.resolve(client)) };
 
-    await expect(svc.countByParty('Нова Пошта', 'defendant', db)).rejects.toThrow(/Звузьте період/);
+    // date_from only: the parties-table fast path (both bounds) never asks the pool.
+    await expect(svc.countByParty('Нова Пошта', 'defendant', db, { date_from: '2025-01-01' }))
+      .rejects.toThrow(/Звузьте період/);
     expect(clientCalls[1]).toMatch(/^SET LOCAL statement_timeout = \d+$/);
     expect(Number(clientCalls[1].split('= ')[1])).toBeLessThan(60_000);
     expect(clientCalls).toContain('ROLLBACK');
@@ -463,14 +487,14 @@ describe('EdsrFtsService.countByParty', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
-  it('answers count, breakdown and sample from one statement', async () => {
+  it('answers count, breakdown and sample of a one-year period from one statement', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({
-      cum: [10],
-      distinct_cases: 8,
+    const db = makeCountDb([{
+      n: 10,
+      causes: causes(8),
       by_court: [{ court_code: 1690, count: 7 }, { court_code: 2605, count: 3 }],
       sample: [{ doc_id: '5', cause_num: '1/2', court_code: 1, justice_kind: 3, adjudication_date: '2025-03-30T21:00:00+00:00' }],
-    });
+    }]);
     const res = await svc.countByParty('Нова Пошта', 'defendant', db, { date_from: '2025-01-01', date_to: '2025-03-31' }, 50);
 
     const { sql, params } = ftsCall(db);
@@ -484,11 +508,12 @@ describe('EdsrFtsService.countByParty', () => {
     expect(res.sample).toHaveLength(1);
     expect(res.sample![0].doc_id).toBe(5);
     expect(res.capped).toBeUndefined();
+    expect(res.incomplete).toBeUndefined();
   });
 
   it('omits the sample unless asked', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [3], distinct_cases: 3, by_court: [{ court_code: 1, count: 3 }] });
+    const db = makeCountDb([{ n: 3, causes: causes(3), by_court: [{ court_code: 1, count: 3 }] }]);
     const res = await svc.countByParty('ЕВЕРЛІҐАЛ', undefined, db);
     expect(ftsCall(db).sql).not.toContain('AS sample');
     expect(res.sample).toBeUndefined();
@@ -496,14 +521,39 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('separates distinct cases from documents (ЕВЕРЛІҐАЛ read 684 "справ" against 591 real)', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [684], distinct_cases: 591, by_court: [{ court_code: 4824, count: 400 }, { court_code: 1003, count: 284 }] });
+    const db = makeCountDb([{ n: 684, causes: causes(591), by_court: [{ court_code: 4824, count: 400 }, { court_code: 1003, count: 284 }] }]);
     const res = await svc.countByParty('ЕВЕРЛІҐАЛ', undefined, db, { date_from: '2025-01-01', date_to: '2025-12-31' });
 
     expect(res.total).toBe(684);
-    // cases: the global count(DISTINCT cause_num), never the sum of a per-court breakdown —
-    // a case appears once per instance it passed through
+    // cases: distinct cause_num over the whole candidate set, never the sum of a per-court
+    // breakdown — a case appears once per instance it passed through
     expect(res.distinct_cases).toBe(591);
-    expect(ftsCall(db).sql).toContain('count(DISTINCT cause_num) FROM cand');
+    expect(ftsCall(db).sql).toContain('array_agg(DISTINCT cause_num) FROM l WHERE cause_num IS NOT NULL');
+  });
+
+  it('merges legs: a case seen in two years is one case, court counts add up', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCountDb([
+      { n: 3, causes: ['a', 'b'], by_court: [{ court_code: 1, count: 2 }, { court_code: 2, count: 1 }] },
+      { n: 2, causes: ['b', 'c'], by_court: [{ court_code: 1, count: 2 }] },
+    ]);
+    const res = await svc.countByParty('X', undefined, db, { date_from: '2025-01-01', date_to: '2026-06-30' });
+    expect(legCalls(db)).toHaveLength(2);
+    expect(res.total).toBe(5);
+    expect(res.distinct_cases).toBe(3);
+    expect(res.by_court).toEqual([{ court_code: 1, count: 4 }, { court_code: 2, count: 1 }]);
+    expect(res.by_court.reduce((s, c) => s + c.count, 0)).toBe(res.total);
+  });
+
+  it('merges the per-leg samples newest first and keeps the requested size', async () => {
+    const svc = new EdsrFtsService();
+    const s = (doc_id: number, d: string) => ({ doc_id, cause_num: null, court_code: 1, justice_kind: 1, adjudication_date: d });
+    const db = makeCountDb([
+      { n: 2, sample: [s(3, '2026-02-01T00:00:00Z'), s(2, '2026-01-01T00:00:00Z')] },
+      { n: 2, sample: [s(1, '2025-12-01T00:00:00Z'), s(0, '2025-01-01T00:00:00Z')] },
+    ]);
+    const res = await svc.countByParty('X', undefined, db, { date_from: '2025-01-01', date_to: '2026-06-30' }, 3);
+    expect(res.sample!.map((x) => x.doc_id)).toEqual([3, 2, 1]);
   });
 
   /**
@@ -513,19 +563,18 @@ describe('EdsrFtsService.countByParty', () => {
    */
   it('applies the period inside the scan, before anything can stop it', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [50553], distinct_cases: 37015, by_court: [] });
+    const db = makeCountDb([{ n: 50553, causes: causes(10) }]);
     const res = await svc.countByParty('Приватбанк', undefined, db, { date_from: '2025-01-01', date_to: '2025-03-31' });
 
     const { sql, params } = ftsCall(db);
     // Only the requested year is scanned — no 2026 leg, no ±1 widening.
+    expect(legCalls(db)).toHaveLength(1);
     expect(sql).toContain('f.adj_year = 2025');
     expect(sql).not.toMatch(/adj_year [<>]=? 202[46]/);
-    expect(sql).not.toContain('l1 AS');
-    // The date filter sits inside the leg, and no LIMIT truncates a leg.
-    const leg = sql.slice(sql.indexOf('l0 AS MATERIALIZED'), sql.indexOf('c0 AS'));
-    expect(leg).toContain("d.adjudication_date >= ($2::date)::timestamp AT TIME ZONE 'Europe/Kyiv'");
-    expect(leg).toContain("d.adjudication_date < ($3::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'");
-    expect(leg).not.toMatch(/LIMIT/);
+    // The date filter sits inside the leg, and no LIMIT truncates it.
+    expect(sql).toContain("d.adjudication_date >= ($2::date)::timestamp AT TIME ZONE 'Europe/Kyiv'");
+    expect(sql).toContain("d.adjudication_date < ($3::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'");
+    expect(sql.slice(0, sql.indexOf('SELECT\n          (SELECT count(*)'))).not.toMatch(/LIMIT/);
     // Date bounds keep $2/$3; the any-role recheck (LEXAI-2124) appends split token + pattern.
     expect(params).toEqual(['Приватбанк', '2025-01-01', '2025-03-31', 'приватбанк', buildPartyAnyRoleRegex('Приватбанк')]);
     expect(res.total).toBe(50553);
@@ -534,7 +583,7 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('selects by the AND form and rechecks the phrase only after the date filter', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [3857], distinct_cases: 3019, by_court: [] });
+    const db = makeCountDb([{ n: 3857 }]);
     await svc.countByParty('Нова Пошта', undefined, db, { date_from: '2025-01-01', date_to: '2025-03-31' });
 
     const sql = ftsCall(db).sql;
@@ -546,7 +595,7 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('skips the phrase recheck for a one-word name', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [1], distinct_cases: 1, by_court: [] });
+    const db = makeCountDb([{ n: 1 }]);
     await svc.countByParty('ПРИВАТБАНК', undefined, db, { date_from: '2025-01-01', date_to: '2025-03-31' });
     const sql = ftsCall(db).sql;
     expect(sql).not.toContain('phraseto_tsquery');
@@ -555,7 +604,7 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('anchors a role-less count to a party slot, after the date filter (LEXAI-2124)', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [446, 1075], distinct_cases: 306, by_court: [] });
+    const db = makeCountDb([{ n: 446 }, { n: 629 }]);
     await svc.countByParty('Укрексімбанк', undefined, db, { date_from: '2025-01-01' });
     const { sql, params } = ftsCall(db);
     // full_text is carried out of the fenced scan and rechecked on the date-filtered rows only.
@@ -567,7 +616,7 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('keeps the claim-clause regex (not the any-role one) for an explicit role', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [1], distinct_cases: 1, by_court: [] });
+    const db = makeCountDb([{ n: 1 }]);
     await svc.countByParty('Укрексімбанк', 'plaintiff', db, { date_from: '2025-01-01' });
     const { sql, params } = ftsCall(db);
     expect(sql).not.toContain('string_to_array');
@@ -576,62 +625,64 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('runs the role regex after the date filter too', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [37], distinct_cases: 29, by_court: [] });
+    const db = makeCountDb([{ n: 37 }]);
     await svc.countByParty('Нова Пошта', 'defendant', db, { date_from: '2025-01-01', date_to: '2025-03-31' });
     const { sql, params } = ftsCall(db);
     expect(sql).toMatch(/WHERE j\.tsv @@ phraseto_tsquery\('simple', \$1\) AND j\.full_text ~\* \$2/);
     expect(findRegexParam(params)).toBeDefined();
   });
 
-  it('keeps the plan-shape guards: materialized legs, fenced scan, per-leg partition bounds', async () => {
+  it('keeps the plan-shape guards: materialized leg, fenced scan, per-leg partition bounds, newest first', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [], distinct_cases: 0, by_court: [] });
+    const db = makeCountDb([]);
     await svc.countByParty('ЕВЕРЛІҐАЛ', undefined, db, {}, 10);
-    const sql = ftsCall(db).sql;
+    const calls = legCalls(db);
+    const sql = calls[0].sql;
     // Unfenced, the GIN misestimate hash-joins a seq scan of all 136M edrsr_documents rows.
-    expect(sql).toContain('l0 AS MATERIALIZED');
-    expect(sql).toContain('cand AS MATERIALIZED');
+    expect(sql).toContain(LEG_MARK);
     expect(sql).toMatch(/OFFSET 0\s+\) m\s+JOIN edrsr_documents d ON d\.doc_id = m\.doc_id/);
-    // Every leg bounds d.adjudication_date to its own year, which prunes edrsr_documents.
-    expect(sql).toContain("d.adjudication_date >= '2014-01-01'::timestamp AT TIME ZONE 'Europe/Kyiv' AND d.adjudication_date < '2015-01-01'::timestamp AT TIME ZONE 'Europe/Kyiv'");
-    // Older legs are gated on what the newer ones counted, so a full cap skips their scans.
-    expect(sql).toContain('(SELECT n FROM c0) < 25000');
-    expect(sql).toMatch(/c1 AS \(\s+SELECT \(SELECT n FROM c0\) \+ count\(\*\)::int AS n FROM l1/);
-    // Structural guard against a CTE following another without a comma.
-    expect(sql).not.toMatch(/\)\s*\n\s*[a-z_0-9]+ AS (MATERIALIZED )?\(/);
+    // One statement per year, newest first; each bounds d.adjudication_date to its own year.
+    const y = new Date().getFullYear();
+    expect(calls[0].sql).toContain(`f.adj_year >= ${y}`);
+    expect(calls[1].sql).toContain(`f.adj_year = ${y - 1}`);
+    expect(calls.some((c) => c.sql.includes("d.adjudication_date >= '2014-01-01'::timestamp AT TIME ZONE 'Europe/Kyiv' AND d.adjudication_date < '2015-01-01'::timestamp AT TIME ZONE 'Europe/Kyiv'"))).toBe(true);
+    expect(calls).toHaveLength(y - 2005 + 1);
   });
 
-  it('flags capped only when older years were skipped, and says from which year it is exact', async () => {
+  it('stops going back once the newer years counted the cap, and says from which year it is exact', async () => {
     const svc = new EdsrFtsService();
-    // 2026 alone counted 201,641 (measured): every older leg was skipped.
-    const db = makeCountDb({ cum: [201641, 201641, 201641], distinct_cases: 145330, by_court: [{ court_code: 232, count: 2023 }] });
-    const res = await svc.countByParty('ПРИВАТБАНК', undefined, db, { date_from: '2024-01-01' });
+    // 2026 alone counted 201,641 (measured): every older leg is skipped — never queried.
+    const db = makeCountDb([{ n: 201641, causes: causes(10) }]);
+    const res = await svc.countByParty('ПРИВАТБАНК', undefined, db, { date_from: '2024-01-01', date_to: '2026-12-31' });
 
+    expect(legCalls(db)).toHaveLength(1);
     expect(res.total).toBe(201641);
     expect(res.capped).toBe(true);
     expect(res.candidate_cap).toBe(25000);
     expect(res.counted_from_year).toBe(2026);
+    expect(res.incomplete).toBeUndefined();
   });
 
   it('a capped result can never be zero, and a full scan is never capped', async () => {
     const svc = new EdsrFtsService();
     // Every year scanned, the last one pushing the total past the threshold: nothing was
     // skipped, so the count is exact however large it is.
-    const full = makeCountDb({ cum: [10000, 20000, 30000], distinct_cases: 1, by_court: [] });
+    const full = makeCountDb([{ n: 10000 }, { n: 10000 }, { n: 10000 }]);
     const res = await svc.countByParty('X', undefined, full, { date_from: '2024-01-01', date_to: '2026-12-31' });
     expect(res.total).toBe(30000);
     expect(res.capped).toBeUndefined();
 
     // An empty answer is exact zero.
-    const empty = makeCountDb({ cum: [0, 0, 0], distinct_cases: 0, by_court: [] });
+    const empty = makeCountDb([]);
     const res0 = await svc.countByParty('X', undefined, empty, { date_from: '2024-01-01', date_to: '2026-12-31' });
     expect(res0.total).toBe(0);
     expect(res0.capped).toBeUndefined();
+    expect(res0.incomplete).toBeUndefined();
   });
 
   it('answers an inverted range without touching the database', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({});
+    const db = makeCountDb([]);
     const res = await svc.countByParty('ПРИВАТБАНК', undefined, db, { date_from: '2025-01-01', date_to: '2024-12-31' }, 5);
     expect(res).toEqual({ total: 0, distinct_cases: 0, by_court: [], sample: [] });
     expect(db.calls.some((c) => c.sql.includes('edrsr_fulltext'))).toBe(false);
@@ -639,12 +690,86 @@ describe('EdsrFtsService.countByParty', () => {
 
   it('applies justice_kind inside each leg', async () => {
     const svc = new EdsrFtsService();
-    const db = makeCountDb({ cum: [1], distinct_cases: 1, by_court: [] });
+    const db = makeCountDb([{ n: 1 }]);
     await svc.countByParty('ПРИВАТБАНК', undefined, db, { date_from: '2025-01-01', date_to: '2025-12-31', justice_kind: 3 });
     const { sql, params } = ftsCall(db);
-    const leg = sql.slice(sql.indexOf('l0 AS MATERIALIZED'), sql.indexOf('c0 AS'));
-    expect(leg).toContain('d.justice_kind = $4');
+    expect(sql).toContain('d.justice_kind = $4');
     expect(params[3]).toBe(3);
+  });
+
+  /**
+   * LEXAI-2177. Укрексімбанк 2024-01-01..2026-10-31 (and with no dates) timed out with nothing
+   * returned: all year legs shared one 50 s statement, and each year's ~7.8k bare mentions
+   * take 54.6 s cold to recheck. A leg that does not finish must not throw away the others.
+   */
+  it('keeps the years that finished when another one times out, and names the missing one', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCountDb([{ n: 474, causes: causes(165) }, pgTimeout(), { n: 300, causes: causes(100, 'z') }]);
+    const res = await svc.countByParty('Укрексімбанк', undefined, db, { date_from: '2024-01-01', date_to: '2026-10-31' });
+    expect(legCalls(db)).toHaveLength(3);
+    expect(res.total).toBe(774);
+    expect(res.distinct_cases).toBe(265);
+    expect(res.incomplete).toBe(true);
+    expect(res.pending_years).toEqual([2025]);
+    expect(res.capped).toBeUndefined();
+  });
+
+  it('stops starting legs when the wall-clock budget is spent', async () => {
+    const svc = new EdsrFtsService();
+    let clock = 1_000_000;
+    const now = jest.spyOn(Date, 'now').mockImplementation(() => clock);
+    try {
+      const db = makeCountDb([{ n: 1, causes: ['a'] }, { n: 1, causes: ['b'] }]);
+      const query = db.query;
+      db.query = jest.fn((sql: string, params: any[]) => {
+        if (sql.includes(LEG_MARK)) clock += 30_000;
+        return query(sql, params);
+      }) as any;
+      const res = await svc.countByParty('Укрексімбанк', undefined, db, { date_from: '2024-01-01', date_to: '2026-10-31' });
+      // 2026 starts with the full budget, 2025 with what is left; 2024 never starts.
+      expect(legCalls(db)).toHaveLength(2);
+      expect(res.total).toBe(2);
+      expect(res.pending_years).toEqual([2024]);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('resumes from cached years: a repeated call counts only what is still missing', async () => {
+    const svc = new EdsrFtsService();
+    const cache = makeLegCache();
+    svc.setEdsrCache(cache as any);
+    const range = { date_from: '2024-01-01', date_to: '2026-10-31' };
+
+    const first = makeCountDb([{ n: 474, causes: causes(165) }, pgTimeout(), { n: 300, causes: causes(100, 'z') }]);
+    const r1 = await svc.countByParty('Укрексімбанк', undefined, first, range);
+    expect(r1.pending_years).toEqual([2025]);
+
+    const second = makeCountDb([{ n: 339, causes: causes(52, 'y') }]);
+    const r2 = await svc.countByParty('Укрексімбанк', undefined, second, range);
+    expect(legCalls(second)).toHaveLength(1);
+    expect(legCalls(second)[0].sql).toContain('f.adj_year = 2025');
+    expect(r2.total).toBe(1113);
+    expect(r2.distinct_cases).toBe(317);
+    expect(r2.incomplete).toBeUndefined();
+
+    // A timed-out leg is never cached; finished closed years get the long TTL.
+    const ttls = cache.setCachedJson.mock.calls.map((c) => [JSON.parse(c[1] as string).leg, c[3]]);
+    const y = new Date().getFullYear();
+    for (const [leg, ttl] of ttls) expect(ttl).toBe((leg as number[])[1] < y ? 86_400 : 3_600);
+  });
+
+  it('reuses a cached year across periods that cover it whole', async () => {
+    const svc = new EdsrFtsService();
+    const cache = makeLegCache();
+    svc.setEdsrCache(cache as any);
+    await svc.countByParty('X', undefined, makeCountDb([{ n: 1 }, { n: 5 }]), { date_from: '2024-01-01', date_to: '2025-12-31' });
+    const db = makeCountDb([{ n: 9 }]);
+    const res = await svc.countByParty('X', undefined, db, { date_from: '2023-03-01', date_to: '2024-12-31' });
+    // 2024 is whole in both periods → cached; 2023 is new and starts mid-year → queried.
+    expect(legCalls(db)).toHaveLength(1);
+    expect(legCalls(db)[0].sql).toContain('f.adj_year = 2023');
+    expect(res.total).toBe(14);
   });
 });
 

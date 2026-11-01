@@ -271,6 +271,14 @@ export interface PartyCaseCount {
   candidate_cap?: number;
   /** Oldest adj_year fully counted, present only alongside `capped`. */
   counted_from_year?: number;
+  /**
+   * LEXAI-2177: true when some year legs did not finish inside the time budget. Every count
+   * is then exact for the years counted and a floor for the period; `pending_years` lists the
+   * legs left out (a leg is labelled by its lowest year, so 2005 = "2005 and earlier" when
+   * the period is open downward). Finished legs are cached, so repeating the call resumes.
+   */
+  incomplete?: boolean;
+  pending_years?: number[];
 }
 
 // Stop threshold for the countByParty FTS fallback (the path taken whenever the structured
@@ -402,9 +410,24 @@ export function yearLegDocPredicate(leg: YearLeg, alias = 'd'): string[] {
 // role filter re-checks full_text with a regex, which is the expensive part.
 const PARTY_COUNT_TIMEOUT_MS = 40_000;
 const PARTY_SAMPLE_TIMEOUT_MS = 15_000;
-// The FTS fallback answers count, breakdown and sample in ONE statement, so it gets the
-// whole budget the fast path splits between its count and sample statements.
-const PARTY_FTS_COUNT_TIMEOUT_MS = 50_000;
+// The FTS fallback runs one statement per adj_year leg (LEXAI-2177) under this shared
+// wall-clock budget; each leg's statement_timeout is whatever is left of it. Kept under the
+// 60 s tool timeout with room for the court-name lookup.
+const PARTY_FTS_BUDGET_MS = 45_000;
+// A leg is not started with less than this left: it would only warm the cache and time out.
+const PARTY_LEG_MIN_MS = 2_000;
+// Per-leg result cache. A past year changes only by late publication; the current year
+// still receives decisions daily.
+const PARTY_LEG_CACHE_TTL_CLOSED_S = 86_400;
+const PARTY_LEG_CACHE_TTL_OPEN_S = 3_600;
+
+/** One counted adj_year leg of the countByParty FTS fallback, as cached. */
+interface PartyLegResult {
+  n: number;
+  causes: string[];
+  by_court: Array<{ court_code: number; count: number }>;
+  sample: NonNullable<PartyCaseCount['sample']>;
+}
 
 /**
  * Number of word tokens the 'simple' parser will see in a party name. Above one,
@@ -1377,6 +1400,11 @@ export class EdsrFtsService {
    * and justice_kind inside each leg, and counts every leg it runs in full. It stops going
    * back in time once PARTY_COUNT_CAND_CAP documents are counted; only then is `capped`
    * set, with `counted_from_year` saying which years the (exact) total covers.
+   *
+   * Each leg is its own statement under a shared PARTY_FTS_BUDGET_MS (LEXAI-2177); legs that
+   * do not fit are returned as `pending_years` with `incomplete`, finished legs are cached,
+   * so a repeated call resumes. Legs run sequentially on purpose: on the HDD-backed
+   * fulltext tablespace two concurrent cold years took >170 s each against ~80 s alone.
    */
   async countByParty(
     partyName: string,
@@ -1458,100 +1486,174 @@ export class EdsrFtsService {
 
     const cols = 'd.doc_id, d.court_code, d.cause_num, d.justice_kind, d.adjudication_date';
     const cap = PARTY_COUNT_CAND_CAP;
+    const safeSample = Math.min(Math.max(sampleLimit, 1), 1000);
+    const thisYear = new Date().getFullYear();
 
-    // One leg per year, newest first, each counted IN FULL — see PARTY_COUNT_CAND_CAP.
-    const ctes: string[] = [];
-    legs.forEach((leg, i) => {
-      const ftsYear = [yearLegPredicate(leg)];
-      const docYear = yearLegDocPredicate(leg);
-      // Gate: once the newer legs have counted `cap` documents, this one-time filter is false
-      // and Postgres never starts the leg's scan.
-      const gate = i === 0 ? [] : [`(SELECT n FROM c${i - 1}) < ${cap}`];
-      ctes.push(`
-        l${i} AS MATERIALIZED (
+    // LEXAI-2177: one STATEMENT per adj_year leg, newest first, under a shared wall-clock
+    // budget. The legs used to be CTEs of a single statement with one 50 s timeout, so a
+    // range whose legs could not all finish returned nothing: Укрексімбанк has ~7-8.6k bare
+    // name mentions a year (127k since 2006), each rechecked by reading its TOASTed full_text
+    // from the HDD-backed edrsr_fulltext tablespace — 54.6 s for 2026 alone cold, 5.0 s warm.
+    // Now every leg that finishes is kept (and cached), a leg that runs out of budget is
+    // reported as pending, and repeating the call resumes from the cached years.
+    const legSql = (leg: YearLeg) => `
+        WITH l AS MATERIALIZED (
           SELECT j.doc_id, j.court_code, j.cause_num, j.justice_kind, j.adjudication_date
           FROM (
             SELECT ${[cols, ...carryOut].join(', ')}
             FROM (
               SELECT ${['f.doc_id', ...carry].join(', ')}
               FROM edrsr_fulltext f
-              WHERE ${[`f.tsv @@ (${ginParts.join(' && ')})`, ...ftsYear, ...gate].join(' AND ')}
+              WHERE ${[`f.tsv @@ (${ginParts.join(' && ')})`, yearLegPredicate(leg)].join(' AND ')}
               OFFSET 0
             ) m
             JOIN edrsr_documents d ON d.doc_id = m.doc_id
-            WHERE ${[...docYear, ...docConditions].join(' AND ')}
+            WHERE ${[...yearLegDocPredicate(leg), ...docConditions].join(' AND ')}
             OFFSET 0
           ) j${recheck.length ? `
           WHERE ${recheck.join(' AND ')}` : ''}
-        ),
-        c${i} AS (
-          SELECT ${i === 0 ? '' : `(SELECT n FROM c${i - 1}) + `}count(*)::int AS n FROM l${i}
-        )`);
-    });
-    const last = legs.length - 1;
-
-    try {
-      const safeSample = Math.min(Math.max(sampleLimit, 1), 1000);
-      // One statement for count, breakdown and sample: the legs are the expensive part and
-      // there is no reason to pay for them twice.
-      const sql = `
-        WITH ${ctes.join(',')},
-        cand AS MATERIALIZED (
-          ${legs.map((_, i) => `SELECT * FROM l${i}`).join('\n          UNION ALL ')}
         )
         SELECT
-          ARRAY[${legs.map((_, i) => `(SELECT n FROM c${i})`).join(', ')}]::int[] AS cum,
-          (SELECT count(DISTINCT cause_num) FROM cand)::int AS distinct_cases,
+          (SELECT count(*) FROM l)::int AS n,
+          coalesce((SELECT array_agg(DISTINCT cause_num) FROM l WHERE cause_num IS NOT NULL), '{}'::text[]) AS causes,
           (SELECT coalesce(json_agg(json_build_object('court_code', court_code, 'count', n) ORDER BY n DESC), '[]'::json)
-             FROM (SELECT court_code, count(*)::int AS n FROM cand WHERE court_code IS NOT NULL GROUP BY court_code) b) AS by_court${sampleLimit > 0 ? `,
+             FROM (SELECT court_code, count(*)::int AS n FROM l WHERE court_code IS NOT NULL GROUP BY court_code) b) AS by_court${sampleLimit > 0 ? `,
           (SELECT coalesce(json_agg(s), '[]'::json) FROM (
-             SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM cand
+             SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM l
              ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
-      logger.debug('[EdsrFtsService] countByParty SQL', { sql, params });
-      const res = await this.queryWithTimeout(dbPool, sql, params, PARTY_FTS_COUNT_TIMEOUT_MS);
-      const row = res.rows[0] ?? {};
 
-      const cum: number[] = Array.isArray(row.cum) ? row.cum.map(Number) : [];
-      const total = cum.length ? cum[cum.length - 1] : 0;
-      const distinct_cases = Number(row.distinct_cases ?? 0);
-      const by_court = (Array.isArray(row.by_court) ? row.by_court : [])
-        .map((r: any) => ({ court_code: Number(r.court_code), count: Number(r.count) }));
-      // Leg i was skipped iff the legs before it had already counted `cap` documents. Only
-      // then is anything left uncounted, so only then is the total a floor — a party that
-      // simply has few matches is never flagged, and a flagged one always has total >= cap.
-      const firstSkipped = legs.findIndex((_, i) => i > 0 && cum[i - 1] >= cap);
-      const capped = firstSkipped > 0;
-      const countedFromYear = capped ? legs[firstSkipped - 1].minYear : null;
-
-      let sample: PartyCaseCount['sample'];
-      if (sampleLimit > 0) {
-        sample = (Array.isArray(row.sample) ? row.sample : []).map((r: any) => ({
-          doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
-          justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
-        }));
-      }
-
-      logger.info('[EdsrFtsService] countByParty', {
-        party_name: partyName, party_role: partyRole ?? 'any',
-        filters: Object.keys(filters).filter(k => (filters as any)[k] !== undefined),
-        total, distinct_cases, courts: by_court.length, legs: legs.length, cum, capped,
+    // Cache key: everything that changes a leg's answer. A date bound that does not cut into
+    // the leg's own years does not, so it is dropped — a whole year is then reused across
+    // periods (2024 of 2024-01-01..2025-12-31 is 2024 of 2023-03-01..2024-12-31).
+    const legCacheKey = (leg: YearLeg) => {
+      const day = (iso?: string) => (iso ? String(iso).slice(0, 10) : null);
+      const df = day(filters.date_from);
+      const dt = day(filters.date_to);
+      const from = df && (leg.minYear === null || df > `${leg.minYear}-01-01`) ? df : null;
+      const to = dt && (leg.maxYear === null || dt < `${leg.maxYear}-12-31`) ? dt : null;
+      return JSON.stringify({
+        v: 1, name: partyName, role: partyRole ?? 'any', jk: filters.justice_kind ?? null,
+        leg: [leg.minYear, leg.maxYear], from, to, s: sampleLimit > 0 ? safeSample : 0,
       });
+    };
 
-      return {
-        total,
-        distinct_cases,
-        by_court,
-        ...(sample ? { sample } : {}),
-        ...(capped ? { capped: true, candidate_cap: cap, ...(countedFromYear !== null ? { counted_from_year: countedFromYear } : {}) } : {}),
-      };
-    } catch (err: any) {
-      if (err.code === '57014') {
-        logger.warn('[EdsrFtsService] countByParty statement timeout', { party_name: partyName, party_role: partyRole ?? 'any' });
-        throw new Error('підрахунок не вклався в ліміт часу. Звузьте період (date_from/date_to) або приберіть фільтр ролі сторони і повторіть запит.');
+    const started = Date.now();
+    const cum: number[] = [];
+    const causes = new Set<string>();
+    const courtCounts = new Map<number, number>();
+    const samples: NonNullable<PartyCaseCount['sample']> = [];
+    const pending: YearLeg[] = [];
+    let counted = 0;
+    let firstSkipped = -1;
+    let cacheHits = 0;
+
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i];
+      const before = i === 0 ? 0 : cum[i - 1];
+      if (i > 0 && before >= cap) {
+        // Newer legs already counted `cap` documents: older years are not looked at.
+        if (firstSkipped < 0) firstSkipped = i;
+        cum.push(before);
+        continue;
       }
-      logger.error('[EdsrFtsService] countByParty failed', { error: err.message, party_name: partyName });
-      throw new Error(`Party count failed: ${err.message}`);
+
+      const key = legCacheKey(leg);
+      let legRes: PartyLegResult | null = await this.getCachedPartyLeg(key);
+      if (legRes) {
+        cacheHits++;
+      } else {
+        const remaining = PARTY_FTS_BUDGET_MS - (Date.now() - started);
+        if (remaining < PARTY_LEG_MIN_MS) {
+          pending.push(leg);
+          cum.push(before);
+          continue; // older legs may still be served from the cache
+        }
+        const sql = legSql(leg);
+        logger.debug('[EdsrFtsService] countByParty leg SQL', { leg, sql, params });
+        try {
+          const res = await this.queryWithTimeout(dbPool, sql, params, remaining);
+          const row = res.rows[0] ?? {};
+          legRes = {
+            n: Number(row.n ?? 0),
+            causes: Array.isArray(row.causes) ? row.causes.map(String) : [],
+            by_court: (Array.isArray(row.by_court) ? row.by_court : [])
+              .map((r: any) => ({ court_code: Number(r.court_code), count: Number(r.count) })),
+            sample: (Array.isArray(row.sample) ? row.sample : []).map((r: any) => ({
+              doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
+              justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
+            })),
+          };
+          // A finished year stays put; the current one still receives decisions.
+          const closed = leg.maxYear !== null && leg.maxYear < thisYear;
+          await this.setCachedPartyLeg(key, legRes, closed ? PARTY_LEG_CACHE_TTL_CLOSED_S : PARTY_LEG_CACHE_TTL_OPEN_S);
+        } catch (err: any) {
+          if (err.code === '57014') {
+            logger.warn('[EdsrFtsService] countByParty leg timed out', { party_name: partyName, leg, remaining_ms: remaining });
+            pending.push(leg);
+            cum.push(before);
+            continue;
+          }
+          logger.error('[EdsrFtsService] countByParty failed', { error: err.message, party_name: partyName, leg });
+          throw new Error(`Party count failed: ${err.message}`);
+        }
+      }
+
+      counted++;
+      cum.push(before + legRes.n);
+      for (const c of legRes.causes) causes.add(c);
+      for (const b of legRes.by_court) courtCounts.set(b.court_code, (courtCounts.get(b.court_code) ?? 0) + b.count);
+      if (sampleLimit > 0) samples.push(...legRes.sample);
     }
+
+    if (counted === 0 && pending.length > 0) {
+      logger.warn('[EdsrFtsService] countByParty statement timeout', { party_name: partyName, party_role: partyRole ?? 'any' });
+      throw new Error('підрахунок не вклався в ліміт часу. Звузьте період (date_from/date_to) або приберіть фільтр ролі сторони і повторіть запит.');
+    }
+
+    const total = cum.length ? cum[cum.length - 1] : 0;
+    const distinct_cases = causes.size;
+    const by_court = [...courtCounts.entries()]
+      .map(([court_code, count]) => ({ court_code, count }))
+      .sort((a, b) => b.count - a.count || a.court_code - b.court_code);
+    const capped = firstSkipped > 0;
+    const countedFromYear = capped ? legs[firstSkipped - 1].minYear : null;
+    const legYear = (leg: YearLeg) => (leg.minYear ?? leg.maxYear) as number;
+
+    let sample: PartyCaseCount['sample'];
+    if (sampleLimit > 0) {
+      const t = (s: { adjudication_date: string | null }) => (s.adjudication_date ? Date.parse(s.adjudication_date) : -Infinity);
+      sample = samples.sort((a, b) => t(b) - t(a)).slice(0, safeSample);
+    }
+
+    logger.info('[EdsrFtsService] countByParty', {
+      party_name: partyName, party_role: partyRole ?? 'any',
+      filters: Object.keys(filters).filter(k => (filters as any)[k] !== undefined),
+      total, distinct_cases, courts: by_court.length, legs: legs.length, cum, capped,
+      cache_hits: cacheHits, pending: pending.map(legYear), ms: Date.now() - started,
+    });
+
+    return {
+      total,
+      distinct_cases,
+      by_court,
+      ...(sample ? { sample } : {}),
+      ...(capped ? { capped: true, candidate_cap: cap, ...(countedFromYear !== null ? { counted_from_year: countedFromYear } : {}) } : {}),
+      ...(pending.length ? { incomplete: true, pending_years: pending.map(legYear) } : {}),
+    };
+  }
+
+  /** Cached result of one countByParty year leg (LEXAI-2177); null on miss/error/no cache. */
+  private async getCachedPartyLeg(key: string): Promise<PartyLegResult | null> {
+    if (!this.edsrCache) return null;
+    const hit = await this.edsrCache.getCachedJson('party-leg', key);
+    return hit && typeof hit.n === 'number' && Array.isArray(hit.causes) ? (hit as PartyLegResult) : null;
+  }
+
+  private async setCachedPartyLeg(key: string, value: PartyLegResult, ttlSeconds: number): Promise<void> {
+    if (!this.edsrCache) return;
+    // A leg big enough to stop the scan carries a six-figure cause list — not worth a Redis value.
+    if (value.causes.length > PARTY_COUNT_CAND_CAP) return;
+    await this.edsrCache.setCachedJson('party-leg', key, value, ttlSeconds);
   }
 
   /**
