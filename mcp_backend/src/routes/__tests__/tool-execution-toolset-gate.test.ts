@@ -60,6 +60,7 @@ function makeApp() {
       getAllTools: async () => LOCAL_TOOLS,
       getToolCounts: () => ({ backend: LOCAL_TOOLS.length }),
       executeTool,
+      validateToolArgs: async () => null,
       handles: () => true,
     } as any,
     db: { query: jest.fn() },

@@ -18,6 +18,7 @@ const mockToolRegistry = {
   getLocalToolDefinitions: jest.fn((): any[] => []),
   getAllToolDefinitions: jest.fn((): Promise<any[]> => Promise.resolve([])),
   executeTool: jest.fn(),
+  validateToolArgs: jest.fn().mockResolvedValue(null),
 };
 
 const mockCostTracker = {

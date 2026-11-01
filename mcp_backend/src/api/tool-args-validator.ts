@@ -31,7 +31,7 @@ function isAlwaysAllowed(key: string): boolean {
 /**
  * Collect the argument names a JSON schema accepts. Returns null when the schema does
  * not constrain argument names (no schema, additionalProperties true or a schema,
- * patternProperties, or no properties at all) — such tools are never rejected.
+ * patternProperties, allOf, or no properties at all) — such tools are never rejected.
  */
 export function allowedArgNames(schema: any): Set<string> | null {
   if (!schema || typeof schema !== 'object') return null;
@@ -42,10 +42,14 @@ export function allowedArgNames(schema: any): Set<string> | null {
       return false;
     }
     if (s.patternProperties && Object.keys(s.patternProperties).length > 0) return false;
+    // allOf would need the intersection of its branches' (possibly open) property sets;
+    // rather than approximate it, don't constrain such schemas at all.
+    if (Array.isArray(s.allOf) && s.allOf.length > 0) return false;
     if (s.properties && typeof s.properties === 'object') {
       for (const k of Object.keys(s.properties)) names.add(k);
     }
-    for (const comb of ['anyOf', 'oneOf', 'allOf']) {
+    // anyOf/oneOf: an argument valid in any branch is accepted (union).
+    for (const comb of ['anyOf', 'oneOf']) {
       if (Array.isArray(s[comb])) {
         for (const sub of s[comb]) if (!visit(sub)) return false;
       }
@@ -69,7 +73,7 @@ function describeArgs(schema: any): string {
   const collect = (s: any) => {
     if (!s || typeof s !== 'object') return;
     if (s.properties) Object.assign(props, s.properties);
-    for (const comb of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(s[comb])) s[comb].forEach(collect);
+    for (const comb of ['anyOf', 'oneOf']) if (Array.isArray(s[comb])) s[comb].forEach(collect);
   };
   collect(schema);
   const required = new Set<string>(Array.isArray(schema?.required) ? schema.required : []);

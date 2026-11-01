@@ -262,6 +262,10 @@ export function createToolServices(
 
   logger.info('Core tool handlers registered with ToolRegistry');
 
+  // Fetch rada_*/openreyestr_* schemas in the background so the first proxied call's
+  // argument check (LEXAI-2164) does not wait for them. Failures are retried lazily.
+  toolRegistry.prewarmRemoteToolDefinitions();
+
   // Nextcloud integration
   const nextcloudService = new NextcloudService();
   toolRegistry.registerHandler(new NextcloudTools(nextcloudService));

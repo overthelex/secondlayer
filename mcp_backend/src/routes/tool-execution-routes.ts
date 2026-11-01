@@ -224,6 +224,69 @@ async function handleStreamingToolCall(
   }
 }
 
+/**
+ * LEXAI-2164: reject arguments a tool's inputSchema does not know, instead of letting the
+ * handler drop them silently and answer an unfiltered query as if it were the filtered one.
+ * Covers local and proxied (rada_*, openreyestr_*) tools. Mounted after auth and BEFORE
+ * usage limits and the balance check, so a rejected call is neither counted nor billed.
+ *
+ * Single and streaming calls: HTTP 400 { success:false, error:'Invalid arguments', message }.
+ * Batch: every call is validated up front; if any is invalid, none runs and the response is
+ * HTTP 400 { success:false, error:'Invalid arguments', message, invalid:[{ index, name, message }] }.
+ * Tools outside the deployment toolset are skipped here (the handler answers 404 for them),
+ * so this never describes a hidden tool's parameters.
+ */
+export function createToolArgsValidationMiddleware(toolRegistry: Pick<ToolRegistry, 'validateToolArgs'>) {
+  return async (req: Request, res: Response, next: (err?: any) => void): Promise<void> => {
+    try {
+      const rawName = (req.params as any)?.toolName;
+      const toolName = Array.isArray(rawName) ? rawName[0] : rawName;
+      const body = req.body || {};
+
+      if (!toolName) {
+        // /batch
+        const calls = body.calls;
+        if (!Array.isArray(calls)) return next();
+        const invalid: Array<{ index: number; name: string; message: string }> = [];
+        for (let i = 0; i < calls.length; i++) {
+          const call = calls[i];
+          if (!call || typeof call.name !== 'string' || !isToolInToolset(call.name)) continue;
+          const rejection = await toolRegistry.validateToolArgs(call.name, call.arguments || {}, 'rest-batch');
+          if (rejection) invalid.push({ index: i, name: call.name, message: rejection.content[0].text });
+        }
+        if (invalid.length > 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Invalid arguments',
+            message: 'Пакет не виконано: деякі виклики містять невідомі параметри.',
+            invalid,
+          });
+          return;
+        }
+        return next();
+      }
+
+      if (!isToolInToolset(toolName)) return next();
+      const args = body.arguments || body;
+      const transport = req.path.endsWith('/stream') ? 'rest-stream' : 'rest';
+      const rejection = await toolRegistry.validateToolArgs(toolName, args, transport);
+      if (rejection) {
+        res.status(400).json({
+          success: false,
+          error: 'Invalid arguments',
+          message: rejection.content[0].text,
+        });
+        return;
+      }
+      next();
+    } catch (err: any) {
+      // The check must never take the endpoint down: fail open.
+      logger.warn('[ToolArgs] Argument validation failed, allowing call', { error: err?.message });
+      next();
+    }
+  };
+}
+
 export function createToolExecutionRoutes(deps: {
   toolRegistry: ToolRegistry;
   // Needed only by the Find Case Law licence gate; see services/uk-judgment-access.
@@ -252,6 +315,7 @@ export function createToolExecutionRoutes(deps: {
   // GET / — List available tools
   // Per-account call limits (mcp_usage_limits), the same as on the MCP transports.
   const usageLimits = mcpUsageLimitMiddleware(deps.db);
+  const validateArgs = createToolArgsValidationMiddleware(deps.toolRegistry);
 
   router.get('/', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
     try {
@@ -301,7 +365,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /batch — Batch tool calls (must be before /:toolName)
-  router.post('/batch', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.post('/batch', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { calls } = req.body;
 
@@ -323,11 +387,6 @@ export function createToolExecutionRoutes(deps: {
               error: 'Not available',
               message: `Tool '${call.name}' is not available on this deployment`,
             };
-          }
-          // LEXAI-2164: unknown arguments are rejected per call, as on the single-tool route.
-          const batchArgsRejection = await deps.toolRegistry.validateToolArgs(call.name, call.arguments || {}, 'rest-batch');
-          if (batchArgsRejection) {
-            return { name: call.name, error: 'Invalid arguments', message: batchArgsRejection.content[0].text };
           }
           // Same licence gate as the single-tool route: a batch must not be a way
           // around it.
@@ -417,7 +476,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName/stream — Dedicated SSE streaming endpoint
-  router.post('/:toolName/stream', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName/stream', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const streamRequestId = `stream-${uuidv4()}`;
     const streamStartTime = Date.now();
 
@@ -435,16 +494,6 @@ export function createToolExecutionRoutes(deps: {
         });
       }
       const args = req.body.arguments || req.body;
-
-      // LEXAI-2164: unknown arguments are rejected, as on the non-streaming route.
-      const streamArgsRejection = await deps.toolRegistry.validateToolArgs(toolName, args, 'rest-stream');
-      if (streamArgsRejection) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid arguments',
-          message: streamArgsRejection.content[0].text,
-        });
-      }
 
       // Find Case Law licence gate, as on the non-streaming route.
       const streamGated = gatedRegistryOf(toolName, args);
@@ -511,7 +560,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName — Execute MCP tool (with SSE support and cost tracking)
-  router.post('/:toolName', dualAuth as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const requestId = uuidv4();
     const startTime = Date.now();
 
@@ -534,18 +583,6 @@ export function createToolExecutionRoutes(deps: {
 
       const args = req.body.arguments || req.body;
       const acceptHeader = req.headers.accept || '';
-
-      // LEXAI-2164: reject arguments the tool's schema does not know. A handler would
-      // otherwise drop them silently and answer an unfiltered query as if it were the
-      // filtered one. Covers local and proxied (rada_*, openreyestr_*) tools.
-      const argsRejection = await deps.toolRegistry.validateToolArgs(toolName, args, 'rest');
-      if (argsRejection) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid arguments',
-          message: argsRejection.content[0].text,
-        });
-      }
 
       // Find Case Law licence gate. Question 13 of TNA ref CAS-349914-B9P5B8 says
       // the judgments are restricted to legal professionals and researchers, so

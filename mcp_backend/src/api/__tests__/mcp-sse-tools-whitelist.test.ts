@@ -41,6 +41,7 @@ describe('MCPSSEServer tools/list curated whitelist', () => {
     getLocalToolDefinitions: jest.fn().mockReturnValue(localToolDefs),
     getAllToolDefinitions: jest.fn().mockResolvedValue(localToolDefs),
     executeTool: jest.fn(),
+    validateToolArgs: jest.fn().mockResolvedValue(null),
   };
   const fakeCostTracker = {
     createTrackingRecord: jest.fn(),
