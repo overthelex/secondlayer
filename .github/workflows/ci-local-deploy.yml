@@ -518,15 +518,49 @@ jobs:
           COLORS=.active-colors-local
           INC=nginx/includes/local-upstreams.conf
 
-          # Активный цвет: файл — подсказка, docker — истина.
-          CUR=$(grep '^app=' "$COLORS" 2>/dev/null | cut -d= -f2 || echo blue)
-          if docker inspect secondlayer-app-local-green --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-            CUR=green
-          elif docker inspect secondlayer-app-local --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
-            CUR=blue
+          running() { docker inspect "$1" --format '{{.State.Running}}' 2>/dev/null | grep -q true; }
+          be_of() { [ "$1" = green ] && echo secondlayer-app-local-green || echo secondlayer-app-local; }
+          fe_of() { [ "$1" = green ] && echo lexwebapp-local-green || echo lexwebapp-local; }
+
+          # Активный цвет — тот, куда СЕЙЧАС смотрит nginx, а не «какой
+          # контейнер запущен». Раньше зелёный выигрывал, если просто был
+          # запущен: висяк от сорвавшейся выкатки зелёного делал его «активным»,
+          # деплой выкатывал синий через `docker rm -f` боевого синего, а при
+          # неудаче гасил и его (LEXAI-2188, ревью #2591).
+          # Порядок: файл апстримов (его читает nginx, каталог смонтирован) →
+          # маркер .active-colors-local → запущенный контейнер (синий первым).
+          # Цвет из файла/маркера берём, только если его контейнер запущен.
+          CUR=""
+          if [ -f "$INC" ]; then
+            UP_BE=$(sed -n 's/^[[:space:]]*server[[:space:]]\{1,\}\(secondlayer-app-local[a-z-]*\):3000.*/\1/p' "$INC" | head -1)
+            case "$UP_BE" in
+              secondlayer-app-local-green) running "$UP_BE" && CUR=green ;;
+              secondlayer-app-local)       running "$UP_BE" && CUR=blue ;;
+            esac
+          fi
+          if [ -z "$CUR" ]; then
+            MARK=$(grep '^app=' "$COLORS" 2>/dev/null | cut -d= -f2 || true)
+            case "$MARK" in
+              blue|green) running "$(be_of "$MARK")" && CUR=$MARK ;;
+            esac
+          fi
+          if [ -z "$CUR" ]; then
+            if running secondlayer-app-local; then CUR=blue
+            elif running secondlayer-app-local-green; then CUR=green
+            else CUR=blue; fi
+            echo "::warning::активный цвет не подтверждён ни файлом апстримов, ни маркером — беру $CUR"
           fi
           [ "$CUR" = "green" ] && NEW=blue || NEW=green
           echo "активен: $CUR, выкатываем: $NEW"
+
+          # Неактивный цвет к этому моменту должен быть остановлен. Если он
+          # запущен (висяк от сорвавшейся выкатки, ручной `up`), он держит
+          # алиас `app-local` и получает часть внутренних запросов — гасим
+          # сразу, а не только перед выкаткой нового цвета ниже.
+          if running "$(be_of "$NEW")" || running "$(fe_of "$NEW")"; then
+            echo "::warning::неактивный цвет $NEW запущен — останавливаю до выкатки"
+            docker stop "$(be_of "$NEW")" "$(fe_of "$NEW")" >/dev/null 2>&1 || true
+          fi
 
           # Апстримы приводим к ТЕКУЩЕМУ цвету до того, как что-либо коснётся
           # nginx. Файл не в git (см. .gitignore) именно потому, что раньше он
@@ -589,6 +623,22 @@ jobs:
           docker exec nginx-local nginx -t
           docker exec nginx-local nginx -s reload
 
+          # prometheus-local читает конфиг из смонтированного каталога, но сам
+          # его не перечитывает: просим явно (--web.enable-lifecycle). Если
+          # контейнер только что пересоздан, даём ему подняться. Мониторинг —
+          # не повод валить выкатку, поэтому warning, а не ошибка.
+          if docker inspect prometheus-local >/dev/null 2>&1; then
+            prom_ok=false
+            for i in 1 2 3 4 5 6; do
+              if docker exec prometheus-local wget -q -O /dev/null --post-data='' http://127.0.0.1:9090/-/reload 2>/dev/null; then
+                prom_ok=true; break
+              fi
+              sleep 5
+            done
+            if [ "$prom_ok" = "true" ]; then echo "prometheus перечитал конфиг"
+            else echo "::warning::prometheus-local не перечитал конфиг"; fi
+          fi
+
           # Новый цвет
           if [ "$NEW" = "green" ]; then
             # висяк от прошлой сорвавшейся выкатки не должен мешать
@@ -619,7 +669,15 @@ jobs:
             # (LEXAI-2188), и запущенный больной контейнер получал бы часть
             # внутренних запросов к http://app-local:3000. Логи остаются в
             # остановленном контейнере.
-            docker stop "$BE" "$FE" >/dev/null 2>&1 || true
+            stopped=false
+            for i in 1 2 3; do
+              docker stop "$BE" "$FE" >/dev/null 2>&1 || true
+              if ! running "$BE" && ! running "$FE"; then stopped=true; break; fi
+              sleep 5
+            done
+            if [ "$stopped" != "true" ]; then
+              echo "::error::не удалось остановить $NEW ($BE / $FE): он в алиасе app-local и получает внутренние запросы — остановите вручную"
+            fi
             exit 1
           fi
           echo "$NEW здоров"

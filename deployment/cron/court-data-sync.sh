@@ -46,11 +46,33 @@ log() {
 log "========================================"
 log "Court data sync started (monthly=$MONTHLY, dry_run=${DRY_RUN:-false})"
 
+# blue-green on the local stack (LEXAI-2188): the active colour is the one nginx
+# points at (deployment/nginx/includes/local-upstreams.conf, rewritten by the
+# deploy), then the .active-colors-local marker; a colour counts only if its
+# container is running. Last resort: whichever colour is running, blue first.
+active_local_backend() {
+  local dep up mark c
+  dep="$(cd "$(dirname "$0")/.." && pwd)"
+  is_running() { [ "$(docker inspect -f '{{.State.Running}}' "$1" 2>/dev/null)" = "true" ]; }
+  up=$(sed -n 's/^[[:space:]]*server[[:space:]]\{1,\}\(secondlayer-app-local[a-z-]*\):3000.*/\1/p' \
+         "$dep/nginx/includes/local-upstreams.conf" 2>/dev/null | head -1)
+  if [ -n "$up" ] && is_running "$up"; then echo "$up"; return; fi
+  mark=$(grep '^app=' "$dep/.active-colors-local" 2>/dev/null | cut -d= -f2)
+  case "$mark" in
+    green) c=secondlayer-app-local-green ;;
+    blue)  c=secondlayer-app-local ;;
+    *)     c="" ;;
+  esac
+  if [ -n "$c" ] && is_running "$c"; then echo "$c"; return; fi
+  for c in secondlayer-app-local secondlayer-app-local-green; do
+    if is_running "$c"; then echo "$c"; return; fi
+  done
+}
+
 # Determine container name
 if docker ps --format '{{.Names}}' | grep -q 'secondlayer-app-stage'; then
   CONTAINER="secondlayer-app-stage"
-elif ACTIVE=$(docker ps --format '{{.Names}}' | grep -xE 'secondlayer-app-local(-green)?' | head -1) && [ -n "$ACTIVE" ]; then
-  # blue-green: active colour is whichever of the two is running (LEXAI-2188)
+elif ACTIVE=$(active_local_backend) && [ -n "$ACTIVE" ]; then
   CONTAINER="$ACTIVE"
 else
   log "ERROR: No backend container running"
