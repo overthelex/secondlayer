@@ -905,10 +905,20 @@ export class ImportTaskService {
     });
   }
 
-  /** GET with redirects; resolves to the 200 response stream (caller consumes it). */
+  /**
+   * GET with redirects; resolves to the 200 response stream (caller consumes it).
+   * `idleTimeoutMs` bounds socket silence before the headers AND while the body streams.
+   */
   private httpGetStream(url: string, signal: AbortSignal, idleTimeoutMs: number, redirects = 0): Promise<IncomingMessage> {
     return new Promise((resolve, reject) => {
       if (redirects > 5) { reject(new Error('Too many redirects')); return; }
+      // Once the response is handed out, the caller reads `res`, not `req`: destroying only the
+      // request surfaces there as a bare «aborted» / ECONNRESET. Put the real reason on both.
+      let body: IncomingMessage | null = null;
+      const fail = (err: Error) => {
+        body?.destroy(err);
+        req.destroy(err);
+      };
       const parsed = new URL(url);
       const mod = parsed.protocol === 'https:' ? https : http;
       const req = mod.request({
@@ -930,11 +940,12 @@ export class ImportTaskService {
           reject(new Error(`HTTP ${res.statusCode} for ${url}`));
           return;
         }
+        body = res;
         resolve(res);
       });
       req.on('error', reject);
-      req.on('timeout', () => req.destroy(new Error(`Request timeout (no data for ${Math.round(idleTimeoutMs / 1000)} s)`)));
-      const onAbort = () => req.destroy(new Error('Aborted'));
+      req.on('timeout', () => fail(new Error(`Request timeout (no data for ${Math.round(idleTimeoutMs / 1000)} s)`)));
+      const onAbort = () => fail(new Error('Aborted'));
       signal.addEventListener('abort', onAbort, { once: true });
       req.on('close', () => signal.removeEventListener('abort', onAbort));
       req.end();
