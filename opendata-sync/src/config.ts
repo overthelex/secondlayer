@@ -154,13 +154,16 @@ const backendWeeklySources: DataSourceSchedule[] = [
     sourceName: 'advocates',
     enabled: true,
   },
+  // LEXAI-2173: the old data.gov.ua dataset is gone (every run since 19.04.2026 failed with
+  // «Cannot download JSON»). The ДСА replacement is a ~0.9 GB ZIP of TSV files, which
+  // start_import cannot load; it is reloaded by mcp_backend/src/scripts/import-court-case-status.ts.
   {
     name: 'court_case_status',
     title: 'Судова влада — Стан розгляду справ',
     cron: '0 7 * * 0', // Sunday 07:00
     target: 'backend',
     sourceName: 'court_case_status',
-    enabled: true,
+    enabled: false,
   },
   {
     name: 'court_schedule',
