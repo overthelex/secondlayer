@@ -11,6 +11,70 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 
+/** Cyrillic letters that look like Latin ones and are stored in Latin in the MVS registry. */
+const CYR_TO_LAT: Record<string, string> = {
+  'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O',
+  'Р': 'P', 'С': 'C', 'Т': 'T', 'Х': 'X', 'І': 'I',
+};
+
+/**
+ * Normalise a passport series to the registry's storage form: upper case, no spaces,
+ * dots or dashes, Cyrillic look-alikes mapped to Latin. "нм" -> "HM", "СЮ" -> "CЮ"
+ * (Ю has no Latin twin and is stored as Cyrillic).
+ */
+export function normalizePassportSeries(input: string): string {
+  return input
+    .toUpperCase()
+    .replace(/[\s\-.]/g, '')
+    .replace(/[АВЕКМНОРСТХІ]/g, (ch) => CYR_TO_LAT[ch] ?? ch);
+}
+
+/** Case endings stripped from a word before substring matching (longest first). */
+const UA_ENDING = /(ОГО|ЕГО|ОМУ|ЕМУ|ИМИ|ІМИ|ІЙ|ИЙ|ІЇ|ОЮ|ЕЮ|ИМ|ІМ|ОЇ|ОМ|ЕМ|АХ|ЯХ|О|А|И|І|Е|У|Ю|Я|Й|Ь)$/;
+
+/**
+ * Turn free text ("ВИКРАДЕНО", "ГУНП Київ", "власник розшукується") into ILIKE
+ * patterns, one per word, all of which must match. Each word is cut to a rough stem
+ * so inflected forms match the registry's wording ("ВИКРАДЕНО" -> "ВИКРАДЕНИЙ",
+ * "КИЇВ" -> "М. КИЄВІ"); Ї/Є (Київ/Києві) become single-char wildcards. Hyphens and
+ * dashes separate words. Apostrophes are dropped here and, via apostropheFreeSql(), from
+ * the column, so "СОЛОМ'ЯНСЬКЕ", "СОЛОМ’ЯНСЬКЕ" and "СОЛОМЯНСЬКЕ" all match each other.
+ */
+export function textTokenPatterns(input: string): string[] {
+  const words = input
+    .toUpperCase()
+    .replace(/['’ʼ`]/g, '')
+    .split(/[\s,.;:!?"«»()/\-‐‑‒–—―]+/)
+    .filter((w) => w.length >= 2);
+  return words.map((w) => {
+    let stem = w;
+    const m = stem.match(UA_ENDING);
+    if (m && stem.length - m[1].length >= 4) stem = stem.slice(0, -m[1].length);
+    const escaped = stem.replace(/[\\%_]/g, (c) => '\\' + c);
+    return `%${escaped.replace(/[ЇЄ]/g, '_')}%`;
+  });
+}
+
+/** SQL expression for a text column with the apostrophes ' ’ ʼ ` removed. */
+export function apostropheFreeSql(column: string): string {
+  return `translate(${column}, chr(39) || chr(8217) || chr(700) || chr(96), '')`;
+}
+
+/**
+ * Whether a pattern could hit a stored apostrophe. Ukrainian writes one only after
+ * Б/П/В/М/Ф/Р before Я/Ю/Є/Ї (Є/Ї are already `_` in the pattern). Only such patterns
+ * need the translate() column, which costs ~2x on a 2.9M-row scan.
+ */
+export function patternNeedsApostropheFold(pattern: string): boolean {
+  return /[БПВМФР](?:[ЯЮ]|(?<!\\)_)/.test(pattern);
+}
+
+function dateKey(d: unknown): number {
+  if (!d) return -Infinity;
+  const t = new Date(d as any).getTime();
+  return Number.isNaN(t) ? -Infinity : t;
+}
+
 export class Tier1OpenDataTools extends BaseToolHandler {
   constructor(private db: any) {
     super();
@@ -23,15 +87,16 @@ export class Tier1OpenDataTools extends BaseToolHandler {
         annotations: { title: 'Недійсні паспорти (МВС)', readOnlyHint: true },
         description: `Перевірка паспорта у реєстрі недійсних документів (МВС)
 
-2.9M внутрішніх + 195K закордонних паспортів. Статуси: ВТРАЧЕНО, ВИКРАДЕНО, ВЛАСНИК РОЗШУКУЄТЬСЯ тощо.
-Пошук за серією та номером, або за OВД.`,
+2.9M внутрішніх + 195K закордонних паспортів. Статуси: ВТРАЧЕНО, ВИЗНАНО НЕДІЙСНИМ, ВИКРАДЕНИЙ,
+ВЛАСНИК ДОКУМЕНТА РОЗШУКУЄТЬСЯ тощо. Пошук за серією та номером (кирилиця і латиниця рівнозначні: НМ = HM),
+за ОВД або статусом (слова в будь-якій відмінковій формі). total_count — повна кількість збігів.`,
         inputSchema: {
           type: 'object',
           properties: {
-            d_series: { type: 'string', description: 'Серія паспорта (напр. АР, ЕН)' },
+            d_series: { type: 'string', description: 'Серія паспорта (напр. АР, ЕН; кирилицею або латиницею)' },
             d_number: { type: 'string', description: 'Номер паспорта' },
-            ovd: { type: 'string', description: 'Орган, що видав (пошук за текстом)' },
-            d_status: { type: 'string', description: 'Статус (ВТРАЧЕНО, ВИКРАДЕНО тощо)' },
+            ovd: { type: 'string', description: 'Орган, що вніс запис (слова через пробіл, напр. "ГУНП Київ")' },
+            d_status: { type: 'string', description: 'Статус (ВТРАЧЕНО, ВИКРАДЕНО, НЕДІЙСНИМ, РОЗШУКУЄТЬСЯ тощо)' },
             include_foreign: { type: 'boolean', default: true, description: 'Включити закордонні паспорти' },
             limit: { type: 'number', default: 50, maximum: 100, description: 'Макс. результатів' },
           },
@@ -65,42 +130,77 @@ AML/sanctions screening. Перелік ДСФМУ — першоджерело 
   }
 
   private async searchInvalidPassports(args: Record<string, unknown>): Promise<ToolResult> {
-    const { d_series, d_number, ovd, d_status, include_foreign = true, limit = 50 } = args as any;
+    const { ovd, d_status, include_foreign = true, limit = 50 } = args as any;
+    let series = typeof args.d_series === 'string' ? normalizePassportSeries(args.d_series) : '';
+    let number = typeof args.d_number === 'string' || typeof args.d_number === 'number'
+      ? String(args.d_number).replace(/[\s-]/g, '') : '';
+    // "НМ525271" in d_number: split off the series. If d_series is also given it wins.
+    if (number) {
+      const m = number.match(/^(\D{1,4})(\d+)$/);
+      if (m) {
+        if (!series) series = normalizePassportSeries(m[1]);
+        number = m[2];
+      }
+    }
+
     const conditions: string[] = [];
     const values: any[] = [];
     let pi = 1;
 
-    if (d_series) { conditions.push(`d_series = $${pi}`); values.push(d_series.toUpperCase()); pi++; }
-    if (d_number) { conditions.push(`d_number = $${pi}`); values.push(d_number); pi++; }
-    if (ovd) { conditions.push(`ovd ILIKE $${pi}`); values.push(`%${ovd}%`); pi++; }
-    if (d_status) { conditions.push(`d_status ILIKE $${pi}`); values.push(`%${d_status}%`); pi++; }
+    // Plain equality keeps idx_*_series_number usable. Stored series use Latin for every
+    // letter that has a Latin look-alike (0 rows with Cyrillic А/В/Е/К/М/Н/О/Р/С/Т/Х/І in
+    // either table on 31.10.2026), so the query is normalised the same way.
+    if (series) { conditions.push(`d_series = $${pi}`); values.push(series); pi++; }
+    if (number) { conditions.push(`d_number = $${pi}`); values.push(number); pi++; }
+    for (const [column, input] of [['ovd', ovd], ['d_status', d_status]] as const) {
+      if (typeof input !== 'string') continue;
+      for (const pattern of textTokenPatterns(input)) {
+        const expr = patternNeedsApostropheFold(pattern) ? apostropheFreeSql(column) : column;
+        conditions.push(`${expr} ILIKE $${pi}`); values.push(pattern); pi++;
+      }
+    }
 
     if (conditions.length === 0) return this.wrapResponse('Вкажіть серію та номер паспорта для перевірки');
 
-    const lim = Math.min(Number(limit) || 50, 100);
+    const lim = Math.min(Math.max(Number(limit) || 50, 1), 100);
     const where = conditions.join(' AND ');
 
     try {
-      const queries: string[] = [
-        `SELECT id, d_series, d_number, d_type, d_status, ovd, theft_date, insert_date, 'internal' as passport_type
-         FROM opendata_invalid_passports WHERE ${where} ORDER BY insert_date DESC NULLS LAST LIMIT ${lim}`,
-      ];
-      if (include_foreign) {
-        queries.push(
-          `SELECT id, d_series, d_number, d_type, d_status, ovd, theft_date, insert_date, 'foreign' as passport_type
-           FROM opendata_invalid_passports_foreign WHERE ${where} ORDER BY insert_date DESC NULLS LAST LIMIT ${lim}`
+      const tables: Array<[string, string]> = [['opendata_invalid_passports', 'internal']];
+      if (include_foreign) tables.push(['opendata_invalid_passports_foreign', 'foreign']);
+
+      const results: any[] = [];
+      const counts: Record<string, number> = {};
+      for (const [table, kind] of tables) {
+        // The page is capped at `lim`; COUNT(*) OVER() gives the real number of matches
+        // from the same scan (prod 01.11.2026: 'ГУНП Київ' 586 ms, 'ВИКРАДЕНО' 191 ms,
+        // broadest 'ГУНП' 1.88M rows 853 ms), not a second full scan.
+        const page = await this.db.query(
+          `SELECT id, d_series, d_number, d_type, d_status, ovd, theft_date, insert_date, '${kind}' as passport_type,
+                  count(*) OVER() AS _total_count
+           FROM ${table} WHERE ${where} ORDER BY insert_date DESC NULLS LAST LIMIT ${lim}`,
+          values
         );
+        counts[kind] = page.rows.length > 0 ? Number(page.rows[0]._total_count ?? page.rows.length) : 0;
+        results.push(...page.rows.map(({ _total_count, ...row }: any) => row));
       }
 
-      const results = [];
-      for (const sql of queries) {
-        const result = await this.db.query(sql, values);
-        results.push(...result.rows);
+      if (results.length === 0) {
+        const what = series || number ? ` (серія ${series || '—'}, номер ${number || '—'})` : '';
+        return this.wrapResponse(`Паспорт не знайдено у реєстрі недійсних документів${what}`);
       }
-
-      if (results.length === 0) return this.wrapResponse('Паспорт не знайдено у реєстрі недійсних документів');
+      results.sort((a, b) => dateKey(b.insert_date) - dateKey(a.insert_date));
       const sliced = results.slice(0, lim);
-      return this.wrapResponse({ results: sliced, total_count: results.length, has_more: results.length > lim, limit: lim, offset: 0 });
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      return this.wrapResponse({
+        results: sliced,
+        total_count: total,
+        total_by_type: counts,
+        has_more: total > sliced.length,
+        limit: lim,
+        offset: 0,
+        ...(series ? { normalized_series: series } : {}),
+      });
     } catch (error: any) {
       logger.error('search_invalid_passports error', { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
