@@ -142,17 +142,57 @@ export const VALUE_TRANSFORMS: Record<string, (v: any) => any> = {
   /** List of strings -> one text, lines joined; [] -> "" (НААУ statusDescription). */
   join: (v) => (v == null ? null : Array.isArray(v) ? v.map(x => String(x ?? '').trim()).filter(Boolean).join('\n') : String(v)),
   /**
-   * Number for a NUMERIC column: "107 302 000,50" -> 107302000.5; anything else -> NULL, so
-   * one text cell in a spreadsheet column does not fail the whole batch.
+   * Number for a NUMERIC column, from a spreadsheet cell in either convention:
+   * "107 302 000,50", "1.234,56", "1,234.56", "22600934.18", "16770000\n". Anything that is
+   * not a number ("NA" in АМКУ's amounts) -> NULL, so one text cell does not fail the batch.
    */
   number: (v) => {
     if (v == null) return null;
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-    const s = String(v).replace(/[\s ]/g, '').replace(',', '.');
-    if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
-    return Number(s);
+    const s = normalizeNumberString(String(v));
+    return s === null ? null : Number(s);
   },
 };
+
+/**
+ * "1.234,56" / "1,234.56" / "1 234,56" -> "1234.56"; null when the text is not a number.
+ * Spaces (incl. no-break ones) are group separators. With both "," and "." the later one is
+ * the decimal mark; a mark that occurs more than once is a group separator; a single mark
+ * alone is the decimal mark (Ukrainian "0,5" and "22600934.18"). Groups after a group
+ * separator must have 3 digits, so "1,2,3" is rejected instead of read as 123.
+ */
+export function normalizeNumberString(raw: string): string | null {
+  const s = raw.replace(/[\s\u00a0\u202f]/g, '');
+  if (!/^-?[\d.,]+$/.test(s) || !/\d/.test(s)) return null;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  let group: string | null = null;
+  let decimal: string | null = null;
+  if (lastComma >= 0 && lastDot >= 0) {
+    decimal = lastComma > lastDot ? ',' : '.';
+    group = decimal === ',' ? '.' : ',';
+  } else if (lastComma >= 0 || lastDot >= 0) {
+    const mark = lastComma >= 0 ? ',' : '.';
+    if (s.split(mark).length > 2) group = mark; else decimal = mark;
+  }
+  let intPart = s;
+  let frac = '';
+  if (decimal) {
+    const i = s.lastIndexOf(decimal);
+    intPart = s.slice(0, i);
+    frac = s.slice(i + 1);
+    if (!/^\d+$/.test(frac)) return null;
+  }
+  const neg = intPart.startsWith('-');
+  let digits = neg ? intPart.slice(1) : intPart;
+  if (group) {
+    const parts = digits.split(group);
+    if (!/^\d{1,3}$/.test(parts[0]) || parts.slice(1).some(x => !/^\d{3}$/.test(x))) return null;
+    digits = parts.join('');
+  }
+  if (!/^\d+$/.test(digits)) return null;
+  return `${neg ? '-' : ''}${digits}${frac ? `.${frac}` : ''}`;
+}
 
 /** Throws on a transform name the importer does not know (caught before any download). */
 export function validateTransforms(transforms: Record<string, string> | undefined): void {
@@ -287,6 +327,15 @@ function rowToRecord(keys: string[], cells: any[]): Record<string, any> {
   return rec;
 }
 
+/**
+ * The file's layout is wrong (missing header row, rows wider than the header): the same
+ * download would fail the same way, so the importer does not retry it. A truncated download
+ * stays a plain Error and is retried.
+ */
+export class TabularLayoutError extends Error {
+  readonly noRetry = true;
+}
+
 const isBlankRow = (cells: any[]) => cells.every(c => c == null || String(c).trim() === '');
 
 /**
@@ -355,7 +404,7 @@ export class CsvStreamParser {
     this.quotePending = false;
     const out: Record<string, any>[] = [];
     if (this.fieldStarted || this.row.length) this.endRow(out);
-    if (!this.keys) throw new Error(`CSV stream: no header row ${this.headerRow}`);
+    if (!this.keys) throw new TabularLayoutError(`CSV stream: no header row ${this.headerRow}`);
     return out;
   }
 
@@ -377,7 +426,7 @@ export class CsvStreamParser {
     }
     if (this.skipLeft > 0) { this.skipLeft--; return; }
     if (cells.length > this.keys.length) {
-      throw new Error(`CSV stream: row ${this.lineNo} has ${cells.length} fields, header has ${this.keys.length}`);
+      throw new TabularLayoutError(`CSV stream: row ${this.lineNo} has ${cells.length} fields, header has ${this.keys.length}`);
     }
     out.push(rowToRecord(this.keys, cells));
   }
@@ -405,14 +454,15 @@ export function xlsxCellValue(v: any): any {
 /**
  * Records of the first worksheet of an XLSX file. Meant for small registers (the whole
  * file is held in memory; the importer caps the download). Blank rows are not counted for
- * headerRow / skipRows; trailing empty header cells are formatting, not columns.
+ * headerRow / skipRows; trailing empty header cells are formatting, not columns, but a data
+ * row with a value beyond the last header column fails (TabularLayoutError).
  */
 export async function xlsxRecords(buf: Buffer, opts: TabularOptions = {}): Promise<Record<string, any>[]> {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf as any);
   const ws = wb.worksheets[0];
-  if (!ws) throw new Error('XLSX: no worksheet');
+  if (!ws) throw new TabularLayoutError('XLSX: no worksheet');
   const headerRow = Math.max(1, opts.headerRow ?? 1);
   let skipLeft = Math.max(0, opts.skipRows ?? 0);
   let keys: string[] | null = null;
@@ -431,8 +481,14 @@ export async function xlsxRecords(buf: Buffer, opts: TabularOptions = {}): Promi
       return;
     }
     if (skipLeft > 0) { skipLeft--; return; }
+    // Like the CSV parser: a populated cell right of the last header column has no field to
+    // land in; dropping it would load the row silently incomplete.
+    const extra = vals.findIndex((c, i) => i >= keys!.length && c != null && String(c).trim() !== '');
+    if (extra >= 0) {
+      throw new TabularLayoutError(`XLSX: row ${row.number} has a value in column ${extra + 1}, header has ${keys!.length} columns`);
+    }
     out.push(rowToRecord(keys, vals));
   });
-  if (!keys) throw new Error(`XLSX: no header row ${headerRow}`);
+  if (!keys) throw new TabularLayoutError(`XLSX: no header row ${headerRow}`);
   return out;
 }

@@ -80,7 +80,8 @@ VALUES (
 )
 ON CONFLICT (name) DO UPDATE SET
   title = EXCLUDED.title, source_type = EXCLUDED.source_type, source_url = EXCLUDED.source_url,
-  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table, enabled = true;
+  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table,
+  default_threads_per_ip = EXCLUDED.default_threads_per_ip, rate_limit_ms = EXCLUDED.rate_limit_ms, enabled = true;
 
 INSERT INTO import_source_catalog (name, title, source_type, source_url, source_config, target_table, default_threads_per_ip, rate_limit_ms)
 VALUES (
@@ -113,7 +114,8 @@ VALUES (
 )
 ON CONFLICT (name) DO UPDATE SET
   title = EXCLUDED.title, source_type = EXCLUDED.source_type, source_url = EXCLUDED.source_url,
-  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table, enabled = true;
+  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table,
+  default_threads_per_ip = EXCLUDED.default_threads_per_ip, rate_limit_ms = EXCLUDED.rate_limit_ms, enabled = true;
 
 INSERT INTO import_source_catalog (name, title, source_type, source_url, source_config, target_table, default_threads_per_ip, rate_limit_ms)
 VALUES (
@@ -153,7 +155,8 @@ VALUES (
 )
 ON CONFLICT (name) DO UPDATE SET
   title = EXCLUDED.title, source_type = EXCLUDED.source_type, source_url = EXCLUDED.source_url,
-  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table, enabled = true;
+  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table,
+  default_threads_per_ip = EXCLUDED.default_threads_per_ip, rate_limit_ms = EXCLUDED.rate_limit_ms, enabled = true;
 
 INSERT INTO import_source_catalog (name, title, source_type, source_url, source_config, target_table, default_threads_per_ip, rate_limit_ms)
 VALUES (
@@ -190,7 +193,8 @@ VALUES (
 )
 ON CONFLICT (name) DO UPDATE SET
   title = EXCLUDED.title, source_type = EXCLUDED.source_type, source_url = EXCLUDED.source_url,
-  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table, enabled = true;
+  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table,
+  default_threads_per_ip = EXCLUDED.default_threads_per_ip, rate_limit_ms = EXCLUDED.rate_limit_ms, enabled = true;
 
 INSERT INTO import_source_catalog (name, title, source_type, source_url, source_config, target_table, default_threads_per_ip, rate_limit_ms)
 VALUES (
@@ -217,7 +221,8 @@ VALUES (
 )
 ON CONFLICT (name) DO UPDATE SET
   title = EXCLUDED.title, source_type = EXCLUDED.source_type, source_url = EXCLUDED.source_url,
-  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table, enabled = true;
+  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table,
+  default_threads_per_ip = EXCLUDED.default_threads_per_ip, rate_limit_ms = EXCLUDED.rate_limit_ms, enabled = true;
 
 INSERT INTO import_source_catalog (name, title, source_type, source_url, source_config, target_table, default_threads_per_ip, rate_limit_ms)
 VALUES (
@@ -257,7 +262,8 @@ VALUES (
 )
 ON CONFLICT (name) DO UPDATE SET
   title = EXCLUDED.title, source_type = EXCLUDED.source_type, source_url = EXCLUDED.source_url,
-  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table, enabled = true;
+  source_config = EXCLUDED.source_config, target_table = EXCLUDED.target_table,
+  default_threads_per_ip = EXCLUDED.default_threads_per_ip, rate_limit_ms = EXCLUDED.rate_limit_ms, enabled = true;
 
 UPDATE import_source_catalog SET enabled = false,
   source_config = coalesce(source_config, '{}'::jsonb) || jsonb_build_object('disabled_reason',

@@ -188,7 +188,9 @@ d('moved catalog sources on PostgreSQL (LEXAI-2183)', () => {
   const run = async (name: string) => svc.runCkanMultiFileImport(1, await catalogRow(name), new AbortController().signal);
 
   it('migrates six sources to ckan_package and disables four with a reason', async () => {
-    const r = await pool.query(`SELECT name, enabled, source_config FROM import_source_catalog
+    await pool.query(`UPDATE import_source_catalog SET default_threads_per_ip = 5, rate_limit_ms = 1100 WHERE name = 'state_aid'`);
+    await pool.query(migration('237_moved_catalog_sources_ckan.sql')); // re-run resets them
+    const r = await pool.query(`SELECT name, enabled, source_config, default_threads_per_ip, rate_limit_ms FROM import_source_catalog
       WHERE name IN ('advocates','court_schedule','nazk_corruption_offenders','nazk_declaration_checks','large_taxpayers','state_aid',
                      'dsfmu_terrorism','judge_candidates','lustration','wage_debtors') ORDER BY name`);
     const by = Object.fromEntries(r.rows.map((x: any) => [x.name, x]));
@@ -196,6 +198,7 @@ d('moved catalog sources on PostgreSQL (LEXAI-2183)', () => {
       expect(by[n].enabled).toBe(true);
       expect(by[n].source_config.ckan_package).toBeTruthy();
       expect(by[n].source_config.replace).toBe(true);
+      expect([by[n].default_threads_per_ip, by[n].rate_limit_ms]).toEqual([1, 0]);
     }
     for (const n of ['dsfmu_terrorism', 'judge_candidates', 'lustration', 'wage_debtors']) {
       expect(by[n].enabled).toBe(false);

@@ -6,8 +6,8 @@
 import { Readable } from 'stream';
 import ExcelJS from 'exceljs';
 import {
-  CkanResource, CsvStreamParser, VALUE_TRANSFORMS, headerKeys, latestCkanResource, selectCkanResources,
-  xlsxCellValue, xlsxRecords,
+  CkanResource, CsvStreamParser, TabularLayoutError, VALUE_TRANSFORMS, headerKeys, latestCkanResource,
+  normalizeNumberString, selectCkanResources, xlsxCellValue, xlsxRecords,
 } from '../ckan-multifile-import';
 import { ImportTaskService } from '../import-task-service';
 
@@ -66,6 +66,7 @@ describe('CsvStreamParser', () => {
   it('gives a short row nulls but refuses a row wider than the header (wrong delimiter)', () => {
     expect(parseAll('a,b,c\n1,2\n')).toEqual([{ a: '1', b: '2', c: null }]);
     expect(() => parseAll('a;b\n1,2;3\n', ',')).toThrow(/2 fields, header has 1/);
+    expect(() => parseAll('a;b\n1,2;3\n', ',')).toThrow(TabularLayoutError);
   });
 
   it('detects a download cut inside a quoted field', () => {
@@ -113,6 +114,25 @@ describe('xlsxRecords', () => {
     expect(recs[1]).toMatchObject({ nameOfProgram: 'Програма 2', EDRPOU: 26139770, linkToThePortal: null });
   });
 
+  it('refuses a row with a value beyond the last header column, like the CSV parser', async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Лист1');
+    ws.addRow(['a', 'b']);
+    ws.addRow([1, 2]);
+    ws.addRow([3, 4, 'загублене значення']);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    await expect(xlsxRecords(buf)).rejects.toThrow(/row 3 has a value in column 3, header has 2 columns/);
+    await expect(xlsxRecords(buf)).rejects.toBeInstanceOf(TabularLayoutError);
+  });
+
+  it('ignores empty or blank cells beyond the header (formatting only)', async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Лист1');
+    ws.addRow(['a', 'b', null]);
+    ws.addRow([1, 2, '  ']);
+    expect(await xlsxRecords(Buffer.from(await wb.xlsx.writeBuffer()))).toEqual([{ a: 1, b: 2 }]);
+  });
+
   it('cell values: formula result, error, date with time', () => {
     expect(xlsxCellValue({ formula: 'A1+1', result: 5 })).toBe(5);
     expect(xlsxCellValue({ error: '#N/A' })).toBeNull();
@@ -133,6 +153,34 @@ describe('transforms for the new sources', () => {
     expect(VALUE_TRANSFORMS.number(12.5)).toBe(12.5);
     expect(VALUE_TRANSFORMS.number('н/д')).toBeNull();
     expect(VALUE_TRANSFORMS.number('')).toBeNull();
+  });
+
+  it('number reads both separator conventions and the real АМКУ cells', () => {
+    const n = VALUE_TRANSFORMS.number;
+    expect(n('1.234,56')).toBe(1234.56);
+    expect(n('1,234.56')).toBe(1234.56);
+    expect(n('1 234,56')).toBe(1234.56);
+    expect(n('1\u00a0234\u00a0567,5')).toBe(1234567.5);
+    expect(n('1.234.567')).toBe(1234567);
+    expect(n('1,234,567')).toBe(1234567);
+    expect(n('1.234.567,89')).toBe(1234567.89);
+    expect(n('-1 234,5')).toBe(-1234.5);
+    expect(n('0,5')).toBe(0.5);
+    // Values from reestr_dd_27_10_2026-1.xlsx: digit strings, one with a trailing newline, a dot decimal, NA.
+    expect(n('107302000')).toBe(107302000);
+    expect(n('16770000\n')).toBe(16770000);
+    expect(n('22600934.18')).toBe(22600934.18);
+    expect(n('NA')).toBeNull();
+  });
+
+  it('normalizeNumberString rejects malformed groups instead of guessing', () => {
+    expect(normalizeNumberString('1,2,3')).toBeNull();
+    expect(normalizeNumberString('12.34.5')).toBeNull();
+    expect(normalizeNumberString('1.234,5,6')).toBeNull();
+    expect(normalizeNumberString('1,234.')).toBeNull();
+    expect(normalizeNumberString('-')).toBeNull();
+    expect(normalizeNumberString('1e5')).toBeNull();
+    expect(normalizeNumberString('1234')).toBe('1234');
   });
 });
 
@@ -294,6 +342,20 @@ describe('runCkanMultiFileImport with tabular and API resources', () => {
     }), new AbortController().signal)).rejects.toThrow(/no field for family_name in any source record/);
     expect(svc.httpGetStream).toHaveBeenCalledTimes(1);
     expect(db.txQueries).toHaveLength(0);
+  });
+
+  it('a CSV row wider than the header fails once; a truncated CSV is retried', async () => {
+    const pkg = { result: { resources: [{ id: 'r', name: 'd', format: 'CSV', last_modified: '2026-03-24',
+      url: 'https://data.gov.ua/d/144a/resource/3a/download/declarationcheck.csv' }] } };
+    const src = source('nazk_declaration_checks', 'opendata_declaration_checks', {
+      format: 'csv', ckan_package: '144a', resource_pattern: '^declarationcheck\\.csv$', mapping: { uid: 'uid' },
+    });
+    const wide = service(new FakeDb(2), pkg, { 'declarationcheck.csv': 'uid;name\n1,2;3\n' });
+    await expect(wide.runCkanMultiFileImport(1, src, new AbortController().signal)).rejects.toThrow(/2 fields, header has 1/);
+    expect(wide.httpGetStream).toHaveBeenCalledTimes(1);
+    const cut = service(new FakeDb(2), pkg, { 'declarationcheck.csv': 'uid,name\n1,"unfinished' });
+    await expect(cut.runCkanMultiFileImport(1, src, new AbortController().signal)).rejects.toThrow(/truncated/);
+    expect(cut.httpGetStream).toHaveBeenCalledTimes(3);
   });
 
   it('refuses an unknown format before any download', async () => {
