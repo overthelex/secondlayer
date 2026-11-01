@@ -13,9 +13,21 @@ import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 import { normalizeApostrophes } from './legislation-search-utils.js';
 import {
-  CkanResource, JsonArrayStreamParser, VALUE_TRANSFORMS, packageShowUrl, replaceGuardError,
-  resourcesUnchangedSince, selectCkanResources, validateTransforms,
+  CkanResource, CsvStreamParser, JsonArrayStreamParser, TabularOptions, VALUE_TRANSFORMS, latestCkanResource,
+  packageShowUrl, replaceGuardError, resourcesUnchangedSince, selectCkanResources, validateTransforms, xlsxRecords,
 } from './ckan-multifile-import.js';
+
+/** Resource formats the CKAN multi-file path can read (source_config.format). */
+const CKAN_FORMATS = ['json', 'csv', 'xlsx'] as const;
+type CkanFormat = typeof CKAN_FORMATS[number];
+
+/** XLSX resources are parsed in memory; anything bigger is not one of the small registers. */
+const XLSX_MAX_BYTES = 50 * 1024 * 1024;
+
+interface ResourceParseOptions extends TabularOptions {
+  format: CkanFormat;
+  delimiter: string;
+}
 import { StringDecoder } from 'string_decoder';
 import type { IncomingMessage } from 'http';
 
@@ -234,6 +246,12 @@ export class ImportTaskService {
       throw new Error(`Source "${opts.sourceName}" not found in catalog`);
     }
     const source: SourceCatalog = srcRes.rows[0];
+    // A disabled source used to run anyway (court_case_status, disabled for LEXAI-2173, still
+    // got a failing task every Sunday), so «disabled» was only a label. Refuse it here.
+    if (source.enabled === false) {
+      const why = source.source_config?.disabled_reason;
+      throw new Error(`Джерело "${source.name}" вимкнено${why ? `: ${why}` : ''}`);
+    }
 
     await this.failOrphanedTasks(source.id);
 
@@ -625,8 +643,14 @@ export class ImportTaskService {
    *   ckan_package      dataset id or slug on data.gov.ua; resources resolved via package_show per run
    *   ckan_api          optional package_show endpoint (default data.gov.ua)
    *   resource_pattern  regex on the resource file name (e.g. "^mvswantedpassport_v\\d+\\.json$")
+   *   resource_format   optional CKAN resource `format` the resource must have (e.g. "API")
+   *   latest_only       load only the most recently modified matching resource (dated snapshots)
    *   min_files         refuse when fewer resources match (default 1)
-   *   mapping           target column -> record field
+   *   format            json (array of objects, default) | csv | xlsx (first sheet, small files)
+   *   csv_delimiter     CSV field delimiter (default ","; "\t" for the ДСА TSV)
+   *   header_row        1-based non-blank row with the column names (csv/xlsx, default 1)
+   *   skip_rows         rows to drop after the header (csv/xlsx, default 0)
+   *   mapping           target column -> record field (csv/xlsx: header name; "" = whole record)
    *   transforms        target column -> VALUE_TRANSFORMS name (e.g. passport_series, iso_date)
    *   unique_key        [column]; duplicates across/within files collapse to one row
    *   dedup_order       column whose highest value wins among duplicates (then the later record)
@@ -655,11 +679,20 @@ export class ImportTaskService {
     if (config.dedup_order && !cols.includes(config.dedup_order)) {
       throw new Error(`dedup_order column ${config.dedup_order} is not mapped`);
     }
+    const format = String(config.format || 'json').toLowerCase() as CkanFormat;
+    if (!CKAN_FORMATS.includes(format)) throw new Error(`unsupported format "${config.format}" for a ckan_package source`);
+    const parseOpts: ResourceParseOptions = {
+      format,
+      delimiter: String(config.csv_delimiter ?? ','),
+      headerRow: config.header_row != null ? Number(config.header_row) : undefined,
+      skipRows: config.skip_rows != null ? Number(config.skip_rows) : undefined,
+    };
 
     const pkgUrl = packageShowUrl(String(config.ckan_package), config.ckan_api);
     const pkg = await this.fetchJson(pkgUrl, null, signal);
     if (!pkg || pkg.success === false) throw new Error(`CKAN package_show failed: ${pkgUrl}`);
-    const resources = selectCkanResources(pkg, String(config.resource_pattern || '\\.json$'));
+    let resources = selectCkanResources(pkg, String(config.resource_pattern || '\\.json$'), config.resource_format);
+    if (config.latest_only) resources = latestCkanResource(resources);
     const minFiles = Number(config.min_files ?? 1);
     if (resources.length < minFiles) {
       throw new Error(`CKAN ${config.ckan_package}: ${resources.length} файлів за шаблоном ${config.resource_pattern} (очікується ≥ ${minFiles}); таблицю не змінено`);
@@ -696,13 +729,13 @@ export class ImportTaskService {
         for (let attempt = 1; ; attempt++) {
           if (signal.aborted) throw new Error('Aborted');
           try {
-            const r = await this.streamResourceIntoStaging(taskId, res, idx, staging, mapping, transforms, uniqueKey, signal);
+            const r = await this.streamResourceIntoStaging(taskId, res, idx, staging, mapping, transforms, uniqueKey, parseOpts, signal);
             rawRows += r.loaded;
             skipped += r.skipped;
             break;
           } catch (err: any) {
             await this.db.query(`DELETE FROM ${staging} WHERE _src = $1`, [idx]);
-            if (signal.aborted || attempt >= 3) throw new Error(`${res.name}: ${err.message}`);
+            if (signal.aborted || attempt >= 3 || err.noRetry) throw new Error(`${res.name}: ${err.message}`);
             logger.warn(`[ImportTask ${taskId}] ${res.name} attempt ${attempt} failed: ${err.message}`);
             await this.sleep(5000 * attempt, signal);
           }
@@ -734,15 +767,16 @@ export class ImportTaskService {
   private async streamResourceIntoStaging(
     taskId: number, res: CkanResource, idx: number, staging: string,
     mapping: Record<string, string>, transforms: Record<string, string>, uniqueKey: string[],
-    signal: AbortSignal,
+    parseOpts: ResourceParseOptions, signal: AbortSignal,
   ): Promise<{ loaded: number; skipped: number }> {
     const cols = Object.keys(mapping);
-    const parser = new JsonArrayStreamParser();
-    const decoder = new StringDecoder('utf8');
     let batch: any[][] = [];
     let loaded = 0;
     let skipped = 0;
-    let checked = false;
+    // Mapped columns not yet seen in any record of this file. Judged over the whole file,
+    // not the first batch: НАЗК records carry offenseId / courtCaseNumber only when there
+    // is a court case, so a first chunk of decree-only records is not a renamed field.
+    let unseen: Set<string> | null = null;
 
     const flush = async () => {
       if (batch.length === 0) return;
@@ -758,10 +792,9 @@ export class ImportTaskService {
     };
 
     const take = async (records: any[]) => {
-      if (!checked && records.length) {
-        const unresolved = unresolvedMappingColumns(records, mapping);
-        if (unresolved.length) throw new Error(`no field for ${unresolved.join(', ')} in source records`);
-        checked = true;
+      if (records.length && (unseen === null || unseen.size > 0)) {
+        const still = new Set(unresolvedMappingColumns(records, mapping));
+        unseen = unseen === null ? still : new Set([...unseen].filter(c => still.has(c)));
       }
       for (const rec of records) {
         const row = cols.map(col => {
@@ -776,12 +809,35 @@ export class ImportTaskService {
     };
 
     const stream = await this.httpGetStream(res.url, signal, 60_000);
-    for await (const chunk of stream) {
-      await take(parser.push(decoder.write(chunk as Buffer)));
+    if (parseOpts.format === 'xlsx') {
+      const parts: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of stream) {
+        size += (chunk as Buffer).length;
+        if (size > XLSX_MAX_BYTES) {
+          stream.destroy();
+          throw Object.assign(new Error(`XLSX larger than ${XLSX_MAX_BYTES} bytes`), { noRetry: true });
+        }
+        parts.push(chunk as Buffer);
+      }
+      await take(await xlsxRecords(Buffer.concat(parts), parseOpts));
+    } else {
+      const parser = parseOpts.format === 'csv'
+        ? new CsvStreamParser(parseOpts.delimiter, parseOpts)
+        : new JsonArrayStreamParser();
+      const decoder = new StringDecoder('utf8');
+      for await (const chunk of stream) {
+        await take(parser.push(decoder.write(chunk as Buffer)));
+      }
+      await take(parser.push(decoder.end()));
+      await take(parser.end());
     }
-    await take(parser.push(decoder.end()));
-    parser.end();
     await flush();
+    const missing: string[] = unseen ? [...(unseen as Set<string>)] : [];
+    if (missing.length) {
+      // The file itself is wrong (renamed header, changed layout): retrying cannot help.
+      throw Object.assign(new Error(`no field for ${missing.join(', ')} in any source record`), { noRetry: true });
+    }
     if (loaded === 0) throw new Error('file has no records');
     logger.info(`[ImportTask ${taskId}] ${res.name}: ${loaded} rows${skipped ? `, ${skipped} without key skipped` : ''}`);
     return { loaded, skipped };
