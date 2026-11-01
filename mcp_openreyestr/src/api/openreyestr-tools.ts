@@ -206,6 +206,57 @@ export function formatBankruptcyRow(row: any): Record<string, unknown> {
   };
 }
 
+/*
+ * LEXAI-2167: rnbo_sanctions is loaded from the official ДРС РНБО subjects dump
+ * (drs.nsdc.gov.ua, see scripts/import-rnbo-sanctions-official.ts). The importer maps
+ * subjectType individual/legal/vessel → Person/Organization/Vessel; callers (and the
+ * old OpenSanctions-era description) use FtM names such as Company or LegalEntity.
+ */
+export const RNBO_SCHEMA_TYPES = ['Person', 'Organization', 'Vessel'] as const;
+export type RnboSchemaType = (typeof RNBO_SCHEMA_TYPES)[number];
+
+const RNBO_SCHEMA_ALIASES: Record<string, RnboSchemaType> = {
+  person: 'Person', individual: 'Person', natural_person: 'Person',
+  'фізична особа': 'Person', 'фізособа': 'Person', 'особа': 'Person',
+  organization: 'Organization', organisation: 'Organization', company: 'Organization',
+  legalentity: 'Organization', legal_entity: 'Organization', 'legal entity': 'Organization',
+  legal: 'Organization', entity: 'Organization',
+  'юридична особа': 'Organization', 'юрособа': 'Organization', 'компанія': 'Organization',
+  'організація': 'Organization',
+  vessel: 'Vessel', ship: 'Vessel', 'судно': 'Vessel',
+};
+
+/** Caller schema_type → stored value; null when it is not a type the register holds. */
+export function normalizeRnboSchemaType(v: string): RnboSchemaType | null {
+  const key = v.trim().toLowerCase().replace(/\s+/g, ' ');
+  return RNBO_SCHEMA_ALIASES[key] ?? null;
+}
+
+export const RNBO_LISTING_DATE_NOTE =
+  'Дата внесення до санкційного списку невідома: вивантаження Державного реєстру санкцій РНБО ' +
+  'не містить дат рішень/указів. register_snapshot_date — дата знімка реєстру, а не дата застосування санкцій.';
+
+function isoDay(v: unknown): string | null {
+  if (v == null) return null;
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/**
+ * Sanctions row → output. first_seen/last_seen/last_change hold the import snapshot
+ * time for every row (not the listing date), so they are replaced with an explicit
+ * register_snapshot_date and listing_date: null.
+ */
+export function formatRnboSanctionRow(row: any): Record<string, unknown> {
+  const { first_seen, last_seen, last_change, ...rest } = row;
+  return {
+    ...rest,
+    listing_date: null,
+    register_snapshot_date: isoDay(last_seen ?? last_change ?? first_seen),
+    listing_date_note: RNBO_LISTING_DATE_NOTE,
+  };
+}
+
 /** Termination row → output with ISO dates. */
 export function formatTerminationRow(row: any): Record<string, unknown> {
   return {
@@ -1824,8 +1875,18 @@ export class OpenReyestrTools {
       paramIndex++;
     }
     if (schema_type) {
+      const stored = normalizeRnboSchemaType(schema_type);
+      if (!stored) {
+        return [{
+          found: false,
+          schema_type,
+          message: `Невідомий schema_type «${schema_type}». Допустимі значення: Person (фізична особа), ` +
+            'Organization (юридична особа; також Company/LegalEntity), Vessel (судно). ' +
+            'Повітряних суден у реєстрі немає.',
+        }];
+      }
       conditions.push(`schema_type = $${paramIndex}`);
-      values.push(schema_type);
+      values.push(stored);
       paramIndex++;
     }
     if (country) {
@@ -1849,7 +1910,7 @@ export class OpenReyestrTools {
     const result = await this.pool.query(
       `SELECT id, entity_id, schema_type, name, aliases, birth_date, countries, addresses, identifiers, sanctions, phones, emails, program_ids, dataset, first_seen, last_seen, last_change
        FROM rnbo_sanctions ${whereClause}
-       ORDER BY last_change DESC NULLS LAST, id DESC
+       ORDER BY (sanctions = 'active') DESC NULLS LAST, name, id
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       values
     );
@@ -1857,7 +1918,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query, message: 'Санкціонованих осіб не знайдено' }];
     }
-    return result.rows;
+    return result.rows.map(formatRnboSanctionRow);
   }
 
   private async findEntityType(record: string): Promise<'UO' | 'FOP' | 'FSU' | null> {

@@ -68,7 +68,10 @@ function mapRow(s: any, id: number, fetchedAt: string): any[] {
     s.subjectStatus || null,                // sanctions: active | expired | excluded
     null, null, null,                       // phones, emails, program_ids
     'Ukraine NSDC State Register of Sanctions',
-    fetchedAt, fetchedAt, fetchedAt,        // first_seen, last_seen, last_change
+    // LEXAI-2167: the subjects dump has no listing/decree dates. Only last_seen
+    // (= snapshot time) is known; first_seen/last_change stay NULL so nothing reads
+    // the import time as the sanction date. The tool reports listing_date: null.
+    null, fetchedAt, null,                  // first_seen, last_seen, last_change
   ];
 }
 
