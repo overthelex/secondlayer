@@ -1293,11 +1293,11 @@ export class EdsrFtsService {
           const legConds = [...legWhere(leg, i), yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
           if (partiesPlan?.covered[i] && partiesPlan.otherKinds) {
             // Kinds edrsr_parties does not hold (2/5, NULL) keep the full-text party predicate.
+            // The split is by kind alone — no date predicate on dk — so a kind-1/3/4 decision
+            // can never land in both branches (edrsr_parties only holds kinds 1/3/4).
             const otherKind = hasMetadataFilter
               ? notPartiesKindSql('d')
-              : `NOT EXISTS (SELECT 1 FROM edrsr_documents dk WHERE ${[
-                  'dk.doc_id = f.doc_id', `dk.justice_kind IN (${[...PARTIES_JUSTICE_KINDS].join(', ')})`, ...yearLegDocPredicate(leg, 'dk'),
-                ].join(' AND ')})`;
+              : `NOT EXISTS (SELECT 1 FROM edrsr_documents dk WHERE dk.doc_id = f.doc_id AND dk.justice_kind IN (${[...PARTIES_JUSTICE_KINDS].join(', ')}))`;
             const otherConds = [...ftsLegConds, ...(whereClause ? [whereClause] : []), otherKind,
               yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
             return `(SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${legConds.join(' AND ')})
@@ -1840,12 +1840,14 @@ export class EdsrFtsService {
           (f.adj_year = ANY($${k}::int[]) AND (
              f.doc_id IN (
                SELECT pp.doc_id FROM edrsr_parties pp
-               WHERE pp.doc_id = ANY($1) AND pp.role = $${k + 3} AND ${partiesNameMatchSql('pp', `$${k + 1}`, `$${k + 2}`)})
+               WHERE pp.doc_id = ANY($1) AND pp.adj_year = f.adj_year
+                 AND pp.role = $${k + 3} AND ${partiesNameMatchSql('pp', `$${k + 1}`, `$${k + 2}`)})
              -- kinds edrsr_parties does not hold (2/5, NULL) keep the full-text predicate
              OR (${ftsConds.join(' AND ')} AND NOT EXISTS (
                SELECT 1 FROM edrsr_documents dk
                WHERE dk.doc_id = f.doc_id AND dk.justice_kind IN (${[...PARTIES_JUSTICE_KINDS].join(', ')})))))
-          OR (NOT (f.adj_year = ANY($${k}::int[])) AND ${ftsConds.join(' AND ')}))`);
+          -- uncovered years, and rows without adj_year (NOT (NULL = ANY) would drop them)
+          OR ((f.adj_year IS NULL OR NOT (f.adj_year = ANY($${k}::int[]))) AND ${ftsConds.join(' AND ')}))`);
       } else {
         conditions.push(...ftsConds);
       }

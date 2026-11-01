@@ -506,7 +506,8 @@ BEGIN
           fl := fl + 1;
           INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
           VALUES (r.doc_id, p_year, left(SQLERRM, 500))
-          ON CONFLICT (doc_id) DO UPDATE SET error = EXCLUDED.error, failed_at = now();
+          ON CONFLICT (doc_id) DO UPDATE
+            SET adj_year = EXCLUDED.adj_year, error = EXCLUDED.error, failed_at = now();
         END;
       END LOOP;
     END;
@@ -563,7 +564,7 @@ BEGIN
     RAISE EXCEPTION 'year % windows end at block % but the partition had % blocks when the backfill started', p_year, top, snap;
   END IF;
   IF (SELECT count(*) FROM pg_trigger
-       WHERE tgrelid = 'edrsr_fulltext'::regclass AND tgenabled <> 'D'
+       WHERE tgrelid = 'edrsr_fulltext'::regclass AND tgenabled IN ('O', 'A')  -- not disabled, not replica-only
          AND tgname IN ('trg_edrsr_parties_ins', 'trg_edrsr_parties_upd', 'trg_edrsr_parties_del')) < 3 THEN
     RAISE EXCEPTION 'edrsr_parties triggers on edrsr_fulltext are missing or disabled';
   END IF;
@@ -598,6 +599,27 @@ $fn$;
 -- 5. Incremental: new, refetched, moved and deleted decisions
 -- ---------------------------------------------------------------------------------------
 
+-- Log a row the trigger could not extract, under the year mark_covered will retry it in: the
+-- row's adj_year, else the Kyiv year of its decision. Never raises (the harvest must not fail
+-- because the failure log could not be written).
+CREATE OR REPLACE FUNCTION edrsr_parties_log_failed(p_doc_id bigint, p_adj_year int, p_error text)
+RETURNS void
+LANGUAGE plpgsql AS
+$fn$
+BEGIN
+  INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
+  VALUES (p_doc_id,
+          coalesce(p_adj_year,
+                   (SELECT extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::int
+                      FROM edrsr_documents d WHERE d.doc_id = p_doc_id LIMIT 1)),
+          left(p_error, 500))
+  ON CONFLICT (doc_id) DO UPDATE
+    SET adj_year = EXCLUDED.adj_year, error = EXCLUDED.error, failed_at = now();
+EXCEPTION WHEN others THEN
+  RAISE WARNING 'edrsr_parties: could not log failed doc % (%)', p_doc_id, SQLERRM;
+END
+$fn$;
+
 -- Statement-level with transition tables: one INSERT per harvest batch, not per row (the same
 -- reason 216 moved the stats trigger off FOR EACH ROW). An error never fails the harvest: the
 -- batch is retried row by row and a row that still raises is logged to edrsr_parties_failed.
@@ -617,8 +639,14 @@ DECLARE
   r record;
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    DELETE FROM edrsr_parties p USING (SELECT DISTINCT doc_id FROM old_rows) o WHERE p.doc_id = o.doc_id;
-    DELETE FROM edrsr_parties_failed f USING (SELECT DISTINCT doc_id FROM old_rows) o WHERE f.doc_id = o.doc_id;
+    BEGIN
+      DELETE FROM edrsr_parties p USING (SELECT DISTINCT doc_id FROM old_rows) o WHERE p.doc_id = o.doc_id;
+      DELETE FROM edrsr_parties_failed f USING (SELECT DISTINCT doc_id FROM old_rows) o WHERE f.doc_id = o.doc_id;
+    EXCEPTION WHEN others THEN
+      -- Never fail the DELETE on edrsr_fulltext; orphaned parties rows of a deleted text
+      -- only cost a stale hit until the year is re-extracted.
+      RAISE WARNING 'edrsr_parties trigger: cleanup after DELETE failed (%)', SQLERRM;
+    END;
     RETURN NULL;
   END IF;
 
@@ -683,9 +711,7 @@ BEGIN
           DELETE FROM edrsr_parties WHERE doc_id = r.doc_id;
           PERFORM edrsr_parties_extract_doc(NULL, r.doc_id);
         EXCEPTION WHEN others THEN
-          INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
-          VALUES (r.doc_id, r.adj_year, left(SQLERRM, 500))
-          ON CONFLICT (doc_id) DO UPDATE SET error = EXCLUDED.error, failed_at = now();
+          PERFORM edrsr_parties_log_failed(r.doc_id, r.adj_year, SQLERRM);
         END;
       END LOOP;
     ELSE
@@ -693,9 +719,7 @@ BEGIN
         BEGIN
           PERFORM edrsr_parties_extract_doc(NULL, r.doc_id);
         EXCEPTION WHEN others THEN
-          INSERT INTO edrsr_parties_failed (doc_id, adj_year, error)
-          VALUES (r.doc_id, r.adj_year, left(SQLERRM, 500))
-          ON CONFLICT (doc_id) DO UPDATE SET error = EXCLUDED.error, failed_at = now();
+          PERFORM edrsr_parties_log_failed(r.doc_id, r.adj_year, SQLERRM);
         END;
       END LOOP;
     END IF;

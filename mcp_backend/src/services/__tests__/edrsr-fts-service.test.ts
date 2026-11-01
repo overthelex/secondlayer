@@ -1261,7 +1261,20 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     expect(sql).toContain('FROM edrsr_parties p WHERE p.adj_year = 2025');
     expect(sql).toContain('f.full_text ~*');
     expect(sql).toContain('dk.justice_kind IN (1, 3, 4)');
-    expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM edrsr_documents dk WHERE dk\.doc_id = f\.doc_id/);
+    // The two branches split by kind alone: the other-kinds branch excludes exactly the kinds
+    // the parties table can hold, with no date predicate that a doc with a missing or
+    // different metadata date could fail — so no decision can come out of both branches.
+    const notExists = sql.match(/NOT EXISTS \(SELECT 1 FROM edrsr_documents dk WHERE ([^)]*\))\)/);
+    expect(notExists).not.toBeNull();
+    expect(notExists![1]).toBe('dk.doc_id = f.doc_id AND dk.justice_kind IN (1, 3, 4)');
+    expect(sql).not.toContain('dk.adjudication_date');
+    const branches = sql.split('UNION ALL').filter((b) => b.includes('p.adj_year = 2025') || b.includes('NOT EXISTS'));
+    expect(branches).toHaveLength(2);
+    const [partiesBranch, otherBranch] = branches;
+    expect(partiesBranch).toContain('FROM edrsr_parties p');
+    expect(partiesBranch).not.toContain('NOT EXISTS');
+    expect(otherBranch).not.toContain('FROM edrsr_parties');
+    expect(otherBranch).toContain('f.full_text ~*');
     expect(params).toContain('Нова Пошта');
     for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
   });
@@ -1287,6 +1300,10 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     expect(sql).toContain('f.full_text ~*');
     // in a covered year, kinds the parties table lacks are still checked by the full text
     expect(sql).toMatch(/OR \(f\.tsv @@ .* AND f\.full_text ~\* \$3 AND NOT EXISTS \(\s*SELECT 1 FROM edrsr_documents dk\s*WHERE dk\.doc_id = f\.doc_id AND dk\.justice_kind IN \(1, 3, 4\)\)\)/s);
+    // structured lookup pinned to the candidate's own partition
+    expect(sql).toContain('pp.doc_id = ANY($1) AND pp.adj_year = f.adj_year');
+    // a candidate without adj_year stays on the full-text predicate instead of vanishing
+    expect(sql).toContain('(f.adj_year IS NULL OR NOT (f.adj_year = ANY($4::int[])))');
     expect(params[3]).toEqual([2024, 2025]);
     expect(params.slice(4)).toEqual(['нова пошта', '% нова пошта', 2]);
     for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
