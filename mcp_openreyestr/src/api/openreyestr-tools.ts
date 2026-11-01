@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isSyntheticKey, notSyntheticSql, nullSyntheticKeys } from '../services/synthetic-keys';
 import { formatSingleTaxPayerRow, tinLookupCandidates } from '../utils/single-tax';
 import { PLAUSIBLE_OPENING_DATE_SQL } from '../utils/enforcement';
+import { ARMA_OWNER_NOT_PUBLISHED, buildArmaFilters } from '../services/arma-mapping';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -1576,41 +1577,53 @@ export class OpenReyestrTools {
   }
 
   /**
-   * Search ARMA seized assets registry
+   * Search ARMA seized assets registry (LEXAI-2161).
+   *
+   * The open dataset has no owner name / ЄДРПОУ. A request with owner_name or
+   * owner_edrpou (alone or with other filters) is not run: it returns the
+   * explanation, so an owner filter is never silently dropped. Filters and the
+   * field map live in services/arma-mapping.ts.
    */
-  async searchArmaSeizedAssets(params: { owner_name?: string; owner_edrpou?: string; case_number?: string; asset_type?: string; status?: string; court_name?: string; region?: string; limit?: number; offset?: number }): Promise<any[]> {
-    const { owner_name, owner_edrpou, case_number, asset_type, status, court_name, region, limit = 50, offset = 0 } = params;
-    const conditions: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
-
-    if (owner_name) { conditions.push(`owner_name ILIKE $${paramIndex}`); values.push(`%${owner_name}%`); paramIndex++; }
-    if (owner_edrpou) { conditions.push(`owner_edrpou = $${paramIndex}`); values.push(owner_edrpou); paramIndex++; }
-    if (case_number) { conditions.push(`case_number = $${paramIndex}`); values.push(case_number); paramIndex++; }
-    if (asset_type) { conditions.push(`asset_type ILIKE $${paramIndex}`); values.push(`%${asset_type}%`); paramIndex++; }
-    if (status) { conditions.push(`status ILIKE $${paramIndex}`); values.push(`%${status}%`); paramIndex++; }
-    if (court_name) { conditions.push(`court_name ILIKE $${paramIndex}`); values.push(`%${court_name}%`); paramIndex++; }
-    if (region) { conditions.push(`region ILIKE $${paramIndex}`); values.push(`%${region}%`); paramIndex++; }
-
-    if (conditions.length === 0) {
-      return [{ found: false, message: 'Вкажіть власника, ЄДРПОУ або номер справи для пошуку' }];
+  async searchArmaSeizedAssets(params: {
+    owner_name?: string | number; owner_edrpou?: string | number; case_number?: string; criminal_proceeding_number?: string;
+    asset_type?: string; description?: string; status?: string; court_name?: string; region?: string;
+    limit?: number; offset?: number;
+  }): Promise<any[]> {
+    const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 100);
+    const offset = Math.max(Number(params.offset) || 0, 0);
+    // Any non-empty owner value (MCP clients may send numbers for ЄДРПОУ).
+    const ownerQuery = [params.owner_name, params.owner_edrpou]
+      .map((v) => (v === null || v === undefined ? '' : String(v).trim()))
+      .find((v) => v !== '');
+    if (ownerQuery) {
+      return [{ found: false, query: ownerQuery, message: ARMA_OWNER_NOT_PUBLISHED }];
     }
 
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
-    values.push(limit, offset);
+    const { conditions, values, error } = buildArmaFilters(params);
+    if (error) {
+      return [{ found: false, message: error }];
+    }
+    if (conditions.length === 0) {
+      return [{ found: false, message: 'Вкажіть номер справи, номер ЄРДР, опис або тип активу, суд, регіон чи статус' }];
+    }
 
+    const n = values.length;
+    values.push(limit, offset);
     const result = await this.pool.query(
-      `SELECT case_number, case_date, court_name, asset_type, asset_description,
-        owner_name, owner_type, owner_edrpou, region, status,
-        arrest_date, transfer_date, manager
-      FROM arma_assets ${whereClause}
-      ORDER BY arrest_date DESC NULLS LAST
-      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      `SELECT asset_id, case_number, criminal_proceeding_number,
+        to_char(case_date, 'YYYY-MM-DD') AS case_date, court_name, judge_name, investigation_body, region,
+        decision_type, asset_type, asset_description, asset_props,
+        action_name, to_char(action_date, 'YYYY-MM-DD') AS action_date, action_details, action_income_sum,
+        status, to_char(arrest_date, 'YYYY-MM-DD') AS arrest_date,
+        to_char(transfer_date, 'YYYY-MM-DD') AS transfer_date, manager
+      FROM arma_assets WHERE ${conditions.join(' AND ')}
+      ORDER BY case_date DESC NULLS LAST, id
+      LIMIT $${n + 1} OFFSET $${n + 2}`,
       values
     );
 
     if (result.rows.length === 0) {
-      return [{ found: false, query: owner_name || owner_edrpou || '', message: 'Арештованих активів не знайдено' }];
+      return [{ found: false, message: 'Арештованих активів не знайдено' }];
     }
     return result.rows;
   }
