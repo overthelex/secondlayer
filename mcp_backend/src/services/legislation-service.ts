@@ -15,6 +15,13 @@ import {
   MIN_VECTOR_SCORE_HYBRID,
 } from './legislation-search-utils';
 import { ActStatusResolver, ActStatus } from './legislation-act-status.js';
+import {
+  ActTimeline,
+  ArticleMissFacts,
+  AsOfVerdict,
+  PLACEHOLDER_VERSION_SQL,
+  classifyAsOfDate,
+} from './legislation-as-of.js';
 
 /**
  * How findRelevantArticles treats hits from acts that are no longer in force
@@ -682,6 +689,98 @@ export class LegislationService {
     return ref;
   }
 
+  /**
+   * Dates that bound an act in time (LEXAI-2146): first edition, entry into
+   * force (when stored) and the latest edition, from npa.act, legislation and
+   * legislation_editions. Null when neither table knows the act.
+   */
+  async getActTimeline(radaId: string): Promise<ActTimeline | null> {
+    const id = normalizeRadaId(radaId).toLowerCase();
+    const r = await this.db.query(
+      `SELECT to_char(LEAST(a.first_ed, l.adoption_date, e.first_ed), 'YYYY-MM-DD') AS first_edition,
+              to_char(l.effective_date, 'YYYY-MM-DD') AS effective_date,
+              to_char(GREATEST(a.last_ed, e.last_ed), 'YYYY-MM-DD') AS last_edition,
+              (a.nreg IS NOT NULL OR l.id IS NOT NULL) AS known
+         FROM (SELECT $1::text AS id) x
+         LEFT JOIN legislation l ON LOWER(l.rada_id) = x.id
+         LEFT JOIN npa.act a ON a.nreg = x.id
+         LEFT JOIN LATERAL (
+           SELECT min(edition_date) AS first_ed, max(edition_date) AS last_ed
+             FROM legislation_editions WHERE legislation_id = l.id
+         ) e ON true`,
+      [id]
+    );
+    const row = r.rows[0];
+    if (!row || !row.known) return null;
+    return { first_edition: row.first_edition, effective_date: row.effective_date, last_edition: row.last_edition };
+  }
+
+  /**
+   * Classify an as_of_date for an act (see legislation-as-of.ts). Resolves an
+   * official number («435-IV») to the registry id first, so the dates are found.
+   */
+  async assessAsOfDate(radaId: string, asOfDate: unknown): Promise<AsOfVerdict> {
+    const first = classifyAsOfDate(asOfDate, null);
+    if (first.kind === 'current' || first.kind === 'invalid') return first;
+    let id = normalizeRadaId(radaId);
+    let timeline: ActTimeline | null = null;
+    try {
+      timeline = await this.getActTimeline(id);
+      if (!timeline) {
+        const canonical = await this.canonicalRadaId(id);
+        if (canonical !== id) timeline = await this.getActTimeline(canonical);
+      }
+    } catch (error: any) {
+      // A timeline failure must not break the lookup; it only loses the guard.
+      logger.warn(`getActTimeline failed for «${radaId}»: ${error.message}`);
+    }
+    return classifyAsOfDate(asOfDate, timeline);
+  }
+
+  /**
+   * Facts behind a temporal miss for each article (LEXAI-2146): whether it
+   * existed later (first dated row / current text) and which loaded edition was
+   * in force on the date. Feeds articleMissMessage().
+   */
+  async explainArticleMisses(radaId: string, articleNumbers: string[], asOfDate: string): Promise<Map<string, ArticleMissFacts>> {
+    let id = normalizeRadaId(radaId);
+    if (looksLikeOfficialNumber(id)) id = await this.canonicalRadaId(id);
+    const ids = expandKupapRadaIds(id).map((x) => x.toLowerCase());
+    // Transitional points are stored as «п.N»; look up both spellings.
+    const variants = Array.from(new Set(articleNumbers.flatMap((n) => [n, `п.${n}`])));
+    const arts = await this.db.query(
+      `SELECT la.article_number,
+              to_char(min(la.version_date) FILTER (WHERE NOT ${PLACEHOLDER_VERSION_SQL}), 'YYYY-MM-DD') AS first_seen,
+              bool_or(la.is_current) AS in_current
+         FROM legislation_articles la
+         JOIN legislation l ON la.legislation_id = l.id
+        WHERE LOWER(l.rada_id) = ANY($1) AND la.article_number = ANY($2)
+        GROUP BY la.article_number`,
+      [ids, variants]
+    );
+    const eds = await this.db.query(
+      `SELECT to_char(max(le.edition_date) FILTER (WHERE le.edition_date <= $2::date AND le.article_count > 0), 'YYYY-MM-DD') AS on_date,
+              to_char(min(le.edition_date), 'YYYY-MM-DD') AS earliest
+         FROM legislation_editions le
+         JOIN legislation l ON le.legislation_id = l.id
+        WHERE LOWER(l.rada_id) = ANY($1)`,
+      [ids, asOfDate]
+    );
+    const ed = eds.rows[0] || {};
+    const byNumber = new Map<string, any>(arts.rows.map((r: any) => [r.article_number, r]));
+    const out = new Map<string, ArticleMissFacts>();
+    for (const n of articleNumbers) {
+      const row = byNumber.get(n) ?? byNumber.get(`п.${n}`);
+      out.set(n, {
+        article_first_seen: row?.first_seen ?? null,
+        in_current_text: Boolean(row?.in_current),
+        edition_on_date: ed.on_date ?? null,
+        earliest_loaded_edition: ed.earliest ?? null,
+      });
+    }
+    return out;
+  }
+
   async getMultipleArticles(radaId: string, articleNumbers: string[], asOfDate?: string): Promise<LegislationReference[]> {
     radaId = normalizeRadaId(radaId);
     if (looksLikeOfficialNumber(radaId)) {
@@ -700,6 +799,7 @@ export class LegislationService {
            FROM legislation_articles la
            JOIN legislation l ON la.legislation_id = l.id
            WHERE LOWER(l.rada_id) = ANY($1) AND la.article_number = ANY($2) AND la.version_date <= $3
+             AND NOT ${PLACEHOLDER_VERSION_SQL}
            ORDER BY la.article_number, la.version_date DESC`,
           [ids, articleNumbers, asOfDate]
         );

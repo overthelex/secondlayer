@@ -27,6 +27,7 @@ import {
   statusLabel,
 } from './npa-dicts.js';
 import { logger } from '../../utils/logger.js';
+import { classifyAsOfDate } from '../../services/legislation-as-of.js';
 
 /**
  * Candidate cap for the FTS leg — total_found is a lower bound, never exact. The index
@@ -625,16 +626,26 @@ export class NpaTools extends BaseToolHandler {
         return this.wrapResponse({ ...this.shapeAct(actRow), editions: rows, editions_returned: rows.length });
       }
 
-      const edition = await this.resolveEdition(resolved, as_of_date);
+      // Same as_of_date rule as the legislation tools (LEXAI-2146): before the
+      // first edition → error, no text; a future date → current edition + note.
+      const asOf = classifyAsOfDate(as_of_date, { first_edition: actRow?.first_ed, last_edition: null });
+      if (asOf.kind === 'invalid') return this.wrapResponse(asOf.error);
+      if (asOf.kind === 'before_act') {
+        return this.wrapResponse({ error: asOf.error, ...this.shapeAct(actRow), as_of_date });
+      }
+      const lookupDate = asOf.kind === 'historical' ? asOf.as_of_date : undefined;
+      const asOfNote = 'note' in asOf && asOf.note ? { as_of_note: asOf.note } : {};
+
+      const edition = await this.resolveEdition(resolved, lookupDate);
       if (!edition) {
         return this.wrapResponse({
           ...this.shapeAct(actRow),
-          note: as_of_date
-            ? `Для цього акта немає редакції з текстом станом на ${as_of_date}.`
+          note: lookupDate
+            ? `Для цього акта немає редакції з текстом станом на ${lookupDate}.`
             : 'Для цього акта немає чинної редакції з текстом.',
         });
       }
-      const base = this.shapeAct(actRow, { shown_edition: edition.ed_date, is_current: edition.is_current });
+      const base = this.shapeAct(actRow, { shown_edition: edition.ed_date, is_current: edition.is_current, ...asOfNote });
 
       if (mode === 'toc') {
         if (!actRow.has_articles) {

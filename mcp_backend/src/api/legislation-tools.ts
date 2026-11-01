@@ -8,6 +8,7 @@ import {
   RepealedActMode,
 } from '../services/legislation-service';
 import { ActStatus, actStatusField, buildStatusWarning } from '../services/legislation-act-status.js';
+import { AsOfVerdict, articleMissMessage } from '../services/legislation-as-of.js';
 import { LegislationRenderer } from '../services/legislation-renderer';
 import { LegalPatternStore } from '../services/legal-pattern-store.js';
 import { logger } from '../utils/logger';
@@ -172,9 +173,18 @@ export class LegislationTools extends BaseToolHandler {
         query: query.substring(0, 80),
       });
 
+      // Vector search covers the current text only; a date still gets the act-level rule.
+      const asOf = await this.assessAsOf(radaId, args.as_of_date);
+      if (asOf.kind === 'invalid' || asOf.kind === 'before_act') {
+        return { error: asOf.error, rada_id: normalizeRadaId(radaId), as_of_date: args.as_of_date };
+      }
+
       const relevantArticles = await this.service.findRelevantArticles(query, normalizeRadaId(radaId), 3);
       if (relevantArticles.length > 0) {
         const response: any = {
+          ...(asOf.kind === 'historical'
+            ? { as_of_note: `Пошук за запитом виконується по чинній редакції. Для тексту станом на ${asOf.as_of_date} запитайте статтю за номером (article_number + as_of_date).` }
+            : asOf.kind === 'use_current' && asOf.note ? { as_of_note: asOf.note } : {}),
           rada_id: normalizeRadaId(radaId),
           search_query: query,
           articles: relevantArticles.map(a => ({
@@ -231,8 +241,37 @@ export class LegislationTools extends BaseToolHandler {
       query: query.substring(0, 50)
     });
 
-    const article = await this.service.getArticle(resolved.radaId, resolved.articleNumber, args.as_of_date);
+    // One as_of_date rule for every legislation tool (LEXAI-2146).
+    const asOf = await this.assessAsOf(resolved.radaId, args.as_of_date);
+    if (asOf.kind === 'invalid') return { error: asOf.error };
+    if (asOf.kind === 'before_act') {
+      return {
+        error: asOf.error,
+        rada_id: resolved.radaId,
+        article_number: resolved.articleNumber,
+        as_of_date: args.as_of_date,
+        first_edition: asOf.first_edition,
+        ...(asOf.effective_date ? { effective_date: asOf.effective_date } : {}),
+      };
+    }
+    const lookupDate = asOf.kind === 'historical' ? asOf.as_of_date : undefined;
+
+    const article = await this.service.getArticle(resolved.radaId, resolved.articleNumber, lookupDate);
     if (!article) {
+      if (lookupDate) {
+        const facts = (await this.service.explainArticleMisses(resolved.radaId, [resolved.articleNumber], lookupDate))
+          .get(resolved.articleNumber);
+        const message = facts ? articleMissMessage(resolved.articleNumber, lookupDate, facts) : null;
+        if (message) {
+          return {
+            error: message,
+            rada_id: resolved.radaId,
+            article_number: resolved.articleNumber,
+            as_of_date: lookupDate,
+            ...(facts?.article_first_seen ? { article_first_seen: facts.article_first_seen } : {}),
+          };
+        }
+      }
       return {
         error: `Article ${resolved.articleNumber} not found in legislation ${resolved.radaId}`,
         suggestion: 'Check if the article number is correct or if the legislation is available',
@@ -259,6 +298,11 @@ export class LegislationTools extends BaseToolHandler {
       } : undefined,
     };
 
+    if (asOf.kind === 'use_current') {
+      response.metadata = { ...(response.metadata || {}), is_historical: false, as_of_date: asOf.as_of_date };
+    }
+    if ('note' in asOf && asOf.note) response.as_of_note = asOf.note;
+
     if (args.include_html) {
       response.html = this.renderer.renderArticleHTML(article, {
         theme: args.theme || 'light',
@@ -267,6 +311,12 @@ export class LegislationTools extends BaseToolHandler {
     }
 
     return this.withActStatus(response, await this.statusOf(article.rada_id), args.as_of_date);
+  }
+
+  /** as_of_date verdict; a service without the guard (older mocks) means «as given». */
+  private async assessAsOf(radaId: string, asOfDate: unknown): Promise<AsOfVerdict> {
+    if (asOfDate === undefined || asOfDate === null || String(asOfDate).trim() === '') return { kind: 'current' };
+    return this.service.assessAsOfDate(radaId, asOfDate);
   }
 
   async getLegislationArticles(args: LegislationToolArgs): Promise<any> {
@@ -280,9 +330,48 @@ export class LegislationTools extends BaseToolHandler {
       articles: args.article_numbers.join(', ')
     });
 
-    const articles = await this.service.getMultipleArticles(args.rada_id, args.article_numbers, args.as_of_date);
+    const asOf = await this.assessAsOf(args.rada_id, args.as_of_date);
+    if (asOf.kind === 'invalid') return { error: asOf.error };
+    if (asOf.kind === 'before_act') {
+      return {
+        error: asOf.error,
+        rada_id: args.rada_id,
+        requested: args.article_numbers,
+        as_of_date: args.as_of_date,
+        first_edition: asOf.first_edition,
+        ...(asOf.effective_date ? { effective_date: asOf.effective_date } : {}),
+      };
+    }
+    const lookupDate = asOf.kind === 'historical' ? asOf.as_of_date : undefined;
+
+    const articles = await this.service.getMultipleArticles(args.rada_id, args.article_numbers, lookupDate);
+
+    // Articles with no text on the date: say why, per article (LEXAI-2146).
+    let missing: Array<{ article_number: string; reason: string }> | undefined;
+    if (lookupDate) {
+      const found = new Set(articles.map(a => String(a.article_number).replace(/^п\./, '')));
+      const absent = args.article_numbers.filter(n => !found.has(String(n).replace(/^п\./, '')));
+      if (absent.length > 0) {
+        const facts = await this.service.explainArticleMisses(args.rada_id, absent, lookupDate);
+        missing = absent.map(n => {
+          const f = facts.get(n);
+          return {
+            article_number: n,
+            reason: (f && articleMissMessage(n, lookupDate, f)) || `Статтю ${n} не знайдено в акті ${args.rada_id}.`,
+          };
+        });
+      }
+    }
 
     if (articles.length === 0) {
+      if (missing && missing.length > 0) {
+        return {
+          error: missing.length === 1 ? missing[0].reason : `Жодної із запитаних статей немає в редакції станом на ${lookupDate}.`,
+          rada_id: args.rada_id,
+          as_of_date: lookupDate,
+          missing,
+        };
+      }
       return {
         error: `No articles found for ${args.rada_id}`,
         requested: args.article_numbers,
@@ -300,6 +389,8 @@ export class LegislationTools extends BaseToolHandler {
       rada_id: args.rada_id,
       total_found: articles.length,
       as_of_date: args.as_of_date || undefined,
+      ...('note' in asOf && asOf.note ? { as_of_note: asOf.note } : {}),
+      ...(missing ? { missing } : {}),
       articles: articles.map(a => ({
         article_number: a.article_number,
         title: a.title,
