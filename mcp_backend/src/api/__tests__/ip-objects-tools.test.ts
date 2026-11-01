@@ -498,6 +498,25 @@ describe('IpObjectsTools', () => {
       expect(p.results[0]).toMatchObject({ status: 'terminated', legal_status: 'дію припинено' });
     });
 
+    it('dossier disambiguation keeps the holder EDRPOU (selected), not the applicant code', async () => {
+      const holderRow = { obj_type: 4, obj_state: 2, app_number: 'm202012036', registration_number: '327551',
+        owner_name: OSKAR, owner_edrpou: '22415322', owner_role: 'holder', status: 'stopped',
+        _color: 'green', _expiry: '2030-06-22', _app_status: 'stopped',
+        _applicant_edrpou: '99999999', _applicant_name: 'ТОВ «Інший заявник»' };
+      const db = makeDb((sql) => {
+        if (sql.includes('ip_object_events') || sql.includes('similarity(title_ua')) return { rows: [] };
+        if (sql.includes('obj_type = 4 ORDER BY obj_state')) return { rows: [{ ...oskarRow, ...holderRow, raw_data: {} }] };
+        return { rows: [holderRow] };
+      });
+      const p = parse(await new IpObjectsTools(db).executeTool('get_trademark_dossier', { number: '327551' }));
+      const disambSql = db.calls[0].sql;
+      expect(disambSql).toContain('owner_edrpou');
+      expect(disambSql).toContain('owner_role');
+      expect(p.disambiguation[0]).toMatchObject({ owner_edrpou: '22415322', owner_edrpou_source: 'holder',
+        applicant_edrpou: '99999999', status: 'active' });
+      expect(p.trademark).toMatchObject({ owner_edrpou: '22415322', owner_edrpou_source: 'holder' });
+    });
+
     it('dossier: the holder\'s own live marks are active and same_owner via the applicant code', async () => {
       const card = { ...oskarRow, app_number: 'm202012036', registration_number: '327551', owner_edrpou: '22415322',
         _expiry: '2030-06-22', expiry_date: '2030-06-22', classes: ['32'], raw_data: {} };

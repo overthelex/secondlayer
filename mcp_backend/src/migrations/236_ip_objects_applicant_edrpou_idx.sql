@@ -10,7 +10,9 @@
 -- `obj_type = 4 AND <expr> = $n`.
 --
 -- ip_objects is created by the NIPO importer, not by a migration: guarded so a database
--- without the table skips this. No data change, no backfill (status/owner are derived at
+-- without the table skips this. On such a database the importer's schema provisioning
+-- (scripts/opendata/nipo/import_ndjson.py CREATE_SQL) creates the same index when it
+-- creates the table, so the index exists either way. No data change, no backfill (status/owner are derived at
 -- read time). Plain CREATE INDEX (CONCURRENTLY cannot run inside DO): reads continue;
 -- importer upserts wait for the build.
 SET statement_timeout = '15min';

@@ -872,7 +872,7 @@ export class IpObjectsTools extends BaseToolHandler {
       // 1. Disambiguation — every IP object registered under this number.
       const disamb = await this.db.query(
         `SELECT obj_type, obj_type_name, obj_state, app_number, registration_number,
-                title_ua, owner_name, status, ${VERBAL_COLUMN}, ${STATUS_COLUMNS}
+                title_ua, owner_name, owner_edrpou, owner_role, status, ${VERBAL_COLUMN}, ${STATUS_COLUMNS}
          FROM ip_objects WHERE ${col} = $1 ORDER BY obj_type, obj_state DESC`,
         [number],
       );
