@@ -62,7 +62,7 @@ describe('searchRnboSanctions (LEXAI-2167)', () => {
     const [sql, values] = query.mock.calls[0];
     expect(sql).toMatch(/schema_type = \$2/);
     expect(values).toEqual(['%Аделантбанк%', 'Organization', 50, 0]);
-    expect(sql).not.toMatch(/ORDER BY last_change/);
+    expect(sql).toMatch(/ORDER BY \(sanctions = 'active'\) DESC NULLS LAST, name, id/);
     expect(res[0]).toMatchObject({ name: 'АДЕЛАНТБАНК', listing_date: null, register_snapshot_date: '2026-07-03' });
     expect(res[0]).not.toHaveProperty('first_seen');
   });
@@ -72,6 +72,8 @@ describe('searchRnboSanctions (LEXAI-2167)', () => {
     const res = await new OpenReyestrTools(pool).searchRnboSanctions({ query: 'Ан', schema_type: 'Airplane' });
     expect(query).not.toHaveBeenCalled();
     expect(res[0]).toMatchObject({ found: false, schema_type: 'Airplane' });
-    expect(res[0].message).toMatch(/Person.*Organization.*Vessel/);
+    expect(res[0].message).toMatch(/Невідомий schema_type «Airplane»/);
+    expect(res[0].message).toMatch(/Допустимі значення: Person.*Organization.*Vessel/);
+    expect(res[0].message).toMatch(/Повітряних суден у реєстрі немає/);
   });
 });

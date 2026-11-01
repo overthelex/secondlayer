@@ -1910,7 +1910,7 @@ export class OpenReyestrTools {
     const result = await this.pool.query(
       `SELECT id, entity_id, schema_type, name, aliases, birth_date, countries, addresses, identifiers, sanctions, phones, emails, program_ids, dataset, first_seen, last_seen, last_change
        FROM rnbo_sanctions ${whereClause}
-       ORDER BY (sanctions = 'active') DESC, name, id
+       ORDER BY (sanctions = 'active') DESC NULLS LAST, name, id
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       values
     );
