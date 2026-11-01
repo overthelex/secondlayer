@@ -43,7 +43,7 @@ function ipObjectToDocument(o: any): VaultDocument {
         classes,
         o.owner_name && `Власник: ${o.owner_name}`,
         o.owner_edrpou && `ЄДРПОУ: ${o.owner_edrpou}`,
-        o.status && `Статус: ${o.status}`,
+        (o.legal_status || o.status) && `Статус: ${o.legal_status || o.status}`,
       ].filter(Boolean).join(' • '),
       status: o.status,
       edrpou: o.owner_edrpou,

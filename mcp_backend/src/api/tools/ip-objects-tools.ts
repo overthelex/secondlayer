@@ -30,11 +30,34 @@ const DOSSIER_SUBTOOL_TIMEOUT_MS = 30_000;
 const VERBAL_COLUMN = `CASE WHEN obj_type = 4
     THEN raw_data->'WordMarkSpecification'->'MarkSignificantVerbalElement' END AS _verbal`;
 
+// First applicant's EDRPOU / name in the NIPO trademark record. The importer fills
+// owner_edrpou from the holder only, and ~68K registered marks carry an empty holder
+// EDRPOU while the applicant's code is present (e.g. m201704396 → 22415322, LEXAI-2162).
+// APPLICANT_EDRPOU_SQL must stay identical to the expression of
+// idx_ip_objects_applicant_edrpou (migration 236) or the owner_edrpou filter seq-scans.
+export const APPLICANT_EDRPOU_SQL =
+  `(raw_data #>> '{ApplicantDetails,Applicant,0,ApplicantAddressBook,FormattedNameAddress,Name,FreeFormatName,EDRPOU}')`;
+const APPLICANT_NAME_SQL =
+  `(raw_data #>> '{ApplicantDetails,Applicant,0,ApplicantAddressBook,FormattedNameAddress,Name,FreeFormatName,FreeFormatNameDetails,FreeFormatNameLine}')`;
+
+// Small raw_data fields the derived status and owner are computed from (deriveIpStatus,
+// resolveOwnerEdrpou). Internal: shapeIpRows strips every `_` column before responding.
+// The stored `status` column is NOT one of them: it is NIPO's raw application stage
+// (`application_status`), which reads 'stopped' on live marks (reg. 327551, LEXAI-2162)
+// and 'active' on terminated ones (reg. 59636, LEXAI-2119).
+const STATUS_COLUMNS = `NULLIF(raw_data->>'registration_status_color', '') AS _color,
+  NULLIF(raw_data->>'TerminationDate', '') AS _termination_date,
+  NULLIF(raw_data->>'ProlonagationExpiryDate', '') AS _prolong_expiry,
+  NULLIF(raw_data->>'application_status', '') AS _app_status,
+  expiry_date::text AS _expiry,
+  CASE WHEN obj_type = 4 THEN NULLIF(${APPLICANT_EDRPOU_SQL}, '') END AS _applicant_edrpou,
+  CASE WHEN obj_type = 4 THEN ${APPLICANT_NAME_SQL} END AS _applicant_name`;
+
 // Columns returned by the list tools — compact, panel-friendly (no raw_data).
 const LIST_COLUMNS = `id, obj_type, obj_type_name, obj_state, app_number, app_date,
   registration_number, registration_date, expiry_date, status, title_ua,
   class_system, classes, owner_name, owner_edrpou, owner_country, owner_kind,
-  owner_role, image_path, ${VERBAL_COLUMN}`;
+  owner_role, image_path, ${VERBAL_COLUMN}, ${STATUS_COLUMNS}`;
 
 // Collision list caps for get_trademark_dossier: other-owner marks are the real
 // blockers and come first; the owner's own family is kept short (LEXAI-2102).
@@ -96,6 +119,163 @@ function withMarkTitles<T extends Record<string, any>>(rows: T[]): T[] {
       rest.title_ua = deriveMarkTitle(_verbal, rest.title_ua ?? null);
     }
     return rest as T;
+  });
+}
+
+export type IpStatus =
+  | 'active' | 'expired' | 'terminated' | 'invalidated' | 'not_in_force' | 'lapsed_restorable'
+  | 'pending' | 'application_stopped';
+
+export const IP_LEGAL_STATUS_UA: Record<IpStatus, string> = {
+  active: 'чинний',
+  expired: 'строк дії сплив',
+  terminated: 'дію припинено',
+  invalidated: 'визнано недійсним',
+  not_in_force: 'не чинний',
+  lapsed_restorable: 'дію припинено, може бути відновлено',
+  pending: 'заявка на розгляді',
+  application_stopped: 'розгляд заявки припинено',
+};
+
+export interface IpStatusInput {
+  obj_state: number | string | null | undefined;
+  color?: string | null;            // registration_status_color: green / yellow / red
+  termination_date?: unknown;       // TerminationDate (early termination)
+  prolong_expiry?: unknown;         // ProlonagationExpiryDate (renewed term end, NIPO spelling)
+  expiry?: unknown;                 // original ExpiryDate (expiry_date column)
+  app_status?: string | null;       // application_status — application stage, NOT validity
+  event_kinds?: Iterable<string>;   // classified ip_object_events kinds
+}
+
+/** YYYY-MM-DD of a DATE/timestamp value or ISO-ish string; null when unusable. */
+function isoDate(v: unknown): string | null {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+  const s = String(v).trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+/**
+ * One status for an IP object, used by every IP tool (LEXAI-2162, LEXAI-2119).
+ *
+ * Registered documents (obj_state=2): legal events and the registry's validity data
+ * decide — invalidation, termination (event or TerminationDate), effective term end
+ * (renewal date if any, else original expiry) in the past, then NIPO's colour flag
+ * (red = not in force, yellow = lapsed but restorable, patents). The application stage
+ * (`application_status`) is ignored here: NIPO leaves it 'stopped' on live marks and
+ * 'active' on terminated ones. Only applications (obj_state=1) use it, where it is the
+ * examination stage: 'stopped' = examination stopped (refused/withdrawn).
+ */
+export function deriveIpStatus(
+  input: IpStatusInput,
+  today: string = new Date().toISOString().slice(0, 10),
+): { status: IpStatus; legal_status: string; effective_expiry_date: string | null } {
+  const effective = isoDate(input.prolong_expiry) || isoDate(input.expiry);
+  const done = (status: IpStatus) => ({ status, legal_status: IP_LEGAL_STATUS_UA[status], effective_expiry_date: effective });
+  if (Number(input.obj_state) !== 2) {
+    return done(String(input.app_status || '').toLowerCase() === 'stopped' ? 'application_stopped' : 'pending');
+  }
+  const kinds = new Set(input.event_kinds ?? []);
+  if (kinds.has('invalidation')) return done('invalidated');
+  if (kinds.has('termination') || isoDate(input.termination_date)) return done('terminated');
+  if (effective && effective < today) return done('expired');
+  const color = String(input.color || '').toLowerCase();
+  if (color === 'red') return done('not_in_force');
+  if (color === 'yellow') return done('lapsed_restorable');
+  return done('active');
+}
+
+const LEGAL_FORM_RX = new RegExp(
+  '(?<![\\p{L}\\p{N}])(' + [
+    'товариство з обмеженою відповідальністю', 'товариство з додатковою відповідальністю',
+    'приватне акціонерне товариство', 'публічне акціонерне товариство',
+    'відкрите акціонерне товариство', 'закрите акціонерне товариство', 'акціонерне товариство',
+    'приватне підприємство', 'дочірнє підприємство', 'державне підприємство',
+    'тов', 'тдв', 'прат', 'пат', 'ват', 'зат', 'ат', 'пп', 'дп',
+  ].join('|') + ')(?![\\p{L}\\p{N}])',
+  'gu',
+);
+
+/** Party name reduced for "same party?" checks: case, quotes, legal form, punctuation dropped. */
+export function normPartyName(name: unknown): string {
+  return String(name ?? '').toLowerCase().replace(/[«»"'“”„`’]/g, ' ')
+    .replace(LEGAL_FORM_RX, ' ').replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/**
+ * Owner EDRPOU with its source (LEXAI-2162). The stored owner_edrpou is the holder's code
+ * (or the applicant's, for applications). When the holder's code is empty, the applicant's
+ * code is used — but only if the applicant is the same party as the holder; ~20K marks were
+ * assigned to someone else, and the applicant's code would name the wrong owner. Then
+ * owner_edrpou stays null and applicant_edrpou is given separately with a note.
+ */
+export function resolveOwnerEdrpou(row: {
+  owner_edrpou?: unknown; owner_role?: unknown; owner_name?: unknown;
+  _applicant_edrpou?: unknown; _applicant_name?: unknown;
+}): { owner_edrpou: string | null; owner_edrpou_source: 'holder' | 'applicant' | null;
+      applicant_edrpou: string | null; owner_edrpou_note: string | null } {
+  const stored = String(row.owner_edrpou ?? '').trim() || null;
+  const applicant = String(row._applicant_edrpou ?? '').trim() || null;
+  const isApplicantRole = String(row.owner_role ?? '') === 'applicant';
+  let owner = stored;
+  let source: 'holder' | 'applicant' | null = stored ? (isApplicantRole ? 'applicant' : 'holder') : null;
+  let note: string | null = null;
+  if (!owner && applicant) {
+    const holderName = normPartyName(row.owner_name);
+    if (isApplicantRole || (holderName && holderName === normPartyName(row._applicant_name))) {
+      owner = applicant;
+      source = 'applicant';
+      if (!isApplicantRole) note = 'ЄДРПОУ власника в реєстрі не вказано; наведено код заявника (та сама особа).';
+    } else {
+      note = 'ЄДРПОУ власника в реєстрі не вказано; applicant_edrpou — код заявника, який є іншою особою (ймовірно, попередній власник).';
+    }
+  }
+  return {
+    owner_edrpou: owner,
+    owner_edrpou_source: source,
+    applicant_edrpou: applicant && applicant !== owner ? applicant : null,
+    owner_edrpou_note: note,
+  };
+}
+
+const INTERNAL_COLUMNS = ['_color', '_termination_date', '_prolong_expiry', '_app_status', '_expiry',
+  '_applicant_edrpou', '_applicant_name'];
+
+/**
+ * Response shape of an ip_objects row: derived title, ONE derived status (+ Ukrainian
+ * legal_status, effective term end, termination date) and the resolved owner EDRPOU.
+ * The raw stored `status` is replaced, never passed through. Internal `_` columns dropped.
+ */
+export function shapeIpRows<T extends Record<string, any>>(
+  rows: T[], eventKinds?: Map<string, Set<string>>, today?: string,
+): T[] {
+  return withMarkTitles(rows).map(row => {
+    if (!row || typeof row !== 'object') return row;
+    const r: any = { ...row };
+    const raw = r.raw_data || {};
+    const st = deriveIpStatus({
+      obj_state: r.obj_state,
+      color: r._color ?? raw.registration_status_color,
+      termination_date: r._termination_date ?? raw.TerminationDate,
+      prolong_expiry: r._prolong_expiry ?? raw.ProlonagationExpiryDate,
+      expiry: r._expiry ?? r.expiry_date,
+      app_status: r._app_status ?? raw.application_status,
+      event_kinds: eventKinds?.get(String(r.app_number)),
+    }, today);
+    r.status = st.status;
+    r.legal_status = st.legal_status;
+    if (st.effective_expiry_date) r.effective_expiry_date = st.effective_expiry_date;
+    const term = isoDate(r._termination_date ?? raw.TerminationDate);
+    if (term) r.termination_date = term;
+    if ('owner_edrpou' in r || '_applicant_edrpou' in r) {
+      const o = resolveOwnerEdrpou(r);
+      r.owner_edrpou = o.owner_edrpou;
+      if (o.owner_edrpou_source) r.owner_edrpou_source = o.owner_edrpou_source;
+      if (o.applicant_edrpou) r.applicant_edrpou = o.applicant_edrpou;
+      if (o.owner_edrpou_note) r.owner_edrpou_note = o.owner_edrpou_note;
+    }
+    for (const k of INTERNAL_COLUMNS) delete r[k];
+    return r as T;
   });
 }
 
@@ -162,7 +342,9 @@ export class IpObjectsTools extends BaseToolHandler {
         annotations: { title: 'Пошук об’єктів права інтелектуальної власності', readOnlyHint: true },
         description: `Пошук у реєстрі об’єктів права інтелектуальної власності України (НІПО/УІПВ): торговельні марки, винаходи, корисні моделі, промислові зразки — заявки та охоронні документи.
 
-Фільтри (передайте хоча б один): query (текст назви/позначення), obj_type (1=винаходи, 2=корисні моделі, 4=торговельні марки, 6=промислові зразки), obj_state (1=заявка, 2=зареєстровано), classes (масив кодів МКТП/МПК/Локарно), owner (назва власника/заявника), owner_edrpou (код ЄДРПОУ власника).
+Фільтри (передайте хоча б один): query (текст назви/позначення), obj_type (1=винаходи, 2=корисні моделі, 4=торговельні марки, 6=промислові зразки), obj_state (1=заявка, 2=зареєстровано), classes (масив кодів МКТП/МПК/Локарно), owner (назва власника/заявника), owner_edrpou (код ЄДРПОУ власника або заявника).
+
+Статус: status (active / expired / terminated / invalidated / not_in_force / lapsed_restorable / pending / application_stopped) і legal_status (українською) виведені з правового стану, строку дії (з урахуванням продовження) та подій; owner_edrpou_source каже, чий це код (holder — власник, applicant — заявник).
 
 Приклад: query="Планета", obj_type=4, classes=["34"]
 Приклад: owner_edrpou="38565147"`,
@@ -174,7 +356,7 @@ export class IpObjectsTools extends BaseToolHandler {
             obj_state: { type: 'number', enum: OBJ_STATES, description: '1=заявка, 2=зареєстровано' },
             classes: { type: 'array', items: { type: 'string' }, description: 'Коди класифікації (МКТП для ТМ, МПК для винаходів, Локарно для зразків). Збіг за будь-яким.' },
             owner: { type: 'string', description: 'Назва власника або заявника (частковий збіг)' },
-            owner_edrpou: { type: 'string', description: 'Код ЄДРПОУ власника/заявника (для юросіб)' },
+            owner_edrpou: { type: 'string', description: 'Код ЄДРПОУ (для юросіб): збіг з кодом власника АБО заявника' },
             limit: { type: 'number', description: `Макс. результатів (за замовч. ${DEFAULT_LIMIT}, макс. ${MAX_LIMIT})` },
           },
         },
@@ -193,7 +375,7 @@ export class IpObjectsTools extends BaseToolHandler {
             query: { type: 'string', description: 'Словесна частина марки (частковий збіг)' },
             nice_classes: { type: 'array', items: { type: 'string' }, description: 'Класи МКТП (Ніццька класифікація). Збіг за будь-яким.' },
             owner: { type: 'string', description: 'Власник або заявник (частковий збіг)' },
-            owner_edrpou: { type: 'string', description: 'Код ЄДРПОУ власника' },
+            owner_edrpou: { type: 'string', description: 'Код ЄДРПОУ: збіг з кодом власника АБО заявника' },
             obj_state: { type: 'number', enum: OBJ_STATES, description: '1=заявка, 2=зареєстровано' },
             limit: { type: 'number', description: `Макс. результатів (за замовч. ${DEFAULT_LIMIT}, макс. ${MAX_LIMIT})` },
           },
@@ -269,6 +451,51 @@ export class IpObjectsTools extends BaseToolHandler {
     }
   }
 
+  /**
+   * owner_edrpou filter: the holder's code OR the (first) applicant's (LEXAI-2162) — the
+   * holder's code is empty on ~68K marks. Served by idx_ip_objects_owner_edrpou and
+   * idx_ip_objects_applicant_edrpou (BitmapOr). Each row says which code it carries
+   * (owner_edrpou_source / applicant_edrpou).
+   */
+  private ownerEdrpouCondition(values: any[], code: any): string {
+    values.push(String(code).trim());
+    const p = `$${values.length}`;
+    return `(owner_edrpou = ${p} OR (obj_type = 4 AND ${APPLICANT_EDRPOU_SQL} = ${p}))`;
+  }
+
+  /**
+   * Termination / invalidation events for registered objects among `rows`, keyed by
+   * app_number — one batched lookup, so list results get the same status as the card.
+   * Best-effort: on failure the status falls back to the registry fields alone.
+   */
+  private async loadEventKinds(rows: any[]): Promise<Map<string, Set<string>>> {
+    const map = new Map<string, Set<string>>();
+    const apps = [...new Set(rows
+      .filter(r => r && Number(r.obj_state) === 2 && r.app_number)
+      .map(r => String(r.app_number)))];
+    if (apps.length === 0) return map;
+    try {
+      const res = await this.db.query(
+        `SELECT DISTINCT app_number, event_kind FROM ip_object_events
+         WHERE app_number = ANY($1::text[]) AND event_kind IN ('invalidation', 'termination')`,
+        [apps],
+      );
+      for (const e of res?.rows ?? []) {
+        if (!e?.app_number) continue;
+        const k = String(e.app_number);
+        if (!map.has(k)) map.set(k, new Set());
+        map.get(k)!.add(String(e.event_kind));
+      }
+    } catch (e: any) {
+      logger.warn('ip_object_events kinds lookup failed', { error: e.message });
+    }
+    return map;
+  }
+
+  private async shapeWithEvents(rows: any[]): Promise<any[]> {
+    return shapeIpRows(rows, await this.loadEventKinds(rows));
+  }
+
   private clampLimit(limit: any): number {
     return Math.max(1, Math.min(Number(limit) || DEFAULT_LIMIT, MAX_LIMIT));
   }
@@ -295,7 +522,7 @@ export class IpObjectsTools extends BaseToolHandler {
       if (result.rows.length === 0) {
         return this.wrapResponse('За вказаними критеріями об’єктів не знайдено.');
       }
-      return this.wrapSearchResults(withMarkTitles(result.rows), lim);
+      return this.wrapSearchResults(await this.shapeWithEvents(result.rows), lim);
     } catch (error: any) {
       logger.error(`${toolLabel} error`, { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
@@ -333,8 +560,7 @@ export class IpObjectsTools extends BaseToolHandler {
       conditions.push(`owner_name ILIKE $${values.length}`);
     }
     if (args.owner_edrpou) {
-      values.push(String(args.owner_edrpou));
-      conditions.push(`owner_edrpou = $${values.length}`);
+      conditions.push(this.ownerEdrpouCondition(values, args.owner_edrpou));
     }
 
     return this.runSearch(conditions, values, args.limit, 'search_ip_objects');
@@ -357,8 +583,7 @@ export class IpObjectsTools extends BaseToolHandler {
       conditions.push(`owner_name ILIKE $${values.length}`);
     }
     if (args.owner_edrpou) {
-      values.push(String(args.owner_edrpou));
-      conditions.push(`owner_edrpou = $${values.length}`);
+      conditions.push(this.ownerEdrpouCondition(values, args.owner_edrpou));
     }
     if (args.obj_state != null) {
       if (!OBJ_STATES.includes(Number(args.obj_state))) {
@@ -446,7 +671,7 @@ export class IpObjectsTools extends BaseToolHandler {
       if (result.rows.length === 0) {
         return this.wrapResponse('Схожих марок у тих самих класах не знайдено.');
       }
-      return this.wrapSearchResults(withMarkTitles(result.rows), lim);
+      return this.wrapSearchResults(await this.shapeWithEvents(result.rows), lim);
     } catch (error: any) {
       logger.error('find_similar_trademarks error', { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
@@ -483,7 +708,7 @@ export class IpObjectsTools extends BaseToolHandler {
       if (result.rows.length === 0) {
         return this.wrapResponse('Об’єкт не знайдено.');
       }
-      const [obj] = withMarkTitles(result.rows);
+      const [row] = result.rows;
       // Lifecycle timeline (продовження / визнання недійсним / припинення) from
       // the classified data_docs events, plus a derived current legal status.
       let events: any[] = [];
@@ -492,14 +717,14 @@ export class IpObjectsTools extends BaseToolHandler {
           `SELECT event_date, event_kind, doc_type, direction, doc_number
            FROM ip_object_events WHERE app_number = $1
            ORDER BY event_date NULLS LAST, id`,
-          [obj.app_number],
+          [row.app_number],
         );
         events = ev.rows;
       } catch (e: any) {
         logger.warn('get_ip_object events lookup failed', { error: e.message });
       }
+      const [obj] = shapeIpRows([row], this.eventKindsOf(row, events));
       obj.events = events;
-      obj.legal_status = this.deriveLegalStatus(obj, events);
       return this.wrapResponse(obj);
     } catch (error: any) {
       logger.error('get_ip_object error', { error: error.message });
@@ -507,22 +732,9 @@ export class IpObjectsTools extends BaseToolHandler {
     }
   }
 
-  private deriveLegalStatus(obj: any, events: any[]): string {
-    const kinds = new Set(events.map(e => e.event_kind));
-    // Prefer the SIS dossier fields in raw_data over classified events: event classification is
-    // incomplete for older records (e.g. reg. №67482 has only the 3 original 2006 docs, so the
-    // termination/prolongation live ONLY in raw_data). Without this, a terminated mark reads as
-    // "чинний" (obj_state=2) or, off the stale expiry_date alone, wrongly as "строк дії сплив".
-    const raw = obj.raw_data || {};
-    if (kinds.has('invalidation')) return 'визнано недійсним';
-    if (kinds.has('termination') || raw.TerminationDate) return 'дію припинено';
-    if (String(raw.registration_status_color || '').toLowerCase() === 'red') return 'не чинний';
-    if (Number(obj.obj_state) === 1) return 'заявка на розгляді';
-    // Effective term end = renewed expiry (ProlonagationExpiryDate) if present, else original.
-    const effectiveExpiry = raw.ProlonagationExpiryDate || obj.expiry_date;
-    if (effectiveExpiry && new Date(effectiveExpiry) < new Date()) return 'строк дії сплив';
-    if (Number(obj.obj_state) === 2) return 'чинний';
-    return obj.status || 'невідомо';
+  /** Event kinds of one object's timeline, in the shape shapeIpRows takes. */
+  private eventKindsOf(obj: any, events: any[]): Map<string, Set<string>> {
+    return new Map([[String(obj?.app_number), new Set(events.map(e => String(e?.event_kind)))]]);
   }
 
   /** Best-effort call of another registered tool; returns parsed JSON or null. */
@@ -660,11 +872,11 @@ export class IpObjectsTools extends BaseToolHandler {
       // 1. Disambiguation — every IP object registered under this number.
       const disamb = await this.db.query(
         `SELECT obj_type, obj_type_name, obj_state, app_number, registration_number,
-                title_ua, owner_name, status, ${VERBAL_COLUMN}
+                title_ua, owner_name, status, ${VERBAL_COLUMN}, ${STATUS_COLUMNS}
          FROM ip_objects WHERE ${col} = $1 ORDER BY obj_type, obj_state DESC`,
         [number],
       );
-      disamb.rows = withMarkTitles(disamb.rows);
+      disamb.rows = await this.shapeWithEvents(disamb.rows);
       if (disamb.rows.length === 0) {
         return this.wrapResponse(`Об'єкт з номером «${number}» не знайдено в реєстрі ip_objects.`);
       }
@@ -687,20 +899,20 @@ export class IpObjectsTools extends BaseToolHandler {
       // Stored token-bag title: trigram similarity below compares it with the other
       // marks' stored titles, like with like. The response shows the derived title.
       const storedTitle: string | null = card.rows[0].title_ua;
-      const [tmFull] = withMarkTitles(card.rows);
-      const { raw_data: tmRaw, ...tm } = tmFull;
 
       let events: any[] = [];
       try {
         events = (await this.db.query(
           `SELECT event_date, event_kind, doc_type, direction
            FROM ip_object_events WHERE app_number = $1 ORDER BY event_date NULLS LAST, id`,
-          [tm.app_number],
+          [card.rows[0].app_number],
         )).rows;
       } catch (e: any) {
         logger.warn('dossier events lookup failed', { error: e.message });
       }
-      const legal_status = this.deriveLegalStatus(tmFull, events);
+      // Same derived status / owner as get_ip_object (LEXAI-2162).
+      const [tmFull] = shapeIpRows(card.rows, this.eventKindsOf(card.rows[0], events));
+      const { raw_data: tmRaw, ...tm } = tmFull;
       // raw_data (full goods/services list, addresses) is dropped from the dossier — it was
       // most of the payload. A compact Nice-class summary replaces it (LEXAI-2102).
       const nice_classes = niceSummary(tmRaw);
@@ -712,14 +924,16 @@ export class IpObjectsTools extends BaseToolHandler {
       let collision_summary: any = null;
       if (Array.isArray(tm.classes) && tm.classes.length && storedTitle) {
         try {
-          const rows = withMarkTitles((await this.db.query(
+          // Collisions carry the derived status too: the raw stage column marked the
+          // holder's own live marks 'stopped' (LEXAI-2162).
+          const rows = (await this.shapeWithEvents((await this.db.query(
             `SELECT ${LIST_COLUMNS}, ROUND(similarity(title_ua, $1)::numeric, 3) AS similarity
              FROM ip_objects
              WHERE obj_type = 4 AND classes && $2::text[]
                AND similarity(title_ua, $1) >= $3 AND app_number <> $4
              ORDER BY similarity(title_ua, $1) DESC LIMIT ${DOSSIER_COLLISION_FETCH}`,
             [storedTitle, tm.classes, 0.3, tm.app_number],
-          )).rows).map((r: any) => ({ ...r, same_owner: isSameOwner(tm, r) }));
+          )).rows)).map((r: any) => ({ ...r, same_owner: isSameOwner(tm, r) }));
           const other = rows.filter((r: any) => !r.same_owner);
           const same = rows.filter((r: any) => r.same_owner);
           collisions = [...other.slice(0, DOSSIER_OTHER_OWNER_MAX), ...same.slice(0, DOSSIER_SAME_OWNER_MAX)];
@@ -764,7 +978,7 @@ export class IpObjectsTools extends BaseToolHandler {
       const dossier = {
         query_number: number,
         disambiguation: disamb.rows,
-        trademark: { ...tm, nice_classes, events, legal_status },
+        trademark: { ...tm, nice_classes, events },
         collisions,
         collision_summary,
         court_practice,

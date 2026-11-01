@@ -1,4 +1,7 @@
-import { IpObjectsTools, deriveMarkTitle, niceSummary, markSearchName } from '../tools/ip-objects-tools.js';
+import {
+  IpObjectsTools, deriveMarkTitle, niceSummary, markSearchName,
+  deriveIpStatus, resolveOwnerEdrpou, normPartyName, shapeIpRows,
+} from '../tools/ip-objects-tools.js';
 
 type Call = { sql: string; params: any[] };
 
@@ -391,6 +394,125 @@ describe('IpObjectsTools', () => {
       expect(markSearchName('моршинська. моя сила відновлення.')).toBe('моршинська');
       expect(markSearchName('столична нерухомість / x')).toBe('столична нерухомість');
       expect(markSearchName(null)).toBeNull();
+    });
+  });
+
+  describe('LEXAI-2162 / LEXAI-2119 derived status and owner EDRPOU', () => {
+    const TODAY = '2026-11-01';
+    const OSKAR = 'Приватне акціонерне товариство «МОРШИНСЬКИЙ ЗАВОД МІНЕРАЛЬНИХ ВОД «ОСКАР»';
+    // reg. 252309 / m201704396 as stored on prod: raw stage 'stopped', colour green,
+    // expiry 2027-03-01, holder EDRPOU empty, applicant 22415322.
+    const oskarRow = {
+      ...tmRow, obj_state: 2, app_number: 'm201704396', registration_number: '252309',
+      expiry_date: '2027-03-01', status: 'stopped', owner_role: 'holder', owner_name: OSKAR,
+      owner_edrpou: null, _color: 'green', _termination_date: null, _prolong_expiry: null,
+      _app_status: 'stopped', _expiry: '2027-03-01', _applicant_edrpou: '22415322',
+      _applicant_name: 'Приватне акціонерне товариство «МОРШИНСЬКИЙ ЗАВОД МІНЕРАЛЬНИХ ВОД «ОСКАР»',
+    };
+    // reg. 59636 as stored on prod: raw 'active', red, expiry 2013-12-24, terminated 2013-12-25.
+    const terminatedRow = {
+      ...tmRow, obj_state: 2, app_number: '20031213411', registration_number: '59636',
+      expiry_date: '2013-12-24', status: 'active', _color: 'red', _termination_date: '2013-12-25',
+      _prolong_expiry: null, _app_status: 'active', _expiry: '2013-12-24',
+    };
+
+    it('registered mark: application stage is ignored, legal state + expiry decide', () => {
+      expect(deriveIpStatus({ obj_state: 2, color: 'green', app_status: 'stopped', expiry: '2030-06-22' }, TODAY))
+        .toMatchObject({ status: 'active', legal_status: 'чинний', effective_expiry_date: '2030-06-22' });
+      expect(deriveIpStatus({ obj_state: 2, color: 'red', app_status: 'active', expiry: '2013-12-24', termination_date: '2013-12-25' }, TODAY))
+        .toMatchObject({ status: 'terminated', legal_status: 'дію припинено' });
+      // renewal moves the term end; the original expiry alone would read expired
+      expect(deriveIpStatus({ obj_state: 2, color: 'green', expiry: '2016-04-04', prolong_expiry: '2026-12-04' }, TODAY))
+        .toMatchObject({ status: 'active', effective_expiry_date: '2026-12-04' });
+      expect(deriveIpStatus({ obj_state: 2, color: 'green', app_status: 'active', expiry: '2020-01-01' }, TODAY).status).toBe('expired');
+      expect(deriveIpStatus({ obj_state: 2, color: 'red', expiry: '2030-01-01' }, TODAY).status).toBe('not_in_force');
+      expect(deriveIpStatus({ obj_state: 2, color: 'yellow' }, TODAY).status).toBe('lapsed_restorable');
+      expect(deriveIpStatus({ obj_state: 2, color: 'green', expiry: '2030-01-01', event_kinds: ['invalidation'] }, TODAY).status).toBe('invalidated');
+      expect(deriveIpStatus({ obj_state: 2, color: 'green', expiry: '2030-01-01', event_kinds: ['termination'] }, TODAY).status).toBe('terminated');
+      // DATE columns may arrive as JS Dates
+      expect(deriveIpStatus({ obj_state: 2, color: 'green', expiry: new Date('2027-03-01T00:00:00Z') }, TODAY).status).toBe('active');
+    });
+
+    it('application: the stage is used, and only there', () => {
+      expect(deriveIpStatus({ obj_state: 1, app_status: 'stopped' }, TODAY))
+        .toMatchObject({ status: 'application_stopped', legal_status: 'розгляд заявки припинено' });
+      expect(deriveIpStatus({ obj_state: 1, app_status: 'active' }, TODAY)).toMatchObject({ status: 'pending', legal_status: 'заявка на розгляді' });
+      expect(deriveIpStatus({ obj_state: 1 }, TODAY).status).toBe('pending');
+    });
+
+    it('owner EDRPOU falls back to the applicant only when it is the same party', () => {
+      expect(resolveOwnerEdrpou(oskarRow)).toEqual({
+        owner_edrpou: '22415322', owner_edrpou_source: 'applicant', applicant_edrpou: null,
+        owner_edrpou_note: expect.stringContaining('код заявника'),
+      });
+      // assigned mark: the applicant is someone else — never presented as the owner
+      const assigned = resolveOwnerEdrpou({ owner_role: 'holder', owner_name: 'Ларін Олександр Борисович', owner_edrpou: null,
+        _applicant_edrpou: '12345678', _applicant_name: 'Товариство з обмеженою відповідальністю «ВІДІСКОП»' });
+      expect(assigned).toMatchObject({ owner_edrpou: null, owner_edrpou_source: null, applicant_edrpou: '12345678' });
+      expect(assigned.owner_edrpou_note).toContain('іншою особою');
+      expect(resolveOwnerEdrpou({ owner_role: 'holder', owner_edrpou: '22415322', _applicant_edrpou: '22415322' }))
+        .toMatchObject({ owner_edrpou: '22415322', owner_edrpou_source: 'holder', applicant_edrpou: null, owner_edrpou_note: null });
+      expect(resolveOwnerEdrpou({ owner_role: 'applicant', owner_edrpou: '38565147' }).owner_edrpou_source).toBe('applicant');
+      // legal-form renames (ВАТ → ПАТ) are the same party
+      expect(normPartyName('ПУБЛІЧНЕ АКЦІОНЕРНЕ ТОВАРИСТВО «НАФТОХІМІК ПРИКАРПАТТЯ»'))
+        .toBe(normPartyName('Відкрите акціонерне товариство "Нафтохімік Прикарпаття"'));
+      expect(normPartyName('ТОВ «Нертус»')).not.toBe(normPartyName('ТОВ «Торговий дім «Нертус»'));
+    });
+
+    it('shapeIpRows replaces the raw status and drops internal columns', () => {
+      const [o, t] = shapeIpRows([oskarRow, terminatedRow], undefined, TODAY);
+      expect(o).toMatchObject({ status: 'active', legal_status: 'чинний', owner_edrpou: '22415322', owner_edrpou_source: 'applicant' });
+      expect(t).toMatchObject({ status: 'terminated', legal_status: 'дію припинено', termination_date: '2013-12-25' });
+      for (const r of [o, t]) expect(Object.keys(r).filter(k => k.startsWith('_') && k !== '_total_count')).toEqual([]);
+    });
+
+    it('get_ip_object {registration_number: 327551} is active, not the raw "stopped"', async () => {
+      const db = makeDb((sql) => sql.includes('ip_object_events') ? { rows: [] }
+        : { rows: [{ ...oskarRow, app_number: 'm202012036', registration_number: '327551', expiry_date: '2030-06-22',
+          _expiry: '2030-06-22', owner_edrpou: '22415322', raw_data: { application_status: 'stopped', registration_status_color: 'green' } }] });
+      const p = parse(await new IpObjectsTools(db).executeTool('get_ip_object', { registration_number: '327551' }));
+      expect(p.status).toBe('active');
+      expect(p.legal_status).toBe('чинний');
+      expect(p.owner_edrpou_source).toBe('holder');
+    });
+
+    it('search results: status derived, events batched, owner_edrpou matches holder OR applicant', async () => {
+      const db = makeDb((sql) => sql.includes('ip_object_events')
+        ? { rows: [{ app_number: 'm201704396', event_kind: 'termination' }] }
+        : { rows: [oskarRow, terminatedRow] });
+      const p = parse(await new IpObjectsTools(db).executeTool('search_ip_objects', { owner_edrpou: '22415322' }));
+      const main = db.calls[0];
+      expect(main.sql).toContain('owner_edrpou = $1 OR (obj_type = 4 AND');
+      expect(main.sql).toContain("'{ApplicantDetails,Applicant,0,ApplicantAddressBook,FormattedNameAddress,Name,FreeFormatName,EDRPOU}'");
+      expect(main.params[0]).toBe('22415322');
+      expect(db.calls[1].sql).toContain('ip_object_events');
+      expect(db.calls[1].params[0]).toEqual(['m201704396', '20031213411']);
+      expect(p.results.map((r: any) => r.status)).toEqual(['terminated', 'terminated']);
+      expect(p.results[0].owner_edrpou).toBe('22415322');
+      expect(p.results.every((r: any) => !('_color' in r) && !('_applicant_edrpou' in r))).toBe(true);
+    });
+
+    it('find_similar_trademarks returns the derived status (LEXAI-2119)', async () => {
+      const db = makeDb((sql) => sql.includes('ip_object_events') ? { rows: [] } : { rows: [{ ...terminatedRow, similarity: 0.5 }] });
+      const p = parse(await new IpObjectsTools(db).executeTool('find_similar_trademarks', { query: 'x', classes: ['32'] }));
+      expect(p.results[0]).toMatchObject({ status: 'terminated', legal_status: 'дію припинено' });
+    });
+
+    it('dossier: the holder\'s own live marks are active and same_owner via the applicant code', async () => {
+      const card = { ...oskarRow, app_number: 'm202012036', registration_number: '327551', owner_edrpou: '22415322',
+        _expiry: '2030-06-22', expiry_date: '2030-06-22', classes: ['32'], raw_data: {} };
+      const db = makeDb((sql) => {
+        if (sql.includes('ip_object_events')) return { rows: [] };
+        if (sql.includes('similarity(title_ua')) return { rows: [{ ...oskarRow, classes: ['32'], similarity: 0.7 }] };
+        if (sql.includes('obj_type = 4 ORDER BY obj_state')) return { rows: [card] };
+        return { rows: [{ obj_type: 4, obj_state: 2, app_number: 'm202012036', registration_number: '327551',
+          status: 'stopped', _color: 'green', _expiry: '2030-06-22', _app_status: 'stopped' }] };
+      });
+      const p = parse(await new IpObjectsTools(db).executeTool('get_trademark_dossier', { number: '327551' }));
+      expect(p.disambiguation[0].status).toBe('active');
+      expect(p.trademark).toMatchObject({ status: 'active', legal_status: 'чинний', owner_edrpou_source: 'holder' });
+      expect(p.collisions[0]).toMatchObject({ app_number: 'm201704396', status: 'active', same_owner: true,
+        owner_edrpou: '22415322', owner_edrpou_source: 'applicant' });
     });
   });
 });
