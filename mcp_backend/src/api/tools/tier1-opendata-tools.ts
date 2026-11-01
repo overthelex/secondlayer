@@ -10,24 +10,10 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { normalizePassportSeries } from '../../utils/passport-series.js';
 
-/** Cyrillic letters that look like Latin ones and are stored in Latin in the MVS registry. */
-const CYR_TO_LAT: Record<string, string> = {
-  'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O',
-  'Р': 'P', 'С': 'C', 'Т': 'T', 'Х': 'X', 'І': 'I',
-};
-
-/**
- * Normalise a passport series to the registry's storage form: upper case, no spaces,
- * dots or dashes, Cyrillic look-alikes mapped to Latin. "нм" -> "HM", "СЮ" -> "CЮ"
- * (Ю has no Latin twin and is stored as Cyrillic).
- */
-export function normalizePassportSeries(input: string): string {
-  return input
-    .toUpperCase()
-    .replace(/[\s\-.]/g, '')
-    .replace(/[АВЕКМНОРСТХІ]/g, (ch) => CYR_TO_LAT[ch] ?? ch);
-}
+// Shared with the invalid-passport importer (import-task-service), re-exported for callers/tests.
+export { normalizePassportSeries };
 
 /** Case endings stripped from a word before substring matching (longest first). */
 const UA_ENDING = /(ОГО|ЕГО|ОМУ|ЕМУ|ИМИ|ІМИ|ІЙ|ИЙ|ІЇ|ОЮ|ЕЮ|ИМ|ІМ|ОЇ|ОМ|ЕМ|АХ|ЯХ|О|А|И|І|Е|У|Ю|Я|Й|Ь)$/;

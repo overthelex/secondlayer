@@ -12,12 +12,27 @@ import { URL } from 'url';
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
 import { normalizeApostrophes } from './legislation-search-utils.js';
+import {
+  CkanResource, JsonArrayStreamParser, VALUE_TRANSFORMS, packageShowUrl, replaceGuardError,
+  resourcesUnchangedSince, selectCkanResources, validateTransforms,
+} from './ckan-multifile-import.js';
+import { StringDecoder } from 'string_decoder';
+import type { IncomingMessage } from 'http';
 
-// Default prod IPs (AWS ENIs)
-const DEFAULT_IPS = [
-  '172.31.29.20', '172.31.21.255', '172.31.31.40', '172.31.22.206', '172.31.28.109',
-  '172.31.22.152', '172.31.21.47', '172.31.20.75', '172.31.20.51', '172.31.27.192',
-];
+/**
+ * Local source addresses outgoing downloads are bound to, from IMPORT_SOURCE_IPS
+ * (comma-separated). Empty = let the OS pick, which is the only thing that works on a host
+ * that does not own extra addresses. Until LEXAI-2181 this was a hard-coded list of ten AWS
+ * ENI addresses (172.31.x) that no longer exist since prod left AWS: every api_paginated
+ * import bound its sockets to an address the host does not have and failed with
+ * "Cannot fetch first page", and every task row recorded those addresses. Exported for tests.
+ */
+export function parseSourceIps(raw: string | undefined): string[] {
+  return (raw || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+/** Running tasks with no progress for this long are treated as orphaned (process restarted mid-run). */
+const STALE_TASK_HOURS = 24;
 
 const MAX_RETRIES = 5;
 const REQUEST_TIMEOUT = 30_000;
@@ -110,6 +125,11 @@ export function unresolvedMappingColumns(records: any[], mapping: Record<string,
   return Object.entries(mapping)
     .filter(([, path]) => !records.some(rec => getJsonPath(rec, path) !== undefined))
     .map(([col]) => col);
+}
+
+/** Catalog-supplied table/column names are interpolated into SQL; allow plain identifiers only. */
+function assertIdentifier(name: string): void {
+  if (!/^[a-z_][a-z0-9_]{0,62}$/.test(name)) throw new Error(`invalid SQL identifier in source_config: ${name}`);
 }
 
 export class ImportTaskService {
@@ -215,18 +235,30 @@ export class ImportTaskService {
     }
     const source: SourceCatalog = srcRes.rows[0];
 
-    const ips = opts.ipAddresses || DEFAULT_IPS;
+    await this.failOrphanedTasks(source.id);
+
+    const ips = opts.ipAddresses || parseSourceIps(process.env.IMPORT_SOURCE_IPS);
     const threadsPerIp = opts.threadsPerIp || source.default_threads_per_ip;
 
-    // Create task record
-    const taskRes = await this.db.query(
-      `INSERT INTO import_tasks (source_id, source_name, status, ip_addresses, threads_per_ip, from_page, config_overrides)
-       VALUES ($1, $2, 'running', $3, $4, $5, $6) RETURNING id`,
-      [source.id, source.name, ips, threadsPerIp, opts.fromPage || 1, JSON.stringify(opts.configOverrides || {})]
-    );
-    const taskId = taskRes.rows[0].id;
-
-    await this.db.query('UPDATE import_tasks SET started_at = NOW() WHERE id = $1', [taskId]);
+    // Create the task record, at most one active task per source: two concurrent runs of a
+    // replace source would race their full-table swaps (and double the download). The
+    // advisory lock serialises the check + insert across backend instances.
+    const taskId: number = await this.db.transaction(async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('import_task_start'), $1)`, [source.id]);
+      const active = await client.query(
+        `SELECT id FROM import_tasks WHERE source_id = $1 AND status IN ('running', 'pending') ORDER BY id LIMIT 1`,
+        [source.id],
+      );
+      if (active.rows.length) {
+        throw new Error(`Імпорт "${source.name}" вже виконується (задача #${active.rows[0].id})`);
+      }
+      const taskRes = await client.query(
+        `INSERT INTO import_tasks (source_id, source_name, status, ip_addresses, threads_per_ip, from_page, config_overrides, started_at)
+         VALUES ($1, $2, 'running', $3, $4, $5, $6, NOW()) RETURNING id`,
+        [source.id, source.name, ips, threadsPerIp, opts.fromPage || 1, JSON.stringify(opts.configOverrides || {})]
+      );
+      return taskRes.rows[0].id;
+    });
 
     // Init in-memory progress
     taskProgress.set(taskId, {
@@ -249,20 +281,50 @@ export class ImportTaskService {
 
     return {
       taskId,
-      message: `Імпорт "${source.title}" запущено. ${ips.length} IP × ${threadsPerIp} потоків = ${ips.length * threadsPerIp} паралельних завантажень.`,
+      message: ips.length > 0
+        ? `Імпорт "${source.title}" запущено. ${ips.length} IP × ${threadsPerIp} потоків = ${ips.length * threadsPerIp} паралельних завантажень.`
+        : `Імпорт "${source.title}" запущено (адреса хоста за замовчуванням).`,
     };
+  }
+
+  /**
+   * A task row stays 'running' forever when the backend restarts mid-import (the worker
+   * lives in process memory). Before starting a source, mark its running tasks that this
+   * process is not executing and that showed no progress for STALE_TASK_HOURS as failed.
+   * Prod had such rows for months (e.g. #761 invalid_passports_foreign since 2026-06-23).
+   */
+  private async failOrphanedTasks(sourceId: number): Promise<void> {
+    const res = await this.db.query(
+      `SELECT id FROM import_tasks
+        WHERE source_id = $1 AND status = 'running'
+          AND COALESCE(last_activity_at, updated_at, started_at, created_at) < NOW() - make_interval(hours => $2)`,
+      [sourceId, STALE_TASK_HOURS],
+    );
+    const orphaned = res.rows.map((r: any) => Number(r.id)).filter((id: number) => !activeControllers.has(id));
+    if (orphaned.length === 0) return;
+    await this.db.query(
+      `UPDATE import_tasks SET status = 'failed', completed_at = NOW(), updated_at = NOW(),
+              last_error = COALESCE(last_error || '; ', '') || $2
+        WHERE id = ANY($1::int[]) AND status = 'running'`,
+      [orphaned, `задача без прогресу понад ${STALE_TASK_HOURS} год (процес перезапущено під час імпорту)`],
+    );
+    logger.warn(`[ImportTask] Marked orphaned running tasks as failed: ${orphaned.join(', ')}`);
   }
 
   // ========================= Worker Pool =========================
 
   private async runImport(taskId: number, source: SourceCatalog, ips: string[], threadsPerIp: number, fromPage: number, signal: AbortSignal): Promise<void> {
+    // No configured source addresses: one worker on the host's default address.
+    const workerIps: Array<string | null> = ips.length > 0 ? ips : [null];
     const log = (msg: string, meta?: any) => logger.info(`[ImportTask ${taskId}] ${msg}`, meta);
 
     try {
       if (source.source_type === 'api_paginated') {
-        await this.runPaginatedImport(taskId, source, ips, threadsPerIp, fromPage, signal);
+        await this.runPaginatedImport(taskId, source, workerIps, threadsPerIp, fromPage, signal);
+      } else if (source.source_type === 'json_array' && source.source_config?.ckan_package) {
+        await this.runCkanMultiFileImport(taskId, source, signal);
       } else if (source.source_type === 'json_array') {
-        await this.runJsonArrayImport(taskId, source, ips, signal);
+        await this.runJsonArrayImport(taskId, source, signal);
       } else if (source.source_type === 'file_download') {
         await this.runFileDownloadImport(taskId, source, signal);
       } else {
@@ -308,7 +370,7 @@ export class ImportTaskService {
 
   // ---- Paginated API (NIPO style) ----
 
-  private async runPaginatedImport(taskId: number, source: SourceCatalog, ips: string[], threadsPerIp: number, fromPage: number, signal: AbortSignal): Promise<void> {
+  private async runPaginatedImport(taskId: number, source: SourceCatalog, ips: Array<string | null>, threadsPerIp: number, fromPage: number, signal: AbortSignal): Promise<void> {
     const config = source.source_config;
     const pageParam = config.page_param || 'page';
     const resultsKey = config.results_key || 'results';
@@ -341,7 +403,7 @@ export class ImportTaskService {
     await Promise.all(workers);
   }
 
-  private async processPageQueue(taskId: number, source: SourceCatalog, ip: string, pages: number[], signal: AbortSignal): Promise<void> {
+  private async processPageQueue(taskId: number, source: SourceCatalog, ip: string | null, pages: number[], signal: AbortSignal): Promise<void> {
     const config = source.source_config;
     const pageParam = config.page_param || 'page';
     const resultsKey = config.results_key || 'results';
@@ -383,7 +445,7 @@ export class ImportTaskService {
 
   // ---- JSON Array (single file download) ----
 
-  private async runJsonArrayImport(taskId: number, source: SourceCatalog, ips: string[], signal: AbortSignal): Promise<void> {
+  private async runJsonArrayImport(taskId: number, source: SourceCatalog, signal: AbortSignal): Promise<void> {
     logger.info(`[ImportTask ${taskId}] Downloading JSON array from ${source.source_url}`);
     const data = await this.fetchJson(source.source_url, null, signal, JSON_ARRAY_TIMEOUT);
     if (!data) throw new Error('Cannot download JSON');
@@ -556,6 +618,268 @@ export class ImportTaskService {
     return v;
   }
 
+  // ---- JSON Array spread over several files of one CKAN dataset (LEXAI-2181) ----
+
+  /**
+   * source_config for this path:
+   *   ckan_package      dataset id or slug on data.gov.ua; resources resolved via package_show per run
+   *   ckan_api          optional package_show endpoint (default data.gov.ua)
+   *   resource_pattern  regex on the resource file name (e.g. "^mvswantedpassport_v\\d+\\.json$")
+   *   min_files         refuse when fewer resources match (default 1)
+   *   mapping           target column -> record field
+   *   transforms        target column -> VALUE_TRANSFORMS name (e.g. passport_series, iso_date)
+   *   unique_key        [column]; duplicates across/within files collapse to one row
+   *   dedup_order       column whose highest value wins among duplicates (then the later record)
+   *   min_rows_ratio    refuse the swap if new rows < ratio × current rows (default 0.9)
+   *   skip_unchanged    skip the run when no resource changed since the last successful load
+   *
+   * Every file is streamed into an UNLOGGED staging table; only when all of them loaded and
+   * the guard passes is the target brought to the staging content in ONE transaction
+   * (delete vanished keys + upsert changed rows), so readers never see a partial table and a
+   * failed run leaves it exactly as it was.
+   */
+  private async runCkanMultiFileImport(taskId: number, source: SourceCatalog, signal: AbortSignal): Promise<void> {
+    const config = source.source_config || {};
+    const mapping = config.mapping as Record<string, string> | undefined;
+    const transforms = (config.transforms || {}) as Record<string, string>;
+    const uniqueKey = (config.unique_key as string[] | undefined) || [];
+    const target = source.target_table;
+    if (!mapping || !target) throw new Error('ckan_package source needs mapping and target_table');
+    if (config.replace !== true) throw new Error('ckan_package sources are loaded with replace=true only');
+    validateTransforms(transforms);
+    const cols = Object.keys(mapping);
+    for (const id of [target, ...cols, ...uniqueKey, ...(config.dedup_order ? [config.dedup_order] : [])]) {
+      assertIdentifier(id);
+    }
+    for (const k of uniqueKey) if (!cols.includes(k)) throw new Error(`unique_key column ${k} is not mapped`);
+    if (config.dedup_order && !cols.includes(config.dedup_order)) {
+      throw new Error(`dedup_order column ${config.dedup_order} is not mapped`);
+    }
+
+    const pkgUrl = packageShowUrl(String(config.ckan_package), config.ckan_api);
+    const pkg = await this.fetchJson(pkgUrl, null, signal);
+    if (!pkg || pkg.success === false) throw new Error(`CKAN package_show failed: ${pkgUrl}`);
+    const resources = selectCkanResources(pkg, String(config.resource_pattern || '\\.json$'));
+    const minFiles = Number(config.min_files ?? 1);
+    if (resources.length < minFiles) {
+      throw new Error(`CKAN ${config.ckan_package}: ${resources.length} файлів за шаблоном ${config.resource_pattern} (очікується ≥ ${minFiles}); таблицю не змінено`);
+    }
+    await this.db.query('UPDATE import_tasks SET total_pages = $2 WHERE id = $1', [taskId, resources.length]);
+    logger.info(`[ImportTask ${taskId}] ${resources.length} files in CKAN dataset ${config.ckan_package}`);
+
+    if (config.skip_unchanged) {
+      const last = await this.db.query(
+        `SELECT max(started_at) AS at FROM import_tasks
+          WHERE source_id = $1 AND id <> $2 AND status = 'completed' AND records_imported > 0`,
+        [source.id, taskId],
+      );
+      const lastAt = last.rows[0]?.at;
+      if (resourcesUnchangedSince(resources, lastAt)) {
+        const msg = `джерело не змінювалось після останнього імпорту (${new Date(lastAt).toISOString()}), пропущено`;
+        logger.info(`[ImportTask ${taskId}] ${msg}`);
+        await this.db.query('UPDATE import_tasks SET last_error = $2 WHERE id = $1', [taskId, msg]);
+        return;
+      }
+    }
+
+    const staging = `${target}__staging_${taskId}`;
+    const mem = taskProgress.get(taskId);
+    try {
+      await this.db.query(`DROP TABLE IF EXISTS ${staging}`);
+      await this.db.query(`CREATE UNLOGGED TABLE ${staging} (LIKE ${target} INCLUDING DEFAULTS)`);
+      await this.db.query(`ALTER TABLE ${staging} ADD COLUMN _src INT, ADD COLUMN _ord BIGSERIAL`);
+
+      let rawRows = 0;
+      let skipped = 0;
+      for (let idx = 0; idx < resources.length; idx++) {
+        const res = resources[idx];
+        for (let attempt = 1; ; attempt++) {
+          if (signal.aborted) throw new Error('Aborted');
+          try {
+            const r = await this.streamResourceIntoStaging(taskId, res, idx, staging, mapping, transforms, uniqueKey, signal);
+            rawRows += r.loaded;
+            skipped += r.skipped;
+            break;
+          } catch (err: any) {
+            await this.db.query(`DELETE FROM ${staging} WHERE _src = $1`, [idx]);
+            if (signal.aborted || attempt >= 3) throw new Error(`${res.name}: ${err.message}`);
+            logger.warn(`[ImportTask ${taskId}] ${res.name} attempt ${attempt} failed: ${err.message}`);
+            await this.sleep(5000 * attempt, signal);
+          }
+        }
+        if (mem) { mem.pagesDone = idx + 1; mem.currentPage = idx + 1; mem.recordsImported = rawRows; mem.recordsFailed = skipped; }
+        await this.db.query(
+          `UPDATE import_tasks SET pages_done = $2, current_page = $2, records_imported = $3, records_failed = $4,
+                  last_activity_at = NOW(), updated_at = NOW() WHERE id = $1`,
+          [taskId, idx + 1, rawRows, skipped],
+        ).catch(() => {});
+      }
+
+      if (uniqueKey.length) await this.db.query(`CREATE INDEX ON ${staging} (${uniqueKey.join(', ')})`);
+      await this.db.query(`ANALYZE ${staging}`);
+
+      const { newRows, curRows, ...stats } = await this.swapFromStaging(
+        target, staging, cols, uniqueKey, Number(config.min_rows_ratio ?? 0.9), config.dedup_order,
+      );
+      logger.info(`[ImportTask ${taskId}] ${target}: ${curRows} -> ${newRows} rows`, {
+        raw: rawRows, skipped, deleted: stats.deleted, upserted: stats.upserted,
+      });
+      if (mem) { mem.recordsImported = newRows; mem.recordsFailed = skipped; }
+    } finally {
+      await this.db.query(`DROP TABLE IF EXISTS ${staging}`).catch(() => {});
+    }
+  }
+
+  /** Stream one resource into the staging table in batches; returns rows loaded / skipped. */
+  private async streamResourceIntoStaging(
+    taskId: number, res: CkanResource, idx: number, staging: string,
+    mapping: Record<string, string>, transforms: Record<string, string>, uniqueKey: string[],
+    signal: AbortSignal,
+  ): Promise<{ loaded: number; skipped: number }> {
+    const cols = Object.keys(mapping);
+    const parser = new JsonArrayStreamParser();
+    const decoder = new StringDecoder('utf8');
+    let batch: any[][] = [];
+    let loaded = 0;
+    let skipped = 0;
+    let checked = false;
+
+    const flush = async () => {
+      if (batch.length === 0) return;
+      const params: any[] = [];
+      const rowsSql = batch.map(row => {
+        const ph = row.map((_, c) => `$${params.length + c + 1}`);
+        params.push(...row, idx);
+        return `(${ph.join(',')},$${params.length})`;
+      });
+      await this.db.query(`INSERT INTO ${staging} (${cols.join(',')},_src) VALUES ${rowsSql.join(',')}`, params);
+      loaded += batch.length;
+      batch = [];
+    };
+
+    const take = async (records: any[]) => {
+      if (!checked && records.length) {
+        const unresolved = unresolvedMappingColumns(records, mapping);
+        if (unresolved.length) throw new Error(`no field for ${unresolved.join(', ')} in source records`);
+        checked = true;
+      }
+      for (const rec of records) {
+        const row = cols.map(col => {
+          const raw = getJsonPath(rec, mapping[col]);
+          const t = transforms[col];
+          return this.normalizeValue(t ? VALUE_TRANSFORMS[t](raw) : raw);
+        });
+        if (uniqueKey.some(k => row[cols.indexOf(k)] == null || row[cols.indexOf(k)] === '')) { skipped++; continue; }
+        batch.push(row);
+        if (batch.length >= 1000) await flush();
+      }
+    };
+
+    const stream = await this.httpGetStream(res.url, signal, 60_000);
+    for await (const chunk of stream) {
+      await take(parser.push(decoder.write(chunk as Buffer)));
+    }
+    await take(parser.push(decoder.end()));
+    parser.end();
+    await flush();
+    if (loaded === 0) throw new Error('file has no records');
+    logger.info(`[ImportTask ${taskId}] ${res.name}: ${loaded} rows${skipped ? `, ${skipped} without key skipped` : ''}`);
+    return { loaded, skipped };
+  }
+
+  /**
+   * Bring `target` to exactly the staging content in one transaction. With a unique key:
+   * duplicates collapse (highest dedup_order, then the later record wins), keys absent from
+   * the source are deleted and only rows that actually changed are rewritten, so an unchanged
+   * re-publication does not churn the indexes. Without a key: DELETE + INSERT.
+   *
+   * The replace guard (new rows vs current rows) is evaluated inside the transaction after
+   * the per-table lock is held, so a swap that waited behind another one compares against
+   * the table as that one left it, never against a stale count. A refusal rolls back.
+   */
+  private async swapFromStaging(
+    target: string, staging: string, cols: string[], uniqueKey: string[], minRowsRatio: number, dedupOrder?: string,
+  ): Promise<{ deleted: number; upserted: number; newRows: number; curRows: number }> {
+    const hasImportedAt = (await this.db.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = 'imported_at'`,
+      [target],
+    )).rows.length > 0;
+    const colList = cols.join(', ');
+
+    return this.db.transaction(async (client) => {
+      await client.query(`SET LOCAL statement_timeout = '60min'`);
+      // Second line of defence next to the one-active-task rule in startImport: whatever
+      // started them, two swaps into the same table never interleave.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('import_swap:' || $1))`, [target]);
+
+      const keyExpr = uniqueKey.length ? `count(DISTINCT (${uniqueKey.join(', ')}))` : 'count(*)';
+      const newRows = Number((await client.query(`SELECT ${keyExpr} AS n FROM ${staging}`)).rows[0].n);
+      const curRows = Number((await client.query(`SELECT count(*) AS n FROM ${target}`)).rows[0].n);
+      const refusal = replaceGuardError(newRows, curRows, minRowsRatio);
+      if (refusal) throw new Error(`replace refused: ${refusal}; таблицю не змінено`);
+
+      if (!uniqueKey.length) {
+        const del = await client.query(`DELETE FROM ${target}`);
+        const ins = await client.query(`INSERT INTO ${target} (${colList}) SELECT ${colList} FROM ${staging} ORDER BY _ord`);
+        return { deleted: del.rowCount ?? 0, upserted: ins.rowCount ?? 0, newRows, curRows };
+      }
+      const keyList = uniqueKey.join(', ');
+      const keyMatch = uniqueKey.map(k => `s.${k} = t.${k}`).join(' AND ');
+      const del = await client.query(
+        `DELETE FROM ${target} t WHERE NOT EXISTS (SELECT 1 FROM ${staging} s WHERE ${keyMatch})`,
+      );
+      const order = [keyList, ...(dedupOrder ? [`${dedupOrder} DESC NULLS LAST`] : []), '_ord DESC'].join(', ');
+      const updCols = cols.filter(c => !uniqueKey.includes(c));
+      const set = updCols.map(c => `${c} = EXCLUDED.${c}`).concat(hasImportedAt ? ['imported_at = NOW()'] : []).join(', ');
+      const changed = updCols.length
+        ? ` WHERE (${updCols.map(c => `${target}.${c}`).join(', ')}) IS DISTINCT FROM (${updCols.map(c => `EXCLUDED.${c}`).join(', ')})`
+        : '';
+      const conflict = set ? `DO UPDATE SET ${set}${changed}` : 'DO NOTHING';
+      const ins = await client.query(
+        `INSERT INTO ${target} (${colList})
+         SELECT DISTINCT ON (${keyList}) ${colList} FROM ${staging} ORDER BY ${order}
+         ON CONFLICT (${keyList}) ${conflict}`,
+      );
+      return { deleted: del.rowCount ?? 0, upserted: ins.rowCount ?? 0, newRows, curRows };
+    });
+  }
+
+  /** GET with redirects; resolves to the 200 response stream (caller consumes it). */
+  private httpGetStream(url: string, signal: AbortSignal, idleTimeoutMs: number, redirects = 0): Promise<IncomingMessage> {
+    return new Promise((resolve, reject) => {
+      if (redirects > 5) { reject(new Error('Too many redirects')); return; }
+      const parsed = new URL(url);
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const req = mod.request({
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        timeout: idleTimeoutMs,
+        headers: { 'Accept': 'application/json', 'User-Agent': 'SecondLayer-Legal-Platform/2.0' },
+      }, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          const next = new URL(res.headers.location, url).toString();
+          this.httpGetStream(next, signal, idleTimeoutMs, redirects + 1).then(resolve, reject);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+          return;
+        }
+        resolve(res);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('Request timeout')));
+      const onAbort = () => req.destroy(new Error('Aborted'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      req.on('close', () => signal.removeEventListener('abort', onAbort));
+      req.end();
+    });
+  }
+
   // ---- File Download (ZIP/CSV/XML) ----
 
   private async runFileDownloadImport(taskId: number, source: SourceCatalog, signal: AbortSignal): Promise<void> {
@@ -578,7 +902,7 @@ export class ImportTaskService {
 
       try {
         const data = await this.httpGet(url, localAddress, signal, timeoutMs);
-        return JSON.parse(data);
+        return JSON.parse(data.charCodeAt(0) === 0xfeff ? data.slice(1) : data);
       } catch (err: any) {
         if (signal.aborted) return null;
         if (err.statusCode === 429) {
