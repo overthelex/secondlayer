@@ -98,6 +98,95 @@ export function buildPartyRoleRegex(partyName: string, role: Exclude<PartyRole, 
     : `за[[:space:]]+позов[а-яіїєґ]*[[:space:]]+${anchoredName}`;
 }
 
+// ---------------------------------------------------------------------------------------
+// LEXAI-1760: the structured parties table (edrsr_parties, migration 239).
+// ---------------------------------------------------------------------------------------
+
+/** edrsr_parties.role codes. */
+export const PARTY_ROLE_CODE: Record<Exclude<PartyRole, 'any'>, number> = { plaintiff: 1, defendant: 2 };
+
+/** Justice kinds the extractor covers (civil, commercial, administrative). */
+export const PARTIES_JUSTICE_KINDS: ReadonlySet<number> = new Set([1, 3, 4]);
+
+/** Mirror of SQL edrsr_party_norm(): lower-case, one apostrophe, letters/digits/'/- only. */
+export function partyNorm(s: string): string | null {
+  const out = s
+    .toLowerCase()
+    .replace(/[’`ʼ‘]/g, "'")
+    .replace(/[^\p{L}\p{N}'-]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return out || null;
+}
+
+/** Mirror of SQL edrsr_party_core(): the last non-blank segment strictly between two quotes. */
+export function partyCore(s: string): string | null {
+  const parts = s.split(/[«»"“”„‟]/);
+  if (parts.length < 3) return null;
+  for (let i = parts.length - 2; i >= 1; i--) {
+    if (parts[i].trim()) return partyNorm(parts[i]);
+  }
+  return null;
+}
+
+// Legal forms a user may type before an unquoted name ("ТОВ Нова Пошта", "АТ КБ ПриватБанк").
+// Applied to the normalised name, repeatedly, so stacked forms all go.
+const PARTY_KEY_LEGAL_PREFIX = new RegExp(
+  '^(?:(?:тов|прат|пат|ат|пп|тдв|дп|кп|фг|фоп|кб|акб|ват|зат|пао|оао|зао|ооо)(?:\\s+|$)' +
+  '|товариств\\S*\\s+з\\s+обмежен\\S*\\s+відповідальніст\\S*\\s+' +
+  '|(?:(?:приватн|публічн|відкрит|закрит)\\S*\\s+)?акціонерн\\S*\\s+товариств\\S*\\s+' +
+  '|(?:приватн|державн|комунальн|дочірн)\\S*\\s+підприємств\\S*\\s+' +
+  '|(?:акціонерн\\S*\\s+)?комерційн\\S*\\s+банк\\S*\\s+' +
+  '|фермерськ\\S*\\s+господарств\\S*\\s+)',
+  'u',
+);
+
+export interface PartyNameKeys {
+  /** Compared with edrsr_parties.name_core, and with name_norm of unquoted names. */
+  key: string;
+  /** LIKE pattern: an unquoted name_norm that ENDS with the key as whole words. */
+  like: string;
+}
+
+/**
+ * The lookup keys for a user-supplied party name. Mirrors the claim-clause regex it replaces
+ * (buildPartyRoleRegex): there the name had to be followed by a closing quote, so «Нова Пошта»
+ * matched and «Нова Пошта Інтернешнл» did not. Here a quoted party is matched by its innermost
+ * quoted name (name_core) exactly; an unquoted one (state bodies) by name_norm ending in the
+ * key. Returns null for a key too short to be meaningful — the caller then keeps the FTS path.
+ */
+export function partyNameKeys(partyName: string): PartyNameKeys | null {
+  let key = partyCore(partyName);
+  if (!key) {
+    let n = partyNorm(partyName);
+    if (!n) return null;
+    for (let prev = ''; prev !== n; ) {
+      prev = n;
+      n = n.replace(PARTY_KEY_LEGAL_PREFIX, '');
+    }
+    key = n;
+  }
+  if (!key || key.length < 3) return null;
+  return { key, like: `% ${key.replace(/[%_\\]/g, '\\$&')}` };
+}
+
+/** SQL predicate on edrsr_parties `alias` for the keys bound at `keyParam` / `likeParam`. */
+export function partiesNameMatchSql(alias: string, keyParam: string, likeParam: string): string {
+  return `(${alias}.name_core = ${keyParam} OR (${alias}.name_core IS NULL AND (${alias}.name_norm = ${keyParam} OR ${alias}.name_norm LIKE ${likeParam})))`;
+}
+
+/**
+ * Whether a year leg can be served from edrsr_parties: every adj_year it spans is listed in
+ * edrsr_parties_coverage. A leg open downward (pre-2005) never is; one open upward spans the
+ * years up to the current one.
+ */
+export function partiesLegCovered(leg: YearLeg, covered: ReadonlySet<number>, thisYear: number): boolean {
+  if (leg.minYear === null || covered.size === 0) return false;
+  const top = leg.maxYear ?? Math.max(thisYear, leg.minYear);
+  for (let y = leg.minYear; y <= top; y++) if (!covered.has(y)) return false;
+  return true;
+}
+
 // Procedural-role nouns that introduce a party by name ("відповідач: АТ «X»", "кредитор — ПАТ
 // X", "апеляційну скаргу АТ «X»", "за заявою ТОВ «X»", "представник АТ «X»", "за позовом
 // Акціонерного товариства «X»" — a spelled-out form the claim-clause slot does not know). Stems with free endings: the 'simple'
@@ -283,9 +372,8 @@ export interface PartyCaseCount {
   resumable?: boolean;
 }
 
-// Stop threshold for the countByParty FTS fallback (the path taken whenever the structured
-// parties table does not cover the requested years — i.e. always, while edrsr_parties is
-// empty on prod).
+// Stop threshold for the countByParty year legs (full-text legs and, LEXAI-1760, the legs
+// served from edrsr_parties for the years in edrsr_parties_coverage).
 //
 // Candidates are resolved in one leg per adj_year partition, newest year first, and every
 // leg that runs is counted IN FULL, with the requested period and justice_kind already
@@ -405,13 +493,13 @@ export function yearLegDocPredicate(leg: YearLeg, alias = 'd'): string[] {
   return out;
 }
 
-// Server-side budgets for the countByParty statements. They must sum to less than the 60 s
-// tool timeout: without them a call the tool layer had already abandoned kept running in
-// Postgres up to the 5 min role default, reading the GIN index on an IO-bound disk and
-// slowing every other query (24.10.2026: two such orphans at 2 and 4 min). A party with a
-// role filter re-checks full_text with a regex, which is the expensive part.
-const PARTY_COUNT_TIMEOUT_MS = 40_000;
-const PARTY_SAMPLE_TIMEOUT_MS = 15_000;
+// Server-side budgets for the countByParty statements. They must stay under the 60 s tool
+// timeout: without them a call the tool layer had already abandoned kept running in Postgres
+// up to the 5 min role default, reading the GIN index on an IO-bound disk and slowing every
+// other query (24.10.2026: two such orphans at 2 and 4 min). A party with a role filter
+// re-checks full_text with a regex, which is the expensive part.
+// The edrsr_parties_coverage lookup (a handful of rows).
+const COVERAGE_TIMEOUT_MS = 5_000;
 // The FTS fallback runs one statement per adj_year leg (LEXAI-2177) under this shared
 // wall-clock budget; each leg's statement_timeout is whatever is left of it. Kept under the
 // 60 s tool timeout with room for the court-name lookup.
@@ -681,9 +769,10 @@ export class EdsrFtsService {
   }
 
   // LEXAI-1760: years whose plaintiff/defendant spans have been extracted into edrsr_parties
-  // (read from edrsr_parties_coverage). When a count's date range falls entirely inside these
-  // years, countByParty serves it from the indexed parties table instead of the full-text
-  // regex scan. Cached briefly; empty set (table absent / not yet built) ⇒ always FTS fallback.
+  // (read from edrsr_parties_coverage). A plaintiff/defendant lookup (countByParty,
+  // searchFulltext, filterDocIdsByConstraints) serves these years from the indexed parties
+  // table and every other year from the full-text regex scan. Cached briefly; empty set
+  // (table absent / not yet built) ⇒ always the full-text path.
   private coveredYearsCache: { years: Set<number>; at: number } | null = null;
   private static readonly COVERAGE_TTL_MS = 60_000;
 
@@ -703,7 +792,7 @@ export class EdsrFtsService {
     }
     let years = new Set<number>();
     try {
-      const res = await dbPool.query(`SELECT adj_year FROM edrsr_parties_coverage`);
+      const res = await this.queryWithTimeout(dbPool, `SELECT adj_year FROM edrsr_parties_coverage`, [], COVERAGE_TIMEOUT_MS);
       years = new Set(res.rows.map((r: any) => Number(r.adj_year)));
     } catch {
       years = new Set();
@@ -712,118 +801,29 @@ export class EdsrFtsService {
     return years;
   }
 
-  /** Normalise a party name the same way the backfill builds name_norm (lower, strip quotes,
-   *  collapse whitespace), then escape ILIKE wildcards so it is matched literally as a substring. */
-  private normalizePartyName(partyName: string): string {
-    return partyName
-      .toLowerCase()
-      .replace(/[«»"“”']/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/[%_\\]/g, '\\$&');
-  }
-
   /**
-   * Fast role count from the structured parties table — used by countByParty only when the
-   * whole [date_from, date_to] year span is covered (see coveredPartyYears). Returns null when
-   * the fast path is not applicable (no/partial date range, an uncovered year, or any error),
-   * which signals the caller to fall back to the FTS scan.
+   * LEXAI-1760: which of `legs` can be answered from edrsr_parties for a role-filtered party
+   * lookup. null when the parties path does not apply at all — no plaintiff/defendant role, a
+   * justice_kind the extractor does not cover, a name with no usable key, or no covered year —
+   * in which case every leg stays on the full-text path.
    */
-  private async countByPartyFast(
-    partyName: string,
+  private async partiesLegPlan(
+    partyName: string | undefined,
     partyRole: PartyRole | undefined,
+    justiceKind: number | undefined,
+    legs: YearLeg[],
     dbPool: any,
-    filters: { date_from?: string; date_to?: string; justice_kind?: number },
-    sampleLimit: number,
-  ): Promise<PartyCaseCount | null> {
-    const { date_from, date_to } = filters;
-    if (!date_from || !date_to) return null;                       // open-ended range — coverage not guaranteed
-    const yFrom = Number(date_from.slice(0, 4));
-    const yTo = Number(date_to.slice(0, 4));
-    if (!Number.isInteger(yFrom) || !Number.isInteger(yTo) || yFrom > yTo) return null;
-
-    const covered = await this.coveredPartyYears(dbPool);
-    if (covered.size === 0) return null;
-    for (let y = yFrom; y <= yTo; y++) {
-      if (!covered.has(y)) return null;                            // any uncovered year ⇒ fall back to FTS
-    }
-
-    const namePattern = `%${this.normalizePartyName(partyName)}%`;
-    const params: any[] = [namePattern, yFrom, yTo];
-    let p = 4;
-    const conditions = [`name_norm ILIKE $1`, `adj_year BETWEEN $2 AND $3`];
-    if (partyRole && partyRole !== 'any') {
-      conditions.push(`role = $${p}`);
-      params.push(partyRole === 'defendant' ? 2 : 1);
-      p++;
-    } else {
-      conditions.push(`role IN (1, 2)`);
-    }
-    // Day-precision bounds inside the boundary years (the year span is coarse): re-check the
-    // exact adjudication_date so e.g. 2023-03-01..2023-09-30 is honoured, not the whole year.
-    // Whole Kyiv-local days, as in countByParty (LEXAI-2110).
-    conditions.push(...kyivDayBoundsSql('adjudication_date', `$${p}`)); params.push(date_from); p++;
-    conditions.push(...kyivDayBoundsSql('adjudication_date', undefined, `$${p}`)); params.push(date_to); p++;
-    if (filters.justice_kind) { conditions.push(`justice_kind = $${p}`); params.push(filters.justice_kind); p++; }
-    const whereClause = conditions.join(' AND ');
-
-    try {
-      const countSql = `
-        SELECT court_code, count(DISTINCT doc_id)::int AS n
-        FROM edrsr_parties
-        WHERE ${whereClause}
-        GROUP BY court_code
-        ORDER BY n DESC`;
-      const countResult = await this.queryWithTimeout(dbPool, countSql, params, PARTY_COUNT_TIMEOUT_MS);
-      const by_court = countResult.rows
-        .filter((r: any) => r.court_code !== null)
-        .map((r: any) => ({ court_code: r.court_code, count: r.n }));
-      const total = countResult.rows.reduce((s: number, r: any) => s + r.n, 0);
-
-      // `total` above counts DOCUMENTS (distinct doc_id). edrsr_parties carries no cause_num,
-      // so distinct cases need the documents table — same distinction the FTS path makes, kept
-      // here so this route cannot silently report documents as "справ" if it ever goes live.
-      const casesResult = await dbPool.query(
-        `SELECT count(DISTINCT d.cause_num)::int AS distinct_cases
-           FROM edrsr_parties p JOIN edrsr_documents d ON d.doc_id = p.doc_id
-          WHERE ${whereClause.replace(/\bname_norm\b/g, 'p.name_norm')
-                              .replace(/\badj_year\b/g, 'p.adj_year')
-                              .replace(/\brole\b/g, 'p.role')
-                              .replace(/\badjudication_date\b/g, 'p.adjudication_date')
-                              .replace(/\bjustice_kind\b/g, 'p.justice_kind')}`,
-        params
-      );
-      const distinct_cases = Number(casesResult.rows[0]?.distinct_cases ?? 0);
-
-      let sample: PartyCaseCount['sample'];
-      if (sampleLimit > 0) {
-        const safeSample = Math.min(Math.max(sampleLimit, 1), 1000);
-        const sampleSql = `
-          SELECT DISTINCT ON (p.doc_id) p.doc_id, d.cause_num, p.court_code, p.justice_kind, p.adjudication_date
-          FROM edrsr_parties p
-          JOIN edrsr_documents d ON d.doc_id = p.doc_id
-          WHERE ${whereClause.replace(/\bname_norm\b/g, 'p.name_norm')
-                              .replace(/\badj_year\b/g, 'p.adj_year')
-                              .replace(/\brole\b/g, 'p.role')
-                              .replace(/\badjudication_date\b/g, 'p.adjudication_date')
-                              .replace(/\bjustice_kind\b/g, 'p.justice_kind')}
-          ORDER BY p.doc_id, p.adjudication_date DESC NULLS LAST
-          LIMIT ${safeSample}`;
-        const sampleResult = await this.queryWithTimeout(dbPool, sampleSql, params, PARTY_SAMPLE_TIMEOUT_MS);
-        sample = sampleResult.rows.map((r: any) => ({
-          doc_id: Number(r.doc_id), cause_num: r.cause_num ?? null, court_code: r.court_code ?? null,
-          justice_kind: r.justice_kind ?? null, adjudication_date: r.adjudication_date ?? null,
-        }));
-      }
-
-      logger.info('[EdsrFtsService] countByParty (fast/parties-table)', {
-        party_name: partyName, party_role: partyRole ?? 'any', years: [yFrom, yTo], total, distinct_cases, courts: by_court.length,
-      });
-      return { total, distinct_cases, by_court, ...(sample ? { sample } : {}) };
-    } catch (err: any) {
-      logger.warn('[EdsrFtsService] countByPartyFast failed; falling back to FTS', { error: err.message, party_name: partyName });
-      return null;
-    }
+  ): Promise<{ keys: PartyNameKeys; role: number; covered: boolean[] } | null> {
+    if (!partyName || !partyRole || partyRole === 'any') return null;
+    if (justiceKind !== undefined && justiceKind !== null && !PARTIES_JUSTICE_KINDS.has(Number(justiceKind))) return null;
+    const keys = partyNameKeys(partyName);
+    if (!keys || legs.length === 0) return null;
+    const years = await this.coveredPartyYears(dbPool);
+    if (years.size === 0) return null;
+    const thisYear = new Date().getFullYear();
+    const covered = legs.map(leg => partiesLegCovered(leg, years, thisYear));
+    if (!covered.some(Boolean)) return null;
+    return { keys, role: PARTY_ROLE_CODE[partyRole], covered };
   }
 
   /**
@@ -1072,7 +1072,33 @@ export class EdsrFtsService {
 
     const partyName = filters.party_name?.trim();
     const roleRegexApplies = !!(partyName && filters.party_role && filters.party_role !== 'any');
-    if (partyName) {
+
+    // LEXAI-1760: with a plaintiff/defendant role, the year legs listed in
+    // edrsr_parties_coverage take the party from edrsr_parties; the others keep the tsv +
+    // claim-clause regex below. Each kind of leg gets only its own parameters bound — an
+    // unreferenced parameter would fail the statement ("could not determine data type").
+    const yearLegs = buildYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
+    const partiesPlan = roleRegexApplies
+      ? await this.partiesLegPlan(partyName, filters.party_role, filters.justice_kind, yearLegs, dbPool)
+      : null;
+    const anyFtsLeg = !partiesPlan || partiesPlan.covered.some(c => !c);
+    let partiesLegConds: (leg: YearLeg) => string[] = () => [];
+    if (partiesPlan) {
+      const k = paramIdx;
+      // Uncorrelated (the leg's years are literals), so it plans as a semi-join driven by the
+      // name_core / trigram index of the parties partition.
+      partiesLegConds = (leg: YearLeg) => [
+        `f.tsv @@ ${topicalExpr}`,
+        `f.doc_id IN (SELECT p.doc_id FROM edrsr_parties p WHERE ${[
+          yearLegPredicate(leg, 'p'), `p.role = $${k + 2}`, partiesNameMatchSql('p', `$${k}`, `$${k + 1}`),
+        ].join(' AND ')})`,
+      ];
+      params.push(partiesPlan.keys.key, partiesPlan.keys.like, partiesPlan.role);
+      paramIdx += 3;
+    }
+    const ftsLegConds: string[] = [];
+
+    if (partyName && anyFtsLeg) {
       // With a role, the claim-clause regex below already requires the name tokens to be
       // adjacent, so the phrase operator is redundant there — and it is the costly part:
       // `<->` makes every GIN hit recheck tsv from the heap (a TOAST read per row), on top
@@ -1092,13 +1118,13 @@ export class EdsrFtsService {
       tsqueryParts.push(`to_tsquery('simple', '${roleTsquery}')`);
     }
 
-    conditions.push(`f.tsv @@ (${tsqueryParts.join(' && ')})`);
+    ftsLegConds.push(`f.tsv @@ (${tsqueryParts.join(' && ')})`);
 
     // Precise role enforcement: the party must stand in the claim clause's role slot, not
     // merely co-occur with the role noun anywhere in the text. Applied as a regex post-filter
     // on full_text — the tsv match above narrows the candidate rows the regex has to scan.
-    if (roleRegexApplies) {
-      conditions.push(`f.full_text ~* $${paramIdx}`);
+    if (roleRegexApplies && anyFtsLeg) {
+      ftsLegConds.push(`f.full_text ~* $${paramIdx}`);
       params.push(buildPartyRoleRegex(partyName!, filters.party_role as Exclude<PartyRole, 'any'>));
       paramIdx++;
     }
@@ -1183,6 +1209,9 @@ export class EdsrFtsService {
     }
 
     const whereClause = conditions.join(' AND ');
+    // Per leg: the party conditions of its kind, then the shared metadata filters.
+    const legWhere = (leg: YearLeg, i: number): string[] =>
+      [...(partiesPlan?.covered[i] ? partiesLegConds(leg) : ftsLegConds), ...(whereClause ? [whereClause] : [])];
 
     // Build FROM clause — only join edrsr_documents when metadata filters are used
     const fromClause = hasMetadataFilter
@@ -1230,11 +1259,10 @@ export class EdsrFtsService {
     const candCap = partyName
       ? Math.min(candidateCap, Math.max(PARTY_FTS_CANDIDATE_CAP, safeOffset + safeLimit + 1))
       : candidateCap;
-    const yearLegs = buildYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
     const legSql = yearLegs.length === 0
       ? ['(SELECT f.doc_id, f.adj_year FROM edrsr_fulltext f WHERE FALSE)']
-      : yearLegs.map(leg => {
-          const legConds = [whereClause, yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
+      : yearLegs.map((leg, i) => {
+          const legConds = [...legWhere(leg, i), yearLegPredicate(leg), ...(hasMetadataFilter ? yearLegDocPredicate(leg) : [])];
           return `(SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${legConds.join(' AND ')})`;
         });
     const candBody = `SELECT legs.doc_id, legs.adj_year FROM (
@@ -1416,17 +1444,17 @@ export class EdsrFtsService {
     sampleLimit: number = 0,
   ): Promise<PartyCaseCount> {
     dbPool = this.resolvePool(dbPool);
-    // LEXAI-1760: when the requested year span is fully covered by the structured parties
-    // table, answer from its indexes (fast, exact) instead of regex-scanning 125M full texts.
-    // Returns null when not applicable / on error → fall through to the legacy FTS path below.
-    const fast = await this.countByPartyFast(partyName, partyRole, dbPool, filters, sampleLimit);
-    if (fast) return fast;
 
     const legs = buildYearLegs(filters.date_from, filters.date_to, new Date().getFullYear());
     if (legs.length === 0) {
       // date_from later than date_to: nothing can match, and saying so needs no scan.
       return { total: 0, distinct_cases: 0, by_court: [], ...(sampleLimit > 0 ? { sample: [] } : {}) };
     }
+
+    // LEXAI-1760: a plaintiff/defendant count is answered from edrsr_parties for every year
+    // leg listed in edrsr_parties_coverage (an index lookup instead of regex-scanning the
+    // TOASTed full texts); the remaining years keep the full-text path below.
+    const partiesPlan = await this.partiesLegPlan(partyName, partyRole, filters.justice_kind, legs, dbPool);
 
     const params: any[] = [partyName];
     let p = 2;
@@ -1498,6 +1526,15 @@ export class EdsrFtsService {
     // from the HDD-backed edrsr_fulltext tablespace — 54.6 s for 2026 alone cold, 5.0 s warm.
     // Now every leg that finishes is kept (and cached), a leg that runs out of budget is
     // reported as pending, and repeating the call resumes from the cached years.
+    const legAggSql = `
+        SELECT
+          (SELECT count(*) FROM l)::int AS n,
+          coalesce((SELECT array_agg(DISTINCT cause_num) FROM l WHERE cause_num IS NOT NULL), '{}'::text[]) AS causes,
+          (SELECT coalesce(json_agg(json_build_object('court_code', court_code, 'count', n) ORDER BY n DESC), '[]'::json)
+             FROM (SELECT court_code, count(*)::int AS n FROM l WHERE court_code IS NOT NULL GROUP BY court_code) b) AS by_court${sampleLimit > 0 ? `,
+          (SELECT coalesce(json_agg(s), '[]'::json) FROM (
+             SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM l
+             ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
     const legSql = (leg: YearLeg) => `
         WITH l AS MATERIALIZED (
           SELECT j.doc_id, j.court_code, j.cause_num, j.justice_kind, j.adjudication_date
@@ -1514,15 +1551,29 @@ export class EdsrFtsService {
             OFFSET 0
           ) j${recheck.length ? `
           WHERE ${recheck.join(' AND ')}` : ''}
-        )
-        SELECT
-          (SELECT count(*) FROM l)::int AS n,
-          coalesce((SELECT array_agg(DISTINCT cause_num) FROM l WHERE cause_num IS NOT NULL), '{}'::text[]) AS causes,
-          (SELECT coalesce(json_agg(json_build_object('court_code', court_code, 'count', n) ORDER BY n DESC), '[]'::json)
-             FROM (SELECT court_code, count(*)::int AS n FROM l WHERE court_code IS NOT NULL GROUP BY court_code) b) AS by_court${sampleLimit > 0 ? `,
-          (SELECT coalesce(json_agg(s), '[]'::json) FROM (
-             SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM l
-             ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
+        )${legAggSql}`;
+
+    // LEXAI-1760: the same leg answered from edrsr_parties. Its own parameter list — the
+    // full-text one carries the name/regex parameters this statement does not use.
+    const partiesParams: any[] = [];
+    const partiesDocConds: string[] = [];
+    if (partiesPlan) {
+      partiesParams.push(partiesPlan.keys.key, partiesPlan.keys.like, partiesPlan.role);
+      let q = 4;
+      if (filters.date_from) { partiesDocConds.push(...kyivDayBoundsSql('d.adjudication_date', `$${q}`)); partiesParams.push(filters.date_from); q++; }
+      if (filters.date_to) { partiesDocConds.push(...kyivDayBoundsSql('d.adjudication_date', undefined, `$${q}`)); partiesParams.push(filters.date_to); q++; }
+      if (filters.justice_kind) { partiesDocConds.push(`d.justice_kind = $${q}`); partiesParams.push(filters.justice_kind); q++; }
+    }
+    const partiesLegSql = (leg: YearLeg) => `
+        WITH l AS MATERIALIZED (
+          SELECT ${cols}
+          FROM edrsr_documents d
+          WHERE d.doc_id IN (
+                  SELECT p.doc_id FROM edrsr_parties p
+                  WHERE ${[yearLegPredicate(leg, 'p'), 'p.role = $3', partiesNameMatchSql('p', '$1', '$2')].join(' AND ')}
+                )
+            AND ${[...yearLegDocPredicate(leg), ...partiesDocConds].join(' AND ')}
+        )${legAggSql}`;
 
     // Cache key: everything that changes a leg's answer. A date bound that does not cut into
     // the leg's own years does not, so it is dropped — a whole year is then reused across
@@ -1560,8 +1611,10 @@ export class EdsrFtsService {
         continue;
       }
 
+      const fromParties = !!partiesPlan?.covered[i];
       const key = legCacheKey(leg);
-      let legRes: PartyLegResult | null = await this.getCachedPartyLeg(key);
+      // Parties legs are index lookups: never cached, and never served from a cached FTS leg.
+      let legRes: PartyLegResult | null = fromParties ? null : await this.getCachedPartyLeg(key);
       if (legRes) {
         cacheHits++;
       } else {
@@ -1572,10 +1625,11 @@ export class EdsrFtsService {
           cum.push(before);
           continue; // older legs may still be served from the cache
         }
-        const sql = legSql(leg);
-        logger.debug('[EdsrFtsService] countByParty leg SQL', { leg, sql, params });
+        const sql = fromParties ? partiesLegSql(leg) : legSql(leg);
+        const args = fromParties ? partiesParams : params;
+        logger.debug('[EdsrFtsService] countByParty leg SQL', { leg, from_parties: fromParties, sql, params: args });
         try {
-          const res = await this.queryWithTimeout(dbPool, sql, params, remaining);
+          const res = await this.queryWithTimeout(dbPool, sql, args, remaining);
           const row = res.rows[0] ?? {};
           legRes = {
             n: Number(row.n ?? 0),
@@ -1589,7 +1643,9 @@ export class EdsrFtsService {
           };
           // A finished year stays put; the current one still receives decisions.
           const closed = leg.maxYear !== null && leg.maxYear < thisYear;
-          await this.setCachedPartyLeg(key, legRes, closed ? PARTY_LEG_CACHE_TTL_CLOSED_S : PARTY_LEG_CACHE_TTL_OPEN_S);
+          if (!fromParties) {
+            await this.setCachedPartyLeg(key, legRes, closed ? PARTY_LEG_CACHE_TTL_CLOSED_S : PARTY_LEG_CACHE_TTL_OPEN_S);
+          }
         } catch (err: any) {
           if (err.code === '57014') {
             logger.warn('[EdsrFtsService] countByParty leg timed out', { party_name: partyName, leg, remaining_ms: remaining });
@@ -1638,6 +1694,7 @@ export class EdsrFtsService {
       filters: Object.keys(filters).filter(k => (filters as any)[k] !== undefined),
       total, distinct_cases, courts: by_court.length, legs: legs.length, cum, capped,
       cache_hits: cacheHits, pending: pending.map(legYear), ms: Date.now() - started,
+      parties_legs: partiesPlan ? legs.filter((_, i) => partiesPlan.covered[i]).map(legYear) : [],
     });
 
     return {
@@ -1696,6 +1753,7 @@ export class EdsrFtsService {
     const conditions: string[] = [`f.doc_id = ANY($1)`];
 
     if (partyName) {
+      const ftsConds: string[] = [];
       // Same as searchFulltext: with a role the claim-clause regex enforces adjacency, so the
       // name is AND-ed (no tsv heap recheck); without one the phrase is the adjacency check.
       const roleRegexApplies = !!(constraints.party_role && constraints.party_role !== 'any');
@@ -1709,15 +1767,31 @@ export class EdsrFtsService {
         // roleTsquery is a hardcoded constant — safe to inline, no user input.
         tsqueryParts.push(`to_tsquery('simple', '${roleTsquery}')`);
       }
-      conditions.push(`f.tsv @@ (${tsqueryParts.join(' && ')})`);
+      ftsConds.push(`f.tsv @@ (${tsqueryParts.join(' && ')})`);
       // Claim-clause role post-filter: re-check the fused (post-RRF) candidates so a
       // vector-only hit that merely names the party as a courier — or in the opposite role —
       // is dropped instead of polluting the result. This is the hybrid path that previously
       // let "через ТОВ «Нова Пошта»" decisions through the defendant filter.
       if (constraints.party_role && constraints.party_role !== 'any') {
-        conditions.push(`f.full_text ~* $${p}`);
+        ftsConds.push(`f.full_text ~* $${p}`);
         params.push(buildPartyRoleRegex(partyName, constraints.party_role));
         p++;
+      }
+      // LEXAI-1760: candidates from a year listed in edrsr_parties_coverage are checked against
+      // edrsr_parties instead (same semantics as searchFulltext's parties legs).
+      const keys = roleRegexApplies ? partyNameKeys(partyName) : null;
+      const years = keys ? await this.coveredPartyYears(dbPool) : new Set<number>();
+      if (keys && years.size > 0) {
+        const k = p;
+        params.push([...years], keys.key, keys.like, PARTY_ROLE_CODE[constraints.party_role as Exclude<PartyRole, 'any'>]);
+        p += 4;
+        conditions.push(`(
+          (f.adj_year = ANY($${k}::int[]) AND f.doc_id IN (
+             SELECT pp.doc_id FROM edrsr_parties pp
+             WHERE pp.doc_id = ANY($1) AND pp.role = $${k + 3} AND ${partiesNameMatchSql('pp', `$${k + 1}`, `$${k + 2}`)}))
+          OR (NOT (f.adj_year = ANY($${k}::int[])) AND ${ftsConds.join(' AND ')}))`);
+      } else {
+        conditions.push(...ftsConds);
       }
     }
 
