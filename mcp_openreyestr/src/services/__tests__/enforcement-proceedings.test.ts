@@ -79,14 +79,22 @@ describe('LEXAI-2163: search_enforcement_proceedings SQL', () => {
     return { t: new OpenReyestrTools({ query } as unknown as Pool), query };
   }
 
-  it('hides and sorts implausible dates last, takes executor from debtors', async () => {
+  it('masks implausible dates, orders by the index, takes executor from debtors per page', async () => {
     const { t, query } = tools();
     await t.searchEnforcementProceedings({ proceeding_status: 'Відкрито', limit: 3 });
     const [sql, values] = query.mock.calls[0];
-    const plausible = "CASE WHEN ep.opening_date >= DATE '1990-01-01' AND ep.opening_date <= CURRENT_DATE + 1 THEN ep.opening_date END";
+    const plausible =
+      "CASE WHEN ep.opening_date >= DATE '1990-01-01' AND ep.opening_date <= (now() AT TIME ZONE 'UTC')::date + 1 THEN ep.opening_date END";
     expect(sql).toContain(`${plausible} AS opening_date`);
-    expect(sql).toContain(`ORDER BY ${plausible} DESC NULLS LAST, ep.id`);
-    expect(sql).toMatch(/LEFT JOIN LATERAL \(\s*SELECT debtors\.executor_name FROM debtors\s+WHERE debtors\.proceeding_number = ep\.proceeding_number/);
+    // ordering on the raw column (idx_enforce_opening_desc), never on the CASE
+    expect(sql).not.toContain(`ORDER BY ${plausible}`);
+    expect(sql).toMatch(
+      /FROM \(\s*SELECT \* FROM enforcement_proceedings ep\s+WHERE ep\.proceeding_status ILIKE \$1\s+ORDER BY ep\.opening_date DESC NULLS LAST, ep\.id DESC\s+LIMIT \$2 OFFSET \$3\s*\) ep/
+    );
+    // executor lookup after the page is cut, deterministic
+    expect(sql).toMatch(
+      /\) ep\s+LEFT JOIN LATERAL \(\s*SELECT debtors\.executor_name FROM debtors\s+WHERE debtors\.proceeding_number = ep\.proceeding_number AND debtors\.executor_name IS NOT NULL\s+ORDER BY debtors\.id DESC\s+LIMIT 1/
+    );
     expect(sql).toContain('COALESCE(ep.executor_name, d.executor_name) AS executor_name');
     expect(sql).toContain('ep.proceeding_status ILIKE $1');
     expect(values).toEqual(['%Відкрито%', 3, 0]);

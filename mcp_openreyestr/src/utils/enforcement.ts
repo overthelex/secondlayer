@@ -42,11 +42,14 @@ export function parseOpeningDate(raw: string | null | undefined, now: Date = new
   return iso;
 }
 
+/** SQL twin of maxOpeningDate(): tomorrow in UTC, whatever the session TimeZone. */
+export const MAX_OPENING_DATE_SQL = `(now() AT TIME ZONE 'UTC')::date + 1`;
+
 /**
- * SQL for opening_date with implausible values hidden, for rows imported
- * before the fix. Used both in the SELECT list and in ORDER BY so such rows
- * sort with the undated ones (NULLS LAST) instead of first.
+ * SQL for the returned opening_date with implausible values hidden. Import and
+ * migration 022 already null them; this only masks leftovers. Select list
+ * only: ordering uses the raw column so it can use idx_enforce_opening_desc.
  */
 export const PLAUSIBLE_OPENING_DATE_SQL =
-  `CASE WHEN ep.opening_date >= DATE '${MIN_OPENING_DATE}' AND ep.opening_date <= CURRENT_DATE + 1 ` +
+  `CASE WHEN ep.opening_date >= DATE '${MIN_OPENING_DATE}' AND ep.opening_date <= ${MAX_OPENING_DATE_SQL} ` +
   `THEN ep.opening_date END`;

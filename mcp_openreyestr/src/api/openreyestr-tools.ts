@@ -908,24 +908,31 @@ export class OpenReyestrTools {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     values.push(limit, offset);
 
-    // opening_date: mistyped source years (2209, 9008, ...) are hidden and sort
-    // last (LEXAI-2163). executor_name: the АСВП file has no executor column,
-    // so it comes from the debtors registry (ЄРБ) by proceeding number; ЄРБ
-    // lists only proceedings with unpaid debts, so it stays NULL for many
-    // closed ones.
+    // The page is picked in the inner query, ordered to match
+    // idx_enforce_opening_desc (migration 022), so LIMIT stops early instead of
+    // sorting the whole table. Mistyped source years (2209, 9008, ...) are
+    // nulled on import and by migration 022; the outer mask only hides any
+    // left over (LEXAI-2163). executor_name: the АСВП file has no executor
+    // column, so it comes from the debtors registry (ЄРБ) by proceeding number,
+    // looked up for the selected page only; ЄРБ lists only proceedings with
+    // unpaid debts, so it stays NULL for many closed ones.
     const result = await this.pool.query(
       `SELECT ep.id, ep.proceeding_number, ${PLAUSIBLE_OPENING_DATE_SQL} AS opening_date, ep.proceeding_status,
               ep.debtor_name, ep.debtor_edrpou, ep.creditor_name, ep.creditor_edrpou, ep.enforcement_agency,
               COALESCE(ep.executor_name, d.executor_name) AS executor_name
-       FROM enforcement_proceedings ep
+       FROM (
+         SELECT * FROM enforcement_proceedings ep
+         ${whereClause}
+         ORDER BY ep.opening_date DESC NULLS LAST, ep.id DESC
+         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+       ) ep
        LEFT JOIN LATERAL (
          SELECT debtors.executor_name FROM debtors
          WHERE debtors.proceeding_number = ep.proceeding_number AND debtors.executor_name IS NOT NULL
+         ORDER BY debtors.id DESC
          LIMIT 1
        ) d ON true
-       ${whereClause}
-       ORDER BY ${PLAUSIBLE_OPENING_DATE_SQL} DESC NULLS LAST, ep.id
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+       ORDER BY ep.opening_date DESC NULLS LAST, ep.id DESC`,
       values
     );
 
