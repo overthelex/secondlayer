@@ -126,13 +126,16 @@ function isContentToken(t: string): boolean {
 /**
  * Phrase tsquery over the same prefix stems as legislationStems, with the exact word
  * distances of the query («штучний інтелект» → "штуч:* <-> інтел:*", «договір про
- * закупівлю» → "дого:* <2> закуп:*"). LEXAI-2153: an AND query is satisfied by
+ * закупівлю» → "дого:* <2> закупі:*"). LEXAI-2153: an AND query is satisfied by
  * «штучні острови … інтелектуальної власності» 50K chars apart; the phrase is the
  * signal that the document is actually about the queried term.
  *
- * Positions mirror PostgreSQL's 'simple' parser: every word, short word, stopword and
- * number takes one position, and a hyphenated word takes one extra position for the
- * compound token, emitted before its parts ('науково-технічний':1 'науково':2 'технічний':3).
+ * Positions mirror PostgreSQL's 'simple' parser (ts_debug-confirmed): every word, short
+ * word, stopword and number takes one position; a dotted number («69.22», «2.3.4») is
+ * one position; only a letters-hyphen-letters word takes one extra position for the
+ * compound token, emitted before its parts ('науково-технічний':1 'науково':2
+ * 'технічний':3). A hyphen next to a digit («354-1», «covid-19») is no compound: the
+ * parts are a word/number and a signed int («-1»), two positions.
  * Returns '' when the query has fewer than two content words — there is no phrase.
  */
 export function legislationPhraseTsquery(query: string): string {

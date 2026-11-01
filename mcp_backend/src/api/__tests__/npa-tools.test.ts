@@ -352,35 +352,50 @@ describe('query normalisation helpers', () => {
     expect(legislationPhraseTsquery('та і в на')).toBe('');
   });
 
-  it('turns a phrase tsquery into a regex with N-1 words allowed for <N>', () => {
+  it('turns a phrase tsquery into a regex with exactly N-1 gap tokens for <N>', () => {
     const W = '[0-9a-zа-яіїєґёʼ]';
     const S = '[^0-9a-zа-яіїєґёʼ]+';
+    const H = '[^0-9a-zа-яіїєґёʼ]*[^0-9a-zа-яіїєґёʼ-][^0-9a-zа-яіїєґёʼ]*';
     const L = '(^|[^0-9a-zа-яіїєґёʼ])';
     const G = `([0-9]+(\\.[0-9]+)+|${W}+)`;
-    // adjacent: no word in between
+    // adjacent: plain separator
     expect(phraseRegex('штуч:* <-> інтел:*')).toBe(`${L}штуч${W}*${S}інтел${W}*`);
-    // <2>: exactly one intervening position → at most one word
-    expect(phraseRegex('дого:* <2> закупі:*')).toBe(`${L}дого${W}*(${S}${G}){0,1}${S}закупі${W}*`);
+    // <2>: exactly one gap token, fenced by non-hyphen separators
+    expect(phraseRegex('дого:* <2> закупі:*')).toBe(`${L}дого${W}*(${H}${G}){1}${H}закупі${W}*`);
     expect(phraseRegex('поря:* <-> вида:* <-> ліцен:* <3> році:*'))
-      .toBe(`${L}поря${W}*${S}вида${W}*${S}ліцен${W}*(${S}${G}){0,2}${S}році${W}*`);
+      .toBe(`${L}поря${W}*${S}вида${W}*${S}ліцен${W}*(${H}${G}){2}${H}році${W}*`);
     expect(phraseRegex('мобіліз:*')).toBeNull();
+  });
 
-    // the regex agrees with the tsquery semantics on real strings (JS RegExp ≈ PG ARE here)
-    const m = (re: string, s: string) => new RegExp(re, 'iu').test(s); // SQL uses ~* / 'i'
-    const ai = phraseRegex('штуч:* <-> інтел:*')!;
-    expect(m(ai, 'створенні штучного інтелекту')).toBe(true);
-    expect(m(ai, 'Штучного Інтелекту')).toBe(true);
-    expect(m(ai, 'штучного, інтелекту')).toBe(true);
-    expect(m(ai, 'штучні острови та інтелектуальна власність')).toBe(false);
-    expect(m(ai, 'наштучний інтелект')).toBe(false);        // stem must start a word
-    const two = phraseRegex('дого:* <2> закупі:*')!;
-    expect(m(two, 'договір про закупівлю')).toBe(true);
-    expect(m(two, 'договір закупівлі')).toBe(true);
-    // a dotted number between the terms is one position, as in the tsvector
-    const num = phraseRegex(legislationPhraseTsquery('пункт 69.22 податкового кодексу'))!;
-    expect(m(num, 'згідно з пунктом 69.22 Податкового кодексу України')).toBe(true);
-    expect(m(num, 'пунктом 69 22 податкового кодексу')).toBe(false);
-    expect(m(two, 'договір про державну закупівлю')).toBe(false); // 2 words in between ≠ <2>
+  // [tsquery, text, PostgreSQL `to_tsvector('simple', text) @@ to_tsquery('simple', q)`].
+  // Every expected value below was checked on prod (LEXAI-2153 review); the regex must
+  // never match where PostgreSQL does not.
+  const PG_CASES: Array<[string, string, boolean]> = [
+    ['штуч:* <-> інтел:*', 'створенні штучного інтелекту', true],
+    ['штуч:* <-> інтел:*', 'Штучного Інтелекту', true],
+    ['штуч:* <-> інтел:*', 'штучного, інтелекту', true],
+    ['штуч:* <-> інтел:*', 'штучного-інтелекту', true],               // hword parts at 2, 3
+    ['штуч:* <-> інтел:*', 'штучні острови та інтелектуальна власність', false],
+    ['штуч:* <-> інтел:*', 'наштучний інтелект', false],
+    ['дого:* <2> закупі:*', 'договір про закупівлю', true],
+    ['дого:* <2> закупі:*', 'договір закупівлі', false],              // <N> is exact
+    ['дого:* <2> закупі:*', 'договір про державну закупівлю', false],
+    ['дого:* <3> закупі:*', 'договір про державну закупівлю', true],
+    ['дого:* <2> закупі:*', 'договір абзац-закупівлі', false],        // hword: distance 3
+    ['дого:* <3> закупі:*', 'договір абзац-а закупівлі', false],      // «абзац-а» = 3 positions
+    ['пунк:* <2> податков:* <-> коде:*', 'згідно з пунктом 69.22 Податкового кодексу України', true],
+    ['пунк:* <2> податков:* <-> коде:*', 'пунктом 69 22 податкового кодексу', false],
+  ];
+
+  it.each(PG_CASES)('regex for %s on «%s» matches only where PostgreSQL does (%s)', (q, text, pg) => {
+    const re = phraseRegex(q)!;
+    expect(new RegExp(re, 'iu').test(text)).toBe(pg); // SQL uses ~* / 'i'
+  });
+
+  it('is conservative where an hword sits inside a gap', () => {
+    // PostgreSQL: договір:1 абзац-а:2 абзац:3 а:4 закупівлі:5 → `<4>` matches. The regex
+    // can't count the compound position, so it declines rather than risk over-matching.
+    expect(new RegExp(phraseRegex('дого:* <4> закупі:*')!, 'iu').test('договір абзац-а закупівлі')).toBe(false);
   });
 
   it('extracts years but not article numbers or longer digit runs', () => {

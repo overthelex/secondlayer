@@ -94,6 +94,12 @@ const AMENDMENT_TITLE_RE = '^\\s*Про (внесення|затвердженн
  */
 const RE_WORD = '[0-9a-zа-яіїєґёʼ]';
 const RE_SEP = '[^0-9a-zа-яіїєґёʼ]+';
+/**
+ * A separator that is not a bare hyphen: a non-word run with at least one non-hyphen
+ * character. Used on both sides of every gap token, so a gap token can never be one part
+ * of a hyphenated word (see phraseRegex).
+ */
+const RE_SEP_NOT_HYPHEN = '[^0-9a-zа-яіїєґёʼ]*[^0-9a-zа-яіїєґёʼ-][^0-9a-zа-яіїєґёʼ]*';
 /** One intervening tsvector position: a word, or a dotted number («69.22» is one float token). */
 const RE_GAP_TOKEN = `([0-9]+(\\.[0-9]+)+|${RE_WORD}+)`;
 
@@ -104,10 +110,16 @@ const RE_GAP_TOKEN = `([0-9]+(\\.[0-9]+)+|${RE_WORD}+)`;
  * beyond BODY_RANK_CHARS — regex over the full body is ~5× cheaper than to_tsvector
  * (354 ms vs 1.78 s over 41 acts / 24M chars on prod).
  *
- * tsquery `<N>` = positions N apart = N−1 words in between, so each gap is
- * (SEP WORD+){0,N−1}. Each stem must start a word. The regex can be slightly stricter
- * than the tsquery (a dotted number between the terms is one tsvector position but two
- * regex words), never looser than one extra hword position.
+ * tsquery `<N>` = positions EXACTLY N apart = N−1 positions in between, so a gap is
+ * exactly N−1 gap tokens. The regex must never match where the tsquery would not, i.e. it may
+ * only OVER-count positions. Every intervening token is one position, except a
+ * letters-hyphen-letters word: the simple parser gives «абзац-а» three positions
+ * (compound + 2 parts, ts_debug-confirmed) where a word regex sees two. Gap tokens are
+ * therefore separated by RE_SEP_NOT_HYPHEN: an hword can't be split into gap tokens, so a
+ * gap containing one doesn't match (conservative). Adjacent terms (`<->`) keep the plain
+ * separator — «штучного-інтелекту» is adjacent to the parser too (parts at 2 and 3).
+ * Other differences only over-count (a dotted number, a URL, «354-1» around a gap → the
+ * regex is stricter). Each stem must start a word.
  */
 export function phraseRegex(phraseTsquery: string): string | null {
   const m = [...phraseTsquery.matchAll(/(?:^|(<->|<(\d+)>) )([\p{L}\p{N}]+):\*/gu)];
@@ -116,8 +128,11 @@ export function phraseRegex(phraseTsquery: string): string | null {
   m.forEach((x, i) => {
     if (i > 0) {
       const between = (x[2] ? Number(x[2]) : 1) - 1;
-      if (between > 0) re += `(${RE_SEP}${RE_GAP_TOKEN}){0,${between}}`;
-      re += RE_SEP;
+      // `<N>` is an EXACT distance in tsquery, so exactly N−1 gap tokens, each fenced by
+      // non-hyphen separators on both sides.
+      re += between > 0
+        ? `(${RE_SEP_NOT_HYPHEN}${RE_GAP_TOKEN}){${between}}${RE_SEP_NOT_HYPHEN}`
+        : RE_SEP;
     }
     re += `${x[3]}${RE_WORD}*`;
   });
