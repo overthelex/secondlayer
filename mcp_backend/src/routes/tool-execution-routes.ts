@@ -324,6 +324,11 @@ export function createToolExecutionRoutes(deps: {
               message: `Tool '${call.name}' is not available on this deployment`,
             };
           }
+          // LEXAI-2164: unknown arguments are rejected per call, as on the single-tool route.
+          const batchArgsRejection = await deps.toolRegistry.validateToolArgs(call.name, call.arguments || {}, 'rest-batch');
+          if (batchArgsRejection) {
+            return { name: call.name, error: 'Invalid arguments', message: batchArgsRejection.content[0].text };
+          }
           // Same licence gate as the single-tool route: a batch must not be a way
           // around it.
           const batchGated = gatedRegistryOf(call.name, call.arguments || {});
@@ -431,6 +436,16 @@ export function createToolExecutionRoutes(deps: {
       }
       const args = req.body.arguments || req.body;
 
+      // LEXAI-2164: unknown arguments are rejected, as on the non-streaming route.
+      const streamArgsRejection = await deps.toolRegistry.validateToolArgs(toolName, args, 'rest-stream');
+      if (streamArgsRejection) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid arguments',
+          message: streamArgsRejection.content[0].text,
+        });
+      }
+
       // Find Case Law licence gate, as on the non-streaming route.
       const streamGated = gatedRegistryOf(toolName, args);
       if (streamGated) {
@@ -519,6 +534,18 @@ export function createToolExecutionRoutes(deps: {
 
       const args = req.body.arguments || req.body;
       const acceptHeader = req.headers.accept || '';
+
+      // LEXAI-2164: reject arguments the tool's schema does not know. A handler would
+      // otherwise drop them silently and answer an unfiltered query as if it were the
+      // filtered one. Covers local and proxied (rada_*, openreyestr_*) tools.
+      const argsRejection = await deps.toolRegistry.validateToolArgs(toolName, args, 'rest');
+      if (argsRejection) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid arguments',
+          message: argsRejection.content[0].text,
+        });
+      }
 
       // Find Case Law licence gate. Question 13 of TNA ref CAS-349914-B9P5B8 says
       // the judgments are restricted to legal professionals and researchers, so

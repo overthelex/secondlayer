@@ -13,6 +13,7 @@ import { logger } from '../utils/logger.js';
 import { BaseToolHandler, ToolResult, ToolDefinition as BaseToolDefinition, StreamEventCallback } from './base-tool-handler.js';
 import { RemoteServiceClient } from '../services/remote-service-client.js';
 import { gatedRegistryOf, hasJudgmentAccessMark } from '../services/uk-judgment-access.js';
+import { checkToolArgs } from './tool-args-validator.js';
 
 export interface ToolDefinition {
   name: string;
@@ -160,6 +161,37 @@ export class ToolRegistry {
     }
 
     return null;
+  }
+
+  /**
+   * Input schema for a tool: local handler definition, else the cached remote
+   * (rada_* / openreyestr_*) definition. Undefined when unknown.
+   */
+  async getToolInputSchema(name: string): Promise<any | undefined> {
+    const handler = this.handlerMap.get(name);
+    if (handler) {
+      return handler.getToolDefinitions().find(d => d.name === name)?.inputSchema;
+    }
+    const route = this.routes.get(name);
+    if (!route || route.local) return undefined;
+    try {
+      const defs = await this.getAllToolDefinitions();
+      return defs.find(d => d.name === name)?.inputSchema;
+    } catch (err: any) {
+      logger.warn('[ToolRegistry] Could not load remote schema for argument check', { tool: name, error: err?.message });
+      return undefined;
+    }
+  }
+
+  /**
+   * Reject arguments that are not in the tool's inputSchema (LEXAI-2164). Returns an
+   * error ToolResult to send to the client, or null when the call may proceed. Used by
+   * the external transports; tools without a known/closed schema always pass.
+   */
+  async validateToolArgs(name: string, args: unknown, transport: string): Promise<ToolResult | null> {
+    const schema = await this.getToolInputSchema(name);
+    if (!schema) return null;
+    return checkToolArgs(name, schema, args, transport);
   }
 
   /**

@@ -414,6 +414,13 @@ export class MCPSSEServer {
       return;
     }
 
+    // LEXAI-2164: reject arguments the tool's schema does not know (before limits/billing).
+    const argsRejection = await this.toolRegistry.validateToolArgs(name, args || {}, 'sse');
+    if (argsRejection) {
+      this.sendSSEMessage(res, { jsonrpc: '2.0', id: request.id, result: argsRejection });
+      return;
+    }
+
     // Get session context (userId, clientKey)
     const context = this.sessions.get(sessionId) || {};
 
