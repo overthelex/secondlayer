@@ -111,15 +111,25 @@ const RE_GAP_TOKEN = `([0-9]+(\\.[0-9]+)+|${RE_WORD}+)`;
  * (354 ms vs 1.78 s over 41 acts / 24M chars on prod).
  *
  * tsquery `<N>` = positions EXACTLY N apart = N−1 positions in between, so a gap is
- * exactly N−1 gap tokens. The regex must never match where the tsquery would not, i.e. it may
- * only OVER-count positions. Every intervening token is one position, except a
- * letters-hyphen-letters word: the simple parser gives «абзац-а» three positions
- * (compound + 2 parts, ts_debug-confirmed) where a word regex sees two. Gap tokens are
- * therefore separated by RE_SEP_NOT_HYPHEN: an hword can't be split into gap tokens, so a
- * gap containing one doesn't match (conservative). Adjacent terms (`<->`) keep the plain
- * separator — «штучного-інтелекту» is adjacent to the parser too (parts at 2 and 3).
- * Other differences only over-count (a dotted number, a URL, «354-1» around a gap → the
- * regex is stricter). Each stem must start a word.
+ * exactly N−1 gap tokens. The regex aims never to match where the tsquery would not;
+ * known remaining differences are in the safe direction (regex stricter). Every
+ * intervening token is one position, except a letters-hyphen-letters word: the simple
+ * parser gives «абзац-а» three positions (compound + 2 parts, ts_debug-confirmed) where a
+ * word regex sees two. Gap tokens are therefore separated by RE_SEP_NOT_HYPHEN: an hword
+ * can't be split into gap tokens. Adjacent terms (`<->`) keep the plain separator —
+ * «штучного-інтелекту» is adjacent to the parser too (parts at 2 and 3). A term that
+ * STARTS an hword needs no special case: our stems are always prefixes (`інтел:*`), and a
+ * prefix also matches the compound lexeme, which sits right after the previous word
+ * («штучного інтелекту-системи» → 'штучного':1 'інтелекту-системи':2 'інтелекту':3, so
+ * `штуч:* <-> інтел:*` matches — checked on prod; only an exact `штучного <-> інтелекту`
+ * would not). Each stem must start a word.
+ *
+ * Known remaining differences (regex says no, tsquery says yes):
+ *  - an hword inside a gap (`<4>` across «договір абзац-а закупівлі»);
+ *  - a term starting an hword reached through its PART position instead of the compound
+ *    (`штуч:* <2> інтел:*` on «штучного інтелекту-системи»);
+ *  - a dotted number, URL, e-mail or other multi-part single token inside a gap;
+ *  - a hyphen next to a digit around a gap token («354-1»).
  */
 export function phraseRegex(phraseTsquery: string): string | null {
   const m = [...phraseTsquery.matchAll(/(?:^|(<->|<(\d+)>) )([\p{L}\p{N}]+):\*/gu)];

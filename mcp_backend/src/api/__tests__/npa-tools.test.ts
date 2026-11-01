@@ -385,6 +385,12 @@ describe('query normalisation helpers', () => {
     ['дого:* <3> закупі:*', 'договір абзац-а закупівлі', false],      // «абзац-а» = 3 positions
     ['пунк:* <2> податков:* <-> коде:*', 'згідно з пунктом 69.22 Податкового кодексу України', true],
     ['пунк:* <2> податков:* <-> коде:*', 'пунктом 69 22 податкового кодексу', false],
+    // a term that starts an hword: the prefix stem also matches the compound lexeme,
+    // which is adjacent ('штучного':1 'інтелекту-системи':2 'інтелекту':3)
+    ['штуч:* <-> інтел:*', 'штучного інтелекту-системи', true],
+    ['штуч:* <-> інтел:*', 'штучного інтелекту - системи', true],     // spaced dash: no hword
+    ['штуч:* <-> інтел:*', 'штучного інтелекту-2', true],             // word + int «-2»: no hword
+    ['дого:* <2> закупі:*', 'договір про закупівлю-продаж', true],    // compound at 3
   ];
 
   it.each(PG_CASES)('regex for %s on «%s» matches only where PostgreSQL does (%s)', (q, text, pg) => {
@@ -396,6 +402,8 @@ describe('query normalisation helpers', () => {
     // PostgreSQL: договір:1 абзац-а:2 абзац:3 а:4 закупівлі:5 → `<4>` matches. The regex
     // can't count the compound position, so it declines rather than risk over-matching.
     expect(new RegExp(phraseRegex('дого:* <4> закупі:*')!, 'iu').test('договір абзац-а закупівлі')).toBe(false);
+    // PostgreSQL: штучного:1 інтелекту:3 (the part) → `<2>` matches; the regex declines.
+    expect(new RegExp(phraseRegex('штуч:* <2> інтел:*')!, 'iu').test('штучного інтелекту-системи')).toBe(false);
   });
 
   it('extracts years but not article numbers or longer digit runs', () => {
