@@ -697,7 +697,8 @@ export class LegislationService {
   async getActTimeline(radaId: string): Promise<ActTimeline | null> {
     const id = normalizeRadaId(radaId).toLowerCase();
     const r = await this.db.query(
-      `SELECT to_char(LEAST(a.first_ed, l.adoption_date, e.first_ed), 'YYYY-MM-DD') AS first_edition,
+      // npa.act.first_ed 1990-01-01 is a placeholder (3 acts, see migrations 187/188).
+      `SELECT to_char(LEAST(NULLIF(a.first_ed, DATE '1990-01-01'), l.adoption_date, e.first_ed), 'YYYY-MM-DD') AS first_edition,
               to_char(l.effective_date, 'YYYY-MM-DD') AS effective_date,
               to_char(GREATEST(a.last_ed, e.last_ed), 'YYYY-MM-DD') AS last_edition,
               (a.nreg IS NOT NULL OR l.id IS NOT NULL) AS known

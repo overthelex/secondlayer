@@ -182,9 +182,14 @@ export class LegislationTools extends BaseToolHandler {
       const relevantArticles = await this.service.findRelevantArticles(query, normalizeRadaId(radaId), 3);
       if (relevantArticles.length > 0) {
         const response: any = {
-          ...(asOf.kind === 'historical'
-            ? { as_of_note: `Пошук за запитом виконується по чинній редакції. Для тексту станом на ${asOf.as_of_date} запитайте статтю за номером (article_number + as_of_date).` }
-            : asOf.kind === 'use_current' && asOf.note ? { as_of_note: asOf.note } : {}),
+          ...(() => {
+            const notes: string[] = [];
+            if ((asOf.kind === 'historical' || asOf.kind === 'use_current') && asOf.note) notes.push(asOf.note);
+            if (asOf.kind === 'historical') {
+              notes.push(`Пошук за запитом виконується по чинній редакції. Для тексту станом на ${asOf.as_of_date} запитайте статтю за номером (article_number + as_of_date).`);
+            }
+            return notes.length > 0 ? { as_of_note: notes.join(' ') } : {};
+          })(),
           rada_id: normalizeRadaId(radaId),
           search_query: query,
           articles: relevantArticles.map(a => ({

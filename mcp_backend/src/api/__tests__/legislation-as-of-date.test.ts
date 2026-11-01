@@ -87,6 +87,15 @@ describe('get_legislation_section as_of_date (LEXAI-2146)', () => {
     expect(service.assessAsOfDate).not.toHaveBeenCalled();
   });
 
+  it('vector branch keeps the date caveat next to the search-scope note', async () => {
+    const { tools } = buildTools({
+      assessAsOfDate: jest.fn(async () => ({ kind: 'historical', as_of_date: '2003-06-01', note: 'Акт прийнято, але ще не набрав чинності.' })),
+    });
+    const res = await tools.getLegislationSection({ rada_id: '435-15', query: 'інфляційні втрати', as_of_date: '2003-06-01' });
+    expect(res.as_of_note).toContain('ще не набрав чинності');
+    expect(res.as_of_note).toContain('по чинній редакції');
+  });
+
   it('vector branch (rada_id + query) applies the act-level rule too', async () => {
     const { tools, service } = buildTools();
     const res = await tools.getLegislationSection({ rada_id: '435-15', query: 'інфляційні втрати', as_of_date: '2001-01-01' });
@@ -126,6 +135,31 @@ describe('get_npa_act as_of_date (LEXAI-2146)', () => {
     const out = JSON.parse((await tools.executeTool('get_npa_act', { nreg: '435-15', mode: 'article', article_number: '625', as_of_date: '2001-01-01' }))!.content[0].text);
     expect(out.error).toContain('Акт ще не діяв на 01.01.2001');
     expect(db.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('the 1990-01-01 first_ed placeholder does not count as a first edition', async () => {
+    const db = { query: jest.fn() };
+    db.query
+      .mockResolvedValueOnce({ rows: [{ nreg: '995_004' }] })
+      .mockResolvedValueOnce({ rows: [{ ...ACT, nreg: '995_004', first_ed: '1990-01-01', last_ed: '2010-01-01' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const tools = new NpaTools(db as any);
+    const out = JSON.parse((await tools.executeTool('get_npa_act', { nreg: '995_004', as_of_date: '1985-01-01' }))!.content[0].text);
+    expect(out.error).toBeUndefined();
+    expect(db.query.mock.calls[2][1]).toEqual(['995_004', '1985-01-01']); // looked up, not refused
+  });
+
+  it('on/after the last edition: current edition with a note', async () => {
+    const db = { query: jest.fn() };
+    db.query
+      .mockResolvedValueOnce({ rows: [{ nreg: '435-15' }] })
+      .mockResolvedValueOnce({ rows: [ACT] })
+      .mockResolvedValueOnce({ rows: [{ ed_date: '2026-08-05', is_current: true }] })
+      .mockResolvedValueOnce({ rows: [{ article_count: 1275, char_len: 9 }] });
+    const tools = new NpaTools(db as any);
+    const out = JSON.parse((await tools.executeTool('get_npa_act', { nreg: '435-15', as_of_date: '2026-09-01' }))!.content[0].text);
+    expect(db.query.mock.calls[2][0]).toContain('is_current');
+    expect(out.as_of_note).toContain('05.08.2026');
   });
 
   it('future date: current edition with a note', async () => {

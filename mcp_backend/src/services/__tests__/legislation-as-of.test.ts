@@ -2,6 +2,7 @@ import {
   articleMissMessage,
   classifyAsOfDate,
   kyivToday,
+  npaFirstEdition,
   parseIsoDate,
   PLACEHOLDER_VERSION_SQL,
 } from '../legislation-as-of';
@@ -77,6 +78,15 @@ describe('articleMissMessage', () => {
     expect(m).toContain('06.02.2015');
   });
 
+  it('article seen before the date but absent from that edition: not «did not exist yet»', () => {
+    const m = articleMissMessage('625', '2010-01-01', {
+      article_first_seen: '2003-01-16', in_current_text: true, edition_on_date: '2009-12-15', earliest_loaded_edition: '2003-01-16',
+    });
+    expect(m).toContain('існувала раніше');
+    expect(m).toContain('16.01.2003');
+    expect(m).not.toContain('ще не існувала');
+  });
+
   it('article only in the current text', () => {
     const m = articleMissMessage('9', '2010-01-01', {
       article_first_seen: null, in_current_text: true, edition_on_date: '2009-12-15', earliest_loaded_edition: '2003-01-16',
@@ -105,8 +115,23 @@ describe('helpers', () => {
     expect(kyivToday(new Date('2026-10-31T22:30:00Z'))).toBe('2026-11-01');
   });
 
-  it('placeholder predicate targets the 2000-01-01 stamp', () => {
-    expect(PLACEHOLDER_VERSION_SQL).toContain("TIMESTAMP '2000-01-01 02:00:00'");
-    expect(PLACEHOLDER_VERSION_SQL).toContain('legislation_editions');
+  it('placeholder predicate: 02:00 always, midnight only without a real 2000-01-01 edition', () => {
+    const sql = PLACEHOLDER_VERSION_SQL.replace(/\s+/g, ' ');
+    // Branch 1: the JS-UTC stamp read back in Kyiv time — unconditional.
+    expect(sql).toMatch(/^\(la\.version_date = TIMESTAMP '2000-01-01 02:00:00' OR \(/);
+    // Branch 2: midnight, excluded only when the act has NO real edition that day,
+    // so a genuine 2000-01-01 edition row stays visible to the temporal lookup.
+    expect(sql).toContain(
+      "(la.version_date = TIMESTAMP '2000-01-01 00:00:00' AND NOT EXISTS (SELECT 1 FROM legislation_editions le_ph" +
+      " WHERE le_ph.legislation_id = la.legislation_id AND le_ph.edition_date = DATE '2000-01-01'))"
+    );
+    // No other dates are treated as placeholders.
+    expect(sql.match(/2000-01-01/g)).toHaveLength(3);
+  });
+
+  it('npaFirstEdition drops the 1990-01-01 placeholder', () => {
+    expect(npaFirstEdition('1990-01-01')).toBeNull();
+    expect(npaFirstEdition('1990-09-11')).toBe('1990-09-11');
+    expect(npaFirstEdition(null)).toBeNull();
   });
 });

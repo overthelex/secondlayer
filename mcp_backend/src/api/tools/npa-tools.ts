@@ -27,7 +27,7 @@ import {
   statusLabel,
 } from './npa-dicts.js';
 import { logger } from '../../utils/logger.js';
-import { classifyAsOfDate } from '../../services/legislation-as-of.js';
+import { classifyAsOfDate, npaFirstEdition } from '../../services/legislation-as-of.js';
 
 /**
  * Candidate cap for the FTS leg — total_found is a lower bound, never exact. The index
@@ -628,7 +628,7 @@ export class NpaTools extends BaseToolHandler {
 
       // Same as_of_date rule as the legislation tools (LEXAI-2146): before the
       // first edition → error, no text; a future date → current edition + note.
-      const asOf = classifyAsOfDate(as_of_date, { first_edition: actRow?.first_ed, last_edition: null });
+      const asOf = classifyAsOfDate(as_of_date, { first_edition: npaFirstEdition(actRow?.first_ed), last_edition: actRow?.last_ed });
       if (asOf.kind === 'invalid') return this.wrapResponse(asOf.error);
       if (asOf.kind === 'before_act') {
         return this.wrapResponse({ error: asOf.error, ...this.shapeAct(actRow), as_of_date });

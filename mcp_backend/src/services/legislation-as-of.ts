@@ -72,6 +72,18 @@ export function parseIsoDate(raw: unknown): string | null {
   return s;
 }
 
+/**
+ * npa.act.first_ed carries 1990-01-01 as a placeholder for three acts (995_*), not a
+ * real date — migrations 187/188 exclude it the same way (npa.act_canon).
+ */
+export const NPA_FIRST_ED_PLACEHOLDER = '1990-01-01';
+
+/** npa.act.first_ed with the 1990-01-01 placeholder dropped. */
+export function npaFirstEdition(d: string | null | undefined): string | null {
+  const v = iso(d);
+  return v && v !== NPA_FIRST_ED_PLACEHOLDER ? v : null;
+}
+
 function iso(d: string | null | undefined): string | undefined {
   if (!d) return undefined;
   return String(d).slice(0, 10);
@@ -159,6 +171,11 @@ export function articleMissMessage(articleNumber: string, asOf: string, f: Artic
   const onDate = iso(f.edition_on_date);
   if (!firstSeen && !f.in_current_text) return null;
 
+  if (onDate && firstSeen && firstSeen <= asOf) {
+    // The article existed before this date but is absent from the edition in force
+    // on it (excluded, then restored; or a gap in that edition's import).
+    return `Стаття ${articleNumber} існувала раніше (вперше — у редакції від ${isoToDmy(firstSeen)}), але в редакції від ${isoToDmy(onDate)}, чинній на ${isoToDmy(asOf)}, її немає. Перевірте редакцію на zakon.rada.gov.ua.`;
+  }
   if (onDate) {
     const appears = firstSeen
       ? `вперше з'являється в редакції від ${isoToDmy(firstSeen)}`
