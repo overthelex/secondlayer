@@ -49,8 +49,9 @@ log "Court data sync started (monthly=$MONTHLY, dry_run=${DRY_RUN:-false})"
 # Determine container name
 if docker ps --format '{{.Names}}' | grep -q 'secondlayer-app-stage'; then
   CONTAINER="secondlayer-app-stage"
-elif docker ps --format '{{.Names}}' | grep -q 'secondlayer-app-local'; then
-  CONTAINER="secondlayer-app-local"
+elif ACTIVE=$(docker ps --format '{{.Names}}' | grep -xE 'secondlayer-app-local(-green)?' | head -1) && [ -n "$ACTIVE" ]; then
+  # blue-green: active colour is whichever of the two is running (LEXAI-2188)
+  CONTAINER="$ACTIVE"
 else
   log "ERROR: No backend container running"
   exit 1

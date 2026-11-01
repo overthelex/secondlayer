@@ -615,6 +615,11 @@ jobs:
           if [ "$ok" != "true" ]; then
             echo "::error::$NEW не поднялся — трафик НЕ переключён, работает $CUR"
             docker logs --tail 60 "$BE" || true
+            # Гасим несостоявшийся цвет: оба цвета носят алиас `app-local`
+            # (LEXAI-2188), и запущенный больной контейнер получал бы часть
+            # внутренних запросов к http://app-local:3000. Логи остаются в
+            # остановленном контейнере.
+            docker stop "$BE" "$FE" >/dev/null 2>&1 || true
             exit 1
           fi
           echo "$NEW здоров"
@@ -630,7 +635,10 @@ jobs:
           printf 'app=%s\n' "$NEW" > "$COLORS"
           echo "трафик переключён на $NEW"
 
-          # Старый цвет гасим только теперь
+          # Старый цвет гасим только теперь. Это же переводит внутренний алиас
+          # `app-local` (его носят оба цвета, LEXAI-2188) целиком на новый цвет:
+          # Docker DNS не отдаёт остановленные контейнеры. До этой строки
+          # http://app-local:3000 раскладывается на оба здоровых цвета.
           if [ "$CUR" = "green" ]; then
             docker stop secondlayer-app-local-green lexwebapp-local-green >/dev/null 2>&1 || true
           else
