@@ -201,7 +201,8 @@ export class ToolRegistry {
     try {
       const defs = await Promise.race([this.loadRemoteDefinitions(route.service), timeout]);
       if (!defs) {
-        logger.warn('[ToolRegistry] Remote schema unavailable, argument check skipped', { tool: name, service: route.service });
+        // Logged once per failed fetch in loadRemoteDefinitions; per call only at debug.
+        logger.debug('[ToolRegistry] Remote schema unavailable, argument check skipped', { tool: name, service: route.service });
         return undefined;
       }
       return defs.find(d => d.name === name)?.inputSchema;
@@ -334,8 +335,14 @@ export class ToolRegistry {
           this.remoteDefsFailedAt.delete(service);
         } else {
           // Failed, empty (RemoteServiceClient returns [] on error) or not configured:
-          // don't cache, retry after the backoff.
+          // don't cache, retry after the backoff. Warn once per failed fetch (calls in the
+          // backoff window log at debug only); an unconfigured service is not a failure.
           this.remoteDefsFailedAt.set(service, Date.now());
+          const log = defs === null ? logger.debug.bind(logger) : logger.warn.bind(logger);
+          log('[ToolRegistry] Remote tool definitions unavailable; argument check and tools/list skip this service until retry', {
+            service,
+            retryInMs: REMOTE_DEFS_RETRY_MS,
+          });
         }
         return defs && defs.length > 0 ? defs : null;
       })

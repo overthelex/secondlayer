@@ -233,8 +233,10 @@ async function handleStreamingToolCall(
  * Single and streaming calls: HTTP 400 { success:false, error:'Invalid arguments', message }.
  * Batch: every call is validated up front; if any is invalid, none runs and the response is
  * HTTP 400 { success:false, error:'Invalid arguments', message, invalid:[{ index, name, message }] }.
- * Tools outside the deployment toolset are skipped here (the handler answers 404 for them),
- * so this never describes a hidden tool's parameters.
+ * Tools outside the deployment toolset are skipped here, so this never describes a hidden
+ * tool's parameters: a single/stream call to one gets the handler's 404, and in a batch
+ * (with no invalid calls) such a call gets a per-call "Not available" entry in the usual
+ * HTTP 200 response.
  */
 export function createToolArgsValidationMiddleware(toolRegistry: Pick<ToolRegistry, 'validateToolArgs'>) {
   return async (req: Request, res: Response, next: (err?: any) => void): Promise<void> => {
@@ -247,13 +249,13 @@ export function createToolArgsValidationMiddleware(toolRegistry: Pick<ToolRegist
         // /batch
         const calls = body.calls;
         if (!Array.isArray(calls)) return next();
-        const invalid: Array<{ index: number; name: string; message: string }> = [];
-        for (let i = 0; i < calls.length; i++) {
-          const call = calls[i];
-          if (!call || typeof call.name !== 'string' || !isToolInToolset(call.name)) continue;
+        // Validate in parallel: each call may wait on a different remote schema.
+        const checked = await Promise.all(calls.map(async (call: any, index: number) => {
+          if (!call || typeof call.name !== 'string' || !isToolInToolset(call.name)) return null;
           const rejection = await toolRegistry.validateToolArgs(call.name, call.arguments || {}, 'rest-batch');
-          if (rejection) invalid.push({ index: i, name: call.name, message: rejection.content[0].text });
-        }
+          return rejection ? { index, name: call.name as string, message: rejection.content[0].text } : null;
+        }));
+        const invalid = checked.filter((c): c is { index: number; name: string; message: string } => c !== null);
         if (invalid.length > 0) {
           res.status(400).json({
             success: false,

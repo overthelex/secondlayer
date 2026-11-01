@@ -191,6 +191,26 @@ describe('ToolRegistry.validateToolArgs', () => {
     }
   });
 
+  it('warns once per failed fetch; calls inside the backoff log only at debug', async () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const debug = jest.spyOn(logger, 'debug').mockImplementation(() => logger);
+    const now = jest.spyOn(Date, 'now').mockReturnValue(3_000_000);
+    try {
+      const reg = new ToolRegistry({ ...remoteClient, fetchRemoteToolDefinitions: async () => [] });
+      for (let i = 0; i < 3; i++) {
+        expect(await reg.validateToolArgs('openreyestr_search_debtors', { name: 'x' }, 'test')).toBeNull();
+      }
+      const unavailableWarns = warn.mock.calls.filter(c => String(c[0]).includes('Remote tool definitions unavailable'));
+      expect(unavailableWarns).toHaveLength(1);
+      expect(warn.mock.calls.some(c => String(c[0]).includes('Remote schema unavailable'))).toBe(false);
+      expect(debug.mock.calls.filter(c => String(c[0]).includes('Remote schema unavailable'))).toHaveLength(3);
+    } finally {
+      warn.mockRestore();
+      debug.mockRestore();
+      now.mockRestore();
+    }
+  });
+
   it('fails open when the owning service schema fetch hangs', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     try {
@@ -261,6 +281,28 @@ describe('createToolArgsValidationMiddleware (REST, before limits/billing)', () 
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(400);
     expect(res.body.invalid).toEqual([{ index: 1, name: 'search_registry', message: 'bad search_registry' }]);
+  });
+
+  it('batch validates calls in parallel', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const slow = createToolArgsValidationMiddleware({
+      validateToolArgs: async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise(r => setImmediate(r));
+        inFlight--;
+        return null;
+      },
+    } as any);
+    const next = jest.fn();
+    await slow({ path: '/batch', params: {}, body: { calls: [
+      { name: 'search_court_decisions', arguments: {} },
+      { name: 'search_registry', arguments: {} },
+      { name: 'search_legislation', arguments: {} },
+    ] } } as any, {} as any, next);
+    expect(maxInFlight).toBe(3);
+    expect(next).toHaveBeenCalled();
   });
 
   it('batch of valid calls passes', async () => {
