@@ -307,8 +307,8 @@ export const ARMA_STATUS_ALIASES: Record<string, string> = {
 };
 
 export interface ArmaSearchParams {
-  owner_name?: string;
-  owner_edrpou?: string;
+  owner_name?: string | number;
+  owner_edrpou?: string | number;
   case_number?: string;
   criminal_proceeding_number?: string;
   asset_type?: string;

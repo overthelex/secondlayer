@@ -9,7 +9,7 @@
 -- The open dataset carries no owner name / ЄДРПОУ at all (excluded by
 -- art. 25 para 9 of the ARMA Law), and no region field.
 --
--- This migration only adds columns and indexes; the corrected importer
+-- This migration only adds columns (indexes: 023); the corrected importer
 -- (services/arma-import.ts) refills every row, stamps it with import_run_id
 -- and, after a clean complete run, deletes rows carrying another run id.
 -- All statements are idempotent.
@@ -37,10 +37,6 @@ COMMENT ON COLUMN arma_assets.status IS 'ARMA action state (source field state),
 COMMENT ON COLUMN arma_assets.region IS 'Region derived from the court seat; NULL for national courts (ВАКС etc.)';
 COMMENT ON COLUMN arma_assets.manager IS 'Asset manager / realiser from action details (props_2)';
 
-CREATE INDEX IF NOT EXISTS idx_arma_assets_case_numbers ON arma_assets USING gin(case_numbers);
-CREATE INDEX IF NOT EXISTS idx_arma_assets_erdr ON arma_assets(criminal_proceeding_number) WHERE criminal_proceeding_number IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_arma_assets_region ON arma_assets(region) WHERE region IS NOT NULL;
--- asset_type filter is (asset_type ILIKE '%x%' OR asset_description ILIKE '%x%'):
--- trigram GIN on both columns lets the planner BitmapOr them.
-CREATE INDEX IF NOT EXISTS idx_arma_assets_asset_type_trgm ON arma_assets USING gin(asset_type gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_arma_assets_description_trgm ON arma_assets USING gin(asset_description gin_trgm_ops);
+-- Indexes are in 023_arma_assets_indexes.sql: the runner sends each file as
+-- one transaction, so building them here would hold the ACCESS EXCLUSIVE lock
+-- of the ALTERs above for the whole index build.

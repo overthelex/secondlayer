@@ -77,6 +77,46 @@ describe('importArmaFile (LEXAI-2161)', () => {
     expect(query.mock.calls.some(([sql]) => sql === ARMA_DELETE_STALE_SQL)).toBe(false);
   });
 
+  it('does not treat a pretty-printed "columns" array as items', async () => {
+    const file = writeFile('pretty.json', [
+      '{',
+      '  "results": [',
+      '    {',
+      '      "columns": [',
+      '        {"name":"ID","type":"CLOB"},',
+      '        {"name":"DESCRIPTION","type":""}',
+      '      ],',
+      '      "items":',
+      '[',
+      item(1),
+      ',' + item(2),
+      ']',
+      '    }',
+      '  ]',
+      '}',
+    ]);
+    const { pool, query } = mockPool(2);
+    const stats = await importArmaFile(pool, file, { sourceUrl: 'u', runId: 'run-5' });
+    expect(stats).toMatchObject({ items: 2, parseErrors: 0, complete: true });
+    const [, params] = query.mock.calls.find(([sql]) => sql === ARMA_UPSERT_SQL)!;
+    expect(JSON.parse(params![0]).map((r: any) => r.asset_id)).toEqual(['1', '2']);
+  });
+
+  it('accepts "items": [ on one line', async () => {
+    const file = writeFile('inline.json', ['{"results":[{"columns":[', '{"name":"ID"}', '],"items": [', item(7), ']}]}']);
+    const { pool } = mockPool(1);
+    const stats = await importArmaFile(pool, file, { sourceUrl: 'u', runId: 'run-6' });
+    expect(stats).toMatchObject({ items: 1, complete: true, parseErrors: 0 });
+  });
+
+  it('stops without deleting when the file has no "items" key', async () => {
+    const file = writeFile('noitems.json', ['{"results":[{"columns":', '[', '{"name":"ID"}', ']', '}]}']);
+    const { pool, query } = mockPool(5);
+    const stats = await importArmaFile(pool, file, { sourceUrl: 'u', runId: 'run-7' });
+    expect(stats).toMatchObject({ items: 0, complete: false });
+    expect(query.mock.calls.some(([sql]) => sql === ARMA_UPSERT_SQL || sql === ARMA_DELETE_STALE_SQL)).toBe(false);
+  });
+
   it('staleDeleteBlocker reports failed batches', () => {
     expect(staleDeleteBlocker({ complete: true, parseErrors: 0, batchErrors: 1, seen: 10, before: 10 })).toMatch(/failed batches/);
     expect(staleDeleteBlocker({ complete: true, parseErrors: 0, batchErrors: 0, seen: 10, before: 10 })).toBeNull();

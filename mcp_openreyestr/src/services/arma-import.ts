@@ -38,13 +38,29 @@ export async function* readArmaItems(filePath: string, state: ArmaReadState): As
     crlfDelay: Infinity,
   });
 
+  // Item mode starts only at the "[" that opens the "items" array: on the
+  // `"items":` line itself or on the first non-empty line after it. A "["
+  // anywhere else (e.g. a pretty-printed "columns" array) is header.
+  let sawItemsKey = false;
   let foundItems = false;
   for await (const line of rl) {
     const trimmed = line.trim();
 
     if (!foundItems) {
-      // `"items":` ends the header line; the "[" may be on the same or the next line.
-      if (trimmed === '[' || (trimmed.includes('"items":') && trimmed.endsWith('['))) foundItems = true;
+      if (!sawItemsKey) {
+        const at = trimmed.indexOf('"items"');
+        if (at >= 0) {
+          sawItemsKey = true;
+          if (/^"items"\s*:\s*\[$/.test(trimmed.slice(at))) foundItems = true;
+        }
+      } else if (trimmed === '[') {
+        foundItems = true;
+      } else if (trimmed !== '') {
+        // Anything else after "items": is not a one-item-per-line layout.
+        state.parseErrors++;
+        console.error(`\n  Unexpected line after "items": ${trimmed.substring(0, 200)}`);
+        return;
+      }
       continue;
     }
 

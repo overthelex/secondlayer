@@ -1585,20 +1585,23 @@ export class OpenReyestrTools {
    * field map live in services/arma-mapping.ts.
    */
   async searchArmaSeizedAssets(params: {
-    owner_name?: string; owner_edrpou?: string; case_number?: string; criminal_proceeding_number?: string;
+    owner_name?: string | number; owner_edrpou?: string | number; case_number?: string; criminal_proceeding_number?: string;
     asset_type?: string; description?: string; status?: string; court_name?: string; region?: string;
     limit?: number; offset?: number;
   }): Promise<any[]> {
     const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 100);
     const offset = Math.max(Number(params.offset) || 0, 0);
-    const ownerQuery = [params.owner_name, params.owner_edrpou].find((v) => typeof v === 'string' && v.trim());
+    // Any non-empty owner value (MCP clients may send numbers for ЄДРПОУ).
+    const ownerQuery = [params.owner_name, params.owner_edrpou]
+      .map((v) => (v === null || v === undefined ? '' : String(v).trim()))
+      .find((v) => v !== '');
     if (ownerQuery) {
       return [{ found: false, query: ownerQuery, message: ARMA_OWNER_NOT_PUBLISHED }];
     }
 
     const { conditions, values, error } = buildArmaFilters(params);
     if (error) {
-      return [{ found: false, error }];
+      return [{ found: false, message: error }];
     }
     if (conditions.length === 0) {
       return [{ found: false, message: 'Вкажіть номер справи, номер ЄРДР, опис або тип активу, суд, регіон чи статус' }];

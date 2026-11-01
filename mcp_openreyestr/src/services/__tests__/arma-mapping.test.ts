@@ -264,11 +264,22 @@ describe('searchArmaSeizedAssets', () => {
     expect(res).toEqual([{ found: false, query: '12345678', message: ARMA_OWNER_NOT_PUBLISHED }]);
   });
 
+  it('triggers the owner guard for numeric owner values too', async () => {
+    const { pool, query } = mockPool();
+    const tools = new OpenReyestrTools(pool);
+    const res = await tools.searchArmaSeizedAssets({ owner_edrpou: 12345678 as any, region: 'Одеса' });
+    expect(query).not.toHaveBeenCalled();
+    expect(res).toEqual([{ found: false, query: '12345678', message: ARMA_OWNER_NOT_PUBLISHED }]);
+    await tools.searchArmaSeizedAssets({ owner_name: '   ', owner_edrpou: null as any, region: 'Одеса' });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('returns the validation error for an overlong description', async () => {
     const { pool, query } = mockPool();
     const res = await new OpenReyestrTools(pool).searchArmaSeizedAssets({ description: Array(12).fill('слово').join(' ') });
     expect(query).not.toHaveBeenCalled();
-    expect(res[0]).toMatchObject({ found: false, error: expect.stringMatching(/^Занадто довгий опис/) });
+    expect(res[0]).toMatchObject({ found: false, message: expect.stringMatching(/^Занадто довгий опис/) });
+    expect(res[0]).not.toHaveProperty('error');
   });
 
   it('numbers LIMIT/OFFSET after the filters and clamps limit', async () => {
