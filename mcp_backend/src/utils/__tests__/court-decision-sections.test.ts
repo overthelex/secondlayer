@@ -269,7 +269,7 @@ describe('sectionizeCourtDecision', () => {
 // Handlers
 // ---------------------------------------------------------------------------------------
 
-function makeTools(text: string) {
+function makeTools(text: string, sectionizer: any = fakeSectionizer) {
   const db = {
     query: jest.fn(async (sql: string) => {
       if (/FROM edrsr_documents d/.test(sql)) {
@@ -279,7 +279,7 @@ function makeTools(text: string) {
     }),
   };
   const zo: any = { saveDocumentsToDatabase: jest.fn(async () => undefined) };
-  return new CourtDecisionTools(zo, zo, fakeSectionizer as any, {} as any, {} as any, db);
+  return new CourtDecisionTools(zo, zo, sectionizer, {} as any, {} as any, db);
 }
 
 function parse(result: any): any {
@@ -383,6 +383,42 @@ describe('get_court_decision (LEXAI-2175)', () => {
       const out = parse(await tools.executeTool('get_court_decision', { doc_id: 90458880, depth: given }));
       expect(out.depth).toBe(want);
     }
+  });
+
+  describe('HEADER + UNSECTIONED', () => {
+    const head = 'ПОСТАНОВА Іменем України 23 червня 2020 року Справа № 922/989/18 Велика Палата Верховного Суду';
+    const headerOnly = {
+      extractSections: async (t: string) => [
+        { type: SectionType.HEADER, text: head, start_index: 0, end_index: head.length, confidence: 0.9 },
+      ],
+    };
+    const body = (n: number) => '\n\n' + 'Текст рішення без розпізнаних заголовків і структури. '.repeat(n);
+
+    it('puts the detected header in full_text and reports a complete document as not truncated', async () => {
+      const t = head + body(40);
+      const out = parse(await makeTools(t, headerOnly).executeTool('get_court_decision', { doc_id: 90458880 }));
+      expect(out.sections_index.map((s: any) => s.type)).toEqual(['HEADER', 'UNSECTIONED']);
+      expect(out.sections).toEqual([]);
+      expect(out.full_text).toBe(t);
+      expect(out.full_text_truncated).toBe(false);
+    });
+
+    it('keeps the header in a budgeted full_text and flags it truncated', async () => {
+      const t = head + body(2500);
+      const out = parse(await makeTools(t, headerOnly).executeTool('get_court_decision', { doc_id: 90458880 }));
+      expect(out.full_text.startsWith(head)).toBe(true);
+      expect(out.full_text.length).toBeLessThanOrEqual(40000);
+      expect(out.full_text_truncated).toBe(true);
+      expect(out.continue_with.arguments).toEqual({ doc_id: 90458880, section: 1, offset: out.next_offset });
+    });
+
+    it('flags a continuation page as truncated even when it reaches the end', async () => {
+      const t = head + body(40);
+      const out = parse(await makeTools(t, headerOnly).executeTool('get_court_decision', { doc_id: 90458880, section: 1, offset: 10 }));
+      expect(out.next_offset).toBeUndefined();
+      expect(out.full_text.startsWith(head)).toBe(false);
+      expect(out.full_text_truncated).toBe(true);
+    });
   });
 
   it('budgets an unstructured decision instead of returning the whole full_text', async () => {

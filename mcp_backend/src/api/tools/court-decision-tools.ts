@@ -714,16 +714,20 @@ total_resolved_links=0 означає відсутність даних граф
       }
     }
 
-    // No structure found: the budgeted UNSECTIONED text goes out as full_text (where the chat
-    // compactor's regex fallback looks for it) instead of the whole text bypassing the budget.
+    // No structure found: the budgeted text goes out as full_text (where the chat compactor's
+    // regex fallback looks for it) instead of the whole text bypassing the budget. A detected
+    // HEADER comes first in it — both were planned within the same budget — and
+    // full_text_truncated is true whenever full_text is not the complete document.
     let unsectionedText: Record<string, unknown> | null = null;
     const unsectionedAt = sections.findIndex((x) => x.type === UNSECTIONED);
     if (unsectionedAt >= 0) {
-      const u = sections.splice(unsectionedAt, 1)[0];
+      const pieces = sections.splice(0, sections.length); // document order; only HEADER/UNSECTIONED here
+      const u = pieces.find((x) => x.type === UNSECTIONED);
+      const complete = pieces.length === allSections.length && pieces.every((x) => !x.text_truncated && !x.offset);
       unsectionedText = {
-        full_text: u.text,
-        full_text_truncated: Boolean(u.text_truncated || u.offset),
-        ...(u.continue_with ? { continue_with: u.continue_with, next_offset: u.next_offset } : {}),
+        full_text: pieces.map((x) => x.text).join(''),
+        full_text_truncated: !complete,
+        ...(u?.continue_with ? { continue_with: u.continue_with, next_offset: u.next_offset } : {}),
         full_text_hint: 'Структуру рішення не розпізнано: текст повертається як UNSECTIONED (див. sections_index) частинами до ~40 000 символів. Решту отримайте викликом get_court_decision з section та offset — див. continue_with.',
       };
     }
