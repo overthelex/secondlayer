@@ -95,13 +95,20 @@ describe('buildActStatus / buildStatusWarning', () => {
     const s = buildActStatus({ nreg: 'x', status_code: 9, last_ed: '2020-01-01', repeal_note: null });
     expect(s.repealed).toBe(false);
     expect(s.partially_repealed).toBe(true);
-    expect(s.repealed_from).toBe('2020-01-01');
+    // last_ed is the latest amendment, not the repeal date: no note, no date.
+    expect(s.repealed_from).toBeUndefined();
     const w = buildStatusWarning(s)!;
-    expect(w).toContain('Акт частково втратив чинність з 01.01.2020');
+    expect(w).toContain('Акт частково втратив чинність: діють лише окремі положення');
     expect(w).toContain('діють лише окремі положення');
     expect(w).not.toContain('НЕ чинна норма');
     expect(actStatusField(s)).toMatchObject({ partially_repealed: true, in_force: false });
     expect(actStatusField(s)).not.toHaveProperty('repealed');
+  });
+
+  it('dates a status-9 act only from its repeal note', () => {
+    const s = buildActStatus({ nreg: 'x', status_code: 9, last_ed: '2025-01-01', repeal_note: INLINE_NOTE });
+    expect(s.repealed_from).toBe('2018-05-17');
+    expect(buildStatusWarning(s)).toContain('Акт частково втратив чинність з 17.05.2018');
   });
 
   it('gives status 8 a partial-effect caveat', () => {

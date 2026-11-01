@@ -678,6 +678,25 @@ describe('LegislationService', () => {
         expect(stats.excluded_repealed).toBe(0);
       });
 
+      it('counts an excluded hit once when the hybrid pass empties and text fallback runs', async () => {
+        mockEmbedding.searchVectors.mockResolvedValueOnce([]);
+        // Hybrid: only repealed-act hits, all excluded -> falls through to text search.
+        mockAdapter.searchArticlesHybrid.mockResolvedValueOnce(ftsRows.slice(0, 2));
+        mockAdapter.searchArticles.mockResolvedValueOnce([
+          { rada_id: '436-15', legislation_title: 'ГК', article_number: '230', title: 'a', full_text: 'x', metadata: {} },
+          { rada_id: '436-15', legislation_title: 'ГК', article_number: '231', title: 'b', full_text: 'x', metadata: {} },
+          { rada_id: '435-15', legislation_title: 'ЦК', article_number: '549', title: 'c', full_text: 'x', metadata: {} },
+        ]);
+        // One status lookup per pass (hybrid, then text fallback).
+        mockDb.query.mockResolvedValueOnce(statusRows).mockResolvedValueOnce(statusRows);
+
+        const stats = { excluded_repealed: 0 };
+        const result = await service.findRelevantArticles('неустойка', undefined, 5, undefined, { repealed: 'exclude', stats });
+        expect(mockDb.query).toHaveBeenCalledTimes(2);
+        expect(result.map(r => r.article_number)).toEqual(['549']);
+        expect(stats.excluded_repealed).toBe(2);
+      });
+
       it('text fallback oversamples, filters and demotes', async () => {
         mockEmbedding.searchVectors.mockResolvedValueOnce([]);
         mockAdapter.searchArticlesHybrid.mockResolvedValueOnce([]);

@@ -142,7 +142,11 @@ export function buildActStatus(row: {
   };
   if (repealed || partial) {
     const note = parseRepealNote(row.repeal_note);
-    status.repealed_from = computeRepealedFrom(row.last_ed, note?.basis_date);
+    // last_ed of a partially repealed act is usually its latest amendment, not
+    // the repeal date, so for status 9 only the repeal note's date counts.
+    status.repealed_from = repealed
+      ? computeRepealedFrom(row.last_ed, note?.basis_date)
+      : note?.basis_date || undefined;
     if (note) {
       status.repealed_by = note.text;
       if (note.basis_rada_id) status.repealed_by_rada_id = note.basis_rada_id;

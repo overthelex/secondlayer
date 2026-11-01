@@ -1,5 +1,12 @@
 import type { ICachePort } from '../domain/ports/index.js';
-import { LegislationService, normalizeRadaId, parseKmuPrefix, RepealedActMode } from '../services/legislation-service';
+import {
+  LegislationService,
+  normalizeRadaId,
+  parseKmuPrefix,
+  PARTIALLY_REPEALED_ACT_PENALTY,
+  REPEALED_ACT_PENALTY,
+  RepealedActMode,
+} from '../services/legislation-service';
 import { ActStatus, actStatusField, buildStatusWarning } from '../services/legislation-act-status.js';
 import { LegislationRenderer } from '../services/legislation-renderer';
 import { LegalPatternStore } from '../services/legal-pattern-store.js';
@@ -569,7 +576,7 @@ export class LegislationTools extends BaseToolHandler {
             // single wrong answer). When the law is suspect, prefer globally-relevant hits.
             const lawMayBeWrong = grounding < ARTICLE_GROUNDING_MIN_RATIO || refRepealed;
             const [scoped, unscoped] = await Promise.all([
-              this.service.findRelevantArticles(args.query, resolvedRadaId, limit),
+              this.service.findRelevantArticles(args.query, resolvedRadaId, limit, undefined, guessedScopeOpts),
               lawMayBeWrong
                 ? this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts)
                 : Promise.resolve([] as any[]),
@@ -631,7 +638,11 @@ export class LegislationTools extends BaseToolHandler {
         // of the combined list (include_repealed:true path). An explicit citation
         // («ст. 230 ГК») stays first — the caller asked for exactly that article.
         if (refRepealed && directRef.source !== 'regexp') {
-          const weight = (a: any) => (a.act_status?.repealed ? 0.5 : a.act_status?.partially_repealed ? 0.75 : 1);
+          const weight = (a: any) => (a.act_status?.repealed
+            ? REPEALED_ACT_PENALTY
+            : a.act_status?.partially_repealed
+              ? PARTIALLY_REPEALED_ACT_PENALTY
+              : 1);
           response.articles = response.articles
             .map((a: any, i: number) => ({ a, i }))
             .sort((x: any, y: any) => weight(y.a) - weight(x.a) || x.i - y.i)

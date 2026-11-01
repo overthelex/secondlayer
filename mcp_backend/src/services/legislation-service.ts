@@ -1487,6 +1487,9 @@ export class LegislationService {
     });
 
     const textFallback = async (): Promise<LegislationReference[]> => {
+      // This is now the final retrieval path: drop any count the hybrid pass
+      // made so a candidate excluded there is not counted a second time here.
+      if (stats) stats.excluded_repealed = 0;
       // Oversample when statuses may drop or reorder hits, so the page still fills.
       const fetchLimit = repealedMode === 'keep' ? limit : limit * 3;
       const textResults = await this.searchLegislation(query, radaId, fetchLimit);
