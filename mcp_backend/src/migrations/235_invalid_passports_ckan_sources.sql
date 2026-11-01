@@ -78,7 +78,7 @@ VALUES (
     'format',           'json',
     'ckan_package',     '247b7401-481d-4d03-88a5-6609670b6bc1',
     'resource_pattern', '^mvswantedpassport_(?!shema)[a-z0-9_]+\.json$',
-    'min_files',        1,
+    'min_files',        2,  -- _z (passports) + _m (seafarer IDs): losing _m would not trip the row-ratio guard
     'replace',          true,
     'unique_key',       jsonb_build_array('id'),
     'dedup_order',      'insert_date',

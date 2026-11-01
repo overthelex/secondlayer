@@ -240,15 +240,25 @@ export class ImportTaskService {
     const ips = opts.ipAddresses || parseSourceIps(process.env.IMPORT_SOURCE_IPS);
     const threadsPerIp = opts.threadsPerIp || source.default_threads_per_ip;
 
-    // Create task record
-    const taskRes = await this.db.query(
-      `INSERT INTO import_tasks (source_id, source_name, status, ip_addresses, threads_per_ip, from_page, config_overrides)
-       VALUES ($1, $2, 'running', $3, $4, $5, $6) RETURNING id`,
-      [source.id, source.name, ips, threadsPerIp, opts.fromPage || 1, JSON.stringify(opts.configOverrides || {})]
-    );
-    const taskId = taskRes.rows[0].id;
-
-    await this.db.query('UPDATE import_tasks SET started_at = NOW() WHERE id = $1', [taskId]);
+    // Create the task record, at most one active task per source: two concurrent runs of a
+    // replace source would race their full-table swaps (and double the download). The
+    // advisory lock serialises the check + insert across backend instances.
+    const taskId: number = await this.db.transaction(async (client) => {
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('import_task_start'), $1)`, [source.id]);
+      const active = await client.query(
+        `SELECT id FROM import_tasks WHERE source_id = $1 AND status IN ('running', 'pending') ORDER BY id LIMIT 1`,
+        [source.id],
+      );
+      if (active.rows.length) {
+        throw new Error(`Імпорт "${source.name}" вже виконується (задача #${active.rows[0].id})`);
+      }
+      const taskRes = await client.query(
+        `INSERT INTO import_tasks (source_id, source_name, status, ip_addresses, threads_per_ip, from_page, config_overrides, started_at)
+         VALUES ($1, $2, 'running', $3, $4, $5, $6, NOW()) RETURNING id`,
+        [source.id, source.name, ips, threadsPerIp, opts.fromPage || 1, JSON.stringify(opts.configOverrides || {})]
+      );
+      return taskRes.rows[0].id;
+    });
 
     // Init in-memory progress
     taskProgress.set(taskId, {
@@ -798,6 +808,9 @@ export class ImportTaskService {
 
     return this.db.transaction(async (client) => {
       await client.query(`SET LOCAL statement_timeout = '60min'`);
+      // Second line of defence next to the one-active-task rule in startImport: whatever
+      // started them, two swaps into the same table never interleave.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('import_swap:' || $1))`, [target]);
       if (!uniqueKey.length) {
         const del = await client.query(`DELETE FROM ${target}`);
         const ins = await client.query(`INSERT INTO ${target} (${colList}) SELECT ${colList} FROM ${staging} ORDER BY _ord`);

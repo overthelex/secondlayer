@@ -123,7 +123,7 @@ export const VALUE_TRANSFORMS: Record<string, (v: any) => any> = {
 /** Throws on a transform name the importer does not know (caught before any download). */
 export function validateTransforms(transforms: Record<string, string> | undefined): void {
   for (const [col, name] of Object.entries(transforms ?? {})) {
-    if (!VALUE_TRANSFORMS[name]) throw new Error(`unknown transform "${name}" for column ${col}`);
+    if (!Object.prototype.hasOwnProperty.call(VALUE_TRANSFORMS, name)) throw new Error(`unknown transform "${name}" for column ${col}`);
   }
 }
 
@@ -131,63 +131,73 @@ export function validateTransforms(transforms: Record<string, string> | undefine
  * Incremental parser for a JSON document whose top level is an array of objects:
  * feed it text chunks, get back the complete elements seen so far. Lets a 200 MB regional
  * file be loaded in batches instead of holding the whole string and parsed tree in memory.
- * Elements may themselves contain nested objects/arrays and any string content.
+ *
+ * The array syntax is checked strictly: only objects at the top level, exactly one comma
+ * between elements, no trailing comma, `]` as the closer and nothing but whitespace after
+ * it. Brackets inside an element must pair up; the element text itself is validated by
+ * JSON.parse. Anything else throws, so a malformed file can never load partially.
  */
+type ArrayState = 'start' | 'first' | 'afterElement' | 'afterComma' | 'done';
+
 export class JsonArrayStreamParser {
   private buf = '';
   private pos = 0;
-  private depth = 0;
+  private state: ArrayState = 'start';
+  /** Open brackets inside the current element; empty = between elements. */
+  private stack: string[] = [];
   private inString = false;
   private escape = false;
   private elementStart = -1;
-  private started = false;
-  private finished = false;
 
   push(chunk: string): any[] {
-    if (this.finished) {
-      if (chunk.trim()) throw new Error('JSON array stream: data after closing bracket');
-      return [];
-    }
     this.buf += chunk;
     const out: any[] = [];
     const s = this.buf;
     let i = this.pos;
     for (; i < s.length; i++) {
       const ch = s[i];
-      if (this.inString) {
-        if (this.escape) this.escape = false;
-        else if (ch === '\\') this.escape = true;
-        else if (ch === '"') this.inString = false;
+      if (this.stack.length > 0) {
+        // Inside an element.
+        if (this.inString) {
+          if (this.escape) this.escape = false;
+          else if (ch === '\\') this.escape = true;
+          else if (ch === '"') this.inString = false;
+          continue;
+        }
+        if (ch === '"') { this.inString = true; continue; }
+        if (ch === '{' || ch === '[') { this.stack.push(ch); continue; }
+        if (ch === '}' || ch === ']') {
+          const open = this.stack.pop();
+          if ((ch === '}') !== (open === '{')) throw new Error(`JSON array stream: mismatched "${ch}" inside an element`);
+          if (this.stack.length === 0) {
+            out.push(JSON.parse(s.slice(this.elementStart, i + 1)));
+            this.elementStart = -1;
+            this.state = 'afterElement';
+          }
+        }
         continue;
       }
-      if (!this.started) {
-        if (ch === '﻿' || ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t') continue;
+      // Between elements, or outside the array.
+      if (ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t') continue;
+      if (this.state === 'start') {
+        if (ch === '﻿') continue;
         if (ch !== '[') throw new Error(`JSON array stream: expected "[" at start, got "${ch}"`);
-        this.started = true;
-        this.depth = 1;
-        continue;
-      }
-      if (ch === '"') {
-        this.inString = true;
-        if (this.depth === 1) throw new Error('JSON array stream: top-level element is not an object');
-        continue;
-      }
-      if (ch === '{' || ch === '[') {
-        if (this.depth === 1) {
-          if (ch === '[') throw new Error('JSON array stream: top-level element is not an object');
+        this.state = 'first';
+      } else if (this.state === 'first' || this.state === 'afterComma') {
+        if (ch === '{') {
           this.elementStart = i;
+          this.stack.push('{');
+        } else if (ch === ']' && this.state === 'first') {
+          this.state = 'done';
+        } else {
+          throw new Error(`JSON array stream: top-level element is not an object (got "${ch}")`);
         }
-        this.depth++;
-      } else if (ch === '}' || ch === ']') {
-        this.depth--;
-        if (this.depth === 1 && ch === '}') {
-          out.push(JSON.parse(s.slice(this.elementStart, i + 1)));
-          this.elementStart = -1;
-        } else if (this.depth === 0) {
-          this.finished = true;
-          i++;
-          break;
-        }
+      } else if (this.state === 'afterElement') {
+        if (ch === ',') this.state = 'afterComma';
+        else if (ch === ']') this.state = 'done';
+        else throw new Error(`JSON array stream: expected "," or "]" after an element, got "${ch}"`);
+      } else {
+        throw new Error('JSON array stream: data after closing bracket');
       }
     }
     // Keep only the unfinished element (or nothing) in the buffer.
@@ -196,7 +206,6 @@ export class JsonArrayStreamParser {
       this.pos = i - this.elementStart;
       this.elementStart = 0;
     } else {
-      if (this.finished && s.slice(i).trim()) throw new Error('JSON array stream: data after closing bracket');
       this.buf = '';
       this.pos = 0;
     }
@@ -205,6 +214,6 @@ export class JsonArrayStreamParser {
 
   /** Call after the last chunk: throws if the document was cut off. */
   end(): void {
-    if (!this.finished) throw new Error('JSON array stream: unexpected end of data (truncated download?)');
+    if (this.state !== 'done') throw new Error('JSON array stream: unexpected end of data (truncated download?)');
   }
 }

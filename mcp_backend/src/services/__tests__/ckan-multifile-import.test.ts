@@ -103,6 +103,8 @@ describe('value transforms', () => {
 
   it('rejects an unknown transform name', () => {
     expect(() => validateTransforms({ d_series: 'nope' })).toThrow(/unknown transform/);
+    expect(() => validateTransforms({ d_series: 'toString' })).toThrow(/unknown transform/);
+    expect(() => validateTransforms({ d_series: 'constructor' })).toThrow(/unknown transform/);
     expect(() => validateTransforms({ d_series: 'passport_series' })).not.toThrow();
   });
 });
@@ -143,9 +145,37 @@ describe('JsonArrayStreamParser', () => {
     expect(() => p.end()).toThrow(/truncated/);
   });
 
-  it('rejects a document that is not an array of objects', () => {
-    expect(() => new JsonArrayStreamParser().push('{"a":1}')).toThrow(/expected "\["/);
-    expect(() => new JsonArrayStreamParser().push('["a"]')).toThrow(/not an object/);
+  it('accepts an empty array', () => {
+    const p = new JsonArrayStreamParser();
+    expect(p.push(' [ ] \n')).toEqual([]);
+    p.end();
+  });
+
+  // Every malformed document must fail, wherever the chunk border falls.
+  const malformed: Array<[string, string]> = [
+    ['{"a":1}', 'object instead of array'],
+    ['["a"]', 'string element'],
+    ['[1]', 'number element'],
+    ['[{"a":1},2]', 'number after an object'],
+    ['[true]', 'boolean element'],
+    ['[null]', 'null element'],
+    ['[[]]', 'array element'],
+    ['[{"a":1}}', 'object closer for the array'],
+    ['[{"a":1}{"b":2}]', 'missing comma'],
+    ['[{"a":1},,{"b":2}]', 'double comma'],
+    ['[,{"a":1}]', 'leading comma'],
+    ['[{"a":1},]', 'trailing comma'],
+    ['[{"a":[1}]', 'mismatched bracket inside element'],
+    ['[{"a":1}] x', 'data after the array'],
+    ['[{"a":1}][]', 'second array'],
+    ['[{"a":1}', 'truncated after an element'],
+    ['[{"a":1},', 'truncated after a comma'],
+  ];
+  it.each(malformed)('rejects %s (%s) at every split point', (text) => {
+    for (let cut = 0; cut <= text.length; cut++) {
+      const p = new JsonArrayStreamParser();
+      expect(() => { p.push(text.slice(0, cut)); p.push(text.slice(cut)); p.end(); }).toThrow(/JSON|Unexpected|Expected/);
+    }
   });
 });
 
@@ -235,11 +265,15 @@ describe('runCkanMultiFileImport', () => {
     const series = db.staging.map(r => r[2]);
     expect(series).toContain('HM'); // Cyrillic input stored Latin
     expect(series).toContain(null);
-    expect(db.staging.every(r => r[6] === null || /^\d{4}-\d{2}-\d{2}$/.test(r[6]))).toBe(true);
+    const isoOrNull = (v: any) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v);
+    expect(db.staging.every(r => isoOrNull(r[6]) && isoOrNull(r[7]))).toBe(true); // theft_date, insert_date
+    expect(db.staging.map(r => r[7])).toContain('2014-01-01');
     expect(db.txQueries[0]).toMatch(/statement_timeout/);
-    expect(db.txQueries[1]).toMatch(/DELETE FROM opendata_invalid_passports t WHERE NOT EXISTS/);
-    expect(db.txQueries[2]).toMatch(/SELECT DISTINCT ON \(id\).*ORDER BY id, insert_date DESC NULLS LAST, _ord DESC/s);
-    expect(db.txQueries[2]).toMatch(/ON CONFLICT \(id\) DO UPDATE SET .*IS DISTINCT FROM/s);
+    expect(db.txQueries[1]).toMatch(/pg_advisory_xact_lock\(hashtext\('import_swap:'/);
+    expect(db.txQueries[2]).toMatch(/DELETE FROM opendata_invalid_passports t WHERE NOT EXISTS/);
+    // Outcome of the duplicate rule is checked on a real database in ckan-multifile-import.pg.test.ts.
+    expect(db.txQueries[3]).toMatch(/SELECT DISTINCT ON \(id\).*ORDER BY id, insert_date DESC NULLS LAST, _ord DESC/s);
+    expect(db.txQueries[3]).toMatch(/ON CONFLICT \(id\) DO UPDATE SET .*IS DISTINCT FROM/s);
     expect(db.queries.some(q => /DROP TABLE IF EXISTS opendata_invalid_passports__staging_1$/.test(q))).toBe(true);
   });
 
