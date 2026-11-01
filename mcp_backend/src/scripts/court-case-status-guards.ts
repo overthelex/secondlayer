@@ -5,8 +5,9 @@
  * Касаційний господарський суд went 328 → 0 rows and Касаційний адміністративний суд
  * 1,147 → 1. The only guard then was «snapshot ≥ 80% of the table», which passed because
  * the table held 1,249,720 rows, so a partial export replaced the table. The checks below
- * compare the snapshot with the table per court and with the last successful load, and the
- * importer refuses the swap when any of them fails (unless --force).
+ * compare the snapshot with the table per court and with the last unforced load (one that
+ * passed these guards, or the seeded baseline), and the importer refuses the swap when any
+ * of them fails (unless --force). A forced load is never the baseline.
  *
  * Rule per court (current = rows in the table, or in the last recorded load if that is
  * larger, so a court already lost from the table by a bad load is still required;
@@ -85,7 +86,7 @@ export interface SnapshotGuardInput {
   next: Map<string, number>;
   /** CSV files read from the snapshot. */
   fileCount: number;
-  /** The last successful load, or null when none is recorded. */
+  /** The last unforced load (the baseline), or null when none is recorded. */
   lastLoad: LoadRecord | null;
 }
 
@@ -102,7 +103,7 @@ export function evaluateSnapshotGuards(input: SnapshotGuardInput, opts: CourtCou
   }
   const last = input.lastLoad;
   if (last && input.fileCount < last.fileCount) {
-    problems.push(`snapshot has ${input.fileCount} files, last successful load` +
+    problems.push(`snapshot has ${input.fileCount} files, last unforced load` +
       `${last.sourceName ? ` (${last.sourceName})` : ''} had ${last.fileCount}`);
   }
   const baseline = courtBaseline(input.current, last?.courtCounts ?? null);

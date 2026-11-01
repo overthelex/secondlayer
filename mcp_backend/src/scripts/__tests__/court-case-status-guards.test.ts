@@ -66,7 +66,7 @@ describe('evaluateSnapshotGuards (LEXAI-2182)', () => {
       lastLoad: { fileCount: 30, totalRows: 2000, sourceName: 'stan-rozglyadu-sprav-vid-30-10-2026.zip', courtCounts: counts({}) },
     });
     expect(r.ok).toBe(false);
-    expect(r.problems).toEqual(['snapshot has 26 files, last successful load (stan-rozglyadu-sprav-vid-30-10-2026.zip) had 30']);
+    expect(r.problems).toEqual(['snapshot has 26 files, last unforced load (stan-rozglyadu-sprav-vid-30-10-2026.zip) had 30']);
   });
 
   it('accepts the same or more files than the last load', () => {
@@ -105,6 +105,23 @@ describe('evaluateSnapshotGuards (LEXAI-2182)', () => {
       'Касаційний адміністративний суд: 1147 → 1 rows (−99%)',
       'Касаційний господарський суд: 328 → 0 rows (vanished)',
     ]);
+  });
+
+  it('keeps refusing a court at 0 after a forced load dropped it (baseline = last unforced load)', () => {
+    // A --force run swapped in a snapshot without B: the table has no B rows now, and
+    // readLastLoad skips that forced row, so the baseline is still the 30.10 load with B.
+    const unforced = { fileCount: 30, totalRows: 1328, sourceName: 'stan-rozglyadu-sprav-vid-30-10-2026.zip',
+      courtCounts: counts({ A: 1000, B: 328 }) };
+    const afterForced = { current: counts({ A: 1000 }), next: counts({ A: 1003 }), fileCount: 26 };
+    const r = evaluateSnapshotGuards({ ...afterForced, lastLoad: unforced });
+    expect(r.ok).toBe(false);
+    expect(r.problems).toEqual([
+      'snapshot has 26 files, last unforced load (stan-rozglyadu-sprav-vid-30-10-2026.zip) had 30',
+      'B: 328 → 0 rows (vanished)',
+    ]);
+    // Had the forced load (26 files, no B) been the baseline, the same snapshot would pass.
+    const forced = { fileCount: 26, totalRows: 1000, sourceName: 'forced.zip', courtCounts: counts({ A: 1000 }) };
+    expect(evaluateSnapshotGuards({ ...afterForced, lastLoad: forced }).ok).toBe(true);
   });
 
   it('passes once the snapshot restores the courts of the last load', () => {

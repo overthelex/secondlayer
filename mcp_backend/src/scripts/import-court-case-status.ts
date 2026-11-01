@@ -14,7 +14,7 @@
  * Dates are normalised on the way in (court-case-status-dates.ts): a doubled year
  * («01.12.2323») is repaired, other impossible years are stored as NULL.
  *
- * Before the swap the snapshot is checked against the table and the last successful load
+ * Before the swap the snapshot is checked against the table and the last unforced load
  * (court-case-status-guards.ts, LEXAI-2182): the 31.10.2026 ZIP shipped 26 of 30 files and
  * dropped whole courts while still passing the old «≥ 80% of rows» check. The swap is
  * refused when the snapshot has fewer files than the last load recorded in
@@ -32,7 +32,10 @@
  * --dry-run   parse, report counts and what the swap guards would decide; nothing is
  *             written. The guards need read access to the database; without it they are
  *             reported as not evaluated.
- * --force     swap even when the guards refuse (and record the load as forced).
+ * --force     swap even when the guards refuse. The load is recorded with forced = true and
+ *             never becomes the guard baseline: later runs still compare against the last
+ *             load that passed the guards (or the seeded 30.10.2026 baseline), so a court a
+ *             forced load dropped to 0 keeps being required.
  */
 
 import { Pool, type PoolClient } from 'pg';
@@ -95,13 +98,17 @@ function* sourceTexts(input: string): Generator<{ name: string; text: string }> 
   for (const e of entries) yield { name: e.entryName, text: e.getData().toString('utf8') };
 }
 
-/** The last successful load; throws when migration 234 has not created the table. */
+/**
+ * The baseline for the guards: the latest load that passed them (forced = false; the seeded
+ * baseline row counts). A forced load is skipped, or a partial snapshot pushed through with
+ * --force would lower the bar for every later run. Throws when migration 234 has not run.
+ */
 async function readLastLoad(client: PoolClient): Promise<LoadRecord | null> {
   const exists = (await client.query(`SELECT to_regclass($1) AS t`, [LOADS_TABLE])).rows[0].t;
   if (!exists) throw new Error(`${LOADS_TABLE} is missing: apply migration 234_court_case_status_loads.sql first`);
   const res = await client.query(
     `SELECT file_count, total_rows, source_name, court_counts FROM ${LOADS_TABLE}
-      ORDER BY loaded_at DESC, id DESC LIMIT 1`,
+      WHERE NOT forced ORDER BY loaded_at DESC, id DESC LIMIT 1`,
   );
   const r = res.rows[0];
   if (!r) return null;
@@ -204,8 +211,8 @@ async function main(): Promise<void> {
     for (const r of curRes.rows) current.set(r.court_name || '', Number(r.n));
     const cur = [...current.values()].reduce((a, b) => a + b, 0);
     const lastLoad = await readLastLoad(client);
-    if (!lastLoad) console.log(`No previous load recorded in ${LOADS_TABLE}: file-count check skipped`);
-    else console.log(`Last load: ${lastLoad.sourceName || '?'} (${lastLoad.fileCount} files, ${lastLoad.totalRows} rows)`);
+    if (!lastLoad) console.log(`No unforced load recorded in ${LOADS_TABLE}: file-count check skipped`);
+    else console.log(`Baseline (last unforced load): ${lastLoad.sourceName || '?'} (${lastLoad.fileCount} files, ${lastLoad.totalRows} rows)`);
     const guard = evaluateSnapshotGuards({ current, next: courts, fileCount, lastLoad });
     if (!guard.ok) {
       const lines = guard.problems.map((p) => `  - ${p}`).join('\n');
@@ -220,6 +227,8 @@ async function main(): Promise<void> {
       }
       console.warn('!'.repeat(78));
       console.warn(`!!! --force: swapping in a snapshot the guards refuse:\n${lines}`);
+      console.warn(`!!! This load is recorded as forced and will NOT become the guard baseline;` +
+        ` the next run is still checked against ${lastLoad?.sourceName || 'the table'}.`);
       console.warn('!'.repeat(78));
     } else {
       console.log(`Swap guards passed (${fileCount} files, ${rows} rows; table has ${cur})`);
