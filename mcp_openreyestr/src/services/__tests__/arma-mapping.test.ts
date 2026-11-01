@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import {
   ARMA_OWNER_NOT_PUBLISHED,
+  parseArmaDate,
   buildArmaFilters,
   categorizeAsset,
   mapArmaItem,
@@ -93,6 +94,18 @@ describe('ARMA field map (LEXAI-2161)', () => {
     expect(mapArmaItem(item).action_income_sum).toBe('583526.51');
   });
 
+  it('accepts only real calendar dates', () => {
+    expect(parseArmaDate('29.02.2024')).toBe('2024-02-29');
+    expect(parseArmaDate('31.02.2024')).toBeNull();
+    expect(parseArmaDate('29.02.2023')).toBeNull();
+    expect(parseArmaDate('00.01.2020')).toBeNull();
+    expect(parseArmaDate('31.04.2020')).toBeNull();
+    expect(parseArmaDate('2023-02-29')).toBeNull();
+    expect(parseArmaDate('2023-12-31T00:00:00')).toBe('2023-12-31');
+    expect(parseArmaDate('01.01.1801')).toBeNull();
+    expect(mapArmaItem({ ...ITEM_WITH_ACTION, decisiondate: '31.02.2019', dateaction: '30.02.2019' })).toMatchObject({ case_date: null, action_date: null });
+  });
+
   it('splits and dedupes case numbers', () => {
     expect(splitCaseNumbers('991/1718/25, 1-кп/991/22/25')).toEqual(['991/1718/25', '1-кп/991/22/25']);
     expect(splitCaseNumbers('760/14539/18, 760/14539/18')).toEqual(['760/14539/18']);
@@ -146,6 +159,15 @@ describe('resolveRegionFilter', () => {
   it('maps "Київ" to the city and the oblast', () => {
     expect(resolveRegionFilter('Київ').sort()).toEqual(['Київська область', 'м. Київ'].sort());
   });
+  it('keeps Київська область and м. Київ apart when the query is explicit', () => {
+    expect(resolveRegionFilter('Київська область')).toEqual(['Київська область']);
+    expect(resolveRegionFilter('Київська обл.')).toEqual(['Київська область']);
+    expect(resolveRegionFilter('Київська')).toEqual(['Київська область']);
+    expect(resolveRegionFilter('м. Київ')).toEqual(['м. Київ']);
+    expect(resolveRegionFilter('місто Київ')).toEqual(['м. Київ']);
+    expect(resolveRegionFilter('Києві')).toEqual(['м. Київ', 'Київська область']);
+    expect(resolveRegionFilter('м. Одеса')).toEqual(['Одеська область']);
+  });
   it('maps oblast and city spellings', () => {
     expect(resolveRegionFilter('Одеська область')).toEqual(['Одеська область']);
     expect(resolveRegionFilter('Одеса')).toEqual(['Одеська область']);
@@ -185,6 +207,24 @@ describe('buildArmaFilters', () => {
     expect(free.values).toEqual(['%Передано для реалізації%']);
   });
 
+  it('does not treat inherited object keys as status aliases', () => {
+    for (const st of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const { conditions, values } = buildArmaFilters({ status: st });
+      expect(conditions[0]).toMatch(/status ILIKE \$1/);
+      expect(values).toEqual([`%${st.replace(/_/g, '\\_')}%`]);
+    }
+  });
+
+  it('uses every description token and rejects more than 10', () => {
+    const eight = 'Mercedes Vaneo сірий 2000 року випуску номер AA1234';
+    const ok = buildArmaFilters({ description: eight });
+    expect(ok.error).toBeUndefined();
+    expect(ok.conditions).toHaveLength(8);
+    const tooLong = buildArmaFilters({ description: 'a1 b2 c3 d4 e5 f6 g7 h8 i9 j10 k11', court_name: 'суд' });
+    expect(tooLong.error).toMatch(/Занадто довгий опис: не більше 10 слів \(отримано 11\)/);
+    expect(tooLong.conditions).toEqual([]);
+  });
+
   it('matches asset_type as a substring of the category or the description', () => {
     const { conditions, values } = buildArmaFilters({ asset_type: 'транспорт' });
     expect(conditions[0]).toBe('(asset_type ILIKE $1 OR asset_description ILIKE $1)');
@@ -215,6 +255,20 @@ describe('searchArmaSeizedAssets', () => {
     const res = await new OpenReyestrTools(pool).searchArmaSeizedAssets({ owner_name: 'Медведчук' });
     expect(query).not.toHaveBeenCalled();
     expect(res[0]).toMatchObject({ found: false, message: ARMA_OWNER_NOT_PUBLISHED });
+  });
+
+  it('does not drop an owner filter combined with other filters', async () => {
+    const { pool, query } = mockPool([{ case_number: 'x' }]);
+    const res = await new OpenReyestrTools(pool).searchArmaSeizedAssets({ owner_edrpou: '12345678', court_name: 'суд' });
+    expect(query).not.toHaveBeenCalled();
+    expect(res).toEqual([{ found: false, query: '12345678', message: ARMA_OWNER_NOT_PUBLISHED }]);
+  });
+
+  it('returns the validation error for an overlong description', async () => {
+    const { pool, query } = mockPool();
+    const res = await new OpenReyestrTools(pool).searchArmaSeizedAssets({ description: Array(12).fill('слово').join(' ') });
+    expect(query).not.toHaveBeenCalled();
+    expect(res[0]).toMatchObject({ found: false, error: expect.stringMatching(/^Занадто довгий опис/) });
   });
 
   it('numbers LIMIT/OFFSET after the filters and clamps limit', async () => {

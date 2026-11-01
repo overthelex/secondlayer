@@ -1579,9 +1579,10 @@ export class OpenReyestrTools {
   /**
    * Search ARMA seized assets registry (LEXAI-2161).
    *
-   * The open dataset has no owner name / ЄДРПОУ, so owner_* filters cannot
-   * match; they return an explanation instead of an empty result. Filters and
-   * the field map live in services/arma-mapping.ts.
+   * The open dataset has no owner name / ЄДРПОУ. A request with owner_name or
+   * owner_edrpou (alone or with other filters) is not run: it returns the
+   * explanation, so an owner filter is never silently dropped. Filters and the
+   * field map live in services/arma-mapping.ts.
    */
   async searchArmaSeizedAssets(params: {
     owner_name?: string; owner_edrpou?: string; case_number?: string; criminal_proceeding_number?: string;
@@ -1590,12 +1591,16 @@ export class OpenReyestrTools {
   }): Promise<any[]> {
     const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 100);
     const offset = Math.max(Number(params.offset) || 0, 0);
-    const { conditions, values } = buildArmaFilters(params);
+    const ownerQuery = [params.owner_name, params.owner_edrpou].find((v) => typeof v === 'string' && v.trim());
+    if (ownerQuery) {
+      return [{ found: false, query: ownerQuery, message: ARMA_OWNER_NOT_PUBLISHED }];
+    }
 
+    const { conditions, values, error } = buildArmaFilters(params);
+    if (error) {
+      return [{ found: false, error }];
+    }
     if (conditions.length === 0) {
-      if (params.owner_name || params.owner_edrpou) {
-        return [{ found: false, query: params.owner_name || params.owner_edrpou, message: ARMA_OWNER_NOT_PUBLISHED }];
-      }
       return [{ found: false, message: 'Вкажіть номер справи, номер ЄРДР, опис або тип активу, суд, регіон чи статус' }];
     }
 
@@ -1616,9 +1621,6 @@ export class OpenReyestrTools {
 
     if (result.rows.length === 0) {
       return [{ found: false, message: 'Арештованих активів не знайдено' }];
-    }
-    if (params.owner_name || params.owner_edrpou) {
-      return [{ note: ARMA_OWNER_NOT_PUBLISHED }, ...result.rows];
     }
     return result.rows;
   }

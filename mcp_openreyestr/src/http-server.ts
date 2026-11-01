@@ -464,25 +464,43 @@ class HTTPOpenReyestrServer {
 
       // ARMA seized assets is a single data.gov.ua JSON file with its own
       // importer (field map: services/arma-mapping.ts, LEXAI-2161). The script
-      // downloads the file, upserts every row, deletes rows it did not see and
-      // holds a pg advisory lock against overlapping runs.
+      // downloads the file, upserts every row, deletes rows from older runs
+      // and holds a pg advisory lock against overlapping runs. Same auth as
+      // every other registry on this route (requireAPIKey).
       if (registry === 'arma') {
-        if (this.armaImport && this.armaImport.exitCode === null) {
-          res.status(409).json({ error: 'ARMA import already running', pid: this.armaImport.pid });
+        if (this.armaImport) {
+          res.status(409).json({ error: 'Імпорт АРМА вже виконується', pid: this.armaImport.pid });
           return;
         }
         const { spawn } = await import('child_process');
         const path = await import('path');
-        const child = spawn(
-          process.execPath,
-          [path.join(__dirname, 'scripts', 'import-arma.js')],
-          { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NAIS_DATA_DIR: process.env.NAIS_DATA_DIR || '/tmp/nais-sync' } },
-        );
+        const fs = await import('fs');
+        const script = path.join(__dirname, 'scripts', 'import-arma.js');
+        if (!fs.existsSync(script)) {
+          // e.g. dev:http runs src/*.ts through tsx: there is no compiled script.
+          res.status(500).json({ error: `Скрипт імпорту АРМА не знайдено: ${script}. Потрібна зібрана версія (npm run build).` });
+          return;
+        }
+        let child: ChildProcess;
+        try {
+          child = spawn(
+            process.execPath,
+            [script],
+            { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NAIS_DATA_DIR: process.env.NAIS_DATA_DIR || '/tmp/nais-sync' } },
+          );
+        } catch (err) {
+          logger.error('ARMA import spawn failed', { error: (err as Error).message });
+          res.status(500).json({ error: 'Не вдалося запустити імпорт АРМА' });
+          return;
+        }
         this.armaImport = child;
+        const clear = () => { if (this.armaImport === child) this.armaImport = null; };
         child.stdout?.on('data', (d: Buffer) => logger.info(`[arma] ${d.toString().trimEnd()}`));
         child.stderr?.on('data', (d: Buffer) => logger.warn(`[arma] ${d.toString().trimEnd()}`));
-        child.on('exit', (code) => logger.info('ARMA import finished', { code }));
-        res.status(202).json({ status: 'accepted', message: 'ARMA seized assets import started', registry, pid: child.pid });
+        // 'error' covers a failed spawn (no 'exit' follows); without a listener it would crash the server.
+        child.on('error', (err) => { logger.error('ARMA import process error', { error: err.message }); clear(); });
+        child.on('exit', (code, signal) => { logger.info('ARMA import finished', { code, signal }); clear(); });
+        res.status(202).json({ status: 'accepted', message: 'Імпорт реєстру АРМА запущено', registry, pid: child.pid });
         return;
       }
 

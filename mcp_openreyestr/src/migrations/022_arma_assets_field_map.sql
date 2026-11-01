@@ -10,7 +10,8 @@
 -- art. 25 para 9 of the ARMA Law), and no region field.
 --
 -- This migration only adds columns and indexes; the corrected importer
--- (scripts/import-arma.ts) refills every row and deletes rows it did not see.
+-- (services/arma-import.ts) refills every row, stamps it with import_run_id
+-- and, after a clean complete run, deletes rows carrying another run id.
 -- All statements are idempotent.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -26,6 +27,8 @@ ALTER TABLE arma_assets ADD COLUMN IF NOT EXISTS action_name TEXT;
 ALTER TABLE arma_assets ADD COLUMN IF NOT EXISTS action_date DATE;
 ALTER TABLE arma_assets ADD COLUMN IF NOT EXISTS action_details TEXT;
 ALTER TABLE arma_assets ADD COLUMN IF NOT EXISTS action_income_sum NUMERIC;
+-- Set by every importer run; rows with another run id are deleted after a clean run.
+ALTER TABLE arma_assets ADD COLUMN IF NOT EXISTS import_run_id TEXT;
 
 COMMENT ON COLUMN arma_assets.owner_name IS 'Not published in ARMA open data (art. 25 para 9); NULL after LEXAI-2161 reload';
 COMMENT ON COLUMN arma_assets.owner_edrpou IS 'Not published in ARMA open data (art. 25 para 9); NULL after LEXAI-2161 reload';
@@ -37,6 +40,7 @@ COMMENT ON COLUMN arma_assets.manager IS 'Asset manager / realiser from action d
 CREATE INDEX IF NOT EXISTS idx_arma_assets_case_numbers ON arma_assets USING gin(case_numbers);
 CREATE INDEX IF NOT EXISTS idx_arma_assets_erdr ON arma_assets(criminal_proceeding_number) WHERE criminal_proceeding_number IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_arma_assets_region ON arma_assets(region) WHERE region IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_arma_assets_asset_type ON arma_assets(asset_type);
-CREATE INDEX IF NOT EXISTS idx_arma_assets_asset_id ON arma_assets(asset_id);
+-- asset_type filter is (asset_type ILIKE '%x%' OR asset_description ILIKE '%x%'):
+-- trigram GIN on both columns lets the planner BitmapOr them.
+CREATE INDEX IF NOT EXISTS idx_arma_assets_asset_type_trgm ON arma_assets USING gin(asset_type gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_arma_assets_description_trgm ON arma_assets USING gin(asset_description gin_trgm_ops);

@@ -72,12 +72,18 @@ export function parseArmaDate(s: unknown): string | null {
   const dmy = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
   if (dmy) {
     const [, d, m, y] = dmy;
-    const year = Number(y);
-    if (year < 1900 || year > 2100 || Number(m) < 1 || Number(m) > 12 || Number(d) < 1 || Number(d) > 31) return null;
-    return `${y}-${m}-${d}`;
+    return validYmd(Number(y), Number(m), Number(d)) ? `${y}-${m}-${d}` : null;
   }
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+  const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) return validYmd(Number(ymd[1]), Number(ymd[2]), Number(ymd[3])) ? ymd[0] : null;
   return null;
+}
+
+/** Real calendar date in 1900..2100 (31.02 or 00.00 would make Postgres reject the whole batch). */
+function validYmd(y: number, m: number, d: number): boolean {
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
 /** Value of "Key: value" inside a ';'-separated props string. */
@@ -186,17 +192,25 @@ export function regionFromCourt(court: string | null | undefined): string | null
 
 /** Regions a free-text filter value refers to ("Київ" → м. Київ + Київська область). */
 export function resolveRegionFilter(q: string): string[] {
-  const v = q.toLowerCase().replace(/(^|\s)обл(асть|\.)?/g, '').replace(/^м\.\s*/, '').trim();
+  const raw = q.toLowerCase().replace(/\s+/g, ' ').trim();
+  const isOblast = /(^|\s)обл(асть|асті|\.|$)/.test(raw);
+  const isCity = /^(м\.|місто\s|міста\s)/.test(raw);
+  const v = raw.replace(/(^|\s)обл(асть|асті|\.)?(?=\s|$)/g, '').replace(/^(м\.|місто|міста)\s*/, '').trim();
   if (!v) return [];
+  const kyivWord = v.startsWith('київ') || v.startsWith('києв');
+  // "Київська (область)" / "Київська обл." is the oblast only; "м. Київ" is the
+  // city only; a bare "Київ" may mean either, so it covers both.
+  if (v.startsWith('київськ') || (kyivWord && isOblast)) return ['Київська область'];
+  if (kyivWord && isCity) return ['м. Київ'];
+  if (kyivWord) return ['м. Київ', 'Київська область'];
   const out: string[] = [];
   for (const r of ARMA_REGIONS) {
+    const cityRegion = r.name.startsWith('м. ');
+    if (isOblast && cityRegion) continue;
     const lname = r.name.toLowerCase();
     if (lname.includes(v) || r.stems.some((s) => v.startsWith(s) || (v.length >= 4 && s.startsWith(v)))) {
       out.push(r.name);
     }
-  }
-  if (v.startsWith('київ') || v.startsWith('києв')) {
-    for (const n of ['м. Київ', 'Київська область']) if (!out.includes(n)) out.push(n);
   }
   return out;
 }
@@ -308,8 +322,10 @@ export function escapeLikeArma(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-/** Build WHERE conditions; placeholders start at $1. */
-export function buildArmaFilters(params: ArmaSearchParams): { conditions: string[]; values: any[] } {
+export const ARMA_MAX_DESCRIPTION_TOKENS = 10;
+
+/** Build WHERE conditions; placeholders start at $1. `error` is a user-facing (Ukrainian) validation message. */
+export function buildArmaFilters(params: ArmaSearchParams): { conditions: string[]; values: any[]; error?: string } {
   const conditions: string[] = [];
   const values: any[] = [];
   const add = (sqlFor: (p: string) => string, value: any) => {
@@ -339,14 +355,19 @@ export function buildArmaFilters(params: ArmaSearchParams): { conditions: string
   }
   const descr = s(params.description);
   if (descr) {
-    for (const tok of descr.split(/\s+/).filter((t) => t.length > 1).slice(0, 6)) {
+    const tokens = descr.split(/\s+/).filter((t) => t.length > 1);
+    if (tokens.length > ARMA_MAX_DESCRIPTION_TOKENS) {
+      return { conditions: [], values: [], error: `Занадто довгий опис: не більше ${ARMA_MAX_DESCRIPTION_TOKENS} слів (отримано ${tokens.length})` };
+    }
+    for (const tok of tokens) {
       add((p) => `(asset_description ILIKE ${p} OR asset_props ILIKE ${p})`, `%${escapeLikeArma(tok)}%`);
     }
   }
 
   const status = s(params.status);
   if (status) {
-    const alias = ARMA_STATUS_ALIASES[status.toLowerCase()];
+    const key = status.toLowerCase();
+    const alias = Object.prototype.hasOwnProperty.call(ARMA_STATUS_ALIASES, key) ? ARMA_STATUS_ALIASES[key] : undefined;
     if (alias) conditions.push(alias);
     else add((p) => `(status ILIKE ${p} OR decision_type ILIKE ${p} OR action_name ILIKE ${p})`, `%${escapeLikeArma(status)}%`);
   }
