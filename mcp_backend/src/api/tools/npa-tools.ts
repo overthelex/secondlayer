@@ -53,10 +53,16 @@ const FTS_CANDIDATE_CAP = 10000;
  * Митний кодекс. Over the reranked pool only (the phrase recheck detoasts every body —
  * 6.6 s for the 536 AND hits of «штучний інтелект», 25 s for «порядок видачі ліцензій»,
  * so it can't be the corpus-wide filter), each act gets
- *   + PHRASE_BONUS if the query phrase (exact word distances) occurs in the ranked prefix,
+ *   + PHRASE_BONUS if the query phrase (exact word distances) occurs in the act,
  * and an act is "scattered" when it has neither the phrase, all stems in the title, nor
- * a body rank ≥ PROXIMITY_MIN (terms only far apart). Scattered acts are dropped whenever
- * at least one non-scattered act exists — the response reports how many.
+ * a body rank ≥ PROXIMITY_MIN (terms only far apart). The phrase/rank are read from the
+ * first BODY_RANK_CHARS; an act with no signal there but a longer body is checked for
+ * the phrase over its FULL text (phraseRegex) before it may be called scattered, so a
+ * phrase on page 200 of a code is never dropped. A regex, not to_tsvector(full body):
+ * tsvector positions saturate at 16383, so `<->` silently fails deep in long acts — on
+ * prod it missed «Проект Закону про штучний інтелект» at char 137K of 4774-20 (and 3
+ * more), which the regex finds. Scattered acts are dropped whenever at
+ * least one non-scattered act exists — the response reports how many.
  */
 export const NPA_RANK = {
   RERANK_POOL: 150,
@@ -83,16 +89,39 @@ export const NPA_RANK = {
 const AMENDMENT_TITLE_RE = '^\\s*Про (внесення|затвердження) (до .{0,200})?змін';
 
 /**
- * PostgreSQL ARE locating the start of the query phrase in lower(body), for the snippet:
- * the first two stems of the phrase tsquery with up to (distance) words between them.
- * Without it the snippet anchors on the first stem alone and shows «штучні острови»
- * for an act that does mention «штучного інтелекту» further down (LEXAI-2153).
+ * Word characters / separators for the phrase regex, matched case-insensitively (~*):
+ * `t.body ~* re` is 161 ms vs 354 ms for `lower(t.body) ~ re` over 41 acts / 24M chars.
  */
-export function phraseSnippetRegex(phraseTsquery: string): string | null {
-  const m = phraseTsquery.match(/^([\p{L}\p{N}]+):\* (?:<->|<(\d+)>) ([\p{L}\p{N}]+):\*/u);
-  if (!m) return null;
-  const gap = m[2] ? Number(m[2]) : 1;
-  return `${m[1]}\\S*(\\s+\\S+){0,${gap}}\\s+${m[3]}`;
+const RE_WORD = '[0-9a-zа-яіїєґёʼ]';
+const RE_SEP = '[^0-9a-zа-яіїєґёʼ]+';
+/** One intervening tsvector position: a word, or a dotted number («69.22» is one float token). */
+const RE_GAP_TOKEN = `([0-9]+(\\.[0-9]+)+|${RE_WORD}+)`;
+
+/**
+ * PostgreSQL ARE equivalent of a phrase tsquery, matched case-insensitively against the body (LEXAI-2153).
+ * Two uses: locating the phrase for the snippet (otherwise the snippet anchors on the
+ * first stem alone and shows «штучні острови»), and confirming a phrase that lies
+ * beyond BODY_RANK_CHARS — regex over the full body is ~5× cheaper than to_tsvector
+ * (354 ms vs 1.78 s over 41 acts / 24M chars on prod).
+ *
+ * tsquery `<N>` = positions N apart = N−1 words in between, so each gap is
+ * (SEP WORD+){0,N−1}. Each stem must start a word. The regex can be slightly stricter
+ * than the tsquery (a dotted number between the terms is one tsvector position but two
+ * regex words), never looser than one extra hword position.
+ */
+export function phraseRegex(phraseTsquery: string): string | null {
+  const m = [...phraseTsquery.matchAll(/(?:^|(<->|<(\d+)>) )([\p{L}\p{N}]+):\*/gu)];
+  if (m.length < 2) return null;
+  let re = `(^|${RE_SEP.slice(0, -1)})`;
+  m.forEach((x, i) => {
+    if (i > 0) {
+      const between = (x[2] ? Number(x[2]) : 1) - 1;
+      if (between > 0) re += `(${RE_SEP}${RE_GAP_TOKEN}){0,${between}}`;
+      re += RE_SEP;
+    }
+    re += `${x[3]}${RE_WORD}*`;
+  });
+  return re;
 }
 
 /** 4-digit years (1900–2099) named in a query — used only for title boosting. */
@@ -429,7 +458,7 @@ export class NpaTools extends BaseToolHandler {
     // NULL phrase (single-stem query, OR fallback): no phrase bonus and nothing is
     // "scattered" — the filter is meaningful only for a strict multi-term query.
     const phraseIdx = pi; values.push(phrase); pi++;
-    const snipReIdx = pi; values.push(phrase ? phraseSnippetRegex(phrase) : null); pi++;
+    const phraseReIdx = pi; values.push(phrase ? phraseRegex(phrase) : null); pi++;
     const R = NPA_RANK;
 
     // See NPA_RANK. Stage 1 (pre/pool) touches only npa.act; stage 2 (ranked) detoasts
@@ -465,21 +494,35 @@ export class NpaTools extends BaseToolHandler {
          LIMIT $${poolIdx}
       ),
       scored AS (
-        SELECT p.*, m.body_rank, m.phrase_hit,
+        SELECT p.*, m.body_rank, (m.phrase_hit OR COALESCE(l.late_phrase, false)) AS phrase_hit,
                ${R.TITLE_WEIGHT} * p.title_cov + m.body_rank
-                 + CASE WHEN m.phrase_hit THEN ${R.PHRASE_BONUS} ELSE 0 END
+                 + CASE WHEN m.phrase_hit OR l.late_phrase THEN ${R.PHRASE_BONUS} ELSE 0 END
                  + p.year_adj - p.amend_pen + p.status_bonus AS score,
-               ($${phraseIdx}::text IS NULL OR m.phrase_hit OR p.title_cov >= 1
-                 OR m.body_rank >= ${R.PROXIMITY_MIN}) AS focused
+               (l.late_phrase IS NULL OR l.late_phrase) AS focused
           FROM pool p
           JOIN npa.edition_text t ON t.nreg = p.nreg AND t.ed_date = p.ed_date
           -- OFFSET 0 fences the subquery: without it the planner inlines tsv into both uses
           -- below and tokenises every body twice (measured 707 vs 357 ms over 41 acts).
-          CROSS JOIN LATERAL (SELECT to_tsvector('simple', substr(t.body || '', 1, $${prefixIdx})) AS tsv OFFSET 0) v
+          CROSS JOIN LATERAL (
+            SELECT to_tsvector('simple', substr(b.body, 1, $${prefixIdx})) AS tsv, length(b.body) AS body_len
+              FROM (SELECT t.body || '' AS body) b OFFSET 0
+          ) v
           CROSS JOIN LATERAL (
             SELECT ts_rank_cd(v.tsv, to_tsquery('simple', $1), 32) AS body_rank,
                    COALESCE($${phraseIdx}::text IS NOT NULL AND v.tsv @@ to_tsquery('simple', $${phraseIdx}::text), false) AS phrase_hit
           ) m
+          -- Scattered = positive evidence over the FULL text, not just the ranked prefix.
+          -- NULL: already focused within the prefix (or no phrase to test). Only an act with
+          -- no signal in the prefix AND a body longer than it pays for a full-body regex.
+          CROSS JOIN LATERAL (
+            SELECT CASE
+                     WHEN $${phraseIdx}::text IS NULL OR m.phrase_hit OR p.title_cov >= 1
+                          OR m.body_rank >= ${R.PROXIMITY_MIN} THEN NULL
+                     WHEN v.body_len > $${prefixIdx} THEN (t.body || '') ~* $${phraseReIdx}::text
+                     ELSE false
+                   END AS late_phrase
+            OFFSET 0
+          ) l
       ),
       judged AS (
         SELECT s.*, bool_or(s.focused) OVER () AS _any_focused,
@@ -497,7 +540,7 @@ export class NpaTools extends BaseToolHandler {
              to_char(sel.ed_date, 'YYYY-MM-DD') AS shown_edition,
              sel.is_current AS shown_is_current,
              substr(t.body || '', GREATEST(1, COALESCE(
-               NULLIF(CASE WHEN r.phrase_hit THEN regexp_instr(lower(t.body), $${snipReIdx}::text) END, 0),
+               NULLIF(CASE WHEN r.phrase_hit THEN regexp_instr(t.body || '', $${phraseReIdx}::text, 1, 1, 0, 'i') END, 0),
                strpos(lower(t.body), $${anchorIdx})) - 150), 400) AS snippet
         FROM ranked r
         CROSS JOIN LATERAL (

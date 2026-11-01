@@ -6,7 +6,7 @@
  * branch, and the TOAST-safe / chrome-stripped text paths.
  */
 
-import { NpaTools, NPA_RANK, phraseSnippetRegex, queryYears } from '../tools/npa-tools.js';
+import { NpaTools, NPA_RANK, phraseRegex, queryYears } from '../tools/npa-tools.js';
 import { legislationPhraseTsquery, normalizeApostrophes } from '../../services/legislation-search-utils.js';
 import { docTypeIdFromLabel, docTypeLabels, npaUrl, statusLabel } from '../tools/npa-dicts.js';
 
@@ -176,7 +176,8 @@ describe('search_npa', () => {
     expect(poolAt).toBeGreaterThan(0);
     expect(rankAt).toBeGreaterThan(poolAt);
     expect(sql.slice(poolAt, rankAt)).toMatch(/LIMIT \$\d+/);
-    expect(sql).toMatch(/to_tsvector\('simple', substr\(t\.body \|\| '', 1, \$\d+\)\) AS tsv/);
+    expect(sql).toMatch(/to_tsvector\('simple', substr\(b\.body, 1, \$\d+\)\) AS tsv/);
+    expect(sql).toContain("(SELECT t.body || '' AS body) b");
     expect(sql).toContain('ts_rank_cd(v.tsv,');
     expect(values).toContain(NPA_RANK.RERANK_POOL);
     expect(values).toContain(NPA_RANK.BODY_RANK_CHARS);
@@ -276,7 +277,7 @@ describe('search_npa', () => {
     const [sql, values] = db.query.mock.calls[0];
     expect(values[0]).toBe('штуч:* & інтел:*');
     expect(values).toContain('штуч:* <-> інтел:*');
-    expect(values).toContain('штуч\\S*(\\s+\\S+){0,1}\\s+інтел');
+    expect(values).toContain(phraseRegex('штуч:* <-> інтел:*'));
     expect(sql).toContain(`THEN ${NPA_RANK.PHRASE_BONUS}`);
     expect(sql).toContain(`m.body_rank >= ${NPA_RANK.PROXIMITY_MIN}`);
     expect(sql).toContain('WHERE j.focused OR NOT j._any_focused');
@@ -286,8 +287,12 @@ describe('search_npa', () => {
     expect(sql.indexOf('phrase_hit')).toBeGreaterThan(poolAt);
     expect(sql.slice(0, poolAt)).not.toMatch(/phrase/);
     // one tokenisation per body: the tsvector subquery is fenced
-    expect(sql).toMatch(/AS tsv OFFSET 0\) v/);
-    expect(sql).toContain('regexp_instr(lower(t.body)');
+    expect(sql).toMatch(/FROM \(SELECT t\.body \|\| '' AS body\) b OFFSET 0/);
+    // "scattered" needs evidence over the FULL body: an act with no signal in the ranked
+    // prefix but a longer text is checked for the phrase over the whole text first
+    expect(sql).toMatch(/WHEN v\.body_len > \$\d+ THEN \(t\.body \|\| ''\) ~\* \$\d+::text/);
+    expect(sql).toContain('(l.late_phrase IS NULL OR l.late_phrase) AS focused');
+    expect(sql).toMatch(/regexp_instr\(t\.body \|\| '', \$\d+::text, 1, 1, 0, 'i'\)/);
 
     expect(out.scattered_dropped).toBe(39);
     expect(out.note).toContain('Відкинуто 39');
@@ -299,7 +304,12 @@ describe('search_npa', () => {
     await tools.executeTool('search_npa', { query: 'мобілізація' });
     const values = db.query.mock.calls[0][1];
     expect(values[0]).toBe('мобіліза:*');
-    expect(values.filter((v: any) => v === null).length).toBeGreaterThanOrEqual(2); // phrase + snippet regex
+    // the phrase and phrase-regex binds are NULL, and no bound string is a phrase or regex
+    const sql: string = db.query.mock.calls[0][0];
+    const bindAt = (re: RegExp) => Number(sql.match(re)![1]) - 1;
+    expect(values[bindAt(/to_tsquery\('simple', \$(\d+)::text\)/)]).toBeNull();
+    expect(values[bindAt(/regexp_instr\(t\.body \|\| '', \$(\d+)::text/)]).toBeNull();
+    expect(values.some((v: any) => typeof v === 'string' && /<(->|\d+>)|\[\^/.test(v))).toBe(false);
   });
 
   it('rejects an unknown doc_type instead of silently ignoring it', async () => {
@@ -331,14 +341,46 @@ describe('query normalisation helpers', () => {
     expect(legislationPhraseTsquery('розвиток науково-технічний')).toBe('розви:* <2> наук:* <-> техніч:*');
     // the apostrophe splits a word in two, as in the corpus
     expect(legislationPhraseTsquery("бронювання військовозобов'язаних")).toBe('бронюва:* <-> військовозо:* <-> язан:*');
+    // a dotted number is ONE token to the simple parser (ts_debug: float «69.22»,
+    // version «2.3.4»); «354-1» is uint + signed int, two positions, no compound
+    expect(legislationPhraseTsquery('ст. 69.22 ПК податок')).toBe('');
+    expect(legislationPhraseTsquery('пункт 69.22 податкового кодексу')).toBe('пунк:* <2> податков:* <-> коде:*');
+    expect(legislationPhraseTsquery('версія 2.3.4 програми')).toBe('верс:* <2> прогр:*');
+    expect(legislationPhraseTsquery('стаття 354-1 кодексу')).toBe('стат:* <3> коде:*');
+    expect(legislationPhraseTsquery('mobilization covid-19 тестування')).toBe('mobilizat:* <-> covi:* <2> тестува:*');
     expect(legislationPhraseTsquery('мобілізація')).toBe('');
     expect(legislationPhraseTsquery('та і в на')).toBe('');
   });
 
-  it('anchors the snippet regex on the first two phrase stems', () => {
-    expect(phraseSnippetRegex('штуч:* <-> інтел:*')).toBe('штуч\\S*(\\s+\\S+){0,1}\\s+інтел');
-    expect(phraseSnippetRegex('дого:* <2> закуп:*')).toBe('дого\\S*(\\s+\\S+){0,2}\\s+закуп');
-    expect(phraseSnippetRegex('мобіліз:*')).toBeNull();
+  it('turns a phrase tsquery into a regex with N-1 words allowed for <N>', () => {
+    const W = '[0-9a-zа-яіїєґёʼ]';
+    const S = '[^0-9a-zа-яіїєґёʼ]+';
+    const L = '(^|[^0-9a-zа-яіїєґёʼ])';
+    const G = `([0-9]+(\\.[0-9]+)+|${W}+)`;
+    // adjacent: no word in between
+    expect(phraseRegex('штуч:* <-> інтел:*')).toBe(`${L}штуч${W}*${S}інтел${W}*`);
+    // <2>: exactly one intervening position → at most one word
+    expect(phraseRegex('дого:* <2> закупі:*')).toBe(`${L}дого${W}*(${S}${G}){0,1}${S}закупі${W}*`);
+    expect(phraseRegex('поря:* <-> вида:* <-> ліцен:* <3> році:*'))
+      .toBe(`${L}поря${W}*${S}вида${W}*${S}ліцен${W}*(${S}${G}){0,2}${S}році${W}*`);
+    expect(phraseRegex('мобіліз:*')).toBeNull();
+
+    // the regex agrees with the tsquery semantics on real strings (JS RegExp ≈ PG ARE here)
+    const m = (re: string, s: string) => new RegExp(re, 'iu').test(s); // SQL uses ~* / 'i'
+    const ai = phraseRegex('штуч:* <-> інтел:*')!;
+    expect(m(ai, 'створенні штучного інтелекту')).toBe(true);
+    expect(m(ai, 'Штучного Інтелекту')).toBe(true);
+    expect(m(ai, 'штучного, інтелекту')).toBe(true);
+    expect(m(ai, 'штучні острови та інтелектуальна власність')).toBe(false);
+    expect(m(ai, 'наштучний інтелект')).toBe(false);        // stem must start a word
+    const two = phraseRegex('дого:* <2> закупі:*')!;
+    expect(m(two, 'договір про закупівлю')).toBe(true);
+    expect(m(two, 'договір закупівлі')).toBe(true);
+    // a dotted number between the terms is one position, as in the tsvector
+    const num = phraseRegex(legislationPhraseTsquery('пункт 69.22 податкового кодексу'))!;
+    expect(m(num, 'згідно з пунктом 69.22 Податкового кодексу України')).toBe(true);
+    expect(m(num, 'пунктом 69 22 податкового кодексу')).toBe(false);
+    expect(m(two, 'договір про державну закупівлю')).toBe(false); // 2 words in between ≠ <2>
   });
 
   it('extracts years but not article numbers or longer digit runs', () => {

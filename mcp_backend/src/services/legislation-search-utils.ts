@@ -136,12 +136,18 @@ function isContentToken(t: string): boolean {
  * Returns '' when the query has fewer than two content words — there is no phrase.
  */
 export function legislationPhraseTsquery(query: string): string {
-  const groups = String(query || '').toLowerCase().match(/[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*/gu) || [];
+  // Verified with ts_debug('simple', …) on prod: a dotted number («69.22», «2.3.4») is ONE
+  // float/version token; «354-1» / «covid-19» are a number/word plus a signed int «-1»
+  // (two positions, no compound); only letters-hyphen-letters («абзац-а») is an hword
+  // that adds the compound position.
+  const groups = String(query || '').toLowerCase()
+    .match(/\p{N}+(?:\.\p{N}+)+|[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*/gu) || [];
   let pos = 0;
   const parts: Array<{ pos: number; stem: string }> = [];
   for (const g of groups) {
+    if (/^\p{N}+(?:\.\p{N}+)+$/u.test(g)) { pos++; continue; } // one numeric token, never a stem
     const words = g.split('-').filter(Boolean);
-    if (words.length > 1) pos++; // the compound token itself
+    if (words.length > 1 && words.every((w) => /^\p{L}+$/u.test(w))) pos++; // hword compound
     for (const w of words) {
       pos++;
       if (!isContentToken(w)) continue;
