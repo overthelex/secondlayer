@@ -102,4 +102,67 @@ describe('search_edrnpa', () => {
   it('builds the phrase key the same way as the SQL side', () => {
     expect(edrnpaPhraseKey('  Бронювання\n  військовозобовʼязаних ')).toBe("бронювання військовозобов'язаних");
   });
+  describe('include_text (LEXAI-2148)', () => {
+    const KMU_301 = { ...CARD, id: 140869, number: '301', date_acc: '06.03.2026', _total_count: 2 };
+    const KMU_298 = { ...CARD, id: 140868, number: '298', date_acc: '06.03.2026', _total_count: 2 };
+
+    it('never joins texts on the serial id; looks them up by reestr_code for the page only', async () => {
+      db.query
+        .mockResolvedValueOnce({ rows: [{ ...KMU_301 }, { ...KMU_298 }] })
+        .mockResolvedValueOnce({ rows: [
+          { id: '140869', full_text: 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ ПОСТАНОВА від 6 березня 2026 р. N 301', n_cards: '1' },
+          { id: '140868', full_text: 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ ПОСТАНОВА від 6 березня 2026 р. N 298', n_cards: '1' },
+        ] });
+
+      const out = parse(await tools.executeTool('search_edrnpa',
+        { publisher: 'Кабінет Міністрів України', doc_type: 'постанова', limit: 2, include_text: true }));
+
+      const [searchSql] = db.query.mock.calls[0];
+      expect(searchSql).not.toContain('opendata_edrnpa_texts');
+      expect(searchSql).not.toMatch(/t\.id\s*=\s*c\.id/);
+
+      const [textSql, textValues] = db.query.mock.calls[1];
+      expect(textSql).toContain('t.reestr_code = c.reestr_code');
+      expect(textSql).not.toMatch(/t\.id\s*=\s*c\.id/);
+      expect(textSql).toContain('c.id = ANY($1::bigint[])');
+      expect(textValues).toEqual([[140869, 140868]]);
+
+      expect(out.results[0].full_text).toContain('N 301');
+      expect(out.results[1].full_text).toContain('N 298');
+      expect(out.results[0].text_note).toBeUndefined();
+    });
+
+    it('flags a text picked from a package that shares one reestr_code, and nulls a missing one', async () => {
+      db.query
+        .mockResolvedValueOnce({ rows: [{ ...KMU_301 }, { ...KMU_298 }] })
+        .mockResolvedValueOnce({ rows: [{ id: '140869', full_text: 'НАКАЗ N 1226', n_cards: '23' }] });
+
+      const out = parse(await tools.executeTool('search_edrnpa', { publisher: 'КМУ', include_text: true }));
+
+      expect(out.results[0].text_note).toContain('спільний для кількох актів');
+      expect(out.results[1].full_text).toBeNull();
+      expect(out.results[1].text_note).toBeUndefined();
+    });
+
+    it('notes a package shared by several cards even when it has a single text', async () => {
+      db.query
+        .mockResolvedValueOnce({ rows: [{ ...KMU_301 }] })
+        .mockResolvedValueOnce({ rows: [{ id: '140869', full_text: 'НАКАЗ N 1226', n_cards: '3' }] });
+
+      const out = parse(await tools.executeTool('search_edrnpa', { publisher: 'КМУ', include_text: true }));
+
+      const textSql: string = db.query.mock.calls[1][0];
+      expect(textSql).toContain('c2.reestr_code = c.reestr_code');
+      expect(textSql).not.toContain('n_texts');
+      expect(db.query).toHaveBeenCalledTimes(2);   // one batched text query per page
+      expect(out.results[0].text_note).toContain('спільний для кількох актів');
+    });
+
+    it('makes no text query without include_text', async () => {
+      db.query.mockResolvedValueOnce({ rows: [{ ...KMU_301 }] });
+      const out = parse(await tools.executeTool('search_edrnpa', { publisher: 'КМУ' }));
+      expect(db.query).toHaveBeenCalledTimes(1);
+      expect(out.results[0]).not.toHaveProperty('full_text');
+    });
+  });
 });
