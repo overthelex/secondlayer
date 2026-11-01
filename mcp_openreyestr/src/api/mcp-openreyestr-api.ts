@@ -528,12 +528,14 @@ tin: 8-значний ЄДРПОУ шукається з провідними н
         description: `Пошук у санкційних списках РНБО України
 
 💰 Примерная стоимость: $0.001-$0.003 USD
-Пошук санкціонованих осіб/компаній за ім'ям, псевдонімами, ідентифікаторами, типом або країною.`,
+Пошук санкціонованих осіб/компаній/суден за ім'ям, псевдонімами, ідентифікаторами, типом або країною.
+Джерело: Державний реєстр санкцій РНБО (drs.nsdc.gov.ua), знімок реєстру. sanctions = статус: active (діють), expired (строк сплив), excluded (виключено).
+Дата внесення до списку в джерелі відсутня: listing_date = null, register_snapshot_date — дата знімка реєстру, а НЕ дата застосування санкцій.`,
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Ім\'я або псевдонім особи/компанії' },
-            schema_type: { type: 'string', description: 'Тип запису (Person, Company тощо)' },
+            schema_type: { type: 'string', description: 'Тип суб\'єкта: Person (фізична особа), Organization (юридична особа; синоніми Company, LegalEntity), Vessel (судно)' },
             country: { type: 'string', description: 'Країна' },
             identifier: { type: 'string', description: 'Ідентифікатор (ІПН, ЄДРПОУ, паспорт тощо)' },
             limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
