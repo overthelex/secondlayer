@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { logger } from '../utils/logger';
 import type { IDatabase } from '../domain/ports/index.js';
 import { buildLegislationTsquery, extractArticleNumberTokens } from '../services/legislation-search-utils';
+import { PLACEHOLDER_VERSION_SQL } from '../services/legislation-as-of.js';
 
 /**
  * КУпАП (Кодекс України про адміністративні правопорушення) is split in RADA
@@ -1094,6 +1095,9 @@ export class RadaLegislationAdapter {
          FROM legislation_articles la
          JOIN legislation l ON la.legislation_id = l.id
          WHERE LOWER(l.rada_id) = ANY($1) AND la.article_number = $2 AND la.version_date <= $3
+           -- The 2000-01-01 placeholder is not an edition date: matching it served
+           -- the current text for any date after 2000 (LEXAI-2146).
+           AND NOT ${PLACEHOLDER_VERSION_SQL}
          ORDER BY la.version_date DESC
          LIMIT 1`,
         [radaIds, articleNumber, asOfDate]
