@@ -37,7 +37,7 @@ const FULL_TEXT_PREVIEW_CHARS = 2000;
 const SECTION_TEXT_CAP = 40000;
 import { logger } from '../../utils/logger.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { generateCaseNumberVariations, extractSnippets, resolveCauseNumber, edrsrPool, formatCourtDate } from '../tool-utils.js';
+import { generateCaseNumberVariations, extractSnippets, resolveCauseNumber, lookupWithCauseNumberFallback, edrsrPool, formatCourtDate, type CauseNumberFallbackInfo } from '../tool-utils.js';
 import { detectDamagedCourtText, DAMAGED_TEXT_REASON } from '../../services/edrsr-text-integrity.js';
 
 /** Chain rows carry `full_text` inline; keep the shape, refuse damaged content. */
@@ -496,6 +496,7 @@ total_resolved_links=0 означає відсутність даних граф
     }
 
     let row: any = null;
+    let caseNumberFallback: CauseNumberFallbackInfo | undefined;
 
     if (docId) {
       const result = await this.edrsrDb().query(`
@@ -552,15 +553,25 @@ total_resolved_links=0 означає відсутність даних граф
         WHERE d.cause_num = $1
         ORDER BY d.adjudication_date DESC NULLS LAST
         LIMIT 1`;
-      const result = await this.edrsrDb().query(byCauseSql, [caseNumber]);
+      // Exact spelling first; on a miss, the one corpus variant (suffix completed or
+      // dropped) — 352/923/16 is stored as 352/923/16-ц and used to come back as
+      // «не знайдено» (LEXAI-2176).
+      const lookup = await lookupWithCauseNumberFallback(
+        caseNumber,
+        this.edrsrDb(),
+        async (cn) => (await this.edrsrDb().query(byCauseSql, [cn])).rows,
+        (rows: any[]) => rows.length === 0,
+      );
+      caseNumberFallback = lookup.fallback;
 
-      if (result.rows.length > 0) {
-        row = result.rows[0];
+      if (lookup.result.length > 0) {
+        row = lookup.result[0];
       }
     }
 
     if (!row) {
-      return this.wrapError(`Рішення не знайдено в ЄДРСР (doc_id=${docId || 'N/A'}, cause_num=${caseNumber || 'N/A'})`);
+      const hint = caseNumberFallback?.ambiguous_case_number ? ` ${caseNumberFallback.case_number_note}` : '';
+      return this.wrapError(`Рішення не знайдено в ЄДРСР (doc_id=${docId || 'N/A'}, cause_num=${caseNumber || 'N/A'})${hint}`);
     }
 
     // Enrich with court/judge names
@@ -591,6 +602,7 @@ total_resolved_links=0 означає відсутність даних граф
         judgment_form: judgmentForm || undefined,
         adjudication_date: formatCourtDate(row.adjudication_date),
         url,
+        ...(caseNumberFallback?.resolved_case_number ? caseNumberFallback : {}),
         text_unavailable: { kind: damage, reason: DAMAGED_TEXT_REASON[damage] },
         sections: [],
         full_text_length: 0,
@@ -626,6 +638,7 @@ total_resolved_links=0 означає відсутність даних граф
       judgment_form: judgmentForm || undefined,
       adjudication_date: formatCourtDate(row.adjudication_date),
       url,
+      ...(caseNumberFallback?.resolved_case_number ? caseNumberFallback : {}),
       depth,
       sections: sections.slice(0, depth),
       // When sections were extracted they already contain this text, so shipping full_text too

@@ -324,7 +324,23 @@ export async function resolveCauseNumber(caseNumber: string, dbPool: any): Promi
       ? all.filter((m: { cause_num: string }) => (m.cause_num.match(ASKED_SUFFIX_RE)?.[1] ?? null) === askedSuffix)
       : all;
 
-    if (matches.length === 0) return empty;
+    if (matches.length === 0) {
+      // Reverse direction (LEXAI-2176): the caller typed a procedural suffix, but EDRSR
+      // stores this case without one (e.g. 120/15617/23). Dropping the suffix does not
+      // swap it for another, so it is allowed — but only for a measured procedural suffix
+      // (an unmeasured tail like -XYZ stays a statement about which case is meant), and
+      // only when the base carries no differently-suffixed case that could be the one
+      // asked about.
+      const typed = askedSuffix?.slice(1) ?? '';
+      if (askedSuffix && CAUSE_NUM_SUFFIXES.includes(typed)) {
+        const bare = all.filter((m: { cause_num: string }) => !ASKED_SUFFIX_RE.test(m.cause_num));
+        const otherSuffixed = all.length - bare.length;
+        if (bare.length === 1 && otherSuffixed === 0) {
+          return { resolved: bare[0].cause_num, matches: bare, ambiguous: false };
+        }
+      }
+      return empty;
+    }
     if (matches.some((m: { cause_num: string }) => m.cause_num === input)) {
       return { resolved: input, matches, ambiguous: false };
     }
@@ -337,6 +353,73 @@ export async function resolveCauseNumber(caseNumber: string, dbPool: any): Promi
     });
     return empty;
   }
+}
+
+/** Response fields describing a case-number fallback, spelled like get_case_documents_chain's. */
+export interface CauseNumberFallbackInfo {
+  requested_case_number: string;
+  resolved_case_number?: string;
+  ambiguous_case_number?: { requested: string; candidates: string[] };
+  case_number_note: string;
+}
+
+export interface CauseNumberLookup<T> {
+  result: T;
+  /** The cause_num spelling that produced `result`. */
+  causeNumber: string;
+  /** Set only when the exact spelling found nothing and a variant was tried or is ambiguous. */
+  fallback?: CauseNumberFallbackInfo;
+}
+
+/**
+ * Run a cause_num lookup exact-first, falling back to the corpus spelling only on a miss.
+ *
+ * Exact always wins: `run` is called with the caller's spelling, and resolveCauseNumber is
+ * consulted only when that returns nothing — so the hot path costs no extra query, and a
+ * stale edrsr_case_index can never override a real exact hit. On a miss, the one variant
+ * resolveCauseNumber settles on (suffix completed, e.g. 352/923/16 → 352/923/16-ц, or a
+ * measured suffix dropped when the case is stored bare) is tried, and the response is told
+ * which variant matched. An ambiguous base returns the empty exact result plus the
+ * candidates, never a merge of two cases.
+ */
+export async function lookupWithCauseNumberFallback<T>(
+  caseNumber: string,
+  dbPool: any,
+  run: (causeNumber: string) => Promise<T>,
+  isEmpty: (result: T) => boolean,
+): Promise<CauseNumberLookup<T>> {
+  const requested = String(caseNumber || '').trim();
+  const exact = await run(requested);
+  if (!isEmpty(exact) || !requested) return { result: exact, causeNumber: requested };
+
+  const resolution = await resolveCauseNumber(requested, dbPool);
+  if (resolution.resolved && resolution.resolved !== requested) {
+    const variant = await run(resolution.resolved);
+    if (!isEmpty(variant)) {
+      return {
+        result: variant,
+        causeNumber: resolution.resolved,
+        fallback: {
+          requested_case_number: requested,
+          resolved_case_number: resolution.resolved,
+          case_number_note: `Справу з номером ${requested} в ЄДРСР не знайдено; показано результати для варіанта номера ${resolution.resolved}.`,
+        },
+      };
+    }
+  }
+  if (resolution.ambiguous) {
+    const candidates = resolution.matches.map((m) => m.cause_num);
+    return {
+      result: exact,
+      causeNumber: requested,
+      fallback: {
+        requested_case_number: requested,
+        ambiguous_case_number: { requested, candidates },
+        case_number_note: `Номер справи ${requested} відповідає кільком різним справам (${candidates.join(', ')}). Уточніть номер повністю.`,
+      },
+    };
+  }
+  return { result: exact, causeNumber: requested };
 }
 
 /**

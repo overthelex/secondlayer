@@ -21,7 +21,7 @@ import type { QueryReformulator } from '../../services/query-reformulator.js';
 import type { EdsrFtsService, EdsrFtsFilters, EdsrFtsSearchResponse } from '../../services/edrsr-fts-service.js';
 import { selectFtsTerms, sanitizeFtsToken, buildPrefixTsquery, isStatusVocabToken } from '../../services/edrsr-fts-service.js';
 import type { EdsrVectorizerService, EdrsrSearchFilters, EdrsrSearchResult } from '../../services/edrsr-vectorizer-service.js';
-import { formatCourtDate, GRAND_CHAMBER_COURT_CODE } from '../tool-utils.js';
+import { formatCourtDate, GRAND_CHAMBER_COURT_CODE, lookupWithCauseNumberFallback, edrsrPool } from '../tool-utils.js';
 
 const DEFAULT_RRF_K = 60;
 const DEFAULT_OVERSAMPLE = 3;
@@ -433,21 +433,40 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
 
     try {
       const countSql = `SELECT COUNT(*)::int as total FROM ${fromClause} WHERE ${whereClause}`;
-      const countResult = await this.db.query(countSql, params);
-      const total = countResult.rows[0]?.total || 0;
-
       const dataSql = `SELECT ${selectFields} FROM ${fromClause}
         WHERE ${whereClause} ORDER BY ${EDRSR_METADATA_SEARCH_ORDER}
         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
-      const dataResult = await this.db.query(dataSql, [...params, limit, offset]);
 
-      const enriched = await this.enrichResults(dataResult.rows);
+      // cause_num is the first slot when present (see the field order above), so a variant
+      // spelling only replaces params[0].
+      const runWith = async (causeNum?: string) => {
+        const p = causeNum !== undefined ? [causeNum, ...params.slice(1)] : params;
+        const countResult = await this.db.query(countSql, p);
+        const total: number = countResult.rows[0]?.total || 0;
+        const rows = total > 0 ? (await this.db.query(dataSql, [...p, limit, offset])).rows : [];
+        return { total, rows };
+      };
+
+      // Exact cause_num first; only on zero hits retry with the one corpus variant
+      // (352/923/16 → 352/923/16-ц, LEXAI-2176) and say so in the response.
+      const lookup = args.cause_num
+        ? await lookupWithCauseNumberFallback(
+            String(args.cause_num),
+            edrsrPool(this.ftsService, this.db),
+            (cn) => runWith(cn),
+            (r) => r.total === 0,
+          )
+        : { result: await runWith(), fallback: undefined };
+      const { total, rows } = lookup.result;
+
+      const enriched = await this.enrichResults(rows);
 
       return this.wrapResponse({
         mode: 'structured',
         query: { ...args, _military_category_codes: undefined, _kupap_category_codes: undefined },
         ...(args._military_label ? { military_filter: args._military_label } : {}),
         ...(args._kupap_label ? { kupap_filter: args._kupap_label } : {}),
+        ...(lookup.fallback ?? {}),
         total, returned: enriched.length, offset, has_more: offset + enriched.length < total,
         results: enriched,
       });
