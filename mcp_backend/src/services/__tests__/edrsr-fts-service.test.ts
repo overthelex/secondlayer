@@ -1089,7 +1089,6 @@ describe('Kyiv-local date bounds (LEXAI-2110)', () => {
     expect(leg.sql).toContain(`d.adjudication_date < ($${iTo}::date + 1)::timestamp AT TIME ZONE 'Europe/Kyiv'`);
   });
 });
-});
 
 describe('party name keys (LEXAI-1760, mirror of edrsr_party_norm / edrsr_party_core)', () => {
   it('normalises like the SQL helper', () => {
