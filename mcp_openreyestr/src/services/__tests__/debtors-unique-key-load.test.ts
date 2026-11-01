@@ -23,7 +23,7 @@ describe('LEXAI-2130: unique-key helpers', () => {
   it('debtors opts into upsert-on-reload with the natural key', () => {
     expect(REGISTRIES.debtors.upsertOnReload).toBe(true);
     expect(uniqueKeyColumns(REGISTRIES.debtors)).toEqual(DEBTOR_KEY);
-    expect(REGISTRIES.enforcement_proceedings.upsertOnReload).toBeUndefined();
+    expect(REGISTRIES.enforcement_proceedings.upsertOnReload).toBe(true);
   });
 
   it('parses the column list of an indexdef', () => {

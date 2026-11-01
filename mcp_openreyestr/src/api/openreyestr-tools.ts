@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { z } from 'zod';
 import { isSyntheticKey, notSyntheticSql, nullSyntheticKeys } from '../services/synthetic-keys';
 import { formatSingleTaxPayerRow, tinLookupCandidates } from '../utils/single-tax';
+import { PLAUSIBLE_OPENING_DATE_SQL } from '../utils/enforcement';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -884,22 +885,22 @@ export class OpenReyestrTools {
     let paramIndex = 1;
 
     if (query) {
-      conditions.push(`to_tsvector('simple', debtor_name) @@ plainto_tsquery('simple', $${paramIndex})`);
+      conditions.push(`to_tsvector('simple', ep.debtor_name) @@ plainto_tsquery('simple', $${paramIndex})`);
       values.push(query);
       paramIndex++;
     }
     if (debtor_edrpou) {
-      conditions.push(`debtor_edrpou = $${paramIndex}`);
+      conditions.push(`ep.debtor_edrpou = $${paramIndex}`);
       values.push(debtor_edrpou);
       paramIndex++;
     }
     if (creditor_name) {
-      conditions.push(`to_tsvector('simple', creditor_name) @@ plainto_tsquery('simple', $${paramIndex})`);
+      conditions.push(`to_tsvector('simple', ep.creditor_name) @@ plainto_tsquery('simple', $${paramIndex})`);
       values.push(creditor_name);
       paramIndex++;
     }
     if (proceeding_status) {
-      conditions.push(`proceeding_status ILIKE $${paramIndex}`);
+      conditions.push(`ep.proceeding_status ILIKE $${paramIndex}`);
       values.push(`%${proceeding_status}%`);
       paramIndex++;
     }
@@ -907,10 +908,23 @@ export class OpenReyestrTools {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     values.push(limit, offset);
 
+    // opening_date: mistyped source years (2209, 9008, ...) are hidden and sort
+    // last (LEXAI-2163). executor_name: the АСВП file has no executor column,
+    // so it comes from the debtors registry (ЄРБ) by proceeding number; ЄРБ
+    // lists only proceedings with unpaid debts, so it stays NULL for many
+    // closed ones.
     const result = await this.pool.query(
-      `SELECT id, proceeding_number, opening_date, proceeding_status, debtor_name, debtor_edrpou, creditor_name, creditor_edrpou, enforcement_agency, executor_name
-       FROM enforcement_proceedings ${whereClause}
-       ORDER BY opening_date DESC NULLS LAST
+      `SELECT ep.id, ep.proceeding_number, ${PLAUSIBLE_OPENING_DATE_SQL} AS opening_date, ep.proceeding_status,
+              ep.debtor_name, ep.debtor_edrpou, ep.creditor_name, ep.creditor_edrpou, ep.enforcement_agency,
+              COALESCE(ep.executor_name, d.executor_name) AS executor_name
+       FROM enforcement_proceedings ep
+       LEFT JOIN LATERAL (
+         SELECT debtors.executor_name FROM debtors
+         WHERE debtors.proceeding_number = ep.proceeding_number AND debtors.executor_name IS NOT NULL
+         LIMIT 1
+       ) d ON true
+       ${whereClause}
+       ORDER BY ${PLAUSIBLE_OPENING_DATE_SQL} DESC NULLS LAST, ep.id
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       values
     );

@@ -9,6 +9,7 @@ import {
   normalizeEdrpou,
   normalizeIsoDate,
 } from '../utils/single-tax';
+import { parseOpeningDate } from '../utils/enforcement';
 
 export type FieldMapper = (value: string, record: Record<string, unknown>) => unknown;
 
@@ -389,11 +390,17 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
     zipFileName: '28-ex_csv_asvp.zip',
     innerFileName: '',
     tableName: 'enforcement_proceedings',
+    // VP_ORDERNUM is unique in the file (LEXAI-2144: 30.76M rows, 0 repeats on
+    // 2026-10-29). Keep the key index during the reload (migration 022) so a
+    // repeated number collapses instead of breaking the index recreate.
     uniqueKey: 'proceeding_number',
+    upsertOnReload: true,
     recordPath: '',
     fieldMap: {
       proceeding_number: 'VP_ORDERNUM',
-      opening_date: (_v: string, r: Record<string, unknown>) => parseDateDMY(String(r['VP_BEGINDATE'] || '')),
+      // Mistyped years in the source ("21.12.2209", "25.05.5005") become NULL
+      // (LEXAI-2163).
+      opening_date: (_v: string, r: Record<string, unknown>) => parseOpeningDate(String(r['VP_BEGINDATE'] || '')),
       proceeding_status: 'VP_STATE',
       debtor_name: 'DEBTOR_NAME',
       debtor_type: (_v: string, r: Record<string, unknown>) => {
@@ -408,7 +415,12 @@ export const REGISTRIES: Record<string, RegistryConfig> = {
       },
       creditor_edrpou: 'CREDITOR_CODE',
       enforcement_agency: 'ORG_NAME',
-      executor_name: 'EXECUTOR_NAME',
+      // The АСВП file has no executor column (header: DEBTOR_NAME,
+      // DEBTOR_BIRTHDATE, DEBTOR_CODE, CREDITOR_NAME, CREDITOR_CODE,
+      // VP_ORDERNUM, VP_BEGINDATE, VP_STATE, ORG_NAME, DVS_CODE, PHONE_NUM,
+      // EMAIL_ADDR, BANK_ACCOUNT); the old 'EXECUTOR_NAME' mapping was always
+      // empty. The search tool takes executor_name from debtors (ЄРБ
+      // EMP_FULL_FIO) by proceeding_number instead (LEXAI-2163).
     },
     updateFrequency: 'daily',
     sizeCategory: 'huge',
