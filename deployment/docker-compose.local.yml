@@ -557,6 +557,19 @@ services:
     profiles: ["green"]
     ports:
       - "127.0.0.1:3110:3000"   # 3001 занят rada-mcp, 3100 тоже занят
+    # Стабильное внутреннее имя активного бэкенда (LEXAI-2188). Синий получает
+    # `app-local` автоматически как имя сервиса, зелёному даём тот же алиас —
+    # как `app-prod` на проде. Docker DNS отдаёт только запущенные контейнеры,
+    # а неактивный цвет деплой останавливает, поэтому http://app-local:3000
+    # всегда ведёт в работающий цвет: rada/openreyestr SECONDLAYER_URL,
+    # opendata-sync BACKEND_URL, lmaf, prometheus. Без алиаса при активном
+    # зелёном все они получали «bad address». Алиас живёт в конфиге compose,
+    # поэтому переживает рестарты, пересоздание и `up -d` прочих сервисов —
+    # никакой ручной возни с `docker network connect` в деплое.
+    networks:
+      secondlayer-local:
+        aliases:
+          - app-local
 
   rada-migrate-local:
     build:
@@ -1165,12 +1178,15 @@ services:
     image: prom/prometheus:v2.48.0
     container_name: prometheus-local
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/config/prometheus-local.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=7d'
       - '--web.enable-lifecycle'
     volumes:
-      - ./prometheus/prometheus-local.yml:/etc/prometheus/prometheus.yml:ro
+      # Каталогом, а не файлом: файловый bind-mount держится за inode, и после
+      # обновления файла из git prometheus видел бы старый конфиг. Деплой после
+      # обновления сервисов дёргает /-/reload (ci-local-deploy.yml).
+      - ./prometheus:/etc/prometheus/config:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_local_data:/prometheus
     ports:
