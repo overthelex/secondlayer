@@ -85,6 +85,12 @@ CREATE INDEX IF NOT EXISTS idx_ip_objects_reg_number  ON ip_objects (registratio
 CREATE INDEX IF NOT EXISTS idx_ip_objects_app_number  ON ip_objects (app_number);
 CREATE INDEX IF NOT EXISTS idx_ip_objects_type_state  ON ip_objects (obj_type, obj_state);
 CREATE INDEX IF NOT EXISTS idx_ip_objects_title_trgm  ON ip_objects USING GIN (title_ua gin_trgm_ops);
+-- First applicant's EDRPOU (owner_edrpou filter matches holder OR applicant, LEXAI-2162).
+-- Same index as mcp_backend migration 236; the expression must match APPLICANT_EDRPOU_SQL
+-- in mcp_backend/src/api/tools/ip-objects-tools.ts.
+CREATE INDEX IF NOT EXISTS idx_ip_objects_applicant_edrpou ON ip_objects
+  ((raw_data #>> '{ApplicantDetails,Applicant,0,ApplicantAddressBook,FormattedNameAddress,Name,FreeFormatName,EDRPOU}'))
+  WHERE obj_type = 4;
 """
 
 CREATE_EVENTS_SQL = """
