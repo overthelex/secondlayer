@@ -101,6 +101,10 @@ jobs:
         if: steps.scan.outputs.count != '0'
         env:
           GH_TOKEN: ${{ github.token }}
+          # Джоба не делает checkout, поэтому `gh issue` не может взять репо из
+          # .git и падает с «not a git repository» (02.11.2026: сторож нашёл
+          # залипшую очередь и не смог об этом сообщить). GH_REPO задаёт репо явно.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           TITLE="CI: прогоны висят в очереди без раннера"
