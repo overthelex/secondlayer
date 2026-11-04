@@ -34,7 +34,12 @@ const VERBAL_COLUMN = `CASE WHEN obj_type = 4
 const LIST_COLUMNS = `id, obj_type, obj_type_name, obj_state, app_number, app_date,
   registration_number, registration_date, expiry_date, status, title_ua,
   class_system, classes, owner_name, owner_edrpou, owner_country, owner_kind,
-  owner_role, image_path, ${VERBAL_COLUMN}`;
+  owner_role, image_path, ${VERBAL_COLUMN},
+  jsonb_build_object(
+    'TerminationDate', raw_data->>'TerminationDate',
+    'registration_status_color', raw_data->>'registration_status_color',
+    'ProlonagationExpiryDate', raw_data->>'ProlonagationExpiryDate'
+  ) AS _lifecycle`;
 
 // Collision list caps for get_trademark_dossier: other-owner marks are the real
 // blockers and come first; the owner's own family is kept short (LEXAI-2102).
@@ -87,14 +92,54 @@ export function deriveMarkTitle(verbal: unknown, fallback: string | null = null)
   return kept.map(x => x.text).join(' / ') || fallback || null;
 }
 
+/** Legal states that mean the object is no longer protected. */
+const INACTIVE_LEGAL_STATES = new Set(['визнано недійсним', 'дію припинено', 'не чинний', 'строк дії сплив']);
+
+/**
+ * Current legal status of an IP object from its registry card (`raw` = the SIS dossier
+ * fields of raw_data) and, when available, its classified lifecycle events.
+ *
+ * Prefer the SIS dossier fields over classified events: event classification is
+ * incomplete for older records (e.g. reg. №67482 has only the 3 original 2006 docs, so the
+ * termination/prolongation live ONLY in raw_data). Without this, a terminated mark reads as
+ * "чинний" (obj_state=2) or, off the stale expiry_date alone, wrongly as "строк дії сплив".
+ */
+export function deriveLegalStatus(obj: any, raw: any = {}, eventKinds: Set<string> = new Set()): string {
+  raw = raw || {};
+  if (eventKinds.has('invalidation')) return 'визнано недійсним';
+  if (eventKinds.has('termination') || raw.TerminationDate) return 'дію припинено';
+  if (String(raw.registration_status_color || '').toLowerCase() === 'red') return 'не чинний';
+  if (Number(obj.obj_state) === 1) return 'заявка на розгляді';
+  // Effective term end = renewed expiry (ProlonagationExpiryDate) if present, else original.
+  const effectiveExpiry = raw.ProlonagationExpiryDate || obj.expiry_date;
+  if (effectiveExpiry && new Date(effectiveExpiry) < new Date()) return 'строк дії сплив';
+  if (Number(obj.obj_state) === 2) return 'чинний';
+  return obj.registry_status || obj.status || 'невідомо';
+}
+
+/**
+ * Put the derived legal status on a row (LEXAI-2192). The stored `status` is NIPO's raw
+ * colour/workflow code and stays "active" long after a mark's term ran out (№67482,
+ * expired 2016), which read to callers as "in force". It moves to `registry_status`;
+ * `status` becomes active/inactive from the derived `legal_status`.
+ */
+export function applyLegalStatus<T extends Record<string, any>>(row: T, raw: any, eventKinds?: Set<string>): T {
+  const r: any = row;
+  if (!('registry_status' in r)) r.registry_status = r.status ?? null;
+  r.legal_status = deriveLegalStatus(r, raw, eventKinds);
+  r.status = INACTIVE_LEGAL_STATES.has(r.legal_status) ? 'inactive' : r.legal_status === 'невідомо' ? r.registry_status : 'active';
+  return row;
+}
+
 /** Replace the stored token-bag title of trademark rows with the derived one; drop _verbal. */
 function withMarkTitles<T extends Record<string, any>>(rows: T[]): T[] {
   return rows.map(row => {
-    if (!row || !('_verbal' in row)) return row;
-    const { _verbal, ...rest } = row as any;
+    if (!row || (!('_verbal' in row) && !('_lifecycle' in row))) return row;
+    const { _verbal, _lifecycle, ...rest } = row as any;
     if (Number(rest.obj_type) === 4 && _verbal != null) {
       rest.title_ua = deriveMarkTitle(_verbal, rest.title_ua ?? null);
     }
+    if (_lifecycle !== undefined) applyLegalStatus(rest, rest.raw_data || _lifecycle);
     return rest as T;
   });
 }
@@ -508,21 +553,8 @@ export class IpObjectsTools extends BaseToolHandler {
   }
 
   private deriveLegalStatus(obj: any, events: any[]): string {
-    const kinds = new Set(events.map(e => e.event_kind));
-    // Prefer the SIS dossier fields in raw_data over classified events: event classification is
-    // incomplete for older records (e.g. reg. №67482 has only the 3 original 2006 docs, so the
-    // termination/prolongation live ONLY in raw_data). Without this, a terminated mark reads as
-    // "чинний" (obj_state=2) or, off the stale expiry_date alone, wrongly as "строк дії сплив".
-    const raw = obj.raw_data || {};
-    if (kinds.has('invalidation')) return 'визнано недійсним';
-    if (kinds.has('termination') || raw.TerminationDate) return 'дію припинено';
-    if (String(raw.registration_status_color || '').toLowerCase() === 'red') return 'не чинний';
-    if (Number(obj.obj_state) === 1) return 'заявка на розгляді';
-    // Effective term end = renewed expiry (ProlonagationExpiryDate) if present, else original.
-    const effectiveExpiry = raw.ProlonagationExpiryDate || obj.expiry_date;
-    if (effectiveExpiry && new Date(effectiveExpiry) < new Date()) return 'строк дії сплив';
-    if (Number(obj.obj_state) === 2) return 'чинний';
-    return obj.status || 'невідомо';
+    applyLegalStatus(obj, obj.raw_data, new Set(events.map(e => e.event_kind)));
+    return obj.legal_status;
   }
 
   /** Best-effort call of another registered tool; returns parsed JSON or null. */
@@ -660,7 +692,12 @@ export class IpObjectsTools extends BaseToolHandler {
       // 1. Disambiguation — every IP object registered under this number.
       const disamb = await this.db.query(
         `SELECT obj_type, obj_type_name, obj_state, app_number, registration_number,
-                title_ua, owner_name, status, ${VERBAL_COLUMN}
+                title_ua, owner_name, status, expiry_date, ${VERBAL_COLUMN},
+                jsonb_build_object(
+                  'TerminationDate', raw_data->>'TerminationDate',
+                  'registration_status_color', raw_data->>'registration_status_color',
+                  'ProlonagationExpiryDate', raw_data->>'ProlonagationExpiryDate'
+                ) AS _lifecycle
          FROM ip_objects WHERE ${col} = $1 ORDER BY obj_type, obj_state DESC`,
         [number],
       );
@@ -764,7 +801,7 @@ export class IpObjectsTools extends BaseToolHandler {
       const dossier = {
         query_number: number,
         disambiguation: disamb.rows,
-        trademark: { ...tm, nice_classes, events, legal_status },
+        trademark: { ...tm, status: tmFull.status, nice_classes, events, legal_status },
         collisions,
         collision_summary,
         court_practice,

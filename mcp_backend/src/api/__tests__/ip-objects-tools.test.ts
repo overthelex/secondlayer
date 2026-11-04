@@ -394,3 +394,31 @@ describe('IpObjectsTools', () => {
     });
   });
 });
+
+
+describe('legal status on list rows (LEXAI-2192)', () => {
+  const expired = {
+    ...tmRow, obj_state: 2, app_number: 'm200604929', registration_number: '67482',
+    expiry_date: '2016-04-04', status: 'active', _verbal: null,
+    _lifecycle: { TerminationDate: null, registration_status_color: null, ProlonagationExpiryDate: null },
+  };
+
+  it('an expired registration is not reported as active', async () => {
+    const tool = new IpObjectsTools(makeDb(() => ({ rows: [expired] })));
+    const parsed = parse(await tool.executeTool('search_ip_objects', { query: 'alien' }));
+    const row = parsed.results[0];
+    expect(row.legal_status).toBe('строк дії сплив');
+    expect(row.status).toBe('inactive');
+    expect(row.registry_status).toBe('active');
+    expect(row._lifecycle).toBeUndefined();
+  });
+
+  it('a renewal keeps it active, a termination date ends it', async () => {
+    const renewed = { ...expired, _lifecycle: { ...expired._lifecycle, ProlonagationExpiryDate: '2036-04-04' } };
+    const ended = { ...renewed, _lifecycle: { ...renewed._lifecycle, TerminationDate: '2020-01-01' } };
+    const tool = new IpObjectsTools(makeDb(() => ({ rows: [renewed, ended] })));
+    const [a, b] = parse(await tool.executeTool('search_ip_objects', { query: 'alien' })).results;
+    expect([a.legal_status, a.status]).toEqual(['чинний', 'active']);
+    expect([b.legal_status, b.status]).toEqual(['дію припинено', 'inactive']);
+  });
+});
