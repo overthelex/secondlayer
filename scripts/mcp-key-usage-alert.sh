@@ -15,7 +15,7 @@
 # Env: MAIL_TO (vladimir@legal.org.ua), MAIL_FROM (vladimir@legal.org.ua),
 #      SMTP_HOST (smtp.azurecomm.net), SMTP_PORT (587), SMTP_ENV_FILE (~/.acs-smtp.env),
 #      DAYS (1), MAX_ANON_REFUSED_PER_DAY (50),
-#      DRY_RUN=1 — надрукувати лист замість відправки,
+#      DRY_RUN=1 — надрукувати лист замість відправки (DRY_RUN=html — HTML-частину),
 #      пороги звіту MAX_IPS_PER_DAY / MAX_CALLS_PER_DAY / MAX_MB_PER_DAY передаються далі.
 # Код виходу: 0 — позначок немає, 2 — лист надіслано, 1 — помилка.
 
@@ -51,6 +51,7 @@ SQL
 fi
 
 BODY=""
+HTML_BODY=""
 FLAGGED=()
 for email in $USERS; do
   out=$("$DIR/mcp-key-usage-report.sh" "$email" "$DAYS" 2>&1)
@@ -58,6 +59,8 @@ for email in $USERS; do
   if [[ $rc -eq 2 ]]; then
     FLAGGED+=("$email")
     BODY+=$'\n\n'"################ $email ################"$'\n'"$out"
+    html=$(REPORT_HTML=1 "$DIR/mcp-key-usage-report.sh" "$email" "$DAYS" 2>&1)
+    HTML_BODY+=$'\n'"################ $email ################"$'\n'"$html"
   elif [[ $rc -ne 0 ]]; then
     echo "звіт для $email завершився з кодом $rc:" >&2
     echo "$out" >&2
@@ -78,6 +81,7 @@ SQL
 if [[ -n "$ANON" ]]; then
   FLAGGED+=("анонімні відмови")
   BODY+=$'\n\n'"################ Відмови авторизації без користувача (перебір ключів?) ################"$'\n'"$ANON"
+  HTML_BODY+=$'\n'"################ Відмови авторизації без користувача (перебір ключів?) ################"$'\n'"$ANON"
 fi
 
 if [[ ${#FLAGGED[@]} -eq 0 ]]; then
@@ -94,11 +98,17 @@ if [[ "${DRY_RUN:-}" == 1 ]]; then
   printf 'To: %s\nSubject: %s\n\n%s%s\n' "$MAIL_TO" "$SUBJECT" "$INTRO" "$BODY"
   exit 2
 fi
+if [[ "${DRY_RUN:-}" == html ]]; then
+  SUBJECT="$SUBJECT" INTRO="$INTRO" HTML_BODY="$HTML_BODY" python3 -c 'import os,sys; sys.path.insert(0,"'"$DIR"'"); from mcp_key_usage_mail import render_html; print(render_html(os.environ["SUBJECT"], os.environ["INTRO"], os.environ["HTML_BODY"]))'
+  exit 2
+fi
 
-SUBJECT="$SUBJECT" INTRO="$INTRO" BODY="$BODY" MAIL_TO="$MAIL_TO" MAIL_FROM="$MAIL_FROM" \
+SUBJECT="$SUBJECT" INTRO="$INTRO" BODY="$BODY" HTML_BODY="$HTML_BODY" MAIL_DIR="$DIR" MAIL_TO="$MAIL_TO" MAIL_FROM="$MAIL_FROM" \
 SMTP_HOST="$SMTP_HOST" SMTP_PORT="$SMTP_PORT" SMTP_ENV_FILE="$SMTP_ENV_FILE" python3 - <<'PY' || { echo "лист не надіслано" >&2; exit 1; }
-import os, smtplib
+import os, smtplib, sys
 from email.message import EmailMessage
+sys.path.insert(0, os.environ["MAIL_DIR"])
+from mcp_key_usage_mail import render_html
 from email.utils import formatdate, make_msgid
 m = EmailMessage()
 m["From"] = os.environ["MAIL_FROM"]
@@ -107,6 +117,7 @@ m["Subject"] = os.environ["SUBJECT"]
 m["Date"] = formatdate(localtime=True)
 m["Message-ID"] = make_msgid(domain=os.environ["MAIL_FROM"].split("@")[1])
 m.set_content(os.environ["INTRO"] + os.environ["BODY"] + "\n")
+m.add_alternative(render_html(os.environ["SUBJECT"], os.environ["INTRO"], os.environ["HTML_BODY"]), subtype="html")
 creds = {}
 env_file = os.environ.get("SMTP_ENV_FILE", "")
 if env_file:

@@ -12,6 +12,7 @@
 #   ./scripts/mcp-key-usage-report.sh <email | префікс ключа sl_xxxx | all> [днів=7]
 # На самому cthulhu (cron): SSH_HOST= ./scripts/mcp-key-usage-report.sh ...
 # Пороги (env): MAX_IPS_PER_DAY=3  MAX_CALLS_PER_DAY=500  MAX_MB_PER_DAY=50
+# REPORT_HTML=1 — таблиці у форматі HTML (psql -H), для листа.
 # Код виходу: 0 — без ознак, 2 — є позначки (для cron/алертів), 1 — помилка.
 #
 # Приклад: ./scripts/mcp-key-usage-report.sh mrbraun013@gmail.com 30
@@ -52,7 +53,7 @@ run_sql() {
 }
 
 echo "=== MCP-використання: $WHO, останні $DAYS дн. ==="
-run_sql <<SQL
+run_sql ${REPORT_HTML:+-H} <<SQL
 \\echo '--- По днях і ключах ---'
 SELECT day, key_name, key_prefix, calls, failed_calls AS failed, distinct_ips AS ips,
        distinct_user_agents AS uas, sessions, distinct_tools AS tools,
