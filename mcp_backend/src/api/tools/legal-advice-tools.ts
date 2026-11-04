@@ -406,6 +406,10 @@ export class LegalAdviceTools extends BaseToolHandler {
     const resolvedId = await this.resolveToDocumentsUUID(input);
 
     if (!resolvedId) {
+      // Not in `documents`, but law_court_citations covers the whole EDRSR corpus.
+      const docId = await this.resolveToEdrsrDocId(input);
+      const pg = docId ? await this.citationGraphFromPostgres(docId) : null;
+      if (pg) return this.wrapResponse({ graph: pg, backend: 'postgres' });
       return this.wrapResponse({
         error: `Справу "${input}" знайдено в ЄДРСР, але вона ще не імпортована до бази цитувань (documents). Граф цитувань поки недоступний для цього рішення.`,
         provided_value: input,
@@ -421,7 +425,18 @@ export class LegalAdviceTools extends BaseToolHandler {
     }
 
     const graph = await this.citationValidator.buildCitationGraph(resolvedId, args.depth || 2);
-    return this.wrapResponse({ graph });
+    if ((graph as any)?.edges?.length) return this.wrapResponse({ graph });
+    // legal.org.ua runs without Neo4j, so this path served ВП 90458880 as a lone node
+    // with no edges and no word why: citation_links only holds decision→decision links
+    // for the imported part of the corpus (LEXAI-2204). Fall back to the decision→article
+    // edges in law_court_citations, and say so when those are empty too.
+    const docId = await this.resolveToEdrsrDocId(input);
+    const pg = docId ? await this.citationGraphFromPostgres(docId) : null;
+    if (pg) return this.wrapResponse({ graph: pg, backend: 'postgres' });
+    return this.wrapResponse({
+      graph,
+      note: `Для рішення ${docId ?? input} у графі цитувань немає посилань: рішення не містить розпізнаних посилань на інші рішення чи статті законів.`,
+    });
   }
 
   private async searchLegalPrecedents(args: any): Promise<ToolResult> {
