@@ -39,3 +39,47 @@ describe('get_citation_graph fallback (LEXAI-2204)', () => {
     expect(out.note).toContain('90458880');
   });
 });
+
+// legal.org.ua runs without Neo4j: the same lone node came from citation_links.
+describe('get_citation_graph fallback without Neo4j (LEXAI-2204)', () => {
+  const UUID = '70409de8-741e-420a-92d2-f6ab51d23539';
+  function buildLegacy(lccRows: any[], inDocuments = true) {
+    const validator: any = {
+      buildCitationGraph: jest.fn().mockResolvedValue({ nodes: [{ id: UUID }], edges: [] }),
+    };
+    const db = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM documents')) return { rows: inDocuments ? [{ id: UUID }] : [] };
+        if (sql.includes('law_court_citations')) return { rows: lccRows };
+        return { rows: [] };
+      }),
+    };
+    const tools = new LegalAdviceTools(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, validator,
+      undefined, undefined, db, undefined, undefined,
+    );
+    return { tools, validator };
+  }
+  const rows = [{ citation_type: 'codex_article', law_number: 'ГПК', law_article: '287' }];
+
+  it('serves law_court_citations edges when citation_links has none', async () => {
+    const { tools, validator } = buildLegacy(rows);
+    const out = body(await tools.executeTool('get_citation_graph', { case_id: '90458880' }));
+    expect(validator.buildCitationGraph).toHaveBeenCalledWith(UUID, 2);
+    expect(out.backend).toBe('postgres');
+    expect(out.graph.edges.some((e: any) => e.type === 'CITES_ARTICLE')).toBe(true);
+  });
+
+  it('serves law_court_citations edges when the decision is not in documents', async () => {
+    const { tools } = buildLegacy(rows, false);
+    const out = body(await tools.executeTool('get_citation_graph', { case_id: '90458880' }));
+    expect(out.backend).toBe('postgres');
+  });
+
+  it('says why the graph is empty when both sources are empty', async () => {
+    const { tools } = buildLegacy([]);
+    const out = body(await tools.executeTool('get_citation_graph', { case_id: '90458880' }));
+    expect(out.graph.edges).toEqual([]);
+    expect(out.note).toContain('90458880');
+  });
+});
