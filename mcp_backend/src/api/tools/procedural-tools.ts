@@ -648,7 +648,7 @@ export class ProceduralTools extends BaseToolHandler {
             const row = {
               doc_id: c.doc_id,
               court_code: c.court_code,
-              date: c.date,
+              date: formatCourtDate(c.date),
               case_number: c.case_number,
               snippet: v.quote || c.fragment,
               outcome: disp?.outcome || 'unknown',
@@ -780,7 +780,7 @@ export class ProceduralTools extends BaseToolHandler {
     const mapFtsCase = (d: any) => ({
       doc_id: d.doc_id,
       court_code: d.court_code,
-      date: d.adjudication_date,
+      date: formatCourtDate(d.adjudication_date),
       case_number: d.cause_num,
       snippet: d.headline,
     });
@@ -807,7 +807,9 @@ export class ProceduralTools extends BaseToolHandler {
     // Honest signalling instead of fabricating a 1-vs-1 controversy out of a single
     // boilerplate-matched decision. The keyword discriminator cannot reliably separate
     // opposing holdings; when too little distinct practice is found, say so.
-    if (distinctDocs.size <= 1) {
+    // One side empty is insufficient practice too, as the tool description promises and as
+    // the classified path already reports (LEXAI-2203); the audit got contra: [] silently.
+    if (distinctDocs.size <= 1 || proCases.length === 0 || contraCases.length === 0) {
       payload.insufficient_practice = true;
       payload.hint =
         'Недостатньо різної практики для протиставлення позицій «за/проти» за цим запитом. ' +
@@ -836,7 +838,7 @@ export class ProceduralTools extends BaseToolHandler {
     const relevant = gathered.candidates.slice(0, limit).map((c) => ({
       doc_id: c.doc_id,
       court_code: c.court_code,
-      date: c.date,
+      date: formatCourtDate(c.date),
       case_number: c.case_number,
       snippet: c.fragment,
     }));
@@ -899,7 +901,7 @@ export class ProceduralTools extends BaseToolHandler {
         out.push({
           doc_id: docId,
           court_code: d.court_code,
-          date: d.adjudication_date,
+          date: formatCourtDate(d.adjudication_date),
           case_number: d.cause_num,
           fragment: d.headline || '',
         });
@@ -984,7 +986,7 @@ export class ProceduralTools extends BaseToolHandler {
             byDoc.set(Number(d.doc_id), {
               doc_id: Number(d.doc_id), // pg bigint arrives as a string
               court_code: d.court_code,
-              date: d.adjudication_date,
+              date: formatCourtDate(d.adjudication_date),
               case_number: d.cause_num,
               fragment: d.headline || '',
             });
@@ -1322,7 +1324,7 @@ export class ProceduralTools extends BaseToolHandler {
               .map((d) => ({
               doc_id: d.doc_id,
               court_code: d.court_code,
-              date: d.adjudication_date,
+              date: formatCourtDate(d.adjudication_date),
               case_number: d.cause_num,
               snippet: d.headline,
             }));

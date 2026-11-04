@@ -173,6 +173,13 @@ export function reconcilePrecedentStatus<T extends Record<string, any>>(status: 
     decided_by: strongest,
     other_reversals: earlier,
     summary: lines.join(' '),
-    shepardization: { ...shep, status: derived },
+    // affecting_decisions carried raw instants (2020-06-22T21:00Z for a 23.06.2020
+    // decision) next to Kyiv dates in decided_by (LEXAI-2203); emit the same calendar day.
+    shepardization: {
+      ...shep,
+      status: derived,
+      affecting_decisions: (shep.affecting_decisions || []).map((d: any) =>
+        d && d.date !== undefined ? { ...d, date: kyivDate(d.date) ?? d.date } : d),
+    },
   };
 }

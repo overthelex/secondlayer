@@ -189,3 +189,14 @@ describe('reconcilePrecedentStatus', () => {
     expect(statusForEffect('upheld')).toBe('valid');
   });
 });
+
+describe('affecting_decisions dates (LEXAI-2203)', () => {
+  it('are Kyiv calendar days, the same as decided_by', () => {
+    const out: any = reconcilePrecedentStatus(validatorResult('922/989/18', 'valid', [
+      { doc_id: '90458880', ...VP, date: '2020-06-22T21:00:00.000Z', outcome: 'залишено без змін', effect: 'upheld' },
+      { doc_id: '76542491', ...APPEAL, date: '2018-09-18T21:00:00.000Z', outcome: 'скасовано', effect: 'overruled' },
+    ]));
+    expect(out.shepardization.affecting_decisions.map((d: any) => d.date)).toEqual(['2020-06-23', '2018-09-19']);
+    expect(out.decided_by.date).toBe('2020-06-23');
+  });
+});
