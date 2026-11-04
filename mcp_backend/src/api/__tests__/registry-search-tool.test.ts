@@ -12,7 +12,7 @@
  * - DB error handling
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { RegistrySearchTool } from '../tools/registry-search-tool.js';
 import { REGISTRY_CATALOG } from '../tools/registry-catalog.js';
 
@@ -462,6 +462,30 @@ describe('aggregate mode (LEXAI-1820)', () => {
   // concatenation rather than a single column, so these assertions are about
   // the index being reachable at all, not about cosmetics.
   describe('UK registries', () => {
+    describe('MCP_TOOLSET gate (LEXAI-2190)', () => {
+      const saved = process.env.MCP_TOOLSET;
+      afterEach(() => {
+        if (saved === undefined) delete process.env.MCP_TOOLSET; else process.env.MCP_TOOLSET = saved;
+      });
+
+      it('MCP_TOOLSET=ua hides the uk_* registries and rejects calls to them', async () => {
+        process.env.MCP_TOOLSET = 'ua';
+        db = makeDb(() => ({ rows: [] }));
+        tool = new RegistrySearchTool(db);
+        const def = tool.getToolDefinitions()[0];
+        const registryEnum = def.inputSchema.properties.registry.enum as string[];
+        expect(registryEnum.some((k) => k.startsWith('uk_'))).toBe(false);
+        expect(registryEnum).toContain('lawyers');
+        expect(def.description).not.toContain('uk_');
+
+        const res: any = await tool.executeTool('search_registry', {
+          registry: 'uk_legislation', filters: { title: 'Companies Act' },
+        });
+        expect(res.isError).toBe(true);
+        expect(calls).toHaveLength(0);
+      });
+    });
+
     it('all four UK registries are in the enum', () => {
       db = makeDb(() => ({ rows: [] }));
       tool = new RegistrySearchTool(db);
