@@ -1243,12 +1243,18 @@ export class LegislationTools extends BaseToolHandler {
     // had some was imported by the pre-LEXAI-1957 parser, which dropped every
     // indexed article: its list is incomplete, not a genuine repeal. Walk oldest
     // to newest so "earlier" means earlier in time.
+    // A partial loss counts too: ЦК editions came back with 104 indexed articles after
+    // earlier ones had 178 (LEXAI-2200). Indexed articles (1166-1, 625-1 …) are almost
+    // never repealed en masse, so falling below half the earlier peak means the parser
+    // dropped them, not the legislator.
     const incomplete = new Set<number>();
-    let seenIndexed = false;
+    let peakIndexed = 0;
     for (let i = editions.length - 1; i >= 0; i--) {
       const e = editions[i];
-      if (e.indexed_article_count > 0) seenIndexed = true;
-      else if (seenIndexed && e.article_count > 0) incomplete.add(i);
+      if (peakIndexed > 0 && e.article_count > 0 && e.indexed_article_count < peakIndexed * 0.5) {
+        incomplete.add(i);
+      }
+      peakIndexed = Math.max(peakIndexed, e.indexed_article_count);
     }
 
     const futureCount = editions.filter(e => e.future).length;
@@ -1259,7 +1265,7 @@ export class LegislationTools extends BaseToolHandler {
       notes.push(`${futureCount} редакц. ще не набрали чинності (future: true) — це опубліковані Радою майбутні редакції з відкладеним набранням чинності, не поточний текст.`);
     }
     if (incomplete.size > 0) {
-      notes.push(`${incomplete.size} редакц. завантажено без статей з індексом (напр. 350-1) — article_count у них занижений, перелік статей неповний (indexed_articles_missing: true).`);
+      notes.push(`${incomplete.size} редакц. завантажено без усіх або частини статей з індексом (напр. 350-1) — article_count у них занижений, перелік статей неповний (indexed_articles_missing: true).`);
     }
     if (radaTotal != null && radaTotal > editions.length) {
       notes.push(`На zakon.rada.gov.ua ${radaTotal} редакц., у базі ${editions.length} — частину редакцій ще не завантажено.`);

@@ -59,7 +59,7 @@ describe('list_legislation_editions (LEXAI-2106)', () => {
     const flagged = res.editions.filter((e: any) => e.indexed_articles_missing).map((e: any) => e.date);
     // 2004-03-18 precedes any indexed article → genuinely none, not flagged.
     expect(flagged).toEqual(['2028-01-01', '2025-07-16']);
-    expect(res.note).toContain('2 редакц. завантажено без статей з індексом');
+    expect(res.note).toContain('2 редакц. завантажено без усіх або частини статей з індексом');
   });
 
   it('notes editions Rada has that are not loaded yet', async () => {
@@ -111,5 +111,26 @@ describe('LegislationService.getEditionDates (LEXAI-2106)', () => {
     expect(e.article_count).toBe(500);
     expect(e.future).toBe(true);
     expect(e.rada_total_editions).toBeNull();
+  });
+});
+
+describe('partial loss of indexed articles (LEXAI-2200)', () => {
+  it('flags an edition that fell below half the earlier indexed peak', async () => {
+    const out = await buildTools([
+      ed('2026-08-05', 1350, 178),
+      ed('2025-01-01', 1275, 104 - 100), // 4 of 178: parser loss
+      ed('2024-01-01', 1349, 177),
+      ed('2023-01-01', 1340, 170),
+    ]).listLegislationEditions({ rada_id: '435-15' });
+    const flagged = out.editions.filter((e: any) => e.indexed_articles_missing).map((e: any) => e.date);
+    expect(flagged).toEqual(['2025-01-01']);
+  });
+
+  it('a modest drop (repeal of a few indexed articles) is not flagged', async () => {
+    const out = await buildTools([
+      ed('2026-01-01', 1330, 150),
+      ed('2025-01-01', 1340, 170),
+    ]).listLegislationEditions({ rada_id: '435-15' });
+    expect(out.editions.some((e: any) => e.indexed_articles_missing)).toBe(false);
   });
 });
