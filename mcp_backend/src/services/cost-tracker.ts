@@ -37,12 +37,17 @@ export class CostTracker extends BaseCostTracker {
     userId?: string;
     userQuery: string;
     queryParams: any;
+    /** MCP audit fields (migration 244); null for non-MCP callers. */
+    clientIp?: string | null;
+    userAgent?: string | null;
+    mcpSessionId?: string | null;
+    mcpTransport?: string | null;
   }): Promise<void> {
     await this.db.query(
       `INSERT INTO cost_tracking (
         request_id, tool_name, client_key, user_id, user_query, query_params,
-        status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        status, client_ip, user_agent, mcp_session_id, mcp_transport
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet, $9, $10, $11)`,
       [
         params.requestId,
         params.toolName,
@@ -51,12 +56,28 @@ export class CostTracker extends BaseCostTracker {
         sanitizeClassified((params.userQuery?.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') || '').substring(0, 500)),
         JSON.stringify(params.queryParams),
         'pending',
+        params.clientIp ?? null,
+        params.userAgent ?? null,
+        params.mcpSessionId ?? null,
+        params.mcpTransport ?? null,
       ]
     );
 
     logger.debug('Cost tracking record created', {
       requestId: params.requestId,
     });
+  }
+
+  /** Size of what an MCP tool call returned to the client, for bulk-extraction review. */
+  async recordResponseBytes(requestId: string, bytes: number): Promise<void> {
+    try {
+      await this.db.query(
+        `UPDATE cost_tracking SET response_bytes = $1 WHERE request_id = $2`,
+        [Math.min(bytes, 2_147_483_647), requestId]
+      );
+    } catch (error) {
+      logger.warn('Failed to record MCP response size', { requestId, error: (error as Error).message });
+    }
   }
 
   async recordRemoteServiceCall(params: {

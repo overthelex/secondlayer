@@ -29,10 +29,44 @@ import { BillingService } from '../services/billing-service.js';
 import { FixedPriceBilling } from '../services/fixed-price-billing.js';
 import { getFixedToolPrice, FixedToolPrice } from '../services/tool-fixed-price.js';
 import { acquireMcpCall } from '../services/mcp-usage-limits.js';
+import { callerFromHeaders, logMcpAccess, McpCallerInfo } from '../services/mcp-access-log.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+
+interface McpAuthResult {
+  userId?: string;
+  clientKey?: string;
+  authMethod?: 'api_key' | 'oauth' | 'jwt';
+  apiKeyId?: string;
+  /** Caller seen on the authenticating request (session open). */
+  caller: McpCallerInfo;
+  /** Transport name derived from the log tag, e.g. 'v2/mcp'. */
+  transport: string;
+}
+
+interface SessionKeyOpts {
+  sessionCaller?: McpCallerInfo;
+  apiKey?: string;
+  apiKeyId?: string;
+}
+
+/** Ukrainian message for an MCP call refused by the API key's own limits. */
+export function apiKeyRefusalText(reason: string): string {
+  switch (reason) {
+    case 'Daily rate limit exceeded':
+      return 'Помилка: вичерпано денний ліміт запитів для цього API-ключа. Ліміт оновиться завтра.';
+    case 'Per-minute rate limit exceeded':
+      return 'Помилка: забагато запитів за хвилину для цього API-ключа. Повторіть за хвилину.';
+    case 'API key expired':
+      return 'Помилка: термін дії API-ключа закінчився.';
+    case 'Invalid or inactive API key':
+      return 'Помилка: API-ключ недійсний або відключений.';
+    default:
+      return 'Помилка: не вдалося перевірити ліміти API-ключа. Спробуйте пізніше.';
+  }
+}
 
 export function createMCPSSERoutes(deps: {
   mcpSSEServer: MCPSSEServer;
@@ -74,6 +108,11 @@ export function createMCPSSERoutes(deps: {
     };
   }
 
+  const bearerOf = (req: Request): string | undefined => {
+    const h = req.headers.authorization;
+    return h && h.startsWith('Bearer ') ? h.slice(7) : undefined;
+  };
+
   // Active Streamable HTTP sessions (transport reused across POST/GET/DELETE by Mcp-Session-Id)
   const streamableSessions = new Map<string, StreamableHTTPServerTransport>();
 
@@ -86,12 +125,17 @@ export function createMCPSSERoutes(deps: {
     res: Response,
     logTag: string,
     resourceMetadataPath: string
-  ): Promise<{ userId?: string; clientKey?: string } | null> {
+  ): Promise<McpAuthResult | null> {
     const baseUrl = getBaseUrl(req);
+    const transportName = logTag.replace(/^\[MCP |\]$/g, '');
+    const caller = callerFromHeaders(req.headers, req.ip);
+    const refuse = (outcome: 'missing_auth' | 'invalid_api_key' | 'rate_limited' | 'auth_failed', token?: string, detail?: string) =>
+      logMcpAccess(deps.db, { transport: transportName, outcome, token, caller, detail });
     const resourceMetadataUrl = `${baseUrl}${resourceMetadataPath}`;
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       logger.warn(`${logTag} Missing or invalid Authorization header`);
+      refuse('missing_auth');
       res.setHeader('WWW-Authenticate', `Bearer resource_metadata="${resourceMetadataUrl}"`);
       res.status(401).json({
         error: 'Unauthorized',
@@ -104,6 +148,8 @@ export function createMCPSSERoutes(deps: {
     const token = authHeader.replace('Bearer ', '');
     let userId: string | undefined;
     let clientKey: string | undefined;
+    let authMethod: McpAuthResult['authMethod'];
+    let apiKeyId: string | undefined;
 
     try {
       if (token.includes('.')) {
@@ -113,6 +159,7 @@ export function createMCPSSERoutes(deps: {
         if (!jwtSecret) throw new Error('JWT_SECRET not configured');
         const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as any;
         userId = String(decoded.userId);
+        authMethod = 'jwt';
         logger.debug(`${logTag} Authenticated with JWT`, { userId: sanitizeId(userId) });
       } else {
         // OAuth access token first, then API key.
@@ -122,12 +169,14 @@ export function createMCPSSERoutes(deps: {
         if (oauthGrant) {
           userId = String(oauthGrant.userId);
           clientKey = oauthGrant.clientId;
+          authMethod = 'oauth';
           logger.debug(`${logTag} Authenticated with OAuth token`);
         } else {
           clientKey = token;
           const keyInfo = await deps.apiKeyService.validateApiKey(token);
           if (!keyInfo) {
             logger.warn(`${logTag} Invalid API key`, { keyPrefix: maskSensitive(token, 8) });
+            refuse('invalid_api_key', token);
             res.setHeader('WWW-Authenticate', `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl}"`);
             res.status(401).json({ error: 'Unauthorized', message: 'Invalid API key', code: 'INVALID_API_KEY' });
             return null;
@@ -135,18 +184,24 @@ export function createMCPSSERoutes(deps: {
           const rateLimit = await deps.apiKeyService.checkRateLimit(token);
           if (!rateLimit.allowed) {
             logger.warn(`${logTag} Rate limit exceeded`, { keyId: keyInfo.id, reason: rateLimit.reason });
+            logMcpAccess(deps.db, {
+              transport: transportName, outcome: 'rate_limited', authMethod: 'api_key',
+              userId: keyInfo.userId, apiKeyId: keyInfo.id, token, caller, detail: rateLimit.reason,
+            });
             res.status(429).json({ error: 'Rate limit exceeded', code: 'RATE_LIMIT_EXCEEDED', reason: rateLimit.reason });
             return null;
           }
           userId = keyInfo.userId;
+          authMethod = 'api_key';
+          apiKeyId = keyInfo.id;
           logger.debug(`${logTag} Authenticated with API key`, { userId: sanitizeId(userId), keyId: keyInfo.id });
-          deps.apiKeyService.updateUsage(token).catch((err) => {
-            logger.error(`${logTag} Failed to update API key usage`, { error: err.message });
-          });
+          // Not counted here: every tool call is checked and counted by consumeCall
+          // (migration 245), so counting the session open too would double-bill the quota.
         }
       }
     } catch (error) {
       logger.warn(`${logTag} Authentication failed`, { error: (error as Error).message });
+      refuse('auth_failed', token, (error as Error).message);
       res.setHeader('WWW-Authenticate', `Bearer error="invalid_token", resource_metadata="${resourceMetadataUrl}"`);
       res.status(401).json({
         error: 'Unauthorized',
@@ -156,7 +211,29 @@ export function createMCPSSERoutes(deps: {
       return null;
     }
 
-    return { userId, clientKey };
+    return { userId, clientKey, authMethod, apiKeyId, caller, transport: transportName };
+  }
+
+  /** Per-session options binding the caller and, for API-key auth, the key whose limits apply per call. */
+  function sessionKeyOpts(auth: McpAuthResult, req: Request): SessionKeyOpts {
+    return {
+      sessionCaller: auth.caller,
+      ...(auth.authMethod === 'api_key' ? { apiKey: bearerOf(req), apiKeyId: auth.apiKeyId } : {}),
+    };
+  }
+
+  /** Record that an authenticated MCP session was opened (who, which key, from where). */
+  function logSessionOpened(auth: McpAuthResult, sessionId: string, token?: string): void {
+    logMcpAccess(deps.db, {
+      transport: auth.transport,
+      outcome: 'session_opened',
+      authMethod: auth.authMethod,
+      userId: auth.userId,
+      apiKeyId: auth.apiKeyId,
+      token: auth.authMethod === 'api_key' ? token : undefined,
+      mcpSessionId: sessionId,
+      caller: auth.caller,
+    });
   }
 
   // Helper: build a fully-wired MCP Server (tools/list + tools/call with billing) for a user.
@@ -166,7 +243,17 @@ export function createMCPSSERoutes(deps: {
   function buildMcpServer(
     userId: string | undefined,
     clientKey: string | undefined,
-    opts?: { allowedTools?: Set<string>; version?: string; usageBilling?: boolean }
+    opts?: {
+      allowedTools?: Set<string>;
+      version?: string;
+      usageBilling?: boolean;
+      /** Transport name and the caller seen when the session was opened (audit fallback). */
+      transport?: string;
+      sessionCaller?: McpCallerInfo;
+      /** Raw API key when the session authenticated with one: its limits apply per call. */
+      apiKey?: string;
+      apiKeyId?: string;
+    }
   ): Server {
     const safeUserId = sanitizeId(userId || 'anonymous');
     const mcpServer = new Server(
@@ -198,8 +285,35 @@ export function createMCPSSERoutes(deps: {
       return { tools: filterToolsByToolset(tools) };
     });
 
-    mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
+    mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       const toolName = request.params.name;
+      // Per-request caller identity: headers of the HTTP request that carried this call,
+      // falling back to what was seen at session open (SSE messages may lack them).
+      const reqCaller = extra?.requestInfo?.headers
+        ? callerFromHeaders(extra.requestInfo.headers as any)
+        : undefined;
+      const caller: McpCallerInfo = {
+        clientIp: reqCaller?.clientIp ?? opts?.sessionCaller?.clientIp ?? null,
+        userAgent: reqCaller?.userAgent ?? opts?.sessionCaller?.userAgent ?? null,
+      };
+
+      // API-key limits apply to every call, not just the session open: a session must
+      // not outlive its key's daily/per-minute quota, expiry, or deactivation.
+      if (opts?.apiKey) {
+        const quota = await deps.apiKeyService.consumeCall(opts.apiKey);
+        if (!quota.allowed) {
+          logger.warn('[MCP] API key call refused', { userId: safeUserId, tool: toolName, reason: quota.reason });
+          logMcpAccess(deps.db, {
+            transport: opts.transport || 'mcp', outcome: 'rate_limited', authMethod: 'api_key',
+            userId, apiKeyId: opts.apiKeyId, token: opts.apiKey, mcpSessionId: extra?.sessionId,
+            caller, detail: `${toolName}: ${quota.reason}`,
+          });
+          return {
+            content: [{ type: 'text', text: apiKeyRefusalText(quota.reason) }],
+            isError: true,
+          };
+        }
+      }
       const args = request.params.arguments || {};
       const requestId = `mcp-v1-${uuidv4()}`;
       const startTime = Date.now();
@@ -321,6 +435,10 @@ export function createMCPSSERoutes(deps: {
           userId,
           userQuery: String(args.query || JSON.stringify(args)),
           queryParams: args,
+          clientIp: caller.clientIp,
+          userAgent: caller.userAgent,
+          mcpSessionId: extra?.sessionId ?? null,
+          mcpTransport: opts?.transport ?? null,
         });
 
         // Find Case Law licence gate. This is the path MCP clients actually take,
@@ -388,6 +506,7 @@ export function createMCPSSERoutes(deps: {
         }
 
         const content = result.content || [{ type: 'text', text: JSON.stringify(result, null, 2) }];
+        await deps.costTracker.recordResponseBytes(requestId, Buffer.byteLength(JSON.stringify(content), 'utf8'));
         return {
           content: limitWarning ? [...content, { type: 'text', text: limitWarning }] : content,
         };
@@ -421,8 +540,10 @@ export function createMCPSSERoutes(deps: {
 
   // Build an MCP Server exposing only the curated v2 subset. Reuses the fully-wired v1
   // builder (tools/list + tools/call with billing) with the whitelist applied.
-  function buildMcpServerV2(userId: string | undefined, clientKey: string | undefined): Server {
-    return buildMcpServer(userId, clientKey, { allowedTools: V2_TOOL_NAMES, version: '2.0.0', usageBilling: true });
+  function buildMcpServerV2(userId: string | undefined, clientKey: string | undefined, keyOpts: SessionKeyOpts): Server {
+    return buildMcpServer(userId, clientKey, {
+      allowedTools: V2_TOOL_NAMES, version: '2.0.0', usageBilling: true, transport: 'v2/mcp', ...keyOpts,
+    });
   }
 
   // ========================= /sse endpoints =========================
@@ -674,13 +795,14 @@ export function createMCPSSERoutes(deps: {
       const { userId, clientKey } = auth;
 
       // Build the MCP server (tools/list + tools/call with billing)
-      const mcpServer = buildMcpServer(userId, clientKey);
+      const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/sse', ...sessionKeyOpts(auth, req) });
 
       // Create SSE transport
       const transport = new SSEServerTransport('/v1/sse', res);
 
       // Store session for POST message routing
       deps.mcpSseSessions.set(transport.sessionId, transport);
+      logSessionOpened(auth, transport.sessionId, bearerOf(req));
 
       // Connect MCP server to transport
       await mcpServer.connect(transport);
@@ -750,13 +872,14 @@ export function createMCPSSERoutes(deps: {
       if (!auth) return; // response already sent
 
       const { userId, clientKey } = auth;
-      const mcpServer = buildMcpServer(userId, clientKey);
+      const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/mcp', ...sessionKeyOpts(auth, req) });
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => uuidv4(),
         onsessioninitialized: (sid: string) => {
           streamableSessions.set(sid, transport);
           logger.info('[MCP v1/mcp] Session initialized', { sessionId: sid });
+          logSessionOpened(auth, sid, bearerOf(req));
         },
       });
 
@@ -848,13 +971,14 @@ export function createMCPSSERoutes(deps: {
       if (!auth) return; // response already sent
 
       const { userId, clientKey } = auth;
-      const mcpServer = buildMcpServerV2(userId, clientKey);
+      const mcpServer = buildMcpServerV2(userId, clientKey, sessionKeyOpts(auth, req));
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => uuidv4(),
         onsessioninitialized: (sid: string) => {
           streamableSessions.set(sid, transport);
           logger.info('[MCP v2/mcp] Session initialized', { sessionId: sid });
+          logSessionOpened(auth, sid, bearerOf(req));
         },
       });
 
