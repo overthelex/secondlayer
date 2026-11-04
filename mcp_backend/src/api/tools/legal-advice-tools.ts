@@ -307,6 +307,50 @@ export class LegalAdviceTools extends BaseToolHandler {
     return null;
   }
 
+  /** Decision→article edges from law_court_citations (uq_lcc_dedup leads with court_case_id). */
+  private async citationGraphFromPostgres(docId: string): Promise<any | null> {
+    if (!this.db || !/^\d+$/.test(docId)) return null;
+    try {
+      const res = await this.db.query(
+        `SELECT citation_type, law_number, law_article
+           FROM law_court_citations
+          WHERE court_case_id = $1::bigint
+          LIMIT 51`,
+        [docId]
+      );
+      const rows = res.rows || [];
+      if (rows.length === 0) return null;
+      const decisionKey = `decision:${docId}`;
+      const nodes = new Map<string, any>([[decisionKey, { id: decisionKey, type: 'decision', label: docId }]]);
+      const edges: any[] = [];
+      const seenOfLaw = new Set<string>();
+      for (const r of rows.slice(0, 50)) {
+        const law = String(r.law_number ?? '');
+        const article = r.law_article == null ? '' : String(r.law_article);
+        const lawKey = `law:${law}`;
+        const artKey = `article:${law}|${article}`;
+        if (!nodes.has(lawKey)) nodes.set(lawKey, { id: lawKey, type: 'law', label: law });
+        if (article && !nodes.has(artKey)) {
+          nodes.set(artKey, { id: artKey, type: 'article', label: `${law} ст.${article}` });
+        }
+        if (article) {
+          edges.push({ from: decisionKey, to: artKey, type: 'CITES_ARTICLE', citation_type: r.citation_type });
+          const ofLaw = `${artKey}>${lawKey}`;
+          if (!seenOfLaw.has(ofLaw)) {
+            seenOfLaw.add(ofLaw);
+            edges.push({ from: artKey, to: lawKey, type: 'OF_LAW' });
+          }
+        } else {
+          edges.push({ from: decisionKey, to: lawKey, type: 'CITES_LAW', citation_type: r.citation_type });
+        }
+      }
+      return { root: { docId }, nodes: Array.from(nodes.values()), edges, truncated: rows.length > 50 };
+    } catch (error: any) {
+      logger.warn('[LegalAdviceTools] law_court_citations fallback failed', { docId, error: error?.message });
+      return null;
+    }
+  }
+
   private async getCitationGraph(args: any): Promise<ToolResult> {
     const input = String(args.case_id).trim();
     const depth = args.depth || 2;
@@ -323,7 +367,17 @@ export class LegalAdviceTools extends BaseToolHandler {
       }
       try {
         const graph = await this.citationGraphService.getCitationGraph(docId, depth);
-        return this.wrapResponse({ graph, backend: 'neo4j' });
+        if (graph.edges.length > 0) return this.wrapResponse({ graph, backend: 'neo4j' });
+        // The Neo4j load does not cover every decision: ВП 90458880 came back as a lone
+        // node with no edges and no word why (LEXAI-2204). law_court_citations holds the
+        // same decision→article edges for the whole corpus; serve them from there.
+        const pg = await this.citationGraphFromPostgres(docId);
+        if (pg) return this.wrapResponse({ graph: pg, backend: 'postgres' });
+        return this.wrapResponse({
+          graph,
+          backend: 'neo4j',
+          note: `Для рішення ${docId} у графі цитувань немає посилань на норми: рішення не завантажене до графа або не містить розпізнаних посилань на статті.`,
+        });
       } catch (error: any) {
         logger.error('[LegalAdviceTools] Neo4j citation graph failed', { input, docId, error: error?.message });
         return this.wrapResponse({
