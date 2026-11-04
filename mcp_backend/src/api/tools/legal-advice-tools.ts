@@ -315,6 +315,7 @@ export class LegalAdviceTools extends BaseToolHandler {
         `SELECT citation_type, law_number, law_article
            FROM law_court_citations
           WHERE court_case_id = $1::bigint
+          ORDER BY citation_type, law_number, law_article
           LIMIT 51`,
         [docId]
       );

@@ -422,3 +422,12 @@ describe('legal status on list rows (LEXAI-2192)', () => {
     expect([b.legal_status, b.status]).toEqual(['дію припинено', 'inactive']);
   });
 });
+
+describe('NIPO yellow status (LEXAI-2192 review)', () => {
+  it('a yellow registered mark is pending, not active', () => {
+    const { applyLegalStatus } = require('../tools/ip-objects-tools');
+    const row = applyLegalStatus({ obj_state: 2, status: 'active' }, { registration_status_color: 'yellow' });
+    expect(row.status).toBe('pending');
+    expect(row.legal_status).toContain('очікує');
+  });
+});

@@ -335,8 +335,12 @@ export class BillService {
     return token;
   }
 
-  /** Adjectival endings (full and short forms): a word with one modifies the next word. */
-  private static readonly UK_ADJ_ENDING = /(ий|ій|ого|ього|ому|ьому|ої|ою|их|іх|ими|іми|ім|им)$/;
+  /**
+   * Adjectival endings. Only those nouns rarely share: «ій» (водій, сценарій), «ою»
+   * (рукою, водою) and «ім» are left out, so a noun is never mistaken for a modifier
+   * and dropped from the required set.
+   */
+  private static readonly UK_ADJ_ENDING = /(ий|ого|ього|ому|ьому|ої|их|іх|ими|іми|им)$/;
 
   /** Prefix-tsquery tokens of the query words that are not adjectives. */
   static nounTokens(input: string): string[] {

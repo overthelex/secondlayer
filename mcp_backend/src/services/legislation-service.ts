@@ -36,11 +36,6 @@ export const REPEALED_ACT_PENALTY = 0.5;
 export const PARTIALLY_REPEALED_ACT_PENALTY = 0.75;
 
 /**
- * Ranking weight for a hit from an act with this status: null = drop it.
- * Only a full repeal (status 1) is ever dropped; status 9 keeps some
- * provisions in force, so it is demoted, not hidden.
- */
-/**
  * Rada statuses of acts that are not repealed but are not current law either:
  * 2 «набирає чинності», 3 «дію зупинено», 6 «не набрав чинності», 7 «не застосовується
  * на території України». Ranked like a repealed act so search_legislation's "current law"
@@ -49,6 +44,11 @@ export const PARTIALLY_REPEALED_ACT_PENALTY = 0.75;
  */
 const NOT_CURRENT_STATUS_CODES = new Set([2, 3, 6, 7]);
 
+/**
+ * Ranking weight for a hit from an act with this status: null = drop it.
+ * Only a full repeal (status 1) is ever dropped; status 9 keeps some
+ * provisions in force, so it is demoted, not hidden.
+ */
 export function repealedActWeight(status: ActStatus | undefined, mode: RepealedActMode): number | null {
   if (!status || mode === 'keep') return 1;
   if (status.repealed) return mode === 'exclude' ? null : REPEALED_ACT_PENALTY;

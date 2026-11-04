@@ -684,8 +684,14 @@ export class LegislationTools extends BaseToolHandler {
             // resolved to ЦК ст. 1166 at 0.78 and the unscoped hits that went first were
             // ст. 5 of the banking law (LEXAI-2201). Same-act hits first unless the act
             // itself is suspect.
+            // Between the two, interleave: same-act hits lead, but an unscoped hit still
+            // reaches the page in case the act guess was wrong after all.
             const lawSuspect = refRepealed || (directRef.confidence ?? 0) < AI_LAW_TRUSTED_CONFIDENCE;
-            const supplemental = lawSuspect ? [...unscoped, ...scoped] : [...scoped, ...unscoped];
+            const interleave = (a: any[], b: any[]) =>
+              Array.from({ length: Math.max(a.length, b.length) }, (_, i) => [a[i], b[i]])
+                .flat()
+                .filter(Boolean);
+            const supplemental = lawSuspect ? [...unscoped, ...scoped] : interleave(scoped, unscoped);
 
             const seen = new Set<string>([
               `${resolvedArticle.rada_id}:${resolvedArticle.article_number}`,

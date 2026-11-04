@@ -242,3 +242,17 @@ describe('not-current acts are ranked like repealed ones (LEXAI-2201)', () => {
     expect(repealedActWeight(CK, 'exclude')).toBe(1);
   });
 });
+
+describe('supplement interleave (LEXAI-2201 review)', () => {
+  it('an unscoped hit still reaches the page when same-act hits are plentiful', async () => {
+    const a = (n: string) => ({ ...ckArticle, article_number: n });
+    const other = { ...ckArticle, rada_id: '2121-14', article_number: '5' };
+    const { tools } = buildTools({
+      parseArticleReferenceWithAI: jest.fn().mockResolvedValue({ radaId: '435-15', articleNumber: '1166', source: 'ai', confidence: 0.78 }),
+      getArticle: jest.fn().mockResolvedValue(a('1166')),
+      findRelevantArticles: jest.fn(async (_q: string, radaId?: string) => (radaId ? [a('1187'), a('1192'), a('1195')] : [other])),
+    });
+    const res = await tools.searchLegislation({ query: 'затоплення квартири сусідом відшкодування шкоди', limit: 3 });
+    expect(res.articles.map((x: any) => `${x.rada_id}:${x.article_number}`)).toEqual(['435-15:1166', '435-15:1187', '2121-14:5']);
+  });
+});

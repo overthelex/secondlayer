@@ -11,6 +11,12 @@ import { logger } from '../../utils/logger.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 
 /** «910/5220/26», «352/923/16-ц», «1-кс/757/1/19»: digits and slashes, no letters beyond a suffix. */
+/** hearing_date («DD.MM.YYYY HH:MI», or ISO) → date; NULL when neither shape matches. */
+export const HEARING_DAY_SQL = `(CASE
+  WHEN hearing_date ~ '^\\d{2}\\.\\d{2}\\.\\d{4}' THEN to_date(substr(hearing_date, 1, 10), 'DD.MM.YYYY')
+  WHEN hearing_date ~ '^\\d{4}-\\d{2}-\\d{2}' THEN substr(hearing_date, 1, 10)::date
+END)`;
+
 export function looksLikeCaseNumber(q: string): boolean {
   const t = q.replace(/\s+/g, '');
   return /^[0-9]{1,4}(-[а-яіїєa-z]{1,3})?\/[0-9]{1,6}\/[0-9]{1,6}(\/[0-9]{1,4})?(-[а-яіїєa-z]{1,3})?$/i.test(t)
@@ -53,7 +59,6 @@ export class CourtSessionTools extends BaseToolHandler {
             target: {
               type: 'string',
               enum: ['cause_num', 'case_involved'],
-              default: 'case_involved',
               description: 'Як трактувати query: cause_num (номер справи) або case_involved (учасники). За замовчуванням визначається автоматично',
             },
             case_number: {
@@ -220,13 +225,16 @@ export class CourtSessionTools extends BaseToolHandler {
       values.push(`%${court_name}%`);
       pi++;
     }
+    // hearing_date is TEXT «05.05.2026 00:00»: compared as a string against an ISO
+    // bound, '06.05.2026' > '2026-05-01' for every row, so the filter and the sort were
+    // meaningless. Compare (and order by) the parsed calendar day instead.
     if (date_from) {
-      conditions.push(`hearing_date >= $${pi}`);
+      conditions.push(`${HEARING_DAY_SQL} >= $${pi}::date`);
       values.push(date_from);
       pi++;
     }
     if (date_to) {
-      conditions.push(`hearing_date <= $${pi}`);
+      conditions.push(`${HEARING_DAY_SQL} <= $${pi}::date`);
       values.push(date_to);
       pi++;
     }
@@ -238,7 +246,7 @@ export class CourtSessionTools extends BaseToolHandler {
     const sql = `SELECT hearing_date, court_name, case_number, judges, court_room, case_involved, case_description
       FROM opendata_court_schedule
       WHERE ${conditions.join(' AND ')}
-      ORDER BY hearing_date DESC
+      ORDER BY ${HEARING_DAY_SQL} DESC NULLS LAST, hearing_date DESC
       LIMIT $${pi}`;
 
     try {

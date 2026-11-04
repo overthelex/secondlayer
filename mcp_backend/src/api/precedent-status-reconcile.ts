@@ -179,7 +179,7 @@ export function reconcilePrecedentStatus<T extends Record<string, any>>(status: 
       ...shep,
       status: derived,
       affecting_decisions: (shep.affecting_decisions || []).map((d: any) =>
-        d && d.date !== undefined ? { ...d, date: kyivDate(d.date) ?? d.date } : d),
+        d && d.date !== undefined ? { ...d, date: kyivDate(d.date) } : d),
     },
   };
 }

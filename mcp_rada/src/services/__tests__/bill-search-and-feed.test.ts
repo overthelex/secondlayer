@@ -169,3 +169,10 @@ describe('relaxed pass needs a noun (LEXAI-2202)', () => {
     expect(BillService.nounTokens('штучний інтелект')).toEqual(['інтелект:*']);
   });
 });
+
+describe('nouns ending like adjectives (LEXAI-2202 review)', () => {
+  it('водій and сценарій stay nouns', () => {
+    expect(BillService.nounTokens('водій штрафи')).toHaveLength(2);
+    expect(BillService.nounTokens('сценарій')).toHaveLength(1);
+  });
+});

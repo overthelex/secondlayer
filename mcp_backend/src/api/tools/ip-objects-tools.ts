@@ -104,6 +104,8 @@ const INACTIVE_LEGAL_STATES = new Set(['визнано недійсним', 'д�
  * termination/prolongation live ONLY in raw_data). Without this, a terminated mark reads as
  * "чинний" (obj_state=2) or, off the stale expiry_date alone, wrongly as "строк дії сплив".
  */
+const YELLOW_LEGAL_STATE = 'зареєстровано, очікує дії власника (напр. сплати збору)';
+
 export function deriveLegalStatus(obj: any, raw: any = {}, eventKinds: Set<string> = new Set()): string {
   raw = raw || {};
   if (eventKinds.has('invalidation')) return 'визнано недійсним';
@@ -113,6 +115,8 @@ export function deriveLegalStatus(obj: any, raw: any = {}, eventKinds: Set<strin
   // Effective term end = renewed expiry (ProlonagationExpiryDate) if present, else original.
   const effectiveExpiry = raw.ProlonagationExpiryDate || obj.expiry_date;
   if (effectiveExpiry && new Date(effectiveExpiry) < new Date()) return 'строк дії сплив';
+  // NIPO yellow = registered but awaiting an action, e.g. the annual fee (import-uipv-ip.ts).
+  if (String(raw.registration_status_color || '').toLowerCase() === 'yellow') return YELLOW_LEGAL_STATE;
   if (Number(obj.obj_state) === 2) return 'чинний';
   return obj.registry_status || obj.status || 'невідомо';
 }
@@ -127,7 +131,9 @@ export function applyLegalStatus<T extends Record<string, any>>(row: T, raw: any
   const r: any = row;
   if (!('registry_status' in r)) r.registry_status = r.status ?? null;
   r.legal_status = deriveLegalStatus(r, raw, eventKinds);
-  r.status = INACTIVE_LEGAL_STATES.has(r.legal_status) ? 'inactive' : r.legal_status === 'невідомо' ? r.registry_status : 'active';
+  r.status = INACTIVE_LEGAL_STATES.has(r.legal_status) ? 'inactive'
+    : r.legal_status === YELLOW_LEGAL_STATE ? 'pending'
+    : r.legal_status === 'невідомо' ? r.registry_status : 'active';
   return row;
 }
 
