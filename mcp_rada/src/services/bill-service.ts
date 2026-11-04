@@ -270,6 +270,13 @@ export class BillService {
       `NOT (bill_number = ANY(${excludeP}::text[]))`,
       ...filters(rb.bind),
     ];
+    // An adjective alone never qualifies a bill: «штучний інтелект» let in «штучних
+    // перепон» and the surname Штучний because «штучн» is rare and so carried half the
+    // query weight on its own (LEXAI-2202). When the query has a noun, require one.
+    const nouns = BillService.nounTokens(q);
+    if (nouns.length > 0 && nouns.length < tokens.length) {
+      relaxedWhere.push(`${TSV} @@ to_tsquery('simple', ${rb.bind(nouns.join(' | '))})`);
+    }
     const relaxedSql = `
       WITH n AS (SELECT GREATEST(count(*), 1)::float8 AS total FROM bills),
       w AS (
@@ -326,6 +333,19 @@ export class BillService {
       }
     }
     return token;
+  }
+
+  /** Adjectival endings (full and short forms): a word with one modifies the next word. */
+  private static readonly UK_ADJ_ENDING = /(ий|ій|ого|ього|ому|ьому|ої|ою|их|іх|ими|іми|ім|им)$/;
+
+  /** Prefix-tsquery tokens of the query words that are not adjectives. */
+  static nounTokens(input: string): string[] {
+    const words = (input.match(/[\p{L}\p{N}]+/gu) || [])
+      .map(t => t.toLowerCase())
+      .filter(t => t.length > 1);
+    return words
+      .filter(w => !/^[а-щьюяіїєґ]+$/.test(w) || !BillService.UK_ADJ_ENDING.test(w))
+      .map(w => `${BillService.stemPrefix(w)}:*`);
   }
 
   /**
