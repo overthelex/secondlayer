@@ -53,6 +53,8 @@ function capText(text: string | undefined | null, maxChars: number = MAX_ARTICLE
 
 /** Confidence at/above which an AI-resolved article is trusted without semantic supplementation. */
 const AI_REF_TRUSTED_CONFIDENCE = 0.9;
+/** Classifier confidence above which the guessed ACT is trusted even if the article is not. */
+const AI_LAW_TRUSTED_CONFIDENCE = 0.7;
 /** Min share of distinctive query terms that must appear in the resolved article for it to be "grounded". */
 const ARTICLE_GROUNDING_MIN_RATIO = 0.5;
 const GROUNDING_TOKEN_MIN_LEN = 5;
@@ -677,7 +679,13 @@ export class LegislationTools extends BaseToolHandler {
                 ? this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts)
                 : Promise.resolve([] as any[]),
             ]);
-            const supplemental = lawMayBeWrong ? [...unscoped, ...scoped] : [...scoped, ...unscoped];
+            // A low grounding ratio says the ARTICLE may be off; it says little about the
+            // LAW when the classifier was fairly sure of it. «затоплення квартири сусідом»
+            // resolved to ЦК ст. 1166 at 0.78 and the unscoped hits that went first were
+            // ст. 5 of the banking law (LEXAI-2201). Same-act hits first unless the act
+            // itself is suspect.
+            const lawSuspect = refRepealed || (directRef.confidence ?? 0) < AI_LAW_TRUSTED_CONFIDENCE;
+            const supplemental = lawSuspect ? [...unscoped, ...scoped] : [...scoped, ...unscoped];
 
             const seen = new Set<string>([
               `${resolvedArticle.rada_id}:${resolvedArticle.article_number}`,

@@ -40,10 +40,20 @@ export const PARTIALLY_REPEALED_ACT_PENALTY = 0.75;
  * Only a full repeal (status 1) is ever dropped; status 9 keeps some
  * provisions in force, so it is demoted, not hidden.
  */
+/**
+ * Rada statuses of acts that are not repealed but are not current law either:
+ * 2 «набирає чинності», 3 «дію зупинено», 6 «не набрав чинності», 7 «не застосовується
+ * на території України». Ranked like a repealed act so search_legislation's "current law"
+ * default does not put ст. 70 of a not-yet-in-force law second (LEXAI-2201); they are
+ * not dropped, since a future law can still be what the caller wants.
+ */
+const NOT_CURRENT_STATUS_CODES = new Set([2, 3, 6, 7]);
+
 export function repealedActWeight(status: ActStatus | undefined, mode: RepealedActMode): number | null {
   if (!status || mode === 'keep') return 1;
   if (status.repealed) return mode === 'exclude' ? null : REPEALED_ACT_PENALTY;
   if (status.partially_repealed) return PARTIALLY_REPEALED_ACT_PENALTY;
+  if (status.status_code != null && NOT_CURRENT_STATUS_CODES.has(status.status_code)) return REPEALED_ACT_PENALTY;
   return 1;
 }
 
