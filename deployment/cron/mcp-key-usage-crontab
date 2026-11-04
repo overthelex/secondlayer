@@ -1,0 +1,7 @@
+# MCP API-key usage check on legal_prod (cthulhu, user vovkes) — mail on flags.
+# Install (merge into the existing crontab):
+#   crontab -l | cat - ~/SecondLayer/deployment/cron/mcp-key-usage-crontab | crontab -
+# Script: scripts/mcp-key-usage-alert.sh (thresholds and recipient via env, see header).
+
+# Every day at 07:00 server time, covering the last 24 h.
+0 7 * * * mkdir -p $HOME/logs && /home/vovkes/SecondLayer/scripts/mcp-key-usage-alert.sh >> $HOME/logs/mcp-key-usage-alert.log 2>&1

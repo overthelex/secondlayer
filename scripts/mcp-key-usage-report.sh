@@ -9,7 +9,8 @@
 # mcp_access_log, view mcp_key_usage_daily — міграція 244.
 #
 # Використання:
-#   ./scripts/mcp-key-usage-report.sh <email | префікс ключа sl_xxxx> [днів=7]
+#   ./scripts/mcp-key-usage-report.sh <email | префікс ключа sl_xxxx | all> [днів=7]
+# На самому cthulhu (cron): SSH_HOST= ./scripts/mcp-key-usage-report.sh ...
 # Пороги (env): MAX_IPS_PER_DAY=3  MAX_CALLS_PER_DAY=500  MAX_MB_PER_DAY=50
 # Код виходу: 0 — без ознак, 2 — є позначки (для cron/алертів), 1 — помилка.
 #
@@ -22,14 +23,17 @@ DAYS="${2:-7}"
 MAX_IPS="${MAX_IPS_PER_DAY:-3}"
 MAX_CALLS="${MAX_CALLS_PER_DAY:-500}"
 MAX_MB="${MAX_MB_PER_DAY:-50}"
-SSH_HOST="${SSH_HOST:-local}"
+SSH_HOST="${SSH_HOST-local}"   # empty = run on this host (cthulhu)
 
 [[ "$DAYS" =~ ^[0-9]+$ ]] || { echo "днів має бути числом" >&2; exit 1; }
 [[ "$MAX_IPS$MAX_CALLS$MAX_MB" =~ ^[0-9]+$ ]] || { echo "пороги мають бути числами" >&2; exit 1; }
 # Only characters that can appear in an email or key prefix; the value is inlined into SQL.
 [[ "$WHO" =~ ^[A-Za-z0-9._%+@-]+$ ]] || { echo "недопустимі символи в '$WHO'" >&2; exit 1; }
 
-if [[ "$WHO" == *@* ]]; then
+if [[ "$WHO" == all ]]; then
+  FILTER="true"
+  LOG_FILTER="true"
+elif [[ "$WHO" == *@* ]]; then
   FILTER="lower(email) = lower('$WHO')"
   LOG_FILTER="user_id = (SELECT id FROM users WHERE lower(email) = lower('$WHO'))"
 else
@@ -38,8 +42,13 @@ else
 fi
 SINCE="now() - interval '$DAYS days'"
 
+PSQL="docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -v ON_ERROR_STOP=1 -P pager=off"
 run_sql() {
-  ssh "$SSH_HOST" "sudo docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -v ON_ERROR_STOP=1 -P pager=off $*"
+  if [[ -n "$SSH_HOST" ]]; then
+    ssh "$SSH_HOST" "sudo $PSQL $*"
+  else
+    $PSQL "$@"
+  fi
 }
 
 echo "=== MCP-використання: $WHO, останні $DAYS дн. ==="
