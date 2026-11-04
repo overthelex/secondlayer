@@ -10,6 +10,13 @@ import { EdsrLocalAdapter } from '../../adapters/edrsr-local-adapter.js';
 import { logger } from '../../utils/logger.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 
+/** «910/5220/26», «352/923/16-ц», «1-кс/757/1/19»: digits and slashes, no letters beyond a suffix. */
+export function looksLikeCaseNumber(q: string): boolean {
+  const t = q.replace(/\s+/g, '');
+  return /^[0-9]{1,4}(-[а-яіїєa-z]{1,3})?\/[0-9]{1,6}\/[0-9]{1,6}(\/[0-9]{1,4})?(-[а-яіїєa-z]{1,3})?$/i.test(t)
+    || /^[0-9]{3,4}\/[0-9]{1,6}\/[0-9]{2,4}(-[а-яіїєa-z]{1,3})?$/i.test(t);
+}
+
 export class CourtSessionTools extends BaseToolHandler {
   constructor(
     private zoSessionsAdapter: EdsrLocalAdapter,
@@ -29,25 +36,25 @@ export class CourtSessionTools extends BaseToolHandler {
 
 💰 Примерная стоимость: $0.001-$0.01 USD
 Знаходить заплановані та завершені засідання за номером справи, учасниками, суддею.
-Джерела: source=api (ZakonOnline API), source=opendata (30M+ засідань з відкритих даних), source=all (обидва).`,
+Джерело: відкриті дані судової влади (30M+ засідань). Номер справи в query розпізнається автоматично.`,
         inputSchema: {
           type: 'object',
           properties: {
             query: {
               type: 'string',
-              description: 'Пошуковий запит (номер справи або ім\'я учасника). Обов\'язковий для source=api.',
+              description: 'Пошуковий запит: номер справи (напр. 910/5220/26) або ім\'я/назва учасника',
             },
             source: {
               type: 'string',
               enum: ['api', 'opendata', 'all'],
               default: 'all',
-              description: 'Джерело: api (ZakonOnline), opendata (локальна БД відкритих даних), all (обидва)',
+              description: 'Застаріле: усі значення шукають у відкритих даних (ZakonOnline API вимкнено)',
             },
             target: {
               type: 'string',
               enum: ['cause_num', 'case_involved'],
               default: 'case_involved',
-              description: 'Тип пошуку для API: cause_num (номер справи) або case_involved (учасники)',
+              description: 'Як трактувати query: cause_num (номер справи) або case_involved (учасники). За замовчуванням визначається автоматично',
             },
             case_number: {
               type: 'string',
@@ -137,46 +144,30 @@ export class CourtSessionTools extends BaseToolHandler {
 
   private async searchCourtSessions(args: any): Promise<ToolResult> {
     const query = String(args.query || '').trim();
-    const source = String(args.source || 'all').trim();
     const limit = Math.min(1000, Math.max(1, Number(args.limit || 50)));
 
-    const apiResults: any[] = [];
     const opendataResults: any[] = [];
-
-    // Source: API (ZakonOnline)
-    if ((source === 'api' || source === 'all') && query) {
-      const target = args.target || 'case_involved';
-      const searchParams: any = {
-        meta: { search: query, target },
-        limit,
-        offset: 0,
-      };
-      if (args.date_from) searchParams.date_session_from = args.date_from;
-      if (args.date_to) searchParams.date_session_to = args.date_to;
-
-      const rawResponse = await this.zoSessionsAdapter.searchCourtDecisions(searchParams);
-      const responseData = Array.isArray(rawResponse)
-        ? rawResponse
-        : (rawResponse?.data && Array.isArray(rawResponse.data) ? rawResponse.data : []);
-
-      // Save to local DB for caching
-      for (const session of responseData) {
-        try { await this.saveSessionToDb(session); } catch (_) { /* skip duplicates */ }
-      }
-      apiResults.push(...responseData);
+    const hasFilter = query || ['case_number', 'judge', 'participant', 'court_name', 'date_from', 'date_to']
+      .some((k) => args[k]);
+    if (!hasFilter) {
+      return this.wrapResponse('Вкажіть query (номер справи або учасник) або фільтри: case_number, judge, participant, court_name, date_from/date_to');
     }
 
-    // Source: OpenData (local PostgreSQL)
-    if (source === 'opendata' || source === 'all') {
-      const odResults = await this.searchScheduleFromOpendata(args, limit);
-      opendataResults.push(...odResults);
+    // ZakonOnline API is retired (LEXAI-2193): the adapter wired here is the local EDRSR
+    // decisions adapter, so source=api searched court DECISIONS with session parameters
+    // and always came back empty. Every source value now reads the opendata schedule;
+    // `source` is still accepted so existing callers do not break.
+    const odArgs = { ...args };
+    if (query && !args.case_number && !args.participant) {
+      const asCaseNumber = args.target === 'cause_num'
+        || (args.target !== 'case_involved' && looksLikeCaseNumber(query));
+      if (asCaseNumber) odArgs.case_number = query.replace(/\s+/g, '');
+      else odArgs.participant = query;
     }
+    opendataResults.push(...await this.searchScheduleFromOpendata(odArgs, limit));
 
-    const totalFound = apiResults.length + opendataResults.length;
+    const totalFound = opendataResults.length;
     if (totalFound === 0) {
-      if (!query && source !== 'opendata') {
-        return this.wrapResponse('Вкажіть query для пошуку через API або використайте source=opendata з фільтрами (case_number, judge, participant, court_name)');
-      }
       return this.wrapResponse({
         query: query || undefined,
         sessions_found: 0,
@@ -186,14 +177,10 @@ export class CourtSessionTools extends BaseToolHandler {
 
     const response: any = {
       query: query || undefined,
-      source,
+      source: 'opendata',
       sessions_found: totalFound,
     };
 
-    if (apiResults.length > 0) {
-      response.api_results = apiResults.slice(0, 20);
-      if (apiResults.length > 20) response.api_total = apiResults.length;
-    }
     if (opendataResults.length > 0) {
       response.opendata_results = opendataResults.slice(0, limit);
     }
