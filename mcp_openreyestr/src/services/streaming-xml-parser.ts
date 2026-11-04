@@ -1,6 +1,7 @@
 import sax from 'sax';
 import { Readable } from 'stream';
 import { ParsedUOEntity, ParsedFOPEntity, ParsedFSUEntity } from './xml-parser.js';
+import { mapTerminationStarted, mapBankruptcyInfo } from '../utils/nais-subrecords';
 
 type EntityCallback<T> = (entity: T) => Promise<void>;
 type BatchCallback<T> = (entities: T[]) => Promise<void>;
@@ -276,8 +277,8 @@ export class StreamingXMLParser {
     if (subject.BRANCHES?.BRANCH) entity.branches = subject.BRANCHES.BRANCH;
     if (subject.PREDECESSORS?.PREDECESSOR) entity.predecessors = subject.PREDECESSORS.PREDECESSOR;
     if (subject.ASSIGNEES?.ASSIGNEE) entity.assignees = subject.ASSIGNEES.ASSIGNEE;
-    if (subject.TERMINATION_STARTED_INFO) entity.termination_started = subject.TERMINATION_STARTED_INFO;
-    if (subject.BANKRUPTCY_READJUSTMENT_INFO) entity.bankruptcy_info = subject.BANKRUPTCY_READJUSTMENT_INFO;
+    if (subject.TERMINATION_STARTED_INFO) entity.termination_started = mapTerminationStarted(subject.TERMINATION_STARTED_INFO);
+    if (subject.BANKRUPTCY_READJUSTMENT_INFO) entity.bankruptcy_info = mapBankruptcyInfo(subject.BANKRUPTCY_READJUSTMENT_INFO);
     if (subject.EXCHANGE_DATA?.EXCHANGE_ANSWER) entity.exchange_data = subject.EXCHANGE_DATA.EXCHANGE_ANSWER;
 
     return entity;
@@ -319,7 +320,7 @@ export class StreamingXMLParser {
     if (subject.BENEFICIARIES?.BENEFICIARY) entity.beneficiaries = subject.BENEFICIARIES.BENEFICIARY;
     if (subject.SIGNERS?.SIGNER) entity.signers = subject.SIGNERS.SIGNER;
     if (subject.PREDECESSORS?.PREDECESSOR) entity.predecessors = subject.PREDECESSORS.PREDECESSOR;
-    if (subject.TERMINATION_STARTED_INFO) entity.termination_started = subject.TERMINATION_STARTED_INFO;
+    if (subject.TERMINATION_STARTED_INFO) entity.termination_started = mapTerminationStarted(subject.TERMINATION_STARTED_INFO);
     if (subject.EXCHANGE_DATA?.EXCHANGE_ANSWER) entity.exchange_data = subject.EXCHANGE_DATA.EXCHANGE_ANSWER;
 
     return entity;

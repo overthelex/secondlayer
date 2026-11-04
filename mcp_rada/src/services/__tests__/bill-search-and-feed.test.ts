@@ -151,3 +151,28 @@ describe('sync-bills buildUpsert', () => {
     expect(sql).toContain('($13, $14,');
   });
 });
+
+describe('relaxed pass needs a noun (LEXAI-2202)', () => {
+  it('«штучний інтелект»: the adjective alone cannot qualify a bill', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce({ rows: [{ bill_number: '15379' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    await makeService(query).searchBills({ query: 'штучний інтелект', limit: 5 });
+    const [relaxedSql, relaxedParams] = query.mock.calls[1];
+    expect(relaxedParams).toContain('інтелект:*');
+    const nounIdx = relaxedParams.indexOf('інтелект:*') + 1;
+    expect(relaxedSql).toContain(`to_tsquery('simple', $${nounIdx})`);
+  });
+
+  it('two nouns keep the old behaviour (no extra clause)', () => {
+    expect(BillService.nounTokens('бронювання працівників')).toHaveLength(2);
+    expect(BillService.nounTokens('штучний інтелект')).toEqual(['інтелект:*']);
+  });
+});
+
+describe('nouns ending like adjectives (LEXAI-2202 review)', () => {
+  it('водій and сценарій stay nouns', () => {
+    expect(BillService.nounTokens('водій штрафи')).toHaveLength(2);
+    expect(BillService.nounTokens('сценарій')).toHaveLength(1);
+  });
+});

@@ -53,6 +53,8 @@ function capText(text: string | undefined | null, maxChars: number = MAX_ARTICLE
 
 /** Confidence at/above which an AI-resolved article is trusted without semantic supplementation. */
 const AI_REF_TRUSTED_CONFIDENCE = 0.9;
+/** Classifier confidence above which the guessed ACT is trusted even if the article is not. */
+const AI_LAW_TRUSTED_CONFIDENCE = 0.7;
 /** Min share of distinctive query terms that must appear in the resolved article for it to be "grounded". */
 const ARTICLE_GROUNDING_MIN_RATIO = 0.5;
 const GROUNDING_TOKEN_MIN_LEN = 5;
@@ -677,7 +679,19 @@ export class LegislationTools extends BaseToolHandler {
                 ? this.service.findRelevantArticles(args.query, undefined, limit, undefined, unscopedOpts)
                 : Promise.resolve([] as any[]),
             ]);
-            const supplemental = lawMayBeWrong ? [...unscoped, ...scoped] : [...scoped, ...unscoped];
+            // A low grounding ratio says the ARTICLE may be off; it says little about the
+            // LAW when the classifier was fairly sure of it. «затоплення квартири сусідом»
+            // resolved to ЦК ст. 1166 at 0.78 and the unscoped hits that went first were
+            // ст. 5 of the banking law (LEXAI-2201). Same-act hits first unless the act
+            // itself is suspect.
+            // Between the two, interleave: same-act hits lead, but an unscoped hit still
+            // reaches the page in case the act guess was wrong after all.
+            const lawSuspect = refRepealed || (directRef.confidence ?? 0) < AI_LAW_TRUSTED_CONFIDENCE;
+            const interleave = (a: any[], b: any[]) =>
+              Array.from({ length: Math.max(a.length, b.length) }, (_, i) => [a[i], b[i]])
+                .flat()
+                .filter(Boolean);
+            const supplemental = lawSuspect ? [...unscoped, ...scoped] : interleave(scoped, unscoped);
 
             const seen = new Set<string>([
               `${resolvedArticle.rada_id}:${resolvedArticle.article_number}`,
@@ -1235,12 +1249,18 @@ export class LegislationTools extends BaseToolHandler {
     // had some was imported by the pre-LEXAI-1957 parser, which dropped every
     // indexed article: its list is incomplete, not a genuine repeal. Walk oldest
     // to newest so "earlier" means earlier in time.
+    // A partial loss counts too: ЦК editions came back with 104 indexed articles after
+    // earlier ones had 178 (LEXAI-2200). Indexed articles (1166-1, 625-1 …) are almost
+    // never repealed en masse, so falling below half the earlier peak means the parser
+    // dropped them, not the legislator.
     const incomplete = new Set<number>();
-    let seenIndexed = false;
+    let peakIndexed = 0;
     for (let i = editions.length - 1; i >= 0; i--) {
       const e = editions[i];
-      if (e.indexed_article_count > 0) seenIndexed = true;
-      else if (seenIndexed && e.article_count > 0) incomplete.add(i);
+      if (peakIndexed > 0 && e.article_count > 0 && e.indexed_article_count < peakIndexed * 0.5) {
+        incomplete.add(i);
+      }
+      peakIndexed = Math.max(peakIndexed, e.indexed_article_count);
     }
 
     const futureCount = editions.filter(e => e.future).length;
@@ -1251,7 +1271,7 @@ export class LegislationTools extends BaseToolHandler {
       notes.push(`${futureCount} редакц. ще не набрали чинності (future: true) — це опубліковані Радою майбутні редакції з відкладеним набранням чинності, не поточний текст.`);
     }
     if (incomplete.size > 0) {
-      notes.push(`${incomplete.size} редакц. завантажено без статей з індексом (напр. 350-1) — article_count у них занижений, перелік статей неповний (indexed_articles_missing: true).`);
+      notes.push(`${incomplete.size} редакц. завантажено без усіх або частини статей з індексом (напр. 350-1) — article_count у них занижений, перелік статей неповний (indexed_articles_missing: true).`);
     }
     if (radaTotal != null && radaTotal > editions.length) {
       notes.push(`На zakon.rada.gov.ua ${radaTotal} редакц., у базі ${editions.length} — частину редакцій ще не завантажено.`);

@@ -206,3 +206,53 @@ describe('search_legislation and repealed acts (LEXAI-2147)', () => {
     expect(res.articles[0].warning).toContain('втратив чинність');
   });
 });
+
+describe('search_legislation supplements (LEXAI-2201)', () => {
+  const QUERY = 'затоплення квартири сусідом відшкодування шкоди';
+  const ck1166 = { ...ckArticle, article_number: '1166', title: 'Загальні підстави відповідальності за завдану майнову шкоду', full_text: 'Майнова шкода … відшкодовується в повному обсязі особою, яка її завдала.' };
+  const ck1187 = { ...ckArticle, article_number: '1187', title: 'Відшкодування шкоди', full_text: 'Шкода … відшкодовується …' };
+  const bank5 = { ...ckArticle, rada_id: '2121-14', article_number: '5', title: 'Економічна незалежність банків', full_text: 'Шкода, заподіяна банку … відшкодуванню', npa_title: 'Про банки і банківську діяльність' };
+
+  function tools(confidence: number) {
+    return buildTools({
+      parseArticleReferenceWithAI: jest.fn().mockResolvedValue({ radaId: '435-15', articleNumber: '1166', source: 'ai', confidence }),
+      getArticle: jest.fn().mockResolvedValue(ck1166),
+      findRelevantArticles: jest.fn(async (_q: string, radaId?: string) => (radaId ? [ck1187] : [bank5])),
+    });
+  }
+
+  it('a fairly sure act guess keeps its own articles ahead of other laws', async () => {
+    const res = await tools(0.78).tools.searchLegislation({ query: QUERY, limit: 3 });
+    expect(res.articles.map((a: any) => `${a.rada_id}:${a.article_number}`)).toEqual(['435-15:1166', '435-15:1187', '2121-14:5']);
+  });
+
+  it('an unsure act guess puts the unscoped hits first, as before', async () => {
+    const res = await tools(0.5).tools.searchLegislation({ query: QUERY, limit: 3 });
+    expect(res.articles[1].rada_id).toBe('2121-14');
+  });
+});
+
+import { repealedActWeight } from '../../services/legislation-service';
+describe('not-current acts are ranked like repealed ones (LEXAI-2201)', () => {
+  it('status 2 «набирає чинності» is demoted, not dropped', () => {
+    const s = buildActStatus({ nreg: '3077-20', status_code: 2, last_ed: '2026-01-01' });
+    const w = repealedActWeight(s, 'exclude');
+    expect(w).not.toBeNull();
+    expect(w!).toBeLessThan(1);
+    expect(repealedActWeight(CK, 'exclude')).toBe(1);
+  });
+});
+
+describe('supplement interleave (LEXAI-2201 review)', () => {
+  it('an unscoped hit still reaches the page when same-act hits are plentiful', async () => {
+    const a = (n: string) => ({ ...ckArticle, article_number: n });
+    const other = { ...ckArticle, rada_id: '2121-14', article_number: '5' };
+    const { tools } = buildTools({
+      parseArticleReferenceWithAI: jest.fn().mockResolvedValue({ radaId: '435-15', articleNumber: '1166', source: 'ai', confidence: 0.78 }),
+      getArticle: jest.fn().mockResolvedValue(a('1166')),
+      findRelevantArticles: jest.fn(async (_q: string, radaId?: string) => (radaId ? [a('1187'), a('1192'), a('1195')] : [other])),
+    });
+    const res = await tools.searchLegislation({ query: 'затоплення квартири сусідом відшкодування шкоди', limit: 3 });
+    expect(res.articles.map((x: any) => `${x.rada_id}:${x.article_number}`)).toEqual(['435-15:1166', '435-15:1187', '2121-14:5']);
+  });
+});

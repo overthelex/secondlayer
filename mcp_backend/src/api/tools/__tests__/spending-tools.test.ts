@@ -160,3 +160,23 @@ describe('search_public_spending amounts are hryvnias', () => {
     expect(props.max_amount.description).not.toMatch(/копійк/);
   });
 });
+
+describe('search_public_spending contractor_edrpou (LEXAI-2191)', () => {
+  it('matches the "identifier" key via the expression indexed by migrations 240-243', async () => {
+    const db = makeDb(async () => ({ rows: [] }));
+    const tools = new SpendingTools(db);
+
+    await tools.executeTool('search_public_spending', {
+      contractor_edrpou: ' 31316718 ',
+      doc_type: 'acts',
+    });
+
+    const { sql, values } = db.calls[0];
+    expect(sql).toContain(
+      "jsonb_path_query_array(contractors, '$[*].identifier') @> jsonb_build_array($1::text)",
+    );
+    // The documents have no "code" key; matching it returned 0 for every company.
+    expect(sql).not.toContain("c->>'code'");
+    expect(values).toEqual(['31316718']);
+  });
+});

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { isSyntheticKey, notSyntheticSql, nullSyntheticKeys } from '../services/synthetic-keys';
 import { formatSingleTaxPayerRow, tinLookupCandidates } from '../utils/single-tax';
 import { PLAUSIBLE_OPENING_DATE_SQL } from '../utils/enforcement';
-import { ARMA_OWNER_NOT_PUBLISHED, buildArmaFilters } from '../services/arma-mapping';
+import { ARMA_OWNER_NOT_PUBLISHED, buildArmaFilters, deriveArmaStatusCategory } from '../services/arma-mapping';
+import { normalizeNazkRegion, nazkRegionCodesMatching } from '../utils/nazk-region';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -276,9 +277,35 @@ export function formatCourtExpertRow(row: any): Record<string, unknown> {
   return nullSyntheticKeys(row, ['expert_id']);
 }
 
-/** Special notary form row → output. Legacy gen_N series/number → null. */
+/**
+ * Special notary form row → output. Legacy gen_N series/number → null.
+ *
+ * `issue_date` is the ERNB INS_DATE tag, which is when the record was written to the
+ * register extract, not when the blank was issued: rows carry the 2026 export date while
+ * their OPER_DATE is years earlier (LEXAI-2195). It is reported as register_entry_date so
+ * nobody reads it as the issue date.
+ */
 export function formatSpecialFormRow(row: any): Record<string, unknown> {
-  return nullSyntheticKeys(row, ['series', 'form_number']);
+  const { issue_date, ...rest } = nullSyntheticKeys(row, ['series', 'form_number']) as any;
+  if ('usage_date' in rest) rest.usage_date = toIsoDate(rest.usage_date);
+  if ('issue_date' in row) rest.register_entry_date = toIsoDate(issue_date);
+  return rest;
+}
+
+const TAX_DEBT_AMOUNT_KEYS = ['debt_total', 'debt_tax', 'debt_penalty', 'debt_fine'];
+
+/**
+ * Tax debt row → output. The ДПС snapshot of 22.02.2022 was loaded without the amount
+ * columns, so debt_* are NULL on every row; say so instead of returning four nulls that
+ * read as "no debt" (LEXAI-2194).
+ */
+export function formatTaxDebtRow(row: any): Record<string, unknown> {
+  if (!TAX_DEBT_AMOUNT_KEYS.every((k) => row[k] === null || row[k] === undefined)) return row;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) if (!TAX_DEBT_AMOUNT_KEYS.includes(k)) out[k] = v;
+  out.debt_amounts = null;
+  out.debt_amounts_note = 'Суми боргу в завантаженому знімку ДПС відсутні; наявність запису означає, що платник є в переліку боржників';
+  return out;
 }
 
 /**
@@ -1104,7 +1131,7 @@ export class OpenReyestrTools {
     const result = await this.pool.query(
       `SELECT id, series, form_number, issue_date, recipient, document_type, status, usage_date
        FROM special_forms ${whereClause}
-       ORDER BY issue_date DESC NULLS LAST
+       ORDER BY usage_date DESC NULLS LAST, id DESC
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       values
     );
@@ -1414,7 +1441,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: query || tin || '', message: 'Податкового боргу не знайдено' }];
     }
-    return result.rows;
+    return result.rows.map(formatTaxDebtRow);
   }
 
   /**
@@ -1443,7 +1470,9 @@ export class OpenReyestrTools {
     values.push(limit, offset);
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
     const result = await this.pool.query(
-      `SELECT id, name, tin, tax_office, tax_office_chief, debt_amount
+      `SELECT id, name, tin, tax_office, tax_office_chief,
+              ROUND(debt_amount * 1000, 2) AS debt_amount_uah,
+              debt_amount AS debt_amount_thousand_uah
        FROM esv_debt ${whereClause}
        ORDER BY debt_amount DESC NULLS LAST
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -1566,7 +1595,17 @@ export class OpenReyestrTools {
     if (declarant_workplace) { conditions.push(`declarant_workplace ILIKE $${paramIndex}`); values.push(`%${declarant_workplace}%`); paramIndex++; }
     if (declaration_year) { conditions.push(`declaration_year = $${paramIndex}`); values.push(declaration_year); paramIndex++; }
     if (declaration_type) { conditions.push(`declaration_type = $${paramIndex}`); values.push(declaration_type); paramIndex++; }
-    if (declarant_region) { conditions.push(`declarant_region ILIKE $${paramIndex}`); values.push(`%${declarant_region}%`); paramIndex++; }
+    if (declarant_region) {
+      // Rows store either the name or a dictionary code like "1.2.80" (LEXAI-2196).
+      const codes = nazkRegionCodesMatching(declarant_region);
+      if (codes.length) {
+        conditions.push(`(declarant_region ILIKE $${paramIndex} OR declarant_region ~ $${paramIndex + 1})`);
+        values.push(`%${declarant_region}%`, `^[0-9.]*\\.(${codes.map((c) => c.replace(/^0/, '0?')).join('|')})$`);
+        paramIndex += 2;
+      } else {
+        conditions.push(`declarant_region ILIKE $${paramIndex}`); values.push(`%${declarant_region}%`); paramIndex++;
+      }
+    }
     if (min_income) { conditions.push(`total_income_declared >= $${paramIndex}`); values.push(min_income); paramIndex++; }
 
     if (conditions.length === 0) {
@@ -1590,7 +1629,7 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, query: declarant_name || declarant_workplace || '', message: 'Декларацій не знайдено' }];
     }
-    return result.rows;
+    return result.rows.map((r: any) => ({ ...r, declarant_region: normalizeNazkRegion(r.declarant_region) }));
   }
 
   /**
@@ -1676,7 +1715,9 @@ export class OpenReyestrTools {
     if (result.rows.length === 0) {
       return [{ found: false, message: 'Арештованих активів не знайдено' }];
     }
-    return result.rows;
+    // status = ARMA management action (null without one); status_category is what the
+    // row means in the vocabulary of the `status` filter (LEXAI-2199).
+    return result.rows.map((r: any) => ({ ...r, status_category: deriveArmaStatusCategory(r) }));
   }
 
   /**

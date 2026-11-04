@@ -9,8 +9,18 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handle
 import { REGISTRY_CATALOG, RegistryDef, FieldDef } from './registry-catalog.js';
 import { buildWhere } from '@secondlayer/shared';
 import { logger } from '../../utils/logger.js';
+import { isToolInToolset } from '../mcp-toolset.js';
 
-const REGISTRY_KEYS = Object.keys(REGISTRY_CATALOG);
+/**
+ * Registries this deployment actually serves. The uk_* registries are named like the
+ * uk_* tools on purpose, so the MCP_TOOLSET gate applies to them unchanged: on
+ * legal.org.ua (MCP_TOOLSET=ua) the UK corpus lives on lawrider.uk and its tables here
+ * are empty by design, so advertising them only produced "nothing found" (LEXAI-2190).
+ * Read per call, like the gate itself, so tests can vary the env var.
+ */
+export function availableRegistryKeys(): string[] {
+  return Object.keys(REGISTRY_CATALOG).filter((k) => isToolInToolset(k));
+}
 
 // Array-column match types (val tested against ANY(col)). Such columns cannot
 // be used as a GROUP BY / COUNT(DISTINCT) target in aggregate mode.
@@ -23,6 +33,8 @@ export class RegistrySearchTool extends BaseToolHandler {
   }
 
   getToolDefinitions(): ToolDefinition[] {
+    const REGISTRY_KEYS = availableRegistryKeys();
+    const hasUk = REGISTRY_KEYS.some((k) => k.startsWith('uk_'));
     const registryDescriptions = REGISTRY_KEYS
       .map(k => `• **${k}** — ${REGISTRY_CATALOG[k].title}`)
       .join('\n');
@@ -30,7 +42,7 @@ export class RegistrySearchTool extends BaseToolHandler {
     return [{
       name: 'search_registry',
       annotations: { title: 'Пошук у реєстрах відкритих даних', readOnlyHint: true },
-      description: `Єдиний інструмент для пошуку в ${REGISTRY_KEYS.length} реєстрах відкритих даних. Переважно Україна; реєстри з префіксом us_ та uk_ — це США і Велика Британія, їхні описи англійською.
+      description: `Єдиний інструмент для пошуку в ${REGISTRY_KEYS.length} реєстрах відкритих даних. Переважно Україна; ${hasUk ? 'реєстри з префіксом us_ та uk_ — це США і Велика Британія' : 'реєстри з префіксом us_ — це США'}, їхні описи англійською.
 
 Обов'язковий параметр: registry (назва реєстру).
 Фільтри передаються в об'єкті filters — набір полів залежить від реєстру.
@@ -79,7 +91,8 @@ ${registryDescriptions}
     if (name !== 'search_registry') return null;
 
     const { registry, filters = {}, limit, aggregate } = args;
-    const def = REGISTRY_CATALOG[registry];
+    const REGISTRY_KEYS = availableRegistryKeys();
+    const def = REGISTRY_KEYS.includes(registry) ? REGISTRY_CATALOG[registry] : undefined;
     if (!def) {
       return this.wrapError(`Невідомий реєстр "${registry}". Доступні: ${REGISTRY_KEYS.join(', ')}`);
     }
