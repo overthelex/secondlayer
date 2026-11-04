@@ -135,8 +135,13 @@ export class SpendingTools extends BaseToolHandler {
       pi++;
     }
     if (contractor_edrpou) {
-      conditions.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(contractors) AS c WHERE c->>'code' = $${pi})`);
-      values.push(contractor_edrpou);
+      // The spending.gov.ua documents carry the contractor's code as "identifier"; the
+      // old c->>'code' matched nothing (LEXAI-2191). This exact expression is what
+      // idx_spending_*_contractor_identifier (migrations 240-243) is built over.
+      conditions.push(
+        `jsonb_path_query_array(contractors, '$[*].identifier') @> jsonb_build_array($${pi}::text)`
+      );
+      values.push(String(contractor_edrpou).trim());
       pi++;
     }
 
