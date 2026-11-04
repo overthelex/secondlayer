@@ -116,6 +116,25 @@ export class ApiKeyService {
   }
 
   /**
+   * Check and count one MCP tool call against the key's limits in a single atomic
+   * statement (active, expiry, per-day, per-minute). Refused calls are not counted.
+   * Fails closed: if the check itself errors, the call is refused.
+   */
+  async consumeCall(apiKey: string): Promise<RateLimitCheck> {
+    try {
+      const result = await this.db.query<RateLimitCheck>(
+        `SELECT allowed, reason, requests_today AS "requestsToday", rate_limit_per_day AS "rateLimitPerDay"
+           FROM consume_api_key_call($1)`,
+        [apiKey]
+      );
+      return result.rows[0] ?? { allowed: false, reason: 'Rate limit check failed', requestsToday: 0, rateLimitPerDay: 0 };
+    } catch (error: any) {
+      logger.error('[ApiKeyService] Error consuming API key call', { error: error.message });
+      return { allowed: false, reason: 'Rate limit check failed', requestsToday: 0, rateLimitPerDay: 0 };
+    }
+  }
+
+  /**
    * Update API key usage stats
    */
   async updateUsage(apiKey: string): Promise<void> {

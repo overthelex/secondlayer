@@ -46,6 +46,28 @@ interface McpAuthResult {
   transport: string;
 }
 
+interface SessionKeyOpts {
+  sessionCaller?: McpCallerInfo;
+  apiKey?: string;
+  apiKeyId?: string;
+}
+
+/** Ukrainian message for an MCP call refused by the API key's own limits. */
+export function apiKeyRefusalText(reason: string): string {
+  switch (reason) {
+    case 'Daily rate limit exceeded':
+      return 'Помилка: вичерпано денний ліміт запитів для цього API-ключа. Ліміт оновиться завтра.';
+    case 'Per-minute rate limit exceeded':
+      return 'Помилка: забагато запитів за хвилину для цього API-ключа. Повторіть за хвилину.';
+    case 'API key expired':
+      return 'Помилка: термін дії API-ключа закінчився.';
+    case 'Invalid or inactive API key':
+      return 'Помилка: API-ключ недійсний або відключений.';
+    default:
+      return 'Помилка: не вдалося перевірити ліміти API-ключа. Спробуйте пізніше.';
+  }
+}
+
 export function createMCPSSERoutes(deps: {
   mcpSSEServer: MCPSSEServer;
   // Needed only by the Find Case Law licence gate; see services/uk-judgment-access.
@@ -173,9 +195,8 @@ export function createMCPSSERoutes(deps: {
           authMethod = 'api_key';
           apiKeyId = keyInfo.id;
           logger.debug(`${logTag} Authenticated with API key`, { userId: sanitizeId(userId), keyId: keyInfo.id });
-          deps.apiKeyService.updateUsage(token).catch((err) => {
-            logger.error(`${logTag} Failed to update API key usage`, { error: err.message });
-          });
+          // Not counted here: every tool call is checked and counted by consumeCall
+          // (migration 245), so counting the session open too would double-bill the quota.
         }
       }
     } catch (error) {
@@ -191,6 +212,14 @@ export function createMCPSSERoutes(deps: {
     }
 
     return { userId, clientKey, authMethod, apiKeyId, caller, transport: transportName };
+  }
+
+  /** Per-session options binding the caller and, for API-key auth, the key whose limits apply per call. */
+  function sessionKeyOpts(auth: McpAuthResult, req: Request): SessionKeyOpts {
+    return {
+      sessionCaller: auth.caller,
+      ...(auth.authMethod === 'api_key' ? { apiKey: bearerOf(req), apiKeyId: auth.apiKeyId } : {}),
+    };
   }
 
   /** Record that an authenticated MCP session was opened (who, which key, from where). */
@@ -221,6 +250,9 @@ export function createMCPSSERoutes(deps: {
       /** Transport name and the caller seen when the session was opened (audit fallback). */
       transport?: string;
       sessionCaller?: McpCallerInfo;
+      /** Raw API key when the session authenticated with one: its limits apply per call. */
+      apiKey?: string;
+      apiKeyId?: string;
     }
   ): Server {
     const safeUserId = sanitizeId(userId || 'anonymous');
@@ -264,6 +296,24 @@ export function createMCPSSERoutes(deps: {
         clientIp: reqCaller?.clientIp ?? opts?.sessionCaller?.clientIp ?? null,
         userAgent: reqCaller?.userAgent ?? opts?.sessionCaller?.userAgent ?? null,
       };
+
+      // API-key limits apply to every call, not just the session open: a session must
+      // not outlive its key's daily/per-minute quota, expiry, or deactivation.
+      if (opts?.apiKey) {
+        const quota = await deps.apiKeyService.consumeCall(opts.apiKey);
+        if (!quota.allowed) {
+          logger.warn('[MCP] API key call refused', { userId: safeUserId, tool: toolName, reason: quota.reason });
+          logMcpAccess(deps.db, {
+            transport: opts.transport || 'mcp', outcome: 'rate_limited', authMethod: 'api_key',
+            userId, apiKeyId: opts.apiKeyId, token: opts.apiKey, mcpSessionId: extra?.sessionId,
+            caller, detail: `${toolName}: ${quota.reason}`,
+          });
+          return {
+            content: [{ type: 'text', text: apiKeyRefusalText(quota.reason) }],
+            isError: true,
+          };
+        }
+      }
       const args = request.params.arguments || {};
       const requestId = `mcp-v1-${uuidv4()}`;
       const startTime = Date.now();
@@ -490,9 +540,9 @@ export function createMCPSSERoutes(deps: {
 
   // Build an MCP Server exposing only the curated v2 subset. Reuses the fully-wired v1
   // builder (tools/list + tools/call with billing) with the whitelist applied.
-  function buildMcpServerV2(userId: string | undefined, clientKey: string | undefined, sessionCaller?: McpCallerInfo): Server {
+  function buildMcpServerV2(userId: string | undefined, clientKey: string | undefined, keyOpts: SessionKeyOpts): Server {
     return buildMcpServer(userId, clientKey, {
-      allowedTools: V2_TOOL_NAMES, version: '2.0.0', usageBilling: true, transport: 'v2/mcp', sessionCaller,
+      allowedTools: V2_TOOL_NAMES, version: '2.0.0', usageBilling: true, transport: 'v2/mcp', ...keyOpts,
     });
   }
 
@@ -745,7 +795,7 @@ export function createMCPSSERoutes(deps: {
       const { userId, clientKey } = auth;
 
       // Build the MCP server (tools/list + tools/call with billing)
-      const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/sse', sessionCaller: auth.caller });
+      const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/sse', ...sessionKeyOpts(auth, req) });
 
       // Create SSE transport
       const transport = new SSEServerTransport('/v1/sse', res);
@@ -822,7 +872,7 @@ export function createMCPSSERoutes(deps: {
       if (!auth) return; // response already sent
 
       const { userId, clientKey } = auth;
-      const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/mcp', sessionCaller: auth.caller });
+      const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/mcp', ...sessionKeyOpts(auth, req) });
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => uuidv4(),
@@ -921,7 +971,7 @@ export function createMCPSSERoutes(deps: {
       if (!auth) return; // response already sent
 
       const { userId, clientKey } = auth;
-      const mcpServer = buildMcpServerV2(userId, clientKey, auth.caller);
+      const mcpServer = buildMcpServerV2(userId, clientKey, sessionKeyOpts(auth, req));
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => uuidv4(),

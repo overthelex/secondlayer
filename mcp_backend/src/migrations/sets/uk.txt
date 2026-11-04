@@ -221,3 +221,5 @@
 # MCP audit trail: cost_tracking.client_ip/user_agent/session, mcp_access_log. The
 # MCP route writes these columns on every box, so the UK set must carry it too.
 244_mcp_request_audit.sql
+# Per-call API-key limits (consume_api_key_call); the MCP route calls it on every box.
+245_api_key_per_call_limits.sql
