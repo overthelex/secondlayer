@@ -389,3 +389,22 @@ export const ARMA_OWNER_NOT_PUBLISHED =
   'Відкриті дані АРМА (data.gov.ua) не містять відомостей про власників активів (ПІБ/назва, ЄДРПОУ): ' +
   'їх виключено згідно з абз. 9 ч. 1 ст. 25 Закону про АРМА. Шукайте за номером справи (case_number), ' +
   'номером кримінального провадження ЄРДР (criminal_proceeding_number), описом активу (description), судом або регіоном.';
+
+/**
+ * Category of a seized-asset row in the same vocabulary as the `status` filter
+ * (ARMA_STATUS_ALIASES). `status` itself is the ARMA management action and is NULL for
+ * every row with no ARMA measure, which is most of them — so a row whose court decision
+ * lifted the arrest still read as status: null (LEXAI-2199). Order matters: a later
+ * stage (sold, returned) wins over the arrest that preceded it.
+ */
+export function deriveArmaStatusCategory(row: { status?: string | null; decision_type?: string | null }): string | null {
+  const st = String(row.status || '');
+  const dt = String(row.decision_type || '');
+  if (st === 'Реалізовано') return 'sold';
+  if (/^Повернення власнику/i.test(st) || /скасування арешту/i.test(dt)) return 'returned';
+  if (/(стягнення в дохід держави|спеціальна конфіскація)/i.test(dt)) return 'confiscated';
+  if (/передач/i.test(dt) || ['Передано для реалізації', 'Організація передачі активу управителю',
+    'Управління за договором', 'Конкурсний відбір управителя'].includes(st)) return 'transferred';
+  if (/(^|;\s*)(накладення арешту|арешт в частині)/i.test(dt)) return 'arrested';
+  return null;
+}
