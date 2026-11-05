@@ -129,6 +129,7 @@ export function parseVacancySheet(sheetName: string, rows: Grid): VacancyRow[] {
     const court_name = str(r[1]);
     if (!court_name || !/суд|палата/i.test(court_name)) continue;
     if (/^найменування/i.test(court_name) || /^гранична/i.test(String(r[lim] ?? '').trim())) continue; // header repeated
+    if (/^(примітка|\*)/i.test(court_name) || court_name.length > 200) continue; // footnote
     out.push({
       court_name, court_level,
       region: reg >= 0 ? str(r[reg]) : null,
