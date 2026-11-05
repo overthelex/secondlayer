@@ -1255,12 +1255,20 @@ export class LegislationTools extends BaseToolHandler {
     // dropped them, not the legislator.
     const incomplete = new Set<number>();
     let peakIndexed = 0;
+    let prevCount = 0;
     for (let i = editions.length - 1; i >= 0; i--) {
       const e = editions[i];
+      // A new code renumbers everything (ГПК/ЦПК/КАС 15.12.2017: ~180 → 371 articles), so
+      // the old code's indexed articles say nothing about the new one. Restart the peak
+      // when the article count jumps by more than 40%.
+      if (prevCount > 0 && e.article_count > 0 && Math.abs(e.article_count - prevCount) > prevCount * 0.4) {
+        peakIndexed = 0;
+      }
       if (peakIndexed > 0 && e.article_count > 0 && e.indexed_article_count < peakIndexed * 0.5) {
         incomplete.add(i);
       }
       peakIndexed = Math.max(peakIndexed, e.indexed_article_count);
+      if (e.article_count > 0) prevCount = e.article_count;
     }
 
     const futureCount = editions.filter(e => e.future).length;
