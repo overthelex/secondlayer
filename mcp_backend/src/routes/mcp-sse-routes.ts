@@ -19,6 +19,7 @@ import { requestContext } from '../utils/openai-client.js';
 import { MCPSSEServer } from '../api/mcp-sse-server.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { V2_TOOL_NAMES } from '../api/curated-mcp-tools.js';
+import { checkToolAccess, isAdminUser, scopeVaultArgs } from '../api/tool-access-policy.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { ChatService } from '../services/chat-service.js';
 import { OAuthService } from '../services/oauth-service.js';
@@ -214,6 +215,33 @@ export function createMCPSSERoutes(deps: {
     return { userId, clientKey, authMethod, apiKeyId, caller, transport: transportName };
   }
 
+  /**
+   * Client API keys (sl_...) are valid on /api/v2/mcp only. v1 and the legacy SSE transport
+   * expose the full registry and skip v2's per-call key limits, so a non-admin key opening
+   * a session there gets 403 and the attempt is recorded (endpoint_denied).
+   * Returns true when the response has been sent.
+   */
+  async function refuseClientKeyOffV2(
+    auth: Pick<McpAuthResult, 'authMethod' | 'userId' | 'apiKeyId' | 'caller' | 'transport'>,
+    token: string | undefined,
+    res: Response
+  ): Promise<boolean> {
+    if (auth.authMethod !== 'api_key') return false;
+    if (await isAdminUser(deps.db, auth.userId)) return false;
+    logger.warn('[MCP] Client API key refused off v2', { transport: auth.transport, userId: sanitizeId(auth.userId || '') });
+    logMcpAccess(deps.db, {
+      transport: auth.transport, outcome: 'endpoint_denied', authMethod: 'api_key',
+      userId: auth.userId, apiKeyId: auth.apiKeyId, token, caller: auth.caller,
+      detail: `api key on ${auth.transport}`,
+    });
+    res.status(403).json({
+      error: 'Forbidden',
+      code: 'API_KEY_V2_ONLY',
+      message: 'API-ключ дійсний лише для MCP на /api/v2/mcp.',
+    });
+    return true;
+  }
+
   /** Per-session options binding the caller and, for API-key auth, the key whose limits apply per call. */
   function sessionKeyOpts(auth: McpAuthResult, req: Request): SessionKeyOpts {
     return {
@@ -323,9 +351,19 @@ export function createMCPSSERoutes(deps: {
       try {
         logger.info('[MCP] Tool call', { tool: toolName, userId: safeUserId });
 
+        // Every refusal below is an attempt to reach something outside the caller's scope:
+        // record it in mcp_access_log (outcome tool_denied), where the security alarm reads it.
+        const denied = (detail: string) => logMcpAccess(deps.db, {
+          transport: opts?.transport || 'mcp', outcome: 'tool_denied',
+          authMethod: opts?.apiKey ? 'api_key' : undefined,
+          userId, apiKeyId: opts?.apiKeyId, token: opts?.apiKey, mcpSessionId: extra?.sessionId,
+          caller, detail: `${toolName}: ${detail}`,
+        });
+
         // Enforce the deployment toolset in code (not just tools/list): a client must not
         // be able to call a tool outside this deployment's jurisdiction by name.
         if (!isToolInToolset(toolName)) {
+          denied('outside deployment toolset');
           return {
             content: [{ type: 'text', text: `Error: tool '${toolName}' is not available on this endpoint.` }],
             isError: true,
@@ -335,10 +373,23 @@ export function createMCPSSERoutes(deps: {
         // Enforce the v2 whitelist in code (not just tools/list): reject any tool outside
         // the exposed subset so a client can't call a hidden low-level tool by name.
         if (opts?.allowedTools && !opts.allowedTools.has(toolName)) {
+          denied('outside v2 whitelist');
           return {
             content: [{ type: 'text', text: `Error: tool '${toolName}' is not available on this endpoint.` }],
             isError: true,
           };
+        }
+
+        // Admin-only operator tools, and the v2-only scope of database API keys, on every
+        // transport (v1 exposes the full registry). See api/tool-access-policy.ts.
+        const access = checkToolAccess(toolName, {
+          isAdmin: await isAdminUser(deps.db, userId),
+          viaDbApiKey: Boolean(opts?.apiKey),
+        });
+        if (!access.allowed) {
+          logger.warn('[MCP] Tool refused by access policy', { userId: safeUserId, tool: toolName, reason: access.reason });
+          denied(access.reason);
+          return { content: [{ type: 'text', text: access.message }], isError: true };
         }
 
         // LEXAI-2164: reject arguments the tool's schema does not know instead of letting
@@ -462,9 +513,7 @@ export function createMCPSSERoutes(deps: {
         const result = await requestContext.run(
           { requestId, task: toolName },
           async () => {
-            const VAULT_TOOLS = new Set(['store_document', 'get_document', 'list_documents', 'semantic_search', 'list_folders', 'delete_document', 'update_document']);
-            const vaultUserId = userId || process.env.DEFAULT_VAULT_USER_ID;
-            const toolArgs = VAULT_TOOLS.has(toolName) ? { ...args, userId: vaultUserId } : args;
+            const toolArgs = scopeVaultArgs(toolName, args as Record<string, any>, userId);
             const registryResult = await deps.toolRegistry.executeTool(toolName, toolArgs);
             if (registryResult) {
               return registryResult;
@@ -703,6 +752,11 @@ export function createMCPSSERoutes(deps: {
 
           if (keyInfo) {
             userId = keyInfo.userId;
+            const refused = await refuseClientKeyOffV2({
+              authMethod: 'api_key', userId, apiKeyId: keyInfo.id, transport: 'sse',
+              caller: callerFromHeaders(req.headers, req.ip),
+            }, token, res);
+            if (refused) return;
           } else {
             // Fallback: check legacy SECONDARY_LAYER_KEYS
             const legacyKeys = (process.env.SECONDARY_LAYER_KEYS || '').split(',').map(k => k.trim()).filter(k => k.length > 0);
@@ -792,6 +846,8 @@ export function createMCPSSERoutes(deps: {
       );
       if (!auth) return; // response already sent
 
+      if (await refuseClientKeyOffV2(auth, bearerOf(req), res)) return;
+
       const { userId, clientKey } = auth;
 
       // Build the MCP server (tools/list + tools/call with billing)
@@ -870,6 +926,7 @@ export function createMCPSSERoutes(deps: {
       // Authenticate the initialize request (token bound to this session for its lifetime)
       const auth = await authenticateMcpBearer(req, res, '[MCP v1/mcp]', MCP_RESOURCE_METADATA_PATH);
       if (!auth) return; // response already sent
+      if (await refuseClientKeyOffV2(auth, bearerOf(req), res)) return;
 
       const { userId, clientKey } = auth;
       const mcpServer = buildMcpServer(userId, clientKey, { transport: 'v1/mcp', ...sessionKeyOpts(auth, req) });

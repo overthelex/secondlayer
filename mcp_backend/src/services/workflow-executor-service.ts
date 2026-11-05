@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../utils/logger.js';
+import { scopeVaultArgs } from '../api/tool-access-policy.js';
 import { ToolRegistry } from '../api/tool-registry.js';
 import { WorkflowService, WorkflowRow } from './workflow-service.js';
 import { CostTracker } from './cost-tracker.js';
@@ -105,10 +106,7 @@ export class WorkflowExecutorService {
 
         try {
           // Inject userId for vault tools
-          const VAULT_TOOLS = new Set(['store_document', 'get_document', 'list_documents', 'semantic_search', 'list_folders', 'delete_document', 'update_document']);
-          const toolArgs = VAULT_TOOLS.has(step.tool)
-            ? { ...step.params, userId }
-            : step.params;
+          const toolArgs = scopeVaultArgs(step.tool, step.params || {}, userId);
 
           const result = await this.toolRegistry.executeTool(step.tool, toolArgs);
           stepResults[step.id] = result;
