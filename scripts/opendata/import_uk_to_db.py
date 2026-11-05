@@ -12,10 +12,7 @@ from xml.etree import ElementTree as ET
 import psycopg2
 from psycopg2.extras import execute_values
 
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://secondlayer:1xfXUY8y7DM8Sm1w6T2cmBnNsnzfgnNJ2Ajl1Zl11xc@172.18.0.13:5432/secondlayer_prod",
-)
+DB_URL = os.environ["DATABASE_URL"]  # never commit a credential here
 MAX_WORKERS = 20
 BATCH_SIZE = 500
 

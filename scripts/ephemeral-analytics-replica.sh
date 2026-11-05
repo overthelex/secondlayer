@@ -36,7 +36,7 @@ AMI_ID="ami-027066fb16fc18634"
 
 # PostgreSQL config (matches prod)
 PG_USER="secondlayer"
-PG_PASS="1xfXUY8y7DM8Sm1w6T2cmBnNsnzfgnNJ2Ajl1Zl11xc"
+PG_PASS="${PGPASSWORD:?set PGPASSWORD}"
 PG_DB="secondlayer_prod"
 
 # Tags for tracking ephemeral resources
