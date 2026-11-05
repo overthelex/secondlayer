@@ -59,7 +59,10 @@
     "esbuild": ">=0.25.0",
     "fast-xml-parser": ">=5.5.6",
     "ajv": ">=8.18.0",
-    "minimatch": ">=10.2.1",
+    "minimatch": ">=11.0.1",
+    "glob@7": {
+      "minimatch": "^3.1.5"
+    },
     "hono": ">=4.12.7",
     "@hono/node-server": ">=1.19.10",
     "underscore": ">=1.13.8",
@@ -69,7 +72,13 @@
     "@tootallnate/once": ">=3.0.1",
     "dompurify": ">=3.4.17",
     "handlebars": ">=4.7.10",
-    "proxy-addr": ">=2.0.8"
+    "proxy-addr": ">=2.0.8",
+    "exceljs": {
+      "uuid": "^11.1.1"
+    },
+    "@tailwindcss/typography": {
+      "postcss-selector-parser": "^6.1.5"
+    }
   },
   "dependencies": {
     "@withgraphite/graphite-cli": "^1.7.20"
