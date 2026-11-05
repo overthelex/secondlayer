@@ -6,6 +6,8 @@
 #   → opendata_rada_stenograms (upsert on source_file), run in the app container
 # - judges: data.gov.ua ВККС judges list → judges / judges_current
 #   (--latest-only; snapshots already in judges_load_log are skipped)
+# - spending: spending.gov.ua acts/addendums/peny, last 7 sign days
+#   → spending_* (ON CONFLICT (id) DO NOTHING); LEXAI-2160 stopped at 25.03.2026
 # - securities: data.gov.ua nssmc-001 holders/YYYY/Q (last 4 quarters)
 #   → opendata_securities_owners (upsert), run in the app container
 ##############################################################################
@@ -18,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: 'Run one job: stenograms | judges | vkks | securities (empty = all)'
+        description: 'Run one job: stenograms | judges | vkks | securities | spending (empty = all)'
         required: false
         type: string
 
@@ -148,4 +150,30 @@ jobs:
           docker cp "$D" "$C:/tmp/nssmc_owners"
           docker exec "$C" node dist/scripts/import-securities-owners-datagov.js /tmp/nssmc_owners
           docker exec "$C" rm -rf /tmp/nssmc_owners
+          rm -rf "$D"
+
+  spending:
+    if: ${{ !inputs.only || inputs.only == 'spending' }}
+    name: spending.gov.ua documents
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/opendata/spending
+      - name: Download last 7 days and import
+        run: |
+          set -euo pipefail
+          cd scripts/opendata/spending
+          D="$RUNNER_TEMP/spending"
+          rm -rf "$D"; mkdir -p "$D"
+          python3 download_spending.py --type all \
+            --from "$(date -u -d '7 days ago' +%F)" --to "$(date -u +%F)" \
+            --ips 0.0.0.0 --threads-per-ip 6 --output "$D"
+          g() { grep -m1 "^$1=" "$PG_ENV_FILE" | cut -d= -f2- | tr -d "\"'"; }
+          P="$(g POSTGRES_PASSWORD)"
+          echo "::add-mask::$P"
+          DATABASE_URL="postgresql://$(g POSTGRES_USER):$P@127.0.0.1:5432/$(g POSTGRES_DB)" \
+            DATA_DIR="$D" python3 import_spending.py
           rm -rf "$D"
