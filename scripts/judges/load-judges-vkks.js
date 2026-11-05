@@ -95,15 +95,28 @@ function parseDateFromName(name) {
   return null;
 }
 
-// --- Detect column layout: old (3 cols) vs new (5 cols with dossier+gender) ---
+// --- Detect column layout from the header row ---
+// The ВККС files come in three shapes, and the columns have to be found by their
+// headers, not guessed from one keyword:
+//   №, ПІБ, Суд                      (to 2023-08-14)
+//   №, ПІБ, Стать, Суд               (2023-08-21 .. 2024-12-23)
+//   №, Досьє, ПІБ, Стать, Суд        (from 2025)
+// The middle shape was read as the first one, so 240K history rows stored the
+// gender («Ч»/«Ж») as court_name and lost the court (LEXAI-2174).
 function detectLayout(rows) {
-  // Find header row
   for (const row of rows) {
-    const joined = (row || []).map(c => String(c || '')).join(' ').toLowerCase();
-    if (joined.includes('досьє')) return 'new'; // 5-column: №, Досьє, ПІБ, Стать, Суд
-    if (joined.includes('прізвище')) return 'old'; // 3-column: №, ПІБ, Суд
+    const cells = (row || []).map(c => String(c || '').toLowerCase());
+    const nameCol = cells.findIndex(c => c.includes('прізвище') || c.includes('піб'));
+    if (nameCol < 0) continue;
+    const find = (re) => { const i = cells.findIndex(c => re.test(c)); return i >= 0 ? i : null; };
+    return {
+      dossier: find(/досьє/),
+      name: nameCol,
+      gender: find(/^\s*стать/),
+      court: find(/найменування суду|^\s*суд/),
+    };
   }
-  return 'old';
+  return { dossier: null, name: 1, gender: null, court: 2 };
 }
 
 // --- Parse XLSX buffer into judge records ---
@@ -126,21 +139,11 @@ async function parseXlsx(buffer, snapshotDate, resourceName) {
     const rowNum = typeof firstCol === 'number' ? firstCol : parseInt(String(firstCol), 10);
     if (isNaN(rowNum) || rowNum < 1) continue;
 
-    let dossierNumber, fullName, gender, courtName;
-
-    if (layout === 'new') {
-      // 5 columns: №, Досьє, ПІБ, Стать, Суд
-      dossierNumber = row[1] ? String(row[1]).trim() : null;
-      fullName = row[2] ? String(row[2]).trim() : null;
-      gender = row[3] ? String(row[3]).trim() : null;
-      courtName = row[4] ? String(row[4]).trim() : null;
-    } else {
-      // 3 columns: №, ПІБ, Суд (no dossier, no gender)
-      dossierNumber = null;
-      fullName = row[1] ? String(row[1]).trim() : null;
-      gender = null;
-      courtName = row[2] ? String(row[2]).trim() : null;
-    }
+    const cell = (i) => (i != null && row[i] != null && String(row[i]).trim()) ? String(row[i]).trim() : null;
+    const dossierNumber = cell(layout.dossier);
+    const fullName = cell(layout.name);
+    const gender = cell(layout.gender);
+    const courtName = cell(layout.court);
 
     if (!fullName) continue;
 
@@ -456,7 +459,11 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal:', err);
+    process.exit(1);
+  });
+}
+
+module.exports = { parseXlsx, detectLayout };
