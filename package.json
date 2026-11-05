@@ -67,7 +67,9 @@
     "picomatch": ">=2.3.2",
     "undici": ">=6.24.0",
     "@tootallnate/once": ">=3.0.1",
-    "dompurify": ">=3.4.12"
+    "dompurify": ">=3.4.17",
+    "handlebars": ">=4.7.10",
+    "proxy-addr": ">=2.0.8"
   },
   "dependencies": {
     "@withgraphite/graphite-cli": "^1.7.20"
