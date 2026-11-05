@@ -369,6 +369,10 @@ async function fetchEditionDates(httpClient: AxiosInstance, bucket: TokenBucket,
   const url = `${BASE_URL}/laws/show/${radaId}/card4`;
   console.log(`  Fetching edition dates from ${url}`);
   const html = await fetchWithBackoff(httpClient, bucket, url);
+  return extractEditionDatesFromCard4(html);
+}
+
+export function extractEditionDatesFromCard4(html: string): string[] {
   // Match /ed{YYYYMMDD} links — rada_id may appear URL-encoded in HTML
   const edRegex = /\/ed(\d{8})/g;
   const dates = new Set<string>();
@@ -389,6 +393,16 @@ async function fetchEditionDates(httpClient: AxiosInstance, bucket: TokenBucket,
     }
     if (dates.size > 0) console.log(`  (fallback) parsed ${dates.size} edition dates from card4 history table`);
   }
+
+  // The edition in force has no /ed link: its row reads
+  //   <span class="dat0"><b>01.11.2026</b></span> … <a name="Current"></a>
+  // and its text sits on the act's own page. Missing it meant the current edition was
+  // never imported here, so its rows kept whatever the older current-text load wrote
+  // (ПК 01.11.2026: 267 articles and none of the 28 indexed ones, LEXAI-2200).
+  // /ed{date}/print serves the same text.
+  const currentRe = /<span class=["']?dat0["']?>\s*(?:<b>)?\s*(\d{2})\.(\d{2})\.(\d{4})\s*(?:<\/b>)?\s*<\/span>(?:(?!<span class=["']?dat[0-9]["']?>)[\s\S]){0,600}?name=["']?Current["']?/g;
+  let cur;
+  while ((cur = currentRe.exec(html)) !== null) dates.add(`${cur[3]}${cur[2]}${cur[1]}`);
 
   // Drop implausible / sentinel dates: Rada uses year 3000 (ed3000XXXX) for
   // editions with no fixed effective date; real editions fall within 1900-2099.
