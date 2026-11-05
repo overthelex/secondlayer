@@ -258,7 +258,13 @@ export function extractArticlesFromEditionHtml(rawHtml: string): Array<{ article
     body = body.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim();
     if (body.length < 5) continue;
 
-    const firstLine = body.split('\n')[0].trim();
+    // The heading sits in its own <pre> block, wrapped by <br>: «Стаття 625.</b> Відповідальність
+    // за порушення грошового <br> зобов'язання <br></pre>». Taking the first line cut the title
+    // («...грошового», LEXAI-2200); take the whole block up to </pre> instead.
+    const headingBlock = match[2].split(/<\/pre>/i)[0];
+    const heading = headingBlock.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\{[^}]*\}/g, '')
+      .replace(/\s+/g, ' ').trim();
+    const firstLine = heading || body.split('\n')[0].trim();
     articles.push({
       article_number: artNum,
       title: firstLine.length < 200 ? firstLine : undefined,
@@ -421,7 +427,10 @@ async function importEdition(
          VALUES ($1, $2, $3, $4, $5, false, $6, $7)
          ON CONFLICT (legislation_id, article_number, version_date)
          DO UPDATE SET title = EXCLUDED.title
-           WHERE legislation_articles.title IS NULL AND EXCLUDED.title IS NOT NULL`,
+           WHERE EXCLUDED.title IS NOT NULL AND (legislation_articles.title IS NULL
+             -- a title the old parser cut at the first <br>: the new one extends it
+             OR (length(EXCLUDED.title) > length(legislation_articles.title)
+                 AND left(EXCLUDED.title, length(legislation_articles.title)) = legislation_articles.title))`,
         [legislationId, art.article_number, titleEsc, art.full_text, art.byte_size, versionDate,
          JSON.stringify({ edition_date: editionDate, extraction_method: 'edition_pre_bold' })],
       );
