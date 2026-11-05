@@ -493,20 +493,52 @@ export class DeputyService {
   }
 
   /**
-   * Get voting statistics for a deputy
-   * This is a placeholder - actual implementation in voting-service.ts
+   * Voting statistics for a deputy over every stored roll call.
+   *
+   * This used to be a placeholder returning zeros, so include_voting_record always
+   * reported 0 votes while rada_analyze_voting_record found hundreds for the same
+   * deputy (LEXAI-2152). Votes are stored per roll call as a jsonb map rada_id -> vote,
+   * as a code (0 відсутній, 1 за, 2 проти, 3 утримався, 4 не голосував) or as the label.
+   * «Не голосував» counts as present (LEXAI-2149).
    */
-  private async getVotingStatistics(_radaId: string): Promise<any> {
-    // TODO: Implement in voting-service.ts
-    return {
-      total_votes: 0,
-      voted_for: 0,
-      voted_against: 0,
-      abstained: 0,
-      not_present: 0,
-      attendance_rate: 0,
-      positions: [],
+  private async getVotingStatistics(radaId: string): Promise<any> {
+    const empty = {
+      total_votes: 0, voted_for: 0, voted_against: 0, abstained: 0,
+      not_voted: 0, not_present: 0, attendance_rate: 0, positions: [],
     };
+    try {
+      const result = await this.db.query(
+        `SELECT
+           count(*)::int AS total,
+           count(*) FILTER (WHERE v IN ('1', 'За'))::int AS voted_for,
+           count(*) FILTER (WHERE v IN ('2', 'Проти'))::int AS voted_against,
+           count(*) FILTER (WHERE v IN ('3', 'Утримався'))::int AS abstained,
+           count(*) FILTER (WHERE v IN ('4', 'Не голосував'))::int AS not_voted,
+           count(*) FILTER (WHERE v IN ('0', 'Відсутній'))::int AS not_present,
+           min(session_date) AS first_vote,
+           max(session_date) AS last_vote
+         FROM (SELECT votes ->> $1 AS v, session_date FROM voting_records WHERE votes ? $1) t`,
+        [String(radaId)],
+      );
+      const r = result.rows[0];
+      if (!r || !r.total) return empty;
+      const present = r.voted_for + r.voted_against + r.abstained + r.not_voted;
+      return {
+        total_votes: r.total,
+        voted_for: r.voted_for,
+        voted_against: r.voted_against,
+        abstained: r.abstained,
+        not_voted: r.not_voted,
+        not_present: r.not_present,
+        attendance_rate: Math.round((present / r.total) * 1000) / 10,
+        first_vote: r.first_vote,
+        last_vote: r.last_vote,
+        positions: [],
+      };
+    } catch (error: any) {
+      logger.error('Failed to compute deputy voting statistics', { radaId, error: error.message });
+      return empty;
+    }
   }
 
   /**

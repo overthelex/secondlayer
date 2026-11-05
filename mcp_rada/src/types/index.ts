@@ -206,6 +206,9 @@ export interface VotingStatistics {
   voted_for: number;
   voted_against: number;
   abstained: number;
+  /** «Не голосував»: registered in the hall but cast no vote. Present, not absent. */
+  not_voted: number;
+  /** «Відсутній» only. */
   not_present: number;
   attendance_rate: number;
   positions: VotingPosition[];

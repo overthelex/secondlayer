@@ -394,7 +394,7 @@ export class MCPRadaAPI {
       const deputies = await this.deputyService.searchDeputies(searchParams);
 
       if (deputies.length === 0) {
-        throw new Error('Deputy not found');
+        throw new Error('Депутата не знайдено');
       }
 
       if (deputies.length > 1) {
@@ -562,7 +562,7 @@ export class MCPRadaAPI {
         name: args.deputy_name,
       });
       if (deputies.length === 0) {
-        throw new Error(`Deputy not found: ${args.deputy_name}`);
+        throw new Error(`Депутата не знайдено: ${args.deputy_name}`);
       }
       const deputyInfo = deputies[0];
       const deputy = deputyInfo.deputy;
@@ -583,16 +583,17 @@ export class MCPRadaAPI {
           faction: deputy.faction_name,
         },
         period: {
-          from: args.date_from || 'all time',
-          to: args.date_to || 'present',
+          from: args.date_from || 'увесь період',
+          to: args.date_to || 'дотепер',
         },
         statistics: {
           total_votes: votingStats.total_votes,
           voted_for: votingStats.voted_for,
           voted_against: votingStats.voted_against,
           abstained: votingStats.abstained,
+          not_voted: votingStats.not_voted,
           not_present: votingStats.not_present,
-          attendance_rate: votingStats.attendance_rate,
+          attendance_rate: Math.round(votingStats.attendance_rate * 10) / 10,
         },
         voting_records: votingStats.positions.slice(0, 20).map(p => ({
           date: p.date,

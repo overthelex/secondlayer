@@ -139,4 +139,23 @@ describe('VotingService.analyzeVotingRecord', () => {
     expect(stats.voted_against).toBe(1);
     expect(stats.not_present).toBe(1);
   });
+
+  it('counts «Не голосував» as present, not absent (LEXAI-2149)', async () => {
+    const query = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ rada_id: '412' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { session_date: '2026-10-29', question_text: 'a', bill_number: null, result: 'Прийнято', vote: 'За' },
+          { session_date: '2026-10-29', question_text: 'b', bill_number: null, result: 'Прийнято', vote: '4' },
+          { session_date: '2026-10-29', question_text: 'c', bill_number: null, result: 'Прийнято', vote: 'Не голосував' },
+          { session_date: '2026-10-28', question_text: 'd', bill_number: null, result: 'Прийнято', vote: 'Відсутній' },
+        ],
+      });
+    const service = new VotingService({ query } as any, {} as any);
+    const stats = await service.analyzeVotingRecord({ deputy_name: 'Железняк' });
+    expect(stats.not_voted).toBe(2);
+    expect(stats.not_present).toBe(1);
+    expect(stats.attendance_rate).toBe(75);
+  });
 });
