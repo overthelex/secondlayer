@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 DATA_DIR = os.environ.get("DATA_DIR", "/home/ubuntu/SecondLayer/scripts/opendata/spending/data")
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://secondlayer:1xfXUY8y7DM8Sm1w6T2cmBnNsnzfgnNJ2Ajl1Zl11xc@127.0.0.1:5438/secondlayer_prod")
+DB_URL = os.environ.get("DATABASE_URL")  # required; never commit a credential here
 
 TABLE_MAP = {
     "acts": "spending_acts",
