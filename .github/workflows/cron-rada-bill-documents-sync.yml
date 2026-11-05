@@ -1,0 +1,49 @@
+##############################################################################
+# RADA bill supporting documents (ГНЕУ, committee, legal-dept conclusions):
+# data.rada.gov.ua billinfo-sklN.json → rada.bill_documents (legal.org.ua)
+# - LEXAI-2156: loaded once on 02.07.2026 and never again, so
+#   rada_search_bill_documents knew nothing registered after 01.07.2026.
+# - Runs sync-bill-documents.js inside the running rada container on cthulhu,
+#   which already has the DB credentials. Dedups by doc_id and upserts on
+#   (doc_id, convocation); never deletes.
+# - Daily: the feed is regenerated daily (~130 MB for skl9).
+##############################################################################
+name: 'Cron: RADA bill documents sync'
+
+on:
+  schedule:
+    # 03:15 UTC, after the voting sync
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+    inputs:
+      convocations:
+        description: 'CONVOCATIONS (comma-separated), default 9'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rada-bill-documents-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-bill-documents:
+    name: Sync RADA bill documents
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 60
+    env:
+      RADA_CONTAINER: rada-mcp-app-local
+    steps:
+      - name: Run sync
+        env:
+          CONVOCATIONS: ${{ inputs.convocations || '9' }}
+        run: |
+          set -euo pipefail
+          if ! docker ps --format '{{.Names}}' | grep -qx "$RADA_CONTAINER"; then
+            echo "::error::$RADA_CONTAINER is not running"
+            exit 1
+          fi
+          docker exec -e "CONVOCATIONS=$CONVOCATIONS" "$RADA_CONTAINER" \
+            node --max-old-space-size=4096 dist/scripts/sync-bill-documents.js
