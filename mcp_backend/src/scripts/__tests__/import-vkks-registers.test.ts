@@ -36,7 +36,7 @@ describe('import-vkks-registers parsers', () => {
     expect(ms[0]).toMatchObject({ court_level: 'місцевий', positions_limit: null, region: null });
     expect(ms[1]).toMatchObject({ positions_limit: 6, positions_filled: 3, positions_vacant: 3, positions_in_process: 0 });
 
-    const asHead = ['№ з/п', 'Найменування суду', 'Регіон та місцезнаходження суду', 'Гранична', 'Призначено', 'Вакантні', 'Триває процедура'];
+    const asHead = ['№ з/п', 'Найменування суду (сортування за регіонами)', 'Регіон та місцезнаходження суду', 'Гранична', 'Призначено', 'Вакантні', 'Триває процедура'];
     const as = parseVacancySheet('АС', [asHead, ['1', 'Вінницький апеляційний суд', 'Вінницька область', '35', '19', '16', '15']]);
     expect(as[0]).toMatchObject({ court_level: 'апеляційний', region: 'Вінницька область', positions_limit: 35, positions_in_process: 15 });
     expect(parseVacancySheet('Аркуш1', [asHead])).toEqual([]);
