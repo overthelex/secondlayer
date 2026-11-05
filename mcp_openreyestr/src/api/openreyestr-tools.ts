@@ -292,19 +292,20 @@ export function formatSpecialFormRow(row: any): Record<string, unknown> {
   return rest;
 }
 
-const TAX_DEBT_AMOUNT_KEYS = ['debt_total', 'debt_tax', 'debt_penalty', 'debt_fine'];
+const TAX_DEBT_AMOUNT_KEYS = ['debt_total', 'debt_state_budget', 'debt_local_budget'];
 
 /**
- * Tax debt row → output. The ДПС snapshot of 22.02.2022 was loaded without the amount
- * columns, so debt_* are NULL on every row; say so instead of returning four nulls that
- * read as "no debt" (LEXAI-2194).
+ * Tax debt row → output. The ДПС file gives the debt as ZN_ALL (to the consolidated
+ * budget) split into ZN_STATE / ZN_LOCAL, in UAH; the first load dropped all three, and
+ * they were backfilled on 05.11.2026 (LEXAI-2194). A row still without them gets an
+ * explicit note instead of nulls that read as "no debt".
  */
 export function formatTaxDebtRow(row: any): Record<string, unknown> {
   if (!TAX_DEBT_AMOUNT_KEYS.every((k) => row[k] === null || row[k] === undefined)) return row;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(row)) if (!TAX_DEBT_AMOUNT_KEYS.includes(k)) out[k] = v;
   out.debt_amounts = null;
-  out.debt_amounts_note = 'Суми боргу в завантаженому знімку ДПС відсутні; наявність запису означає, що платник є в переліку боржників';
+  out.debt_amounts_note = 'Суми боргу для цього запису відсутні; наявність запису означає, що платник є в переліку боржників';
   return out;
 }
 
@@ -1431,7 +1432,7 @@ export class OpenReyestrTools {
     values.push(limit, offset);
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
     const result = await this.pool.query(
-      `SELECT id, report_date, tin, name, chief_name, tax_office_name, tax_name, debt_total, debt_tax, debt_penalty, debt_fine
+      `SELECT id, report_date, tin, name, chief_name, tax_office_name, tax_name, debt_total, debt_state_budget, debt_local_budget
        FROM tax_debt ${whereClause}
        ORDER BY debt_total DESC NULLS LAST
        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
