@@ -1005,8 +1005,11 @@ export class LegislationService {
          SELECT count(*)::int AS n,
                 count(*) FILTER (WHERE la.article_number LIKE '%-%')::int AS idx
          FROM legislation_articles la
+         -- No is_current filter: the in-force edition's rows are stored is_current = true,
+         -- so counting only historical rows gave it 0 indexed articles and flagged the
+         -- current ЦК edition as incomplete (LEXAI-2200). (legislation_id, article_number,
+         -- version_date) is unique, so nothing is counted twice.
          WHERE la.legislation_id = le.legislation_id
-           AND la.is_current = false
            AND la.version_date = le.edition_date
        ) c ON true
        WHERE LOWER(l.rada_id) = LOWER($1)
