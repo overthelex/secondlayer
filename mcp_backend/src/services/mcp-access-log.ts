@@ -73,9 +73,11 @@ export function logMcpAccess(db: { query: (sql: string, params: unknown[]) => Pr
         client_ip, user_agent, detail)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet, $9, $10)`,
     [
-      e.transport,
-      e.outcome,
-      e.authMethod ?? null,
+      // transport/auth_method are VARCHAR(16), outcome VARCHAR(32): an over-long value
+      // would fail the INSERT and silently lose the audit row
+      e.transport.slice(0, 16),
+      e.outcome.slice(0, 32),
+      e.authMethod ? e.authMethod.slice(0, 16) : null,
       e.userId ?? null,
       e.apiKeyId ?? null,
       e.token ? e.token.slice(0, 12) : null,

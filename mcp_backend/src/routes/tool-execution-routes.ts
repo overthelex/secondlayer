@@ -334,7 +334,8 @@ export function createToolExecutionRoutes(deps: {
     const isAdmin = req.user ? ((req.user as any).is_admin === true || (req.user as any).role === 'administrator' || await isAdminUser(deps.db, userId)) : false;
     const viaDbApiKey = req.authType === 'apikey' && Boolean(req.user);
     const caller = callerFromHeaders(req.headers as any, req.ip);
-    const transport = `rest${req.baseUrl ? ':' + req.baseUrl : ''}`;
+    // mcp_access_log.transport is VARCHAR(16): '/api/v1/tools' -> 'rest:v1/tools'
+    const transport = `rest${req.baseUrl ? ':' + req.baseUrl.replace(/^\/api\//, '') : ''}`;
     const refuse = (outcome: 'endpoint_denied' | 'tool_denied', detail: string, status: number, message: string) => {
       logger.warn('[HTTP API] Request refused by access policy', { userId, outcome, detail, path: req.originalUrl });
       logMcpAccess(deps.db, {

@@ -42,3 +42,16 @@ describe('createClientKeyGuard', () => {
     expect((await request(makeApp({ authType: 'jwt', user: { id: 'u-web' } }).app).get('/api/internal/db-stats')).status).toBe(200);
   });
 });
+
+describe('access-log row for a refusal', () => {
+  it('fits mcp_access_log (transport VARCHAR(16)) on long paths', async () => {
+    const db = { query: jest.fn(async () => ({ rows: [] })) };
+    const app = express();
+    app.use((req: any, _res, next) => { Object.assign(req, { authType: 'apikey', clientKey: 'sl_c', user: { id: 'u-long', is_admin: false } }); next(); });
+    app.get('/api/v1/substrate/:j/decisions/:e', createClientKeyGuard(db) as any, (_req, res) => { res.json({}); });
+    await request(app).get('/api/v1/substrate/nl/decisions/ECLI:NL:HR:2020:1');
+    const insert = db.query.mock.calls.find(([sql]: any[]) => String(sql).includes('INSERT INTO mcp_access_log')) as any[];
+    expect(insert[1][0].length).toBeLessThanOrEqual(16);
+    expect(insert[1][9]).toContain('/api/v1/substrate/nl/decisions');
+  });
+});
