@@ -134,3 +134,25 @@ describe('partial loss of indexed articles (LEXAI-2200)', () => {
     expect(out.editions.some((e: any) => e.indexed_articles_missing)).toBe(false);
   });
 });
+
+describe('re-codification restarts the indexed peak (LEXAI-2200)', () => {
+  it('does not flag a new code against the indexed articles of the old one', async () => {
+    const out = await buildTools([
+      ed('2025-10-31', 379, 8),
+      ed('2017-12-15', 371, 0), // new ГПК, renumbered
+      ed('2017-06-01', 180, 65),
+      ed('2016-01-01', 178, 64),
+    ]).listLegislationEditions({ rada_id: '1798-12' });
+    expect(out.editions.some((e: any) => e.indexed_articles_missing)).toBe(false);
+  });
+
+  it('still flags a loss inside the new code', async () => {
+    const out = await buildTools([
+      ed('2025-10-31', 372, 0),
+      ed('2024-01-01', 379, 8),
+      ed('2017-12-15', 371, 6),
+      ed('2017-06-01', 180, 65),
+    ]).listLegislationEditions({ rada_id: '1798-12' });
+    expect(out.editions.filter((e: any) => e.indexed_articles_missing).map((e: any) => e.date)).toEqual(['2025-10-31']);
+  });
+});
