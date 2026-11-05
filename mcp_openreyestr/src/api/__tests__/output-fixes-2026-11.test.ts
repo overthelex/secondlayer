@@ -15,13 +15,13 @@ describe('special forms (LEXAI-2195)', () => {
 
 describe('tax debt (LEXAI-2194)', () => {
   it('replaces four null amounts with an explicit note', () => {
-    const out: any = formatTaxDebtRow({ id: 1, name: 'X', debt_total: null, debt_tax: null, debt_penalty: null, debt_fine: null });
+    const out: any = formatTaxDebtRow({ id: 1, name: 'X', debt_total: null, debt_state_budget: null, debt_local_budget: null });
     expect(out).not.toHaveProperty('debt_total');
     expect(out.debt_amounts).toBeNull();
     expect(out.debt_amounts_note).toMatch(/відсутні/);
   });
   it('keeps rows that do have amounts unchanged', () => {
-    const row = { id: 1, debt_total: '10', debt_tax: '8', debt_penalty: '1', debt_fine: '1' };
+    const row = { id: 1, debt_total: '10', debt_state_budget: '8', debt_local_budget: '2' };
     expect(formatTaxDebtRow(row)).toBe(row);
   });
 });
