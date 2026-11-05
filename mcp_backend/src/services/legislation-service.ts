@@ -1154,14 +1154,22 @@ export class LegislationService {
     total: number;
     versions: Array<{ effective_from: string | null; last_seen: string | null; title: string | null; byte_size: number | null }>;
   }> {
+    // 2000-01-01 is not an edition: it is the default version_date of the old current-text
+    // loader (saveLegislationToDatabase), left behind on articles that the edition import
+    // later covered with real dates. Showing it read as «редакція від 01.01.2000» (LEXAI-2150).
+    // Keep it only for an article that has no dated row at all.
+    const PLACEHOLDER = '2000-01-01';
     const countResult = await this.db.query(
-      `SELECT COUNT(DISTINCT md5(la.full_text))::int AS n
+      `SELECT COUNT(DISTINCT md5(la.full_text)) FILTER (WHERE la.version_date::date <> $3::date)::int AS dated,
+              COUNT(DISTINCT md5(la.full_text))::int AS n
        FROM legislation_articles la
        JOIN legislation l ON la.legislation_id = l.id
        WHERE LOWER(l.rada_id) = LOWER($1) AND la.article_number = $2 AND la.full_text IS NOT NULL`,
-      [radaId, articleNumber]
+      [radaId, articleNumber, PLACEHOLDER]
     );
-    const total = countResult.rows[0]?.n || 0;
+    const dated = countResult.rows[0]?.dated || 0;
+    const skipPlaceholder = dated > 0;
+    const total = skipPlaceholder ? dated : (countResult.rows[0]?.n || 0);
 
     const result = await this.db.query(
       `SELECT to_char(MIN(la.version_date), 'YYYY-MM-DD') AS effective_from,
@@ -1170,10 +1178,11 @@ export class LegislationService {
        FROM legislation_articles la
        JOIN legislation l ON la.legislation_id = l.id
        WHERE LOWER(l.rada_id) = LOWER($1) AND la.article_number = $2 AND la.full_text IS NOT NULL
+         AND (NOT $4::boolean OR la.version_date::date <> $5::date)
        GROUP BY md5(la.full_text)
        ORDER BY MIN(la.version_date) DESC NULLS LAST
        LIMIT $3`,
-      [radaId, articleNumber, limit]
+      [radaId, articleNumber, limit, skipPlaceholder, PLACEHOLDER]
     );
     return {
       total,

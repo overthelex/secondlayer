@@ -216,6 +216,26 @@ describe('LegislationService', () => {
     );
   });
 
+  describe('getArticleVersions (LEXAI-2150)', () => {
+    it('hides the 2000-01-01 placeholder when the article has dated versions', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [{ dated: 2, n: 3 }] })
+        .mockResolvedValueOnce({ rows: [{ effective_from: '2014-01-01', last_seen: '2026-08-05', title: 't', byte_size: 1 }] });
+      const r = await service.getArticleVersions('435-15', '625');
+      expect(r.total).toBe(2);
+      expect(mockDb.query.mock.calls[1][1]).toEqual(['435-15', '625', 50, true, '2000-01-01']);
+    });
+
+    it('keeps the placeholder for an article with no dated row', async () => {
+      mockDb.query
+        .mockResolvedValueOnce({ rows: [{ dated: 0, n: 1 }] })
+        .mockResolvedValueOnce({ rows: [] });
+      const r = await service.getArticleVersions('x', '1');
+      expect(r.total).toBe(1);
+      expect(mockDb.query.mock.calls[1][1][3]).toBe(false);
+    });
+  });
+
   describe('getAdapter', () => {
     it('should return the adapter instance', () => {
       expect(service.getAdapter()).toBe(mockAdapter);

@@ -26,6 +26,8 @@ export interface LegislationToolArgs {
   as_of_date?: string;
   /** search_legislation: include acts that are no longer in force (ranked below current law). */
   include_repealed?: boolean;
+  /** get_legislation_section: character offset into a long article's full_text. */
+  offset?: number;
 }
 
 /** Per-request dedup cache for search_legislation — prevents repeated searches returning same rada_id */
@@ -44,6 +46,26 @@ const MAX_SINGLE_ARTICLE_TEXT_CHARS = 60_000;
 /** Total full_text budget for an explicit multi-article fetch (get_legislation_articles) —
  * split across the requested articles, but never below the search-hit cap. */
 const MAX_ARTICLES_TOTAL_TEXT_CHARS = 120_000;
+
+/**
+ * One page of a long article. ПК ст. 14 is ~190K characters; the single-article cap used
+ * to cut it at 60K with no way to read the rest (LEXAI-2151). Callers page with offset.
+ */
+export function pageArticleText(text: string | undefined | null, offset: unknown, pageChars: number = MAX_SINGLE_ARTICLE_TEXT_CHARS) {
+  const full = text || '';
+  const n = Number(offset);
+  const start = Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), full.length) : 0;
+  const end = Math.min(start + pageChars, full.length);
+  const more = end < full.length;
+  return {
+    full_text: full.slice(start, end),
+    ...(start > 0 || more ? {
+      text_offset: start,
+      truncated: more,
+      ...(more ? { next_offset: end, note: `Показано символи ${start}–${end} з ${full.length}. Решта — з offset=${end}.` } : {}),
+    } : {}),
+  };
+}
 
 function capText(text: string | undefined | null, maxChars: number = MAX_ARTICLE_TEXT_CHARS): string {
   if (!text) return '';
@@ -280,8 +302,8 @@ export class LegislationTools extends BaseToolHandler {
         }
       }
       return {
-        error: `Article ${resolved.articleNumber} not found in legislation ${resolved.radaId}`,
-        suggestion: 'Check if the article number is correct or if the legislation is available',
+        error: `Статтю ${resolved.articleNumber} не знайдено в акті ${resolved.radaId}`,
+        suggestion: 'Перевірте номер статті або чи завантажено цей акт',
       };
     }
 
@@ -289,7 +311,7 @@ export class LegislationTools extends BaseToolHandler {
       rada_id: article.rada_id,
       article_number: article.article_number,
       title: article.title,
-      full_text: capText(article.full_text, MAX_SINGLE_ARTICLE_TEXT_CHARS),
+      ...pageArticleText(article.full_text, args.offset),
       full_text_length: article.full_text?.length,
       url: article.url,
       metadata: article.metadata,
@@ -998,6 +1020,10 @@ export class LegislationTools extends BaseToolHandler {
               type: 'string',
               enum: ['light', 'dark'],
               description: 'Тема для HTML (за замовчуванням light)',
+            },
+            offset: {
+              type: 'number',
+              description: 'Зсув у символах для довгих статей (напр. ПКУ ст. 14). Відповідь повертає next_offset, поки текст не скінчився.',
             },
           },
           required: [],
