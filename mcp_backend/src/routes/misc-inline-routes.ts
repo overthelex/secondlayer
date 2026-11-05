@@ -5,6 +5,7 @@
 
 import { Router, Response } from 'express';
 import { AuthenticatedRequest as DualAuthRequest, dualAuth, requireJWT } from '../middleware/dual-auth.js';
+import { createClientKeyGuard } from '../middleware/client-key-guard.js';
 import { logger } from '../utils/logger.js';
 import { Database } from '../database/database.js';
 import { DocumentClassificationService } from '../services/document-classification-service.js';
@@ -386,10 +387,11 @@ export function createMiscInlineRoutes(deps: {
     }
   }) as any);
 
-  // ============ Internal endpoints (uses dualAuth — API key or JWT) ============
+  // ============ Internal endpoints (dualAuth: JWT, admin key or legacy env key; client keys refused) ============
+  const clientKeyGuard = createClientKeyGuard(deps.db as any) as any;
 
   // GET /internal/db-stats - Internal service-to-service endpoint for DB stats
-  router.get('/internal/db-stats', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
+  router.get('/internal/db-stats', dualAuth as any, clientKeyGuard, (async (_req: DualAuthRequest, res: Response) => {
     const tableList = [
       'documents', 'document_sections', 'legislation', 'legislation_articles',
       'legislation_chunks', 'users', 'conversations', 'upload_sessions', 'zo_dictionaries',
@@ -442,7 +444,7 @@ export function createMiscInlineRoutes(deps: {
   }) as any);
 
   // GET /internal/edrsr-stats - Internal EDRSR stats endpoint
-  router.get('/internal/edrsr-stats', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
+  router.get('/internal/edrsr-stats', dualAuth as any, clientKeyGuard, (async (_req: DualAuthRequest, res: Response) => {
     try {
       // Check if tables exist
       const tablesExist = await deps.db.query(`
