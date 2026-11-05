@@ -237,7 +237,9 @@ export class MCPOpenReyestrAPI {
 Поля: procedure — процедура (ліквідація, розпорядження майном, санація…); case_status — стан провадження;
 case_closure_ground — підстава закриття (ст. 90 КУзПБ); case_initiator — ініціатор справи (кредитор/заявник).
 Джерело НАІС не містить ЄДРПОУ боржника і суду: debtor_edrpou заповнюється лише за точним і однозначним збігом назви з ЄДР
-(debtor_edrpou_source = edr_exact_name_match), інакше null. Дати — YYYY-MM-DD.`,
+(debtor_edrpou_source = edr_exact_name_match), інакше null. Дати — YYYY-MM-DD.
+⚠️ Набір НАІС на data.gov.ua не оновлюється з 31.05.2024: останній запис зареєстровано 30.05.2024, новіших справ у джерелі немає.
+case_status у більшості записів порожній, бо в джерелі стан провадження «(Не визначено)»; підстава закриття (case_closure_ground) заповнена.`,
         inputSchema: {
           type: 'object',
           properties: {

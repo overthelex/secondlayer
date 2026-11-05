@@ -1130,7 +1130,7 @@ export class OpenReyestrTools {
     );
 
     if (result.rows.length === 0) {
-      return [{ found: false, query: query || debtor_edrpou || case_number || '', message: 'Справ про банкрутство не знайдено за вашим запитом' }];
+      return [{ found: false, query: query || debtor_edrpou || case_number || '', message: 'Справ про банкрутство не знайдено за вашим запитом. Джерело НАІС не оновлюється з 31.05.2024 — новіших справ у ньому немає.' }];
     }
     return result.rows.map(formatBankruptcyRow);
   }
