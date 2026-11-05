@@ -6,6 +6,8 @@ import { createBalanceCheckMiddleware } from '../middleware/balance-check.js';
 import { logger } from '../utils/logger.js';
 import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess, judgmentFiltersOf, markJudgmentAccessGranted } from '../services/uk-judgment-access.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
+import { checkToolAccess, isAdminUser, scopeVaultArgs } from '../api/tool-access-policy.js';
+import { callerFromHeaders, logMcpAccess } from '../services/mcp-access-log.js';
 import { requestContext } from '../utils/openai-client.js';
 import { ToolRegistry } from '../api/tool-registry.js';
 import { ServiceProxy } from '../services/service-proxy.js';
@@ -319,6 +321,48 @@ export function createToolExecutionRoutes(deps: {
   const usageLimits = mcpUsageLimitMiddleware(deps.db);
   const validateArgs = createToolArgsValidationMiddleware(deps.toolRegistry);
 
+  // Access policy for every POST below (see api/tool-access-policy.ts), right after dualAuth:
+  //  • a client API key (sl_..., authType 'apikey' with a user) is valid on /api/v2/mcp only.
+  //    This router skips the key's per-call limits, and its streaming path is never billed,
+  //    so a non-admin key gets 403 here whatever the tool;
+  //  • operator tools are admin-only for everyone else (JWT web users included).
+  // Legacy env keys (authType 'apikey', no user) are internal and pass. Refusals are
+  // recorded in mcp_access_log for the security alarm.
+  const toolAccessGuard = (async (req: DualAuthRequest, res: Response, next: () => void) => {
+    const userId = req.user?.id;
+    const isAdmin = req.user ? ((req.user as any).is_admin === true || (req.user as any).role === 'administrator' || await isAdminUser(deps.db, userId)) : false;
+    const viaDbApiKey = req.authType === 'apikey' && Boolean(req.user);
+    const caller = callerFromHeaders(req.headers as any, req.ip);
+    const transport = `rest${req.baseUrl ? ':' + req.baseUrl : ''}`;
+    const refuse = (outcome: 'endpoint_denied' | 'tool_denied', detail: string, status: number, message: string) => {
+      logger.warn('[HTTP API] Request refused by access policy', { userId, outcome, detail, path: req.originalUrl });
+      logMcpAccess(deps.db, {
+        transport, outcome, authMethod: viaDbApiKey ? 'api_key' : (req.authType === 'jwt' ? 'jwt' : 'legacy_key'),
+        userId, token: viaDbApiKey ? req.clientKey : undefined, caller, detail,
+      });
+      res.status(status).json({ success: false, error: 'Forbidden', code: outcome === 'endpoint_denied' ? 'API_KEY_V2_ONLY' : 'TOOL_FORBIDDEN', message });
+    };
+
+    if (viaDbApiKey && !isAdmin) {
+      refuse('endpoint_denied', `api key on ${req.originalUrl.slice(0, 200)}`, 403,
+        'API-ключ дійсний лише для MCP на /api/v2/mcp.');
+      return;
+    }
+    if (!req.user && req.authType === 'apikey') { next(); return; } // legacy internal key
+
+    const names: string[] = req.path === '/batch'
+      ? (Array.isArray(req.body?.calls) ? req.body.calls.map((c: any) => String(c?.name ?? '')) : [])
+      : [String(req.params.toolName ?? req.path.split('/')[1] ?? '')];
+    for (const name of names) {
+      const decision = checkToolAccess(name, { isAdmin, viaDbApiKey });
+      if (!decision.allowed) {
+        refuse('tool_denied', `${name}: ${decision.reason}`, 403, decision.message);
+        return;
+      }
+    }
+    next();
+  }) as any;
+
   router.get('/', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
     try {
       const gatewayEnabled = process.env.ENABLE_UNIFIED_GATEWAY === 'true';
@@ -367,7 +411,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /batch — Batch tool calls (must be before /:toolName)
-  router.post('/batch', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
+  router.post('/batch', dualAuth as any, toolAccessGuard, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response): Promise<void> => {
     try {
       const { calls } = req.body;
 
@@ -419,7 +463,7 @@ export function createToolExecutionRoutes(deps: {
 
             const result = await requestContext.run(
               { requestId: callRequestId, task: call.name },
-              () => deps.toolRegistry.executeTool(call.name, call.arguments || {})
+              () => deps.toolRegistry.executeTool(call.name, scopeVaultArgs(call.name, call.arguments || {}, req.user?.id))
             );
 
             const breakdown = await deps.costTracker.completeTrackingRecord({
@@ -478,7 +522,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName/stream — Dedicated SSE streaming endpoint
-  router.post('/:toolName/stream', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName/stream', dualAuth as any, toolAccessGuard, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const streamRequestId = `stream-${uuidv4()}`;
     const streamStartTime = Date.now();
 
@@ -495,7 +539,7 @@ export function createToolExecutionRoutes(deps: {
           error: `Tool '${toolName}' is not available on this deployment`,
         });
       }
-      const args = req.body.arguments || req.body;
+      const args = scopeVaultArgs(toolName, req.body.arguments || req.body, req.user?.id);
 
       // Find Case Law licence gate, as on the non-streaming route.
       const streamGated = gatedRegistryOf(toolName, args);
@@ -562,7 +606,7 @@ export function createToolExecutionRoutes(deps: {
   }) as any);
 
   // POST /:toolName — Execute MCP tool (with SSE support and cost tracking)
-  router.post('/:toolName', dualAuth as any, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
+  router.post('/:toolName', dualAuth as any, toolAccessGuard, validateArgs as any, usageLimits as any, balanceCheckMiddleware as any, (async (req: DualAuthRequest, res: Response) => {
     const requestId = uuidv4();
     const startTime = Date.now();
 
@@ -583,7 +627,7 @@ export function createToolExecutionRoutes(deps: {
         });
       }
 
-      const args = req.body.arguments || req.body;
+      const args = scopeVaultArgs(toolName, req.body.arguments || req.body, req.user?.id);
       const acceptHeader = req.headers.accept || '';
 
       // Find Case Law licence gate. Question 13 of TNA ref CAS-349914-B9P5B8 says
@@ -745,10 +789,7 @@ export function createToolExecutionRoutes(deps: {
         result = await requestContext.run(
           { requestId, task: toolName },
           async () => {
-            const VAULT_TOOLS = new Set(['store_document', 'get_document', 'list_documents', 'semantic_search', 'list_folders', 'delete_document', 'update_document']);
-            const vaultUserId = req.user?.id || process.env.DEFAULT_VAULT_USER_ID;
-            const httpToolArgs = VAULT_TOOLS.has(toolName) ? { ...args, userId: vaultUserId } : args;
-            return await deps.toolRegistry.executeTool(toolName, httpToolArgs);
+            return await deps.toolRegistry.executeTool(toolName, args);
           }
         );
       }

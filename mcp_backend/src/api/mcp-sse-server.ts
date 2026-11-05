@@ -20,6 +20,8 @@ import { CreditService } from '../services/credit-service.js';
 import { requestContext } from '../utils/openai-client.js';
 import { V2_TOOL_NAMES } from './curated-mcp-tools.js';
 import { isToolInToolset, filterToolsByToolset } from './mcp-toolset.js';
+import { scopeVaultArgs } from './tool-access-policy.js';
+import { logMcpAccess } from '../services/mcp-access-log.js';
 
 export interface MCPToolDefinition {
   name: string;
@@ -414,6 +416,26 @@ export class MCPSSEServer {
       return;
     }
 
+    // tools/list here advertises only the curated v2 set; enforce the same set on call so a
+    // client cannot reach a hidden low-level or operator tool by name (and record the attempt).
+    if (!V2_TOOL_NAMES.has(name)) {
+      const ctx = this.sessions.get(sessionId) || {};
+      if (this.db) {
+        logMcpAccess(this.db as any, {
+          transport: 'sse', outcome: 'tool_denied', userId: ctx.userId,
+          token: ctx.clientKey?.startsWith('sl_') ? ctx.clientKey : undefined,
+          mcpSessionId: sessionId, caller: { clientIp: null, userAgent: null },
+          detail: `${name}: outside v2 whitelist`,
+        });
+      }
+      this.sendSSEMessage(res, {
+        jsonrpc: '2.0',
+        id: request.id,
+        error: { code: -32602, message: `Tool '${name}' is not available on this endpoint` },
+      });
+      return;
+    }
+
     // LEXAI-2164: reject arguments the tool's schema does not know (before limits/billing).
     const argsRejection = await this.toolRegistry.validateToolArgs(name, args || {}, 'sse');
     if (argsRejection) {
@@ -542,7 +564,7 @@ export class MCPSSEServer {
       const result = await requestContext.run(
         { requestId, task: name },
         async () => {
-          const registryResult = await this.toolRegistry.executeTool(name, args);
+          const registryResult = await this.toolRegistry.executeTool(name, scopeVaultArgs(name, args || {}, context.userId));
           if (registryResult) return registryResult;
           throw new Error(`Unknown tool: ${name}`);
         }

@@ -49,8 +49,13 @@ export function callerFromHeaders(headers: HeaderBag, fallbackIp?: string): McpC
 
 export interface McpAccessEvent {
   transport: string;
-  outcome: 'session_opened' | 'missing_auth' | 'invalid_api_key' | 'rate_limited' | 'auth_failed';
-  authMethod?: 'api_key' | 'oauth' | 'jwt';
+  /**
+   * tool_denied: an authenticated caller asked for a tool outside its scope (tool-access-policy).
+   * endpoint_denied: a client API key (sl_...) used anywhere but /api/v2/mcp.
+   */
+  outcome: 'session_opened' | 'missing_auth' | 'invalid_api_key' | 'rate_limited' | 'auth_failed'
+    | 'tool_denied' | 'endpoint_denied';
+  authMethod?: 'api_key' | 'oauth' | 'jwt' | 'legacy_key';
   userId?: string;
   apiKeyId?: string;
   /** Raw bearer token: only its first 12 characters are stored. */
