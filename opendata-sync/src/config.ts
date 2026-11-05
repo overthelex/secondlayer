@@ -225,6 +225,15 @@ const backendWeeklySources: DataSourceSchedule[] = [
     sourceName: 'vrp_interference_reports',
     enabled: true,
   },
+  // ВРП decisions (LEXAI-2126): cumulative JSON, ~22K rows, upsert by ВРП id.
+  {
+    name: 'vrp_decisions',
+    title: 'ВРП — Рішення Вищої ради правосуддя',
+    cron: '0 9 * * 0', // Sunday 09:00
+    target: 'backend',
+    sourceName: 'vrp_decisions',
+    enabled: true,
+  },
 ];
 
 // ─── OpenReyestr NAIS registries (sync via HTTP trigger) ────────────
