@@ -28,7 +28,7 @@ export function createClientKeyGuard(db: Db) {
     const path = req.originalUrl.split('?')[0].slice(0, 200);
     logger.warn('[ClientKeyGuard] API key refused off v2', { userId: user.id, path });
     logMcpAccess(db, {
-      transport: `rest:${path}`,
+      transport: 'rest',
       outcome: 'endpoint_denied',
       authMethod: 'api_key',
       userId: user.id,
