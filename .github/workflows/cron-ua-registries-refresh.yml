@@ -1,0 +1,110 @@
+##############################################################################
+# UA registries refresh on cthulhu (legal.org.ua), LEXAI-2126.
+# After the move off AWS nothing refreshed these; each job is idempotent
+# (upsert / skip-if-loaded) and never deletes rows.
+# - stenograms: data.rada.gov.ua /ogd/zal/agenda/skl9/{sten,text,spog}/*_txt.zip
+#   → opendata_rada_stenograms (upsert on source_file), run in the app container
+# - judges: data.gov.ua ВККС judges list → judges / judges_current
+#   (--latest-only; snapshots already in judges_load_log are skipped)
+# - securities: data.gov.ua nssmc-001 holders/YYYY/Q (last 4 quarters)
+#   → opendata_securities_owners (upsert), run in the app container
+##############################################################################
+name: 'Cron: UA registries refresh'
+
+on:
+  schedule:
+    # 04:00 UTC daily
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Run one job: stenograms | judges | securities (empty = all)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ua-registries-refresh
+  cancel-in-progress: false
+
+env:
+  PG_ENV_FILE: /home/vovkes/SecondLayer/deployment/.env.local
+
+jobs:
+  stenograms:
+    if: ${{ !inputs.only || inputs.only == 'stenograms' }}
+    name: RADA stenograms
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 30
+    steps:
+      - name: Download and import skl9 archives
+        run: |
+          set -euo pipefail
+          C=$(docker ps --format '{{.Names}}' | grep -E '^secondlayer-app-local(-blue|-green)?$' | head -1)
+          [ -n "$C" ] || { echo "::error::no running secondlayer-app-local container"; exit 1; }
+          R="$RUNNER_TEMP/rada_stenograms"
+          rm -rf "$R"
+          for f in sten/stenogram_txt.zip text/agenda_txt.zip spog/stenpog_txt.zip; do
+            mkdir -p "$R/zal/agenda/skl9/$(dirname "$f")"
+            curl -sf --retry 3 --max-time 600 -o "$R/zal/agenda/skl9/$f" \
+              "https://data.rada.gov.ua/ogd/zal/agenda/skl9/$f"
+          done
+          docker exec "$C" rm -rf /tmp/rada_stenograms
+          docker cp "$R" "$C:/tmp/rada_stenograms"
+          docker exec "$C" node dist/scripts/import-rada-stenograms.js /tmp/rada_stenograms
+          docker exec "$C" rm -rf /tmp/rada_stenograms
+          rm -rf "$R"
+
+  judges:
+    if: ${{ !inputs.only || inputs.only == 'judges' }}
+    name: VKKS judges
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/judges
+      - name: Load latest snapshot
+        run: |
+          set -euo pipefail
+          cd scripts/judges
+          npm install --no-save --no-package-lock --silent pg@8.20.0 xlsx@0.18.5
+          g() { grep -m1 "^$1=" "$PG_ENV_FILE" | cut -d= -f2- | tr -d "\"'"; }
+          export POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432
+          export POSTGRES_USER="$(g POSTGRES_USER)" POSTGRES_DB="$(g POSTGRES_DB)"
+          export POSTGRES_PASSWORD="$(g POSTGRES_PASSWORD)"
+          echo "::add-mask::$POSTGRES_PASSWORD"
+          node load-judges-vkks.js --latest-only --concurrency=2
+
+  securities:
+    if: ${{ !inputs.only || inputs.only == 'securities' }}
+    name: NKCPFR securities owners
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 30
+    steps:
+      - name: Download last 4 quarters and import
+        run: |
+          set -euo pipefail
+          C=$(docker ps --format '{{.Names}}' | grep -E '^secondlayer-app-local(-blue|-green)?$' | head -1)
+          [ -n "$C" ] || { echo "::error::no running secondlayer-app-local container"; exit 1; }
+          D="$RUNNER_TEMP/nssmc_owners"
+          rm -rf "$D"; mkdir -p "$D"
+          curl -sf --retry 3 --max-time 120 'https://data.gov.ua/api/3/action/package_show?id=nssmc-001' \
+            | python3 -c '
+          import json, sys
+          rs = [r for r in json.load(sys.stdin)["result"]["resources"] if r["name"].startswith("holders/")]
+          rs.sort(key=lambda r: r["name"])
+          for r in rs[-4:]:
+              print(r["name"].replace("/", "_") + ".csv", r["url"])
+          ' | while read -r name url; do
+            curl -sf --retry 3 --max-time 600 -o "$D/$name" "$url"
+          done
+          ls -la "$D"
+          docker exec "$C" rm -rf /tmp/nssmc_owners
+          docker cp "$D" "$C:/tmp/nssmc_owners"
+          docker exec "$C" node dist/scripts/import-securities-owners-datagov.js /tmp/nssmc_owners
+          docker exec "$C" rm -rf /tmp/nssmc_owners
+          rm -rf "$D"

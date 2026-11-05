@@ -10,6 +10,10 @@
  *   12 share_percent (частка в статутному капіталі)  13 share_count (кількість акцій)
  *   14 country_code (країна реєстрації власника)
  *
+ * Since 2024 the files (holders/YYYY/Q on data.gov.ua) start with a header line
+ * ("Код";"fid";"z_edre";…) and a leading row-number column; the remaining 15
+ * columns are the same, so the header is skipped and column 0 dropped.
+ *
  * The full raw row is preserved in raw_data; upsert matches the existing unique index.
  *
  * Usage:
@@ -35,8 +39,8 @@ const pool = new Pool({
   max: 5,
 });
 
-/** Parse one semicolon-delimited line honouring "" quotes. */
-function parseLine(line: string): string[] {
+/** Parse one delimited line honouring "" quotes (2025 Q1–Q2 files use commas). */
+function parseLine(line: string, delim = ';'): string[] {
   const out: string[] = [];
   let cur = '';
   let inQ = false;
@@ -47,7 +51,7 @@ function parseLine(line: string): string[] {
         if (line[i + 1] === '"') { cur += '"'; i++; } else inQ = false;
       } else cur += c;
     } else if (c === '"') inQ = true;
-    else if (c === ';') { out.push(cur); cur = ''; }
+    else if (c === delim) { out.push(cur); cur = ''; }
     else cur += c;
   }
   out.push(cur);
@@ -142,9 +146,15 @@ function reportDateFromName(f: string): string | null {
   let q: number, y: string;
   if (m) { q = parseInt(m[1]); y = m[2]; }
   else if ((m = f.match(/_(\d{4})_q(\d)/))) { y = m[1]; q = parseInt(m[2]); }
+  else if ((m = f.match(/holders_(\d{4})_(\d)\b/))) { y = m[1]; q = parseInt(m[2]); }
   else return null;
   const ends = ['03-31', '06-30', '09-30', '12-31'];
   return q >= 1 && q <= 4 ? `${y}-${ends[q - 1]}` : null;
+}
+
+/** 2024+ files carry a header line: "Код";"fid";"z_edre";… */
+function isHeader(cells: string[]): boolean {
+  return cells.some(c => /^(fid|z_edre)$/i.test(c));
 }
 
 async function importFile(file: string): Promise<number> {
@@ -152,9 +162,19 @@ async function importFile(file: string): Promise<number> {
   const text = win1251.decode(buf);
   const fallback = reportDateFromName(path.basename(file));
   let imported = 0, batch: any[] = [];
+  let dropLead = false;
+  let first = true;
+  let delim = ';';
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
-    const row = mapRow(parseLine(line), fallback);
+    if (first) delim = parseLine(line, ';').length >= 10 ? ';' : ',';
+    let cells = parseLine(line, delim);
+    if (first) {
+      first = false;
+      if (isHeader(cells)) { dropLead = cells[0].toLowerCase() === 'код'; continue; }
+    }
+    if (dropLead) cells = cells.slice(1);
+    const row = mapRow(cells, fallback);
     if (!row) continue;
     batch.push(row);
     if (batch.length >= BATCH_SIZE) { imported += await insertBatch(batch); batch = []; }
