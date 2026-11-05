@@ -213,7 +213,22 @@ function getCodeProgress(progress: OverallProgress, radaId: string, shortTitle: 
 
 // ─── Article Parser ──────────────────────────────────────────────────────────
 
-function extractArticlesFromEditionHtml(html: string): Array<{ article_number: string; title?: string; full_text: string; byte_size: number }> {
+/**
+ * From 2014 the /print pages write an article index as a superscript with a hidden hyphen:
+ *   Стаття 1056</span><span class=rvts37><span style="font-size:0px">-</span>1</span><span class=rvts9>.</span>
+ * The heading regex then read «1056», collided with the real article 1056 and the indexed
+ * one was dropped, so every ЦК edition from 2014 to 2026 held no 50-1, 1056-1, ... at all
+ * (LEXAI-2200). Fold it back into «Стаття 1056-1.» before parsing.
+ */
+export function foldIndexedArticleHeadings(html: string): string {
+  return html.replace(
+    /(Стаття\s+\d+)\s*<\/span>\s*<span\b[^>]*>\s*<span\s+style=["']?font-size:\s*0(?:px)?["']?\s*>\s*[-–—]\s*<\/span>\s*(\d+)\s*<\/span>\s*<span\b[^>]*>/g,
+    '$1-$2',
+  );
+}
+
+export function extractArticlesFromEditionHtml(rawHtml: string): Array<{ article_number: string; title?: string; full_text: string; byte_size: number }> {
+  const html = foldIndexedArticleHeadings(rawHtml);
   const articles: Array<{ article_number: string; title?: string; full_text: string; byte_size: number }> = [];
   const seen = new Set<string>();
 
@@ -264,7 +279,10 @@ function extractArticlesFromEditionHtml(html: string): Array<{ article_number: s
     if (seen.has(artNum)) continue;
     seen.add(artNum);
 
-    const inlineTitle = match[2]?.trim();
+    // The heading span often holds only «Стаття N.»; the title follows it up to </p>.
+    // Without this every rvts-format edition stored title = null (ЦК ст.625, LEXAI-2200).
+    const trailingTitle = cheerio.load(match[3].split(/<\/p>/i)[0]).text().replace(/\s+/g, ' ').trim();
+    const inlineTitle = match[2]?.trim() || (trailingTitle.length < 200 ? trailingTitle : '');
     let body = match[3];
     const $body = cheerio.load(body);
     $body('script, style').remove();
@@ -401,7 +419,9 @@ async function importEdition(
       await client.query(
         `INSERT INTO legislation_articles (legislation_id, article_number, title, full_text, byte_size, is_current, version_date, metadata)
          VALUES ($1, $2, $3, $4, $5, false, $6, $7)
-         ON CONFLICT (legislation_id, article_number, version_date) DO NOTHING`,
+         ON CONFLICT (legislation_id, article_number, version_date)
+         DO UPDATE SET title = EXCLUDED.title
+           WHERE legislation_articles.title IS NULL AND EXCLUDED.title IS NOT NULL`,
         [legislationId, art.article_number, titleEsc, art.full_text, art.byte_size, versionDate,
          JSON.stringify({ edition_date: editionDate, extraction_method: 'edition_pre_bold' })],
       );
@@ -488,6 +508,9 @@ async function main() {
   const fromArg = args.find(a => a.startsWith('--from='))?.split('=')[1];
   const toArg = args.find(a => a.startsWith('--to='))?.split('=')[1];
   const dryRun = args.includes('--dry-run');
+  // --reimport: also re-parse editions already in the DB. Existing rows keep their text and
+  // only get a missing title filled; articles the old parser dropped are inserted.
+  const reimport = args.includes('--reimport');
 
   // --ids-file: import editions for arbitrary acts by rada_id (one per line),
   // independent of the hardcoded CODES list. short_title defaults to the rada_id.
@@ -502,6 +525,7 @@ async function main() {
     console.log('  --code=ЦК              Import one code');
     console.log('  --codes=ПК,КК,ЗК       Import a specific subset (disjoint split across machines)');
     console.log('  --ids-file=PATH         Import editions for rada_ids listed in a file (one per line)');
+    console.log('  --reimport              Re-parse editions already in the DB (fills dropped articles / null titles)');
     console.log('  --all                   Import all 16 codes');
     console.log('  --resume                Resume from checkpoint');
     console.log('  --from=YYYYMMDD         Start from this edition date');
@@ -594,7 +618,7 @@ async function main() {
       'SELECT edition_key FROM legislation_editions WHERE legislation_id = $1',
       [legislationId],
     );
-    for (const row of dbEditions.rows) alreadyImported.add(row.edition_key);
+    if (!reimport) for (const row of dbEditions.rows) alreadyImported.add(row.edition_key);
 
     const toImport = editionDates.filter(d => !alreadyImported.has(d));
     console.log(`  To import: ${toImport.length} editions (${alreadyImported.size} already done)`);
@@ -670,7 +694,10 @@ async function main() {
   console.log('='.repeat(60));
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+// Importable for tests without starting an import.
+if (process.argv[1] && /import-historical-editions/.test(process.argv[1])) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}
