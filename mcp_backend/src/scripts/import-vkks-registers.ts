@@ -123,7 +123,7 @@ export function parseVacancySheet(sheetName: string, rows: Grid): VacancyRow[] {
   if (h < 0) throw new Error(`vacancies ${sheetName}: no «Гранична» header row`);
   const head = rows[h].map((c) => String(c ?? '').toLowerCase());
   const lim = head.findIndex((c) => /^гранична/.test(c.trim()));
-  const reg = head.findIndex((c) => /регіон/.test(c));
+  const reg = head.findIndex((c) => /^регіон/.test(c.trim())); // «Найменування суду (сортування за регіонами)» also says регіон
   const out: VacancyRow[] = [];
   for (const r of rows.slice(h + 1)) {
     const court_name = str(r[1]);
