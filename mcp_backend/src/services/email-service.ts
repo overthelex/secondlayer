@@ -4,6 +4,10 @@
  */
 
 import nodemailer from 'nodemailer';
+import type { Mail } from 'nodemailer';
+// nodemailer 10 ships its own types (no `nodemailer.*` namespace): SendMailOptions is the
+// first parameter of Mail#sendMail.
+type SendMailOptions = Parameters<Mail['sendMail']>[0];
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.js';
@@ -68,7 +72,7 @@ export type PreferenceFetcher = (userId: string) => Promise<EmailPreferences>;
 export type ReferralDataFetcher = (userId: string) => Promise<ReferralData>;
 
 export class EmailService {
-  private transporter: nodemailer.Transporter;
+  private transporter: Mail;
   private config: EmailConfig;
   private frontendUrl: string;
   private getPreferences?: PreferenceFetcher;
@@ -169,7 +173,7 @@ export class EmailService {
       null,
     );
 
-    const attachments: nodemailer.SendMailOptions['attachments'] = [];
+    const attachments: SendMailOptions['attachments'] = [];
     if (this.logoBuffer) {
       attachments.push({
         filename: 'logolex.png',
@@ -223,7 +227,7 @@ export class EmailService {
 
       const html = this.generatePaymentSuccessTemplate(params, referralData);
 
-      const attachments: nodemailer.SendMailOptions['attachments'] = [];
+      const attachments: SendMailOptions['attachments'] = [];
       if (this.logoBuffer) {
         attachments.push({
           filename: 'logolex.png',
@@ -266,7 +270,7 @@ export class EmailService {
     try {
       const html = this.generateAdminCreditTemplate(params);
 
-      const attachments: nodemailer.SendMailOptions['attachments'] = [];
+      const attachments: SendMailOptions['attachments'] = [];
       if (this.logoBuffer) {
         attachments.push({
           filename: 'logolex.png',
@@ -698,7 +702,7 @@ export class EmailService {
 </body>
 </html>`.trim();
 
-    const attachments: nodemailer.SendMailOptions['attachments'] = [];
+    const attachments: SendMailOptions['attachments'] = [];
     if (this.logoBuffer) {
       attachments.push({
         filename: 'logolex.png',
