@@ -267,6 +267,7 @@ export class VotingService {
       voted_for: 0,
       voted_against: 0,
       abstained: 0,
+      not_voted: 0,
       not_present: 0,
       attendance_rate: 0,
       positions,
@@ -276,11 +277,14 @@ export class VotingService {
       if (pos.vote === 'За') stats.voted_for++;
       else if (pos.vote === 'Проти') stats.voted_against++;
       else if (pos.vote === 'Утримався') stats.abstained++;
-      else if (pos.vote === 'Не голосував' || pos.vote === 'Відсутній') stats.not_present++;
+      else if (pos.vote === 'Не голосував') stats.not_voted++;
+      else if (pos.vote === 'Відсутній') stats.not_present++;
     }
 
-    // Calculate attendance rate (present = voted_for + voted_against + abstained)
-    const present = stats.voted_for + stats.voted_against + stats.abstained;
+    // «Не голосував» means the deputy was registered in the hall and did not press a
+    // button; only «Відсутній» is an absence. Counting both as absent put Железняк's
+    // September-October 2026 attendance at 44% (LEXAI-2149).
+    const present = stats.voted_for + stats.voted_against + stats.abstained + stats.not_voted;
     stats.attendance_rate =
       stats.total_votes > 0 ? (present / stats.total_votes) * 100 : 0;
 
@@ -604,6 +608,7 @@ Only return the JSON array, no additional text.
       voted_for: 0,
       voted_against: 0,
       abstained: 0,
+      not_voted: 0,
       not_present: 0,
       attendance_rate: 0,
       positions: [],
