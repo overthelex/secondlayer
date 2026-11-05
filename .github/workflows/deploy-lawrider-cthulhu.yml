@@ -36,6 +36,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-lawrider-cthulhu
   cancel-in-progress: false

@@ -43,6 +43,9 @@ on:
       - ".github/workflows/deploy-lawrider-uk.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-lawrider-uk
   cancel-in-progress: false
