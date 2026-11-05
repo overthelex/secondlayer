@@ -1306,13 +1306,31 @@ export class EdsrFtsService {
           }
           return `(SELECT f.doc_id, f.adj_year FROM ${fromClause}${extraJoin} WHERE ${legConds.join(' AND ')})`;
         });
-    const candBody = `SELECT legs.doc_id, legs.adj_year FROM (
-            ${legSql.join('\n            UNION ALL\n            ')}
+    const candBodyFrom = (legs: string[]) => `SELECT legs.doc_id, legs.adj_year FROM (
+            ${legs.join('\n            UNION ALL\n            ')}
           ) legs
           LIMIT ${candCap}`;
 
-    const executeQuery = async (withHeadline: boolean) => {
+    // Metadata-first legs (LEXAI-2116). With a common phrase the GIN scan above returns
+    // hundreds of thousands of hits, each joined to edrsr_documents before the court/date
+    // filter can drop it: «стягнення заборгованості» in ВС decisions of Q1 2026 ran past
+    // 90 s although only 44,859 decisions match the metadata. Starting from those decisions
+    // and checking tsv per row (doc_id lookup into the year partition) found 500 matches in
+    // 0.9 s. OFFSET 0 keeps the planner from flattening the subquery back into the GIN plan.
+    // Used only as the retry after a timeout: for a rare term the GIN-first plan is the
+    // fast one, and this one would read every decision the metadata admits.
+    const metadataFirstAvailable = hasMetadataFilter && !partiesPlan && !!whereClause && yearLegs.length > 0;
+    const metadataFirstLegSql = metadataFirstAvailable
+      ? yearLegs.map((leg) => `(SELECT f.doc_id, f.adj_year
+            FROM (SELECT d.doc_id FROM edrsr_documents d${extraJoin}
+                   WHERE ${[whereClause, ...yearLegDocPredicate(leg)].join(' AND ')} OFFSET 0) md
+            JOIN edrsr_fulltext f ON f.doc_id = md.doc_id
+           WHERE ${[...ftsLegConds, yearLegPredicate(leg)].join(' AND ')})`)
+      : [];
+
+    const executeQuery = async (withHeadline: boolean, metadataFirst = false) => {
       const selectFields = buildSelectFields(withHeadline);
+      const candBody = metadataFirst ? candBodyFrom(metadataFirstLegSql) : candBodyFrom(legSql);
 
       // Cap-before-rank (A): a MATERIALIZED CTE pins a bounded candidate set via a cheap
       // GIN-only scan (WHERE tsv @@ q LIMIT cap, no rank/headline), then rank/highlight only
@@ -1353,7 +1371,7 @@ export class EdsrFtsService {
     };
 
     try {
-      let total: number;
+      let total = 0;
       let dataResult: any;
       let timedOut = false;
 
@@ -1365,15 +1383,29 @@ export class EdsrFtsService {
           logger.warn('[EdsrFtsService] Retrying without ts_headline due to encoding error', { query });
           ({ total, dataResult } = await executeQuery(false));
         } else if (headlineErr.code === '57014') {
-          // Statement timeout (B): even the candidate-capped rank blew the budget. Return
-          // empty, flagged timed_out, so the caller can tell it from a genuine no-match
-          // (LEXAI-2087/2085): relaxing a timed-out probe only issues broader, slower ones.
-          logger.warn('[EdsrFtsService] FTS statement timeout; returning empty (timed_out)', {
-            query: cacheKey, timeoutMs: statementTimeoutMs, candidateCap: candCap, party_name: partyName,
-          });
-          timedOut = true;
-          total = 0;
-          dataResult = { rows: [] };
+          // Statement timeout (B): even the candidate-capped rank blew the budget. With
+          // metadata filters, retry once from the metadata side (LEXAI-2116). Otherwise, or
+          // if that also times out, return empty, flagged timed_out, so the caller can tell
+          // it from a genuine no-match (LEXAI-2087/2085): relaxing a timed-out probe only
+          // issues broader, slower ones.
+          let recovered = false;
+          if (metadataFirstAvailable) {
+            try {
+              ({ total, dataResult } = await executeQuery(true, true));
+              recovered = true;
+              logger.info('[EdsrFtsService] FTS timeout recovered by the metadata-first plan', { query: cacheKey });
+            } catch (retryErr: any) {
+              if (retryErr.code !== '57014') throw retryErr;
+            }
+          }
+          if (!recovered) {
+            logger.warn('[EdsrFtsService] FTS statement timeout; returning empty (timed_out)', {
+              query: cacheKey, timeoutMs: statementTimeoutMs, candidateCap: candCap, party_name: partyName,
+            });
+            timedOut = true;
+            total = 0;
+            dataResult = { rows: [] };
+          }
         } else {
           throw headlineErr;
         }
