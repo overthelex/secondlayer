@@ -247,6 +247,33 @@ describe('EdsrFtsService.searchFulltext candidate cap + timeout (LEXAI-2087)', (
     expect(cache.setCachedFtsResults).not.toHaveBeenCalled();
   });
 
+  it('retries a timed-out filtered query from the metadata side (LEXAI-2116)', async () => {
+    const svc = new EdsrFtsService();
+    const sqls: string[] = [];
+    const db = {
+      query: jest.fn((sql: string) => {
+        sqls.push(sql);
+        if (sqls.length === 1) return Promise.reject(Object.assign(new Error('timeout'), { code: '57014' }));
+        return Promise.resolve({ rows: [{ doc_id: '1', rank: 0.5, headline: null, cand_total: 1 }] });
+      }),
+    };
+    const res = await svc.searchFulltext('стягнення заборгованості', db as any,
+      { court_code: 9911, date_from: '2026-01-01', date_to: '2026-03-31' }, 5, 0);
+    expect(res.timed_out).toBeUndefined();
+    expect(res.total).toBe(1);
+    const retry = sqls.find((q) => q.includes('OFFSET 0) md'));
+    expect(retry).toBeDefined();
+    expect(retry).toContain('JOIN edrsr_fulltext f ON f.doc_id = md.doc_id');
+  });
+
+  it('still reports timed_out when there are no metadata filters to start from', async () => {
+    const svc = new EdsrFtsService();
+    const db = { query: jest.fn(() => Promise.reject(Object.assign(new Error('timeout'), { code: '57014' }))) };
+    const res = await svc.searchFulltext('стягнення', db as any, {}, 5, 0);
+    expect(res.timed_out).toBe(true);
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
   it('keys the cache by candidate cap so a capped total never answers an uncapped query', async () => {
     const svc = new EdsrFtsService();
     const keys: string[] = [];
