@@ -160,6 +160,16 @@ export const VALUE_TRANSFORMS: Record<string, (v: any) => any> = {
     return `${m[1]}-${m[2]}-${m[3]}`;
   },
   trim: (v) => (v == null ? null : String(v).trim() || null),
+  /**
+   * JSON list -> PostgreSQL text[] literal for a TEXT[] column ('{"a","b"}'); a scalar becomes a
+   * one-element array. Without it normalizeValue would send '["a"]', which text[] rejects
+   * (ВРП decisions: proceedingId, texts).
+   */
+  pg_text_array: (v) => {
+    if (v == null) return null;
+    const q = (x: any) => (x == null ? 'NULL' : '"' + String(x).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"');
+    return '{' + (Array.isArray(v) ? v : [v]).map(q).join(',') + '}';
+  },
   /** List of strings -> one text, lines joined; [] -> "" (НААУ statusDescription). */
   join: (v) => (v == null ? null : Array.isArray(v) ? v.map(x => String(x ?? '').trim()).filter(Boolean).join('\n') : String(v)),
   /**
