@@ -9,6 +9,7 @@ Output: definitions.jsonl
 """
 
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, asdict
@@ -246,7 +247,7 @@ def main():
     elif use_tunnel:
         db_config = {
             "host": "localhost", "port": 15432,
-            "user": "secondlayer", "password": "1xfXUY8y7DM8Sm1w6T2cmBnNsnzfgnNJ2Ajl1Zl11xc",
+            "user": "secondlayer", "password": os.environ["PGPASSWORD"],
             "dbname": "secondlayer_prod",
         }
         schema = "rada"
