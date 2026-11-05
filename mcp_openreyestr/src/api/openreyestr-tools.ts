@@ -285,10 +285,51 @@ export function formatCourtExpertRow(row: any): Record<string, unknown> {
  * their OPER_DATE is years earlier (LEXAI-2195). It is reported as register_entry_date so
  * nobody reads it as the issue date.
  */
+/**
+ * BLANK_STATE, the only state field the ЄРНБ file has, is «<code> - <label>» and mixes two
+ * things: codes 1–16 name the notarial act the form was used for («7 - Довіреність»),
+ * codes 21–26 are the form's own condition («21 - Зіпсований бланк», «25 - Викрадений
+ * бланк»). The importer stored it as document_type and left status null for every one of
+ * the 4.3M rows, so the status filter never matched (LEXAI-2166).
+ */
+export const SPECIAL_FORM_STATUSES: Record<string, string> = {
+  'використаний': 'використаний',
+  'зіпсований': 'Зіпсований бланк',
+  'анульований': 'Анульований бланк',
+  'дефектний': 'Дефектний бланк',
+  'відсутній': 'Відсутній бланк',
+  'викрадений': 'Викрадений бланк',
+  'втрачений': 'Втрачений бланк',
+};
+
+export function splitBlankState(raw: unknown): { status: string | null; document_type: string | null; document_type_code: number | null } {
+  const text = raw == null ? '' : String(raw).trim();
+  const m = text.match(/^(\d+)\s*-\s*(.+)$/);
+  if (!m) return { status: null, document_type: text || null, document_type_code: null };
+  const code = Number(m[1]);
+  const label = m[2].trim();
+  if (code >= 21) return { status: label.split(/\s+/)[0].toLowerCase(), document_type: null, document_type_code: code };
+  return { status: 'використаний', document_type: label, document_type_code: code };
+}
+
+/** SQL predicate on document_type for a status filter value, or null if the value is unknown. */
+export function specialFormStatusSql(status: string, param: number): { sql: string; value: string } | null {
+  const key = Object.keys(SPECIAL_FORM_STATUSES).find((k) => status.trim().toLowerCase().startsWith(k.slice(0, 6)));
+  if (!key) return null;
+  if (key === 'використаний') return { sql: `document_type ~ $${param}`, value: '^(?:[1-9]|1[0-9]|20)\\s*-' };
+  return { sql: `document_type ILIKE $${param}`, value: `%- ${SPECIAL_FORM_STATUSES[key]}` };
+}
+
 export function formatSpecialFormRow(row: any): Record<string, unknown> {
   const { issue_date, ...rest } = nullSyntheticKeys(row, ['series', 'form_number']) as any;
   if ('usage_date' in rest) rest.usage_date = toIsoDate(rest.usage_date);
   if ('issue_date' in row) rest.register_entry_date = toIsoDate(issue_date);
+  if ('document_type' in rest) {
+    const split = splitBlankState(rest.document_type);
+    rest.status = rest.status ?? split.status;
+    rest.document_type = split.document_type;
+    rest.document_type_code = split.document_type_code;
+  }
   return rest;
 }
 
@@ -1119,8 +1160,12 @@ export class OpenReyestrTools {
       paramIndex++;
     }
     if (status) {
-      conditions.push(`status = $${paramIndex}`);
-      values.push(status);
+      const pred = specialFormStatusSql(status, paramIndex);
+      if (!pred) {
+        return [{ found: false, query: status, message: `Невідомий статус бланка «${status}». Допустимі: ${Object.keys(SPECIAL_FORM_STATUSES).join(', ')}` }];
+      }
+      conditions.push(pred.sql);
+      values.push(pred.value);
       paramIndex++;
     }
     // Legacy gen_N rows duplicate a row keyed by the real SR/NUM (LEXAI-2129).

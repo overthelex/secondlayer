@@ -263,7 +263,7 @@ usage_date — дата операції з бланком; register_entry_date 
             series: { type: 'string', description: 'Серія бланка' },
             form_number: { type: 'string', description: 'Номер бланка' },
             recipient: { type: 'string', description: "Ім'я отримувача" },
-            status: { type: 'string', description: 'Статус бланка' },
+            status: { type: 'string', description: 'Статус бланка: використаний, зіпсований, анульований, дефектний, відсутній, викрадений, втрачений' },
             limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
             offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
           },
