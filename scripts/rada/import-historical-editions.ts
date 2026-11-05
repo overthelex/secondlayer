@@ -219,12 +219,18 @@ function getCodeProgress(progress: OverallProgress, radaId: string, shortTitle: 
  * The heading regex then read «1056», collided with the real article 1056 and the indexed
  * one was dropped, so every ЦК edition from 2014 to 2026 held no 50-1, 1056-1, ... at all
  * (LEXAI-2200). Fold it back into «Стаття 1056-1.» before parsing.
+ *
+ * Other acts leave the dot as plain text after the index, with no span to absorb:
+ *   Стаття 5</span><span class=rvts37><span style="font-size:0px">-</span>1</span>. Використання…</p>
+ * (Закон про Національну поліцію 580-19: 105 of 110 articles, none of the 5 indexed ones).
+ * There the folded heading has to be closed again, or the heading regex, which wants
+ * «Стаття N.</span>», never matches it.
  */
 export function foldIndexedArticleHeadings(html: string): string {
-  return html.replace(
-    /(Стаття\s+\d+)\s*<\/span>\s*<span\b[^>]*>\s*<span\s+style=["']?font-size:\s*0(?:px)?["']?\s*>\s*[-–—]\s*<\/span>\s*(\d+)\s*<\/span>\s*<span\b[^>]*>/g,
-    '$1-$2',
-  );
+  const index = String.raw`(Стаття\s+\d+)\s*<\/span>\s*<span\b[^>]*>\s*<span\s+style=["']?font-size:\s*0(?:px)?["']?\s*>\s*[-–—]\s*<\/span>\s*(\d+)\s*<\/span>`;
+  return html
+    .replace(new RegExp(index + String.raw`\s*<span\b[^>]*>`, 'g'), '$1-$2')
+    .replace(new RegExp(index + String.raw`(\s*\.)?`, 'g'), '$1-$2.</span>');
 }
 
 export function extractArticlesFromEditionHtml(rawHtml: string): Array<{ article_number: string; title?: string; full_text: string; byte_size: number }> {
