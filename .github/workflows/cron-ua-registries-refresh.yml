@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: 'Run one job: stenograms | judges | securities (empty = all)'
+        description: 'Run one job: stenograms | judges | vkks | securities (empty = all)'
         required: false
         type: string
 
@@ -78,6 +78,47 @@ jobs:
           export POSTGRES_PASSWORD="$(g POSTGRES_PASSWORD)"
           echo "::add-mask::$POSTGRES_PASSWORD"
           node load-judges-vkks.js --latest-only --concurrency=2
+
+  vkks:
+    if: ${{ !inputs.only || inputs.only == 'vkks' }}
+    name: VKKS registers (judges, vacancies, evaluations)
+    runs-on: [self-hosted, cthulhu]
+    timeout-minutes: 30
+    steps:
+      - name: Download newest XLSX and import
+        run: |
+          set -euo pipefail
+          C=$(docker ps --format '{{.Names}}' | grep -E '^secondlayer-app-local(-blue|-green)?$' | head -1)
+          [ -n "$C" ] || { echo "::error::no running secondlayer-app-local container"; exit 1; }
+          D="$RUNNER_TEMP/vkks"
+          rm -rf "$D"; mkdir -p "$D/evaluations"
+          # newest resource of a dataset, or newest whose name matches a pattern
+          pick() {
+            curl -sf --retry 3 --max-time 120 "https://data.gov.ua/api/3/action/package_show?id=$1" \
+              | python3 -c '
+          import json, re, sys
+          pat = re.compile(sys.argv[1], re.I)
+          rs = [r for r in json.load(sys.stdin)["result"]["resources"]
+                if pat.search(r.get("name") or "") and (r.get("format") or "").lower().find("xls") >= 0]
+          rs.sort(key=lambda r: r.get("last_modified") or r.get("created") or "")
+          print(rs[-1]["url"] if rs else "")
+          ' "$2"
+          }
+          get() { [ -n "$1" ] || { echo "::error::no resource for $2"; exit 1; }; curl -sf --retry 3 --max-time 600 -o "$2" "$1"; }
+          get "$(pick 9338e3fb-41a1-486d-a9b1-c49a0a4f7e4a .)" "$D/judges.xlsx"
+          get "$(pick f37f5de5-8892-4525-808f-ff3a9475efe2 .)" "$D/vacancies.xlsx"
+          EV=7fd5f184-eb9a-4837-9954-05d183b1d7df
+          get "$(pick $EV 'первинн')" "$D/evaluations/primary.xlsx"
+          get "$(pick $EV 'відповідність займан')" "$D/evaluations/regular.xlsx"
+          u=$(pick $EV 'дисциплінарн'); [ -n "$u" ] && get "$u" "$D/evaluations/disciplinary.xlsx"
+          ls -laR "$D"
+          docker exec "$C" rm -rf /tmp/vkks
+          docker cp "$D" "$C:/tmp/vkks"
+          docker exec "$C" node dist/scripts/import-vkks-registers.js judges /tmp/vkks/judges.xlsx
+          docker exec "$C" node dist/scripts/import-vkks-registers.js vacancies /tmp/vkks/vacancies.xlsx
+          docker exec "$C" node dist/scripts/import-vkks-registers.js evaluations /tmp/vkks/evaluations
+          docker exec "$C" rm -rf /tmp/vkks
+          rm -rf "$D"
 
   securities:
     if: ${{ !inputs.only || inputs.only == 'securities' }}
