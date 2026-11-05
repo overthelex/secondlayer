@@ -513,6 +513,14 @@ async function reconcileCurrentEdition(pool: pg.Pool, legislationId: number): Pr
         WHERE legislation_id = $1 AND version_date = $2 AND is_current = false`,
       [legislationId, currentVersion],
     );
+    // total_articles is what get_legislation_structure reports; keep it equal
+    // to the current redaction (580-19 said 128 while the current edition has 110).
+    await client.query(
+      `UPDATE legislation SET total_articles = (
+         SELECT COUNT(*) FROM legislation_articles WHERE legislation_id = $1 AND is_current = true
+       ) WHERE id = $1`,
+      [legislationId],
+    );
     await client.query('COMMIT');
     const d = new Date(currentVersion).toISOString().slice(0, 10);
     console.log(`  Flagged current redaction ${d}: ${res.rowCount} articles is_current=true`);
