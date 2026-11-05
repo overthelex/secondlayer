@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.js';
 import { gatedRegistryOf, checkJudgmentAccess, logJudgmentAccess, judgmentFiltersOf, markJudgmentAccessGranted } from '../services/uk-judgment-access.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { checkToolAccess, isAdminUser, scopeVaultArgs } from '../api/tool-access-policy.js';
+import { createClientKeyGuard } from '../middleware/client-key-guard.js';
 import { callerFromHeaders, logMcpAccess } from '../services/mcp-access-log.js';
 import { requestContext } from '../utils/openai-client.js';
 import { ToolRegistry } from '../api/tool-registry.js';
@@ -363,7 +364,7 @@ export function createToolExecutionRoutes(deps: {
     next();
   }) as any;
 
-  router.get('/', dualAuth as any, (async (_req: DualAuthRequest, res: Response) => {
+  router.get('/', dualAuth as any, createClientKeyGuard(deps.db) as any, (async (_req: DualAuthRequest, res: Response) => {
     try {
       const gatewayEnabled = process.env.ENABLE_UNIFIED_GATEWAY === 'true';
 

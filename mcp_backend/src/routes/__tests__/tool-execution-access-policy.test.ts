@@ -73,6 +73,15 @@ describe('/api/tools access policy', () => {
     expect(accessLogOutcomes()).toEqual(['endpoint_denied']);
   });
 
+  it('refuses the tool catalogue to a client API key', async () => {
+    authAs = CLIENT_KEY;
+    const { app, accessLogOutcomes } = makeApp();
+    const res = await request(app).get('/api/tools');
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('API_KEY_V2_ONLY');
+    expect(accessLogOutcomes()).toEqual(['endpoint_denied']);
+  });
+
   it('refuses an operator tool to a web user, including inside a batch', async () => {
     authAs = WEB_USER;
     const { app, executeTool, accessLogOutcomes } = makeApp();
