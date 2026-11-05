@@ -73,7 +73,7 @@ def resolve_host(host):
 
 
 # --- Stats ---
-stats = {"downloaded": 0, "skipped": 0, "failed": 0, "documents": 0, "truncated": 0, "requests": 0}
+stats = {"downloaded": 0, "skipped": 0, "failed": 0, "documents": 0, "truncated": 0, "requests": 0, "split_days": 0}
 stats_lock = Lock()
 skip_truncated_mode = False
 truncated_log_lock = Lock()
