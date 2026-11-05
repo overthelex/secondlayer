@@ -173,6 +173,18 @@ const STRIP_CHROME_SQL = `CASE
   END`;
 
 /** Cosmetic same-strip for snippets, where the match can land inside the chrome block. */
+/**
+ * An article body in npa.article runs up to the next article, so when a division
+ * heading («VII.», «Розділ VII») follows the last article of a part, its number stays
+ * glued to the end of that article: 2857-17 ст. 34 ended in «… від 07.04.2011 } VII.»
+ * (LEXAI-2132). Drop a bare trailing roman numeral, optionally after «Розділ», when it
+ * follows the end of a sentence, an amendment note or a bracket. A roman numeral inside
+ * the text («розділ VII цього Закону») is never at the very end after such a mark.
+ */
+export function stripTrailingDivisionNumber(text: string): string {
+  return text.replace(/([.;:}\)»])\s+(?:Розділ\s+)?[IVXLCDM]{1,7}\.?\s*$/u, '$1');
+}
+
 function stripChrome(text: string | null | undefined): string {
   const s = String(text ?? '');
   const i = s.indexOf('mouse wheel');
@@ -706,7 +718,9 @@ export class NpaTools extends BaseToolHandler {
             ...(kin.length > 0 ? { related_articles: kin } : {}),
           });
         }
-        return this.wrapResponse({ ...base, article: rows[0] });
+        const article = { ...rows[0], full_text: stripTrailingDivisionNumber(String(rows[0].full_text || '')) };
+        article.char_len = article.full_text.length;
+        return this.wrapResponse({ ...base, article });
       }
 
       if (mode === 'text') {
