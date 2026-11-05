@@ -414,7 +414,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
 
   wage_debtors: {
     title: 'Боржники із зарплати',
-    description: 'Пошук боржників із заробітної плати\n\n1.3K записів. Пошук за назвою підприємства, регіоном, формою власності, видом діяльності.',
+    description: 'Пошук боржників із заробітної плати\n\n1.3K записів. Пошук за назвою підприємства, регіоном (напр. «Донецька область», «м. Київ»), формою власності, видом діяльності.\n⚠️ Єдиний знімок станом на 25.02.2019: набір Мінсоцполітики більше не оновлюється.',
     table: 'opendata_wage_debtors',
     selectColumns: 'id, region, company_name, ownership_form, economic_activity, debt_2018_01, debt_2019_01, debt_2019_02_25, debt_reason',
     orderBy: 'company_name',
