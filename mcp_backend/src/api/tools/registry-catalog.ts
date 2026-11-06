@@ -78,6 +78,23 @@ export interface RegistryDef {
   notices?: Record<string, string>;
 }
 
+// opendata_advocates keeps contacts inside jsonb. These expressions flatten them
+// for the `lawyers` registry (select list, filters and aggregate GROUP BY alike).
+const ADVOCATE_STATUS_SQL =
+  "(CASE WHEN status = 'TRUE' AND status_description ILIKE '%припинен%' THEN 'terminated' " +
+  "WHEN status = 'TRUE' THEN 'suspended' ELSE 'active' END)";
+const ADVOCATE_PHONE_SQL =
+  "COALESCE(NULLIF(TRIM(work_address->0->>'workAddressContacts'), ''), " +
+  "(SELECT NULLIF(TRIM(o->>'orgFormContacts'), '') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(org_forms) = 'array' THEN org_forms ELSE '[]'::jsonb END) o " +
+  "WHERE NULLIF(TRIM(o->>'orgFormContacts'), '') IS NOT NULL LIMIT 1))";
+const ADVOCATE_ADDRESS_SQL =
+  "NULLIF(CONCAT_WS(', ', NULLIF(work_address->0->>'workAddressPostCode', ''), " +
+  "NULLIF(work_address->0->>'workAddressRegion', ''), NULLIF(work_address->0->>'workAddressDistrict', ''), " +
+  "NULLIF(work_address->0->>'workAddressCity', ''), " +
+  "NULLIF(CONCAT_WS(' ', NULLIF(work_address->0->>'workAddressStreetType', ''), NULLIF(work_address->0->>'workAddressStreetName', '')), ''), " +
+  "NULLIF(CONCAT_WS(' ', NULLIF(work_address->0->>'workAddressHouseNum', ''), NULLIF(work_address->0->>'workAddressExtNum', '')), ''), " +
+  "NULLIF(CONCAT_WS(' ', NULLIF(work_address->0->>'workAddressAptType', ''), NULLIF(work_address->0->>'workAddressAptNum', '')), '')), '')";
+
 export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
 
   // ── opendata-registries-tools.ts ──────────────────────────────────
@@ -320,19 +337,38 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     ],
   },
 
+  // Backed by opendata_advocates (NAAU register via data.gov.ua, refreshed by
+  // opendata-sync). The older opendata_lawyers copy has no phone numbers and an
+  // empty work_address, so contacts are flattened here from the jsonb columns.
+  // Current standing comes from the registry's own `status` flag ('TRUE' = right
+  // to practise suspended or terminated); status_description is a history log
+  // and may mention an old suspension for an advocate who has since been reinstated.
   lawyers: {
     title: 'Реєстр адвокатів',
-    description: 'Пошук у Єдиному реєстрі адвокатів України\n\n73K записів. Пошук за прізвищем, радою адвокатів, статусом, номером свідоцтва.',
-    table: 'opendata_lawyers',
-    selectColumns: 'lawyer_id, last_name, first_name, patronymic, ra_name, certificate_num, certificate_date, decision_num, decision_date, authority_name, email, status, status_description, work_address, org_forms',
-    orderBy: 'last_name, first_name',
+    description: 'Пошук у Єдиному реєстрі адвокатів України (НААУ)\n\n74K записів. Пошук за прізвищем, містом, областю, радою адвокатів, статусом, номером свідоцтва, телефоном.\nУ результатах: телефон, email, робоча адреса, адвокатське бюро/об\'єднання, статус (active / suspended / terminated).',
+    table: 'opendata_advocates',
+    selectColumns: `source_id AS lawyer_id, family_name AS last_name, name AS first_name, additional_name AS patronymic,
+      ${ADVOCATE_STATUS_SQL} AS status, NULLIF(status_description, '') AS status_description,
+      NULLIF(email, '') AS email,
+      ${ADVOCATE_PHONE_SQL} AS phone,
+      ${ADVOCATE_ADDRESS_SQL} AS work_address,
+      work_address->0->>'workAddressCity' AS city, work_address->0->>'workAddressRegion' AS region, work_address->0->>'workAddressPostCode' AS post_code,
+      (SELECT string_agg(CONCAT_WS(' ', NULLIF(o->>'orgFormType', ''), NULLIF(o->>'orgFormName', '')), '; ') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(org_forms) = 'array' THEN org_forms ELSE '[]'::jsonb END) o) AS org_forms,
+      ra_name, certificate_num, certificate_date, decision_num, decision_date, authority_name`,
+    orderBy: 'family_name, name, additional_name',
     emptyMessage: 'Адвокатів не знайдено',
     fields: [
-      { name: 'last_name', description: 'Прізвище адвоката', match: 'ilike', columns: ['last_name'] },
-      { name: 'first_name', description: "Ім'я адвоката", match: 'ilike', columns: ['first_name'] },
+      { name: 'last_name', description: 'Прізвище адвоката', match: 'ilike', columns: ['family_name'] },
+      { name: 'first_name', description: "Ім'я адвоката", match: 'ilike', columns: ['name'] },
+      { name: 'patronymic', description: 'По батькові', match: 'ilike', columns: ['additional_name'] },
+      { name: 'city', description: 'Місто робочої адреси (наприклад, Київ, Львів)', match: 'ilike', columns: ["(work_address->0->>'workAddressCity')"] },
+      { name: 'region', description: 'Область робочої адреси (наприклад, Одеська)', match: 'ilike', columns: ["(work_address->0->>'workAddressRegion')"] },
       { name: 'ra_name', description: 'Назва ради адвокатів регіону', match: 'ilike', columns: ['ra_name'] },
-      { name: 'status', description: 'Статус (діє, зупинено, припинено)', match: 'ilike', columns: ['status'] },
+      { name: 'status', description: 'Статус: active (діє), suspended (право зупинено), terminated (право припинено)', match: 'exact_ci', columns: [ADVOCATE_STATUS_SQL] },
       { name: 'certificate_num', description: 'Номер свідоцтва', match: 'exact', columns: ['certificate_num'] },
+      { name: 'phone', description: 'Телефон або його частина (цифри як у реєстрі: +38(0XX)XXX-XX-XX)', match: 'ilike', columns: [ADVOCATE_PHONE_SQL] },
+      { name: 'email', description: 'Email або його частина', match: 'ilike', columns: ['email'] },
+      { name: 'org_name', description: 'Назва адвокатського бюро / об\'єднання', match: 'ilike_cast', columns: ['org_forms'] },
     ],
   },
 

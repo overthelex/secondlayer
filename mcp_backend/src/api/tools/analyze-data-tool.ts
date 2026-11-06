@@ -19,7 +19,7 @@ const ALLOWED_TABLES: Set<string> = new Set([
   // Open data registries
   'opendata_public_organizations', 'opendata_missing_persons', 'opendata_wanted_persons',
   'opendata_wanted_vehicles', 'opendata_court_experts', 'opendata_vat_payers',
-  'opendata_securities_owners', 'opendata_corruption', 'opendata_lawyers',
+  'opendata_securities_owners', 'opendata_corruption', 'opendata_lawyers', 'opendata_advocates',
   'opendata_declaration_checks', 'opendata_wage_debtors', 'opendata_large_taxpayers',
   'opendata_trademarks', 'opendata_patents', 'opendata_vehicle_registrations',
   'opendata_lustration', 'opendata_state_aid', 'opendata_financial_statements',
