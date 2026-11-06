@@ -21,6 +21,7 @@ import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { V2_TOOL_NAMES } from '../api/curated-mcp-tools.js';
 import { checkToolAccess, isAdminUser, scopeVaultArgs } from '../api/tool-access-policy.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
+import { executePrivateTool, isPrivateToolName, privateToolDefinitionsFor } from '../api/private-tools/index.js';
 import { ChatService } from '../services/chat-service.js';
 import { OAuthService } from '../services/oauth-service.js';
 import { ApiKeyService } from '../services/api-key-service.js';
@@ -310,7 +311,10 @@ export function createMCPSSERoutes(deps: {
       }
       // The missing-tools warning above intentionally runs against the full registry:
       // the toolset gate hides tools from this deployment, it does not make them missing.
-      return { tools: filterToolsByToolset(tools) };
+      // Private toolsets (api/private-tools): only for accounts holding a grant, never via
+      // the registry, so no other door lists them. Not subject to the toolset/v2 filters.
+      const privateTools = await privateToolDefinitionsFor(deps.db, userId);
+      return { tools: [...filterToolsByToolset(tools), ...privateTools] };
     });
 
     mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -359,6 +363,29 @@ export function createMCPSSERoutes(deps: {
           userId, apiKeyId: opts?.apiKeyId, token: opts?.apiKey, mcpSessionId: extra?.sessionId,
           caller, detail: `${toolName}: ${detail}`,
         });
+
+        // Private toolsets: answered here and nowhere else (they are not in the registry).
+        // No grant → the same reply as an unknown tool, so their existence is not leaked.
+        // Free of charge; per-account call limits still apply.
+        if (isPrivateToolName(toolName)) {
+          if (userId) {
+            const limit = await acquireMcpCall(deps.db, userId, toolName, args as Record<string, any>);
+            if (!limit.allowed) {
+              return { content: [{ type: 'text', text: limit.message }], isError: true };
+            }
+            releaseLimit = limit.release;
+          }
+          const privateResult = await executePrivateTool(deps.db, userId, toolName, args as Record<string, any>);
+          if (!privateResult) {
+            denied('private tool without grant');
+            return {
+              content: [{ type: 'text', text: `Error: tool '${toolName}' is not available on this endpoint.` }],
+              isError: true,
+            };
+          }
+          logger.info('[MCP] Private tool served', { tool: toolName, userId: safeUserId, ms: Date.now() - startTime });
+          return privateResult as any;
+        }
 
         // Enforce the deployment toolset in code (not just tools/list): a client must not
         // be able to call a tool outside this deployment's jurisdiction by name.
