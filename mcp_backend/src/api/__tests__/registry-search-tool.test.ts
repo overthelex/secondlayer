@@ -111,6 +111,28 @@ describe('RegistrySearchTool', () => {
       expect(calls[1].sql).toContain('COUNT(*)');
     });
 
+    it('lawyers: reads opendata_advocates and flattens phone/address/status', async () => {
+      db = makeDb(() => ({ rows: [{ last_name: 'Коробка', phone: '+38(067)898-81-27', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'lawyers',
+        filters: { last_name: 'Коробка', city: 'Харків', status: 'active' },
+      });
+
+      expect(calls).toHaveLength(2);
+      expect(calls[0].sql).toContain('FROM opendata_advocates');
+      expect(calls[0].sql).not.toContain('opendata_lawyers');
+      expect(calls[0].sql).toContain('AS phone');
+      expect(calls[0].sql).toContain('AS work_address');
+      expect(calls[0].sql).toContain("family_name ILIKE");
+      expect(calls[0].sql).toContain("work_address->0->>'workAddressCity'");
+      // status is a derived CASE expression matched case-insensitively, never a substring
+      expect(calls[0].sql).toContain("THEN 'terminated'");
+      expect(calls[0].params).toEqual(['%Коробка%', '%Харків%', 'active', 50]);
+      expect(calls[1].sql).toContain('FROM opendata_advocates');
+    });
+
     it('exact: uses = operator without wrapping', async () => {
       db = makeDb(() => ({ rows: [{ edrpou: '12345678', _total_count: 1 }] }));
       tool = new RegistrySearchTool(db);
