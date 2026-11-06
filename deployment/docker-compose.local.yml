@@ -138,6 +138,7 @@ x-app-local-base: &app_local_base
 
     # Upload temp directory
     UPLOAD_TEMP_DIR: /app/data/uploads
+    GORENICHI_DOCS_ROOT: /data/gorenichi
 
     # Vision/OCR credentials
     VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
@@ -193,6 +194,9 @@ x-app-local-base: &app_local_base
     - app_local_data:/app/data
     # Vision API credentials for OCR
     - ../vision-ocr-credentials.json:/app/credentials/vision-credentials.json:ro
+    # Private document archive for the `gorenichi_*` MCP tools (api/private-tools),
+    # read-only. Visible only to accounts with a row in private_tool_grants.
+    - ${GORENICHI_DOCS_DIR:-/mnt/bulk_storage/GORENICHI}:/data/gorenichi:ro
 
   healthcheck:
     test:
