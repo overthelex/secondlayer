@@ -90,6 +90,38 @@ def teryt(button):
     return fetch
 
 
+def patent_attorneys():
+    """UPRP register of patent attorneys (rzecznicy.uprp.gov.pl), a paged HTML
+    table. Returns (rows, url, label, bytes-for-hash)."""
+    import html as _html
+    base = "https://rzecznicy.uprp.gov.pl/attorneys"
+    s = requests.Session()
+    s.headers["User-Agent"] = UA
+    rows, hdr, raw, page = [], None, [], 1
+    while True:
+        t = s.get(base, params={"per_page": 200, "sort": "registration_number",
+                                "dir": "asc", "page": page}, timeout=120).text
+        trs = re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S)
+        cells = [[re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", c))).strip()
+                  for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S)]
+                 for tr in trs]
+        if hdr is None and cells:
+            hdr = cells[0]
+        body = [c for c in cells[1:] if c and c != hdr]
+        if not body:
+            break
+        for c in body:
+            rec = {h: v for h, v in zip(hdr, c) if h and v and v != "\u2014"}
+            if rec:
+                rows.append(("", len(rows) + 1, rec))
+        raw.append(t)
+        page += 1
+        if page > 200:
+            raise RuntimeError("patent attorneys: more than 200 pages, stopping")
+    blob = json.dumps([r[2] for r in rows], ensure_ascii=False, sort_keys=True).encode()
+    return rows, base, f"{len(rows)} entries", blob
+
+
 SOURCES = {
     "komornicy":      {"resolve": lambda: dane_latest(927), "kind": "xlsx"},
     "sady_teleadres": {"resolve": lambda: dane_latest(985, r"teleadres"), "kind": "xlsx"},
@@ -99,6 +131,7 @@ SOURCES = {
                                            "gov.pl wykaz prac legislacyjnych RM"),
                        "kind": "csv"},
     "mswia_sankcje":  {"resolve": mswia_sanctions, "kind": "xlsx"},
+    "rzecznicy_patentowi": {"fetch_rows": patent_attorneys, "kind": "json"},
     "teryt_terc":     {"fetch": teryt("BTERCUrzedowyPobierz"), "kind": "csv"},
     "teryt_simc":     {"fetch": teryt("BSIMCUrzedowyPobierz"), "kind": "csv"},
     "teryt_ulic":     {"fetch": teryt("BULICUrzedowyPobierz"), "kind": "csv"},
@@ -148,7 +181,10 @@ def rows_csv(blob):
 
 
 def load(name, cfg, raw_dir, force):
-    if "fetch" in cfg:
+    parsed = None
+    if "fetch_rows" in cfg:
+        parsed, url, label, blob = cfg["fetch_rows"]()
+    elif "fetch" in cfg:
         blob, url, label = cfg["fetch"]()
     else:
         url, label = cfg["resolve"]()
@@ -164,7 +200,12 @@ def load(name, cfg, raw_dir, force):
     with open(os.path.join(raw_dir, f"{name}-{sha[:12]}.{ext}"), "wb") as f:
         f.write(blob)
 
-    rows = rows_xlsx(blob, cfg.get("header")) if ext == "xlsx" else rows_csv(blob)
+    if parsed is not None:
+        rows = parsed
+    elif ext == "xlsx":
+        rows = rows_xlsx(blob, cfg.get("header"))
+    else:
+        rows = rows_csv(blob)
     if not rows:
         raise RuntimeError(f"{name}: parsed 0 rows from {url}")
 
