@@ -176,7 +176,7 @@ def main():
         rows = [row_from_item(it, divisions) for it in new]
         if rows and not args.dry_run:
             with conn.cursor() as cur:
-                psycopg2.extras.execute_values(cur, INSERT, rows, page_size=100)
+                psycopg2.extras.execute_values(cur, INSERT, rows, page_size=max(len(rows), 1))
                 n = cur.rowcount
             conn.commit()
             inserted += max(n, 0)

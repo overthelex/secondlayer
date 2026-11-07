@@ -231,7 +231,8 @@ def main():
             ))
         if rows and not args.dry_run:
             with conn.cursor() as cur:
-                psycopg2.extras.execute_values(cur, INSERT, rows, page_size=50)
+                # one batch, so rowcount covers every row (it only reports the last batch)
+                psycopg2.extras.execute_values(cur, INSERT, rows, page_size=max(len(rows), 1))
                 n = max(cur.rowcount, 0)
             conn.commit()
             inserted += n
