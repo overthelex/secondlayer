@@ -109,6 +109,13 @@ def row(kind, term, key, title, changed, payload, path):
 
 
 def write(rows):
+    # Some lists repeat a key (proceedings carries more than one entry per
+    # number). One upsert batch cannot touch a row twice, so keep the last.
+    uniq = {(r[0], r[1], r[2]): r for r in rows}
+    if len(uniq) != len(rows):
+        print(f"  {len(rows) - len(uniq)} duplicate keys in {rows[0][0]} "
+              f"term {rows[0][1]}, kept the last", flush=True)
+    rows = list(uniq.values())
     if rows:
         plprod.upsert_rows("pl_sejm_objects", COLS, rows, ["kind", "term", "key"],
                            prefer_new=False)
@@ -192,7 +199,10 @@ def run_term(term, kinds):
         simple_list("print", term, "prints", lambda i: i["number"],
                     lambda i: i.get("title"), lambda i: i.get("changeDate"))
     if "proceeding" in kinds:
-        simple_list("proceeding", term, "proceedings", lambda i: i["number"],
+        # number 0 is shared by every assembly and planned sitting (20 of them
+        # in term 10), so those are keyed by their first date instead.
+        simple_list("proceeding", term, "proceedings",
+                    lambda i: i["number"] or f"0/{(i.get('dates') or ['?'])[0]}",
                     lambda i: i.get("title"))
     if "bill" in kinds:
         simple_list("bill", term, "bills", lambda i: i["number"],
