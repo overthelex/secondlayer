@@ -87,13 +87,16 @@ test('GET /advocates with a session renders the table with filters and rows', as
   pool.on((t) => (t.includes('SELECT DISTINCT') ? [{ v: 'Київ' }] : undefined));
   pool.on((t) =>
     t.includes('FROM opendata_advocates a') && t.includes('LIMIT 50')
-      ? [{ source_id: '42', family_name: 'Коваль', first_name: 'Іван', patronymic: 'Петрович', status: 'active', phone: '+38(044)1', email: 'k@x', city: 'Київ', region: 'м. Київ', org_forms: 'АО К', ra_name: 'РА Києва', certificate_num: '1/1', certificate_date: new Date('2010-01-01'), stage: 'interested', next_contact_at: null, manual_practices: ['ДТП'], last_contact: null, kind_cases: 5, kind_summary: '2:5' }]
+      ? [{ source_id: '42', family_name: 'Коваль', first_name: 'Іван', patronymic: 'Петрович', status: 'active', phone: '+38(044)1, +38(044)1', email: 'k@x', city: 'Київ', region: 'м. Київ', org_forms: 'АО К', ra_name: 'РА Києва', certificate_num: '1/1', certificate_date: new Date('2010-01-01'), stage: 'interested', next_contact_at: null, manual_practices: ['ДТП'], last_contact: null, kind_cases: 5, kind_summary: '2:5' }]
       : undefined,
   );
   const res = await request(appWith(pool)).get('/advocates?justice_kind=2&sort=cases').set('Cookie', 'acrm_session=tok');
   expect(res.status).toBe(200);
   expect(res.text).toContain('Коваль Іван Петрович');
   expect(res.text).toContain('href="/advocates/42"');
+  // two identical phones in the registry string collapse to one tel: link
+  expect(res.text.match(/href="tel:\+380441"/g)).toHaveLength(1);
+  expect(res.text).toContain('href="mailto:k@x"');
   expect(res.text).toContain('Кримінальне · 5');
   expect(res.text).toContain('chip chip--manual');
   expect(res.text).toContain('Зацікавлений');

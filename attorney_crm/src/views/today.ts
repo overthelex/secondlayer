@@ -1,5 +1,6 @@
 import { html } from './html';
 import { renderPage } from './layout';
+import { phoneList } from './contacts';
 import { fmtDate, fmtDateTime, stageChip } from './advocates';
 import type { DueRow, NoteWithAdvocate } from '../leads/repo';
 import { NOTE_KIND_LABELS } from '../practices';
@@ -18,7 +19,7 @@ export function renderTodayPage(d: { due: DueRow[]; notes: NoteWithAdvocate[]; u
   (r) => html`<tr>
   <td class="nowrap ${r.overdue ? 'overdue' : ''}">${fmtDate(r.nextContactAt)}${r.overdue ? ' · прострочено' : ''}</td>
   <td><a href="/advocates/${r.sourceId}">${r.fullName}</a></td>
-  <td>${r.city ?? ''}</td><td class="nowrap">${r.phone ?? ''}</td>
+  <td>${r.city ?? ''}</td><td class="stack">${phoneList(r.phone)}</td>
   <td>${stageChip(r.stage)}</td>
   <td>${r.lastNote ? html`<small class="muted">${fmtDate(r.lastNoteAt)}</small> ${r.lastNote.length > 140 ? r.lastNote.slice(0, 140) + '…' : r.lastNote}` : ''}</td>
 </tr>`,

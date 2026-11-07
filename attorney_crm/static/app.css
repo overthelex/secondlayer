@@ -23,7 +23,7 @@ small, .muted { color: var(--muted); }
 .nav-link.active { background: rgba(255,255,255,.14); color: #fff; }
 .user { margin-left: auto; display: flex; align-items: center; gap: 12px; color: #d4dbe3; }
 
-.page { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+.page { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
 .page-narrow { max-width: 420px; padding-top: 10vh; }
 .card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
 .login { text-align: center; }
@@ -53,7 +53,8 @@ small, .muted { color: var(--muted); }
 
 .table-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
 table.data { border-collapse: collapse; width: 100%; font-size: 13px; }
-table.data th, table.data td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+table.data th, table.data td { padding: 7px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+table.data th.num { text-align: right; }
 table.data thead th { position: sticky; top: 0; background: var(--panel); font-weight: 600; white-space: nowrap; z-index: 1; }
 table.data tbody tr:nth-child(even) { background: #FCFCFC; }
 table.data tbody tr:hover { background: #F4F7FA; }
@@ -62,6 +63,18 @@ table.data th a.sorted::after { content: ' ▾'; color: var(--accent); }
 table.data th a.sorted.asc::after { content: ' ▴'; }
 td.num { text-align: right; white-space: nowrap; }
 td.nowrap { white-space: nowrap; }
+.stack .contact, .stack .line, .sub, .line { display: block; }
+.stack .contact { white-space: nowrap; }
+.sub { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.col-name { min-width: 180px; }
+.col-name strong { font-weight: 600; }
+.col-contacts { width: 1%; }
+.col-org { max-width: 240px; }
+.col-cert { white-space: nowrap; }
+.col-practices { max-width: 280px; }
+.col-practices .chip { margin-bottom: 3px; }
+.col-dates { white-space: nowrap; }
+table.data td:empty::after { content: '—'; color: var(--border); }
 
 .chip { display: inline-block; padding: 1px 8px; margin: 1px 4px 1px 0; border-radius: 999px; font-size: 12px; background: #E8EEF4; color: var(--brand); white-space: nowrap; }
 .chip--manual { background: transparent; border: 1px solid var(--accent); color: var(--accent); }

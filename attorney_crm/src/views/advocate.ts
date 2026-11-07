@@ -1,6 +1,7 @@
 import { html } from './html';
 import { renderPage } from './layout';
 import { fmtDate, fmtDateTime, isOverdue, practiceChips, stageChip } from './advocates';
+import { emailList, orgList, phoneList } from './contacts';
 import type { AdvocateRow, PracticeProfile } from '../advocates/repo';
 import type { Lead, NoteWithAuthor } from '../leads/repo';
 import { NAAU_PRACTICES, NOTE_KINDS, NOTE_KIND_LABELS, STAGES, STAGE_LABELS } from '../practices';
@@ -25,11 +26,11 @@ ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
   <section class="card section">
     <h2>Реєстр НААУ</h2>
     <dl class="props">
-      <dt>Телефон</dt><dd>${a.phone ?? '—'}</dd>
-      <dt>E-mail</dt><dd>${a.email ? html`<a href="mailto:${a.email}">${a.email}</a>` : '—'}</dd>
+      <dt>Телефон</dt><dd class="stack">${a.phone ? phoneList(a.phone) : '—'}</dd>
+      <dt>E-mail</dt><dd class="stack">${a.email ? emailList(a.email) : '—'}</dd>
       <dt>Адреса</dt><dd>${a.workAddress ?? '—'}</dd>
       <dt>Місто / область</dt><dd>${[a.city, a.region].filter(Boolean).join(', ') || '—'}</dd>
-      <dt>Бюро / об'єднання</dt><dd>${a.orgForms ?? '—'}</dd>
+      <dt>Бюро / об'єднання</dt><dd class="stack">${a.orgForms ? orgList(a.orgForms) : '—'}</dd>
       <dt>Рада адвокатів</dt><dd>${a.raName ?? '—'}</dd>
       <dt>Свідоцтво</dt><dd>${a.certificateNum ?? '—'}${a.certificateDate ? ` від ${fmtDate(a.certificateDate)}` : ''}</dd>
       <dt>Рішення</dt><dd>${a.decisionNum ?? '—'}${a.decisionDate ? ` від ${fmtDate(a.decisionDate)}` : ''}</dd>
