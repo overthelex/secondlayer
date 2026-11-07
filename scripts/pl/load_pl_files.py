@@ -63,6 +63,33 @@ def mswia_sanctions():
     return "https://www.gov.pl" + m.group(1), "gov.pl/web/mswia lista sankcyjna"
 
 
+TERYT = ("https://eteryt.stat.gov.pl/eTeryt/rejestr_teryt/udostepnianie_danych/"
+         "baza_teryt/uzytkownicy_indywidualni/pobieranie/pliki_pelne.aspx")
+
+
+def teryt(button):
+    """GUS TERYT full file via the page's own form button (ASP.NET postback).
+    Returns (csv bytes, url, label). The ZIP holds the same catalogue as XML
+    and as ';'-separated CSV; the CSV is used."""
+    def fetch():
+        import html as _html
+        import zipfile
+        s = requests.Session()
+        s.headers["User-Agent"] = UA
+        page = s.get(TERYT, timeout=120).text
+        form = {m.group(1): _html.unescape(m.group(2)) for m in re.finditer(
+            r'<input type="hidden" name="([^"]+)" id="[^"]*" value="([^"]*)"', page)}
+        form.update(__EVENTTARGET=f"ctl00$body${button}", __EVENTARGUMENT="")
+        r = s.post(TERYT, data=form, timeout=600)
+        r.raise_for_status()
+        if r.content[:2] != b"PK":
+            raise RuntimeError(f"TERYT {button}: not a zip ({r.headers.get('Content-Type')})")
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
+        return z.read(name), TERYT + "#" + button, name
+    return fetch
+
+
 SOURCES = {
     "komornicy":      {"resolve": lambda: dane_latest(927), "kind": "xlsx"},
     "sady_teleadres": {"resolve": lambda: dane_latest(985, r"teleadres"), "kind": "xlsx"},
@@ -72,6 +99,9 @@ SOURCES = {
                                            "gov.pl wykaz prac legislacyjnych RM"),
                        "kind": "csv"},
     "mswia_sankcje":  {"resolve": mswia_sanctions, "kind": "xlsx"},
+    "teryt_terc":     {"fetch": teryt("BTERCUrzedowyPobierz"), "kind": "csv"},
+    "teryt_simc":     {"fetch": teryt("BSIMCUrzedowyPobierz"), "kind": "csv"},
+    "teryt_ulic":     {"fetch": teryt("BULICUrzedowyPobierz"), "kind": "csv"},
 }
 
 
@@ -118,8 +148,11 @@ def rows_csv(blob):
 
 
 def load(name, cfg, raw_dir, force):
-    url, label = cfg["resolve"]()
-    blob = http(url).content
+    if "fetch" in cfg:
+        blob, url, label = cfg["fetch"]()
+    else:
+        url, label = cfg["resolve"]()
+        blob = http(url).content
     sha = hashlib.sha256(blob).hexdigest()
     seen = plprod.scalar(
         f"SELECT count(*) FROM pl_opendata_loads WHERE source = '{name}' AND sha256 = '{sha}'")

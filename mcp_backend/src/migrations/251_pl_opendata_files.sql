@@ -3,6 +3,7 @@
 -- Each source is a full snapshot published as a file: the bailiff list
 -- (dane.gov.pl 927, CC0), court contact data and court list (985, CC0), the
 -- Council of Ministers legislative work list (gov.pl register CSV, CC BY),
+-- the GUS TERYT territorial registers TERC/SIMC/ULIC (official versions),
 -- and the MSWiA national sanctions list (gov.pl XLSX). A load replaces the
 -- source's rows in one transaction; pl_opendata_loads keeps what was loaded,
 -- from where, and the file hash, so a changed file is visible and an
