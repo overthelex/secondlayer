@@ -118,3 +118,56 @@ test('unknown route renders a Ukrainian 404', async () => {
   expect(res.status).toBe(404);
   expect(res.text).toContain('Сторінку не знайдено');
 });
+
+describe('advocate page', () => {
+  const advocateRow = { source_id: '42', family_name: 'Коваль', first_name: 'Іван', patronymic: 'Петрович', status: 'suspended', status_description: 'зупинено', phone: '+38(044)1', email: 'k@x', city: 'Київ', region: 'м. Київ', org_forms: 'АО К', ra_name: 'РА', certificate_num: '1/1', certificate_date: new Date('2010-01-01'), stage: null, next_contact_at: null, manual_practices: null, last_contact: null, kind_cases: 0, kind_summary: '1:10' };
+
+  test('GET /advocates/:id renders registry card, profile, forms and notes; unknown id → 404', async () => {
+    const pool = fakePool();
+    sessionFor(pool, 'tok');
+    pool.on((t, v) => (t.includes('WHERE a.source_id = $1') ? (v?.[0] === '42' ? [advocateRow] : []) : undefined));
+    pool.on((t) => (t.includes('edrsr_cause_categories') ? [{ category_code: 1, name: 'Спори', cases: 4 }] : undefined));
+    pool.on((t) => (t.includes('GROUP BY justice_kind ORDER BY') ? [{ justice_kind: 1, cases: 10, first_year: 2024, last_year: 2026 }] : undefined));
+    pool.on((t) => (t.includes('FROM attorney_crm_notes n') && t.includes('JOIN attorney_crm_users') ? [{ id: 5, advocate_source_id: '42', user_id: 1, kind: 'call', body: 'Подзвонив <b>', created_at: new Date('2026-11-07T10:00:00Z'), author: 'V' }] : undefined));
+    const res = await request(appWith(pool)).get('/advocates/42').set('Cookie', 'acrm_session=tok');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Коваль Іван Петрович');
+    expect(res.text).toContain('<strong>Цивільне</strong>: 10 справ, 2024–2026');
+    expect(res.text).toContain('Спори');
+    expect(res.text).toContain('action="/advocates/42/lead"');
+    expect(res.text).toContain('action="/advocates/42/notes"');
+    expect(res.text).toContain('Подзвонив &lt;b&gt;');
+    expect(res.text).toContain('status suspended');
+    const nf = await request(appWith(pool)).get('/advocates/nope').set('Cookie', 'acrm_session=tok');
+    expect(nf.status).toBe(404);
+  });
+
+  test('POST notes with a blank body → 400; valid note → redirect back', async () => {
+    const pool = fakePool();
+    sessionFor(pool, 'tok');
+    pool.on((t) => (t.includes('WHERE a.source_id = $1') ? [advocateRow] : undefined));
+    pool.on((t) => (t.includes('INSERT INTO attorney_crm_notes') ? [{ id: 1, advocate_source_id: '42', user_id: 1, kind: 'call', body: 'ok', created_at: new Date() }] : undefined));
+    let res = await request(appWith(pool)).post('/advocates/42/notes').set('Cookie', 'acrm_session=tok').type('form').send({ kind: 'call', body: '   ' });
+    expect(res.status).toBe(400);
+    expect(res.text).toContain('Порожня нотатка');
+    res = await request(appWith(pool)).post('/advocates/42/notes').set('Cookie', 'acrm_session=tok').type('form').send({ kind: 'call', body: 'ok' });
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/advocates/42');
+  });
+
+  test('POST lead saves stage, date and practices; unknown practice → 400', async () => {
+    const pool = fakePool();
+    sessionFor(pool, 'tok');
+    pool.on((t) => (t.includes('WHERE a.source_id = $1') ? [advocateRow] : undefined));
+    pool.on((t) => (t.includes('INSERT INTO attorney_crm_leads') ? [{ advocate_source_id: '42', stage: 'interested', next_contact_at: new Date(), manual_practices: ['ДТП', 'Сімейне право'], assigned_user_id: null, updated_at: new Date(), updated_by: 1 }] : undefined));
+    let res = await request(appWith(pool)).post('/advocates/42/lead').set('Cookie', 'acrm_session=tok').type('form')
+      .send('stage=interested&next_contact_at=2026-11-10&manual_practices=ДТП&manual_practices=Сімейне право');
+    expect(res.status).toBe(302);
+    const ins = pool.calls.find((c) => c.text.includes('INSERT INTO attorney_crm_leads'))!;
+    expect(ins.values![1]).toBe('interested');
+    expect((ins.values![2] as Date).toISOString()).toBe('2026-11-09T22:00:00.000Z');
+    expect(ins.values![3]).toEqual(['ДТП', 'Сімейне право']);
+    res = await request(appWith(pool)).post('/advocates/42/lead').set('Cookie', 'acrm_session=tok').type('form').send({ stage: 'new', manual_practices: 'Космічне право' });
+    expect(res.status).toBe(400);
+  });
+});

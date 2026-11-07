@@ -6,6 +6,7 @@ import type { LoginRateLimit } from './auth/rate-limit';
 import { requireLogin } from './auth/middleware';
 import { authRoutes } from './routes/auth';
 import { advocatesRoutes } from './routes/advocates';
+import { advocateRoutes } from './routes/advocate';
 import { html } from './views/html';
 import { renderPage } from './views/layout';
 
@@ -35,6 +36,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(authRoutes(pool, rateLimit));
   app.use(requireLogin(pool));
   app.use(advocatesRoutes(pool));
+  app.use(advocateRoutes(pool));
   app.get('/', (_req, res) => res.redirect('/advocates'));
 
   app.use((_req, res) => {
