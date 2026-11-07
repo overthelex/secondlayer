@@ -1,4 +1,5 @@
-import { html, type RawHtml } from './html';
+import { html, raw, type RawHtml } from './html';
+import { emailList, orgList, phoneList } from './contacts';
 import { renderPage } from './layout';
 import type { AdvocateRow } from '../advocates/repo';
 import type { AdvocateFilters, SortKey } from '../advocates/query';
@@ -98,25 +99,24 @@ export function renderAdvocatesPage(d: AdvocatesPageData): string {
 <div class="table-wrap">
 <table class="data">
 <thead><tr>
-  ${SORT_COLUMNS.map((c) => html`<th>${sortLink(f, c.key, c.label)}</th>`)}
-  <th>Телефон</th><th>E-mail</th><th>Бюро / об'єднання</th><th>Рада адвокатів</th><th>Свідоцтво</th>
-  <th>Практики</th><th>${sortLink(f, 'cases', casesLabel)}</th><th>Стадія</th>
-  <th>${sortLink(f, 'next_contact', 'Наступний контакт')}</th><th>${sortLink(f, 'last_contact', 'Останній контакт')}</th>
+  <th>${SORT_COLUMNS.map((c, i) => html`${i ? raw(' <span class="muted">/</span> ') : ''}${sortLink(f, c.key, c.label)}`)}</th>
+  <th>Контакти</th><th>Бюро / рада</th><th>Свідоцтво</th>
+  <th>Практики</th><th class="num">${sortLink(f, 'cases', casesLabel)}</th><th>Стадія</th>
+  <th>${sortLink(f, 'next_contact', 'Наступний')} <span class="muted">/</span> ${sortLink(f, 'last_contact', 'останній')} контакт</th>
 </tr></thead>
 <tbody>
-${d.rows.length === 0 ? html`<tr><td colspan="13" class="empty">Адвокатів не знайдено</td></tr>` : ''}
+${d.rows.length === 0 ? html`<tr><td colspan="8" class="empty">Адвокатів не знайдено</td></tr>` : ''}
 ${d.rows.map(
   (a) => html`<tr>
-  <td><a href="/advocates/${a.sourceId}">${a.fullName}</a></td>
-  <td>${a.city ?? ''}</td><td>${a.region ?? ''}</td>
-  <td class="nowrap">${a.phone ?? ''}</td><td>${a.email ?? ''}</td>
-  <td>${a.orgForms ?? ''}</td><td>${a.raName ?? ''}</td>
-  <td class="nowrap">${a.certificateNum ?? ''}${a.certificateDate ? html` <small>${fmtDate(a.certificateDate)}</small>` : ''}</td>
-  <td>${practiceChips(a)}</td>
+  <td class="col-name"><a href="/advocates/${a.sourceId}"><strong>${a.fullName}</strong></a>
+    ${a.city || a.region ? html`<span class="sub">${[a.city, a.region].filter(Boolean).join(' · ')}</span>` : ''}</td>
+  <td class="col-contacts stack">${phoneList(a.phone)}${emailList(a.email)}</td>
+  <td class="col-org stack">${orgList(a.orgForms)}${a.raName ? html`<span class="sub">${a.raName}</span>` : ''}</td>
+  <td class="col-cert">${a.certificateNum ?? ''}${a.certificateDate ? html`<span class="sub">${fmtDate(a.certificateDate)}</span>` : ''}</td>
+  <td class="col-practices">${practiceChips(a)}</td>
   <td class="num">${f.justiceKind ? a.kindCases : a.kinds.reduce((s, k) => s + k.cases, 0)}</td>
   <td>${stageChip(a.stage)}</td>
-  <td class="nowrap ${isOverdue(a.nextContactAt) ? 'overdue' : ''}">${fmtDate(a.nextContactAt)}</td>
-  <td class="nowrap">${fmtDate(a.lastContact)}</td>
+  <td class="col-dates">${a.nextContactAt ? html`<span class="line ${isOverdue(a.nextContactAt) ? 'overdue' : ''}">${fmtDate(a.nextContactAt)}</span>` : ''}${a.lastContact ? html`<span class="sub">${fmtDate(a.lastContact)}</span>` : ''}</td>
 </tr>`,
 )}
 </tbody>
