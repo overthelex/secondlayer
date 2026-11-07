@@ -111,6 +111,20 @@ describe('RegistrySearchTool', () => {
       expect(calls[1].sql).toContain('COUNT(*)');
     });
 
+    it('lawyers: last_name_prefix anchors the surname at its first letter', async () => {
+      db = makeDb(() => ({ rows: [{ last_name: 'Абрамов', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'lawyers',
+        filters: { last_name_prefix: 'А', status: 'active' },
+      });
+
+      expect(calls[0].sql).toContain('family_name ILIKE $1');
+      // 'А%' (not '%А%'): Євдокимов contains an А but does not start with one
+      expect(calls[0].params).toEqual(['А%', 'active', 50]);
+    });
+
     it('lawyers: reads opendata_advocates and flattens phone/address/status', async () => {
       db = makeDb(() => ({ rows: [{ last_name: 'Коробка', phone: '+38(067)898-81-27', _total_count: 1 }] }));
       tool = new RegistrySearchTool(db);

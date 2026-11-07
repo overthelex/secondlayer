@@ -114,6 +114,16 @@ export function buildWhere(
         pi++;
         break;
 
+      // Anchored at the start of the value: 'ilike' wraps the value in %…% and
+      // cannot express "surname starts with А" (every surname containing an А
+      // would match). Wildcards in the value are escaped so a user-typed '%'
+      // stays literal.
+      case 'prefix':
+        conditions.push(`${field.columns[0]} ILIKE $${pi}`);
+        values.push(`${String(val).replace(/[\\%_]/g, '\\$&')}%`);
+        pi++;
+        break;
+
       case 'ilike_cast':
         conditions.push(`${field.columns[0]}::text ILIKE $${pi}`);
         values.push(`%${val}%`);

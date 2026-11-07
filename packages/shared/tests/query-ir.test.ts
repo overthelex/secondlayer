@@ -129,6 +129,7 @@ describe('query-ir / buildWhere', () => {
     { name: 'date_from', match: 'gte', columns: ['d.adjudication_date'] },
     { name: 'owner', match: 'ilike_multi', columns: ['owner_a', 'owner_b'] },
     { name: 'status', match: 'exact_ci', columns: ['status'] },
+    { name: 'name_prefix', match: 'prefix', columns: ['name'] },
   ];
 
   it('builds parameterized conditions joined by AND', () => {
@@ -171,6 +172,15 @@ describe('query-ir / buildWhere', () => {
     // "active" cannot match the stored "inactive".
     expect(r.whereClause).toBe('status ILIKE $1');
     expect(r.values).toEqual(['active']);
+  });
+
+  it('prefix anchors at the start and escapes LIKE wildcards in the value', () => {
+    const r = buildWhere(FIELDS, { name_prefix: 'А' });
+    expect(r.whereClause).toBe('name ILIKE $1');
+    expect(r.values).toEqual(['А%']);
+
+    const escaped = buildWhere(FIELDS, { name_prefix: '50%_x' });
+    expect(escaped.values).toEqual(['50\\%\\_x%']);
   });
 
   it('renders eq_any (col = ANY($N)) for array-valued slots', () => {

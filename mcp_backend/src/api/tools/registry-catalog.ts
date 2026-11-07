@@ -345,7 +345,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
   // and may mention an old suspension for an advocate who has since been reinstated.
   lawyers: {
     title: 'Реєстр адвокатів',
-    description: 'Пошук у Єдиному реєстрі адвокатів України (НААУ)\n\n74K записів. Пошук за прізвищем, містом, областю, радою адвокатів, статусом, номером свідоцтва, телефоном.\nУ результатах: телефон, email, робоча адреса, адвокатське бюро/об\'єднання, статус (active / suspended / terminated).',
+    description: 'Пошук у Єдиному реєстрі адвокатів України (НААУ)\n\n74K записів. Пошук за прізвищем (підрядок або початок — last_name_prefix), містом, областю, радою адвокатів, статусом, номером свідоцтва, телефоном.\nУ результатах: телефон, email, робоча адреса, адвокатське бюро/об\'єднання, статус (active / suspended / terminated).',
     table: 'opendata_advocates',
     selectColumns: `source_id AS lawyer_id, family_name AS last_name, name AS first_name, additional_name AS patronymic,
       ${ADVOCATE_STATUS_SQL} AS status, NULLIF(status_description, '') AS status_description,
@@ -359,6 +359,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     emptyMessage: 'Адвокатів не знайдено',
     fields: [
       { name: 'last_name', description: 'Прізвище адвоката', match: 'ilike', columns: ['family_name'] },
+      { name: 'last_name_prefix', description: 'Початок прізвища: "А" = усі адвокати з прізвищем на А, "Ков" = Коваль, Коваленко, Ковальчук…', match: 'prefix', columns: ['family_name'] },
       { name: 'first_name', description: "Ім'я адвоката", match: 'ilike', columns: ['name'] },
       { name: 'patronymic', description: 'По батькові', match: 'ilike', columns: ['additional_name'] },
       { name: 'city', description: 'Місто робочої адреси (наприклад, Київ, Львів)', match: 'ilike', columns: ["(work_address->0->>'workAddressCity')"] },
