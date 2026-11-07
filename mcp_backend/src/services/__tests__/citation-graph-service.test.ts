@@ -177,6 +177,29 @@ describe('CitationGraphService', () => {
     });
   });
 
+  describe('resolveCaseDocId (case number → the member with article edges)', () => {
+    it('returns the doc_id the graph ranked first and reads the case through IN_CASE', async () => {
+      // 200/2129/24: the newest document (a КАС ухвала) had no edges, the постанова had 5.
+      mockRun.mockResolvedValueOnce({ records: [rec({ docId: '123059446', edges: neoInt(5) })] });
+
+      const svc = new CitationGraphService();
+      const docId = await svc.resolveCaseDocId('200/2129/24');
+
+      expect(docId).toBe('123059446');
+      const [cypher, params] = mockRun.mock.calls[0];
+      expect(cypher).toMatch(/\(c:Case \{cause_num: \$cn\}\)<-\[:IN_CASE\]-\(d:Decision\)/);
+      expect(cypher).toMatch(/OPTIONAL MATCH \(d\)-\[r:CITES_ARTICLE\]->/);
+      expect(cypher).toMatch(/ORDER BY edges DESC, toInteger\(d\.doc_id\) DESC\s+LIMIT 1/);
+      expect(params).toEqual({ cn: '200/2129/24' });
+      expect(mockSessionClose).toHaveBeenCalled();
+    });
+
+    it('returns null when the case is not in the graph', async () => {
+      mockRun.mockResolvedValueOnce({ records: [] });
+      expect(await new CitationGraphService().resolveCaseDocId('999/1/99')).toBeNull();
+    });
+  });
+
   describe('getCaseCitedBy / getDecisionCitedCases', () => {
     it('returns citing decision doc_ids for a case', async () => {
       mockRun.mockResolvedValueOnce({ records: [rec({ docId: '111' }), rec({ docId: '222' })] });
