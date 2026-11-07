@@ -83,8 +83,8 @@ END $$;
 -- Returns (documents scanned, documents with text, upserted rows, cursor);
 -- out_docs = 0 means this year is exhausted. OUT columns carry an out_ prefix so
 -- they never shadow the progress table's columns inside plpgsql.
--- OUT column names are part of the signature: a rename needs DROP, not REPLACE.
-DROP FUNCTION IF EXISTS attorney_crm_derive_batch(INTEGER, INTEGER, INTEGER);
+-- OUT column names are part of the signature: renaming one later needs a DROP first
+-- (do it by hand, outside a running backfill), CREATE OR REPLACE alone will refuse.
 CREATE OR REPLACE FUNCTION attorney_crm_derive_batch(
   p_year     INTEGER,
   p_limit    INTEGER DEFAULT 2000,
