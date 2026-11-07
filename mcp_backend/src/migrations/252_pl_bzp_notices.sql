@@ -33,3 +33,12 @@ CREATE INDEX IF NOT EXISTS idx_pl_bzp_type_date ON pl_bzp_notices (notice_type, 
 CREATE INDEX IF NOT EXISTS idx_pl_bzp_tender    ON pl_bzp_notices (tender_id);
 CREATE INDEX IF NOT EXISTS idx_pl_bzp_org_nip   ON pl_bzp_notices (organization_nip);
 CREATE INDEX IF NOT EXISTS idx_pl_bzp_contractors ON pl_bzp_notices USING gin (contractors jsonb_path_ops);
+
+-- Harvest progress: every notice of this type published before done_until is
+-- held. Windows are exact ([From, To + 24h) on this API), so this is a fact,
+-- not a cursor guess.
+CREATE TABLE IF NOT EXISTS pl_bzp_progress (
+    notice_type text PRIMARY KEY,
+    done_until  timestamptz NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);

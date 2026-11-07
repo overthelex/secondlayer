@@ -7,14 +7,16 @@
 How the API actually behaves (measured 2026-11-07, not documented anywhere):
   * NoticeType is required; 11 values are accepted (TYPES below)
   * PageSize is capped at 500 and PageNumber is IGNORED: every page is page 1
-  * PublicationDateFrom is honoured to the second, PublicationDateTo is not
-    (a 00:00-09:59 window returns notices up to 13:38)
-  * results come sorted by publicationDate ascending
-So the harvest is a cursor: ask from the last publicationDate seen, drop the
-objectIds already held, stop when a page comes back short.
+  * the date filter is [PublicationDateFrom, PublicationDateTo + 24 h).
+    To=From gives one day; To earlier than From is accepted, so an exact
+    window [A, B) is From=A, To=B-24h (1 h windows 08-09 and 09-10 gave 62 and
+    67, the 08-10 window 129)
+  * order is by internal id, which is NOT publication order for 2021-2022
+So the harvest walks exact windows: start with one day, halve while a window
+fills the 500 cap, grow (up to a week) while windows come back small.
 
-The cursor per type is max(publication_date) in the table, so a killed run is
-resumed by running it again.
+pl_bzp_progress.done_until per type is the end of the last complete window,
+so a killed run resumes exactly where it stopped.
 
 `contractors` arrives as a Python repr string ("[{'contractorName': ...}]"),
 not JSON; it is parsed with ast.literal_eval.
@@ -85,78 +87,87 @@ def row(x):
     )
 
 
-def fetch(s, ntype, since):
-    params = {"NoticeType": ntype, "PublicationDateFrom": since,
-              "PublicationDateTo": "2099-12-31T23:59:59", "PageSize": 500,
-              "PageNumber": 1}
+FMT = "%Y-%m-%dT%H:%M:%S"
+
+
+def fetch(s, ntype, lo, hi):
+    """Every notice of ntype with lo <= publicationDate < hi, or None if the
+    window is too full to tell (the 500 cap)."""
+    params = {"NoticeType": ntype, "PublicationDateFrom": lo.strftime(FMT),
+              "PublicationDateTo": (hi - dt.timedelta(hours=24)).strftime(FMT),
+              "PageSize": 500, "PageNumber": 1}
     for attempt in range(5):
         try:
             r = s.get(API, params=params, timeout=300)
             if r.status_code == 200:
-                return r.json()
+                items = r.json()
+                return None if len(items) >= 500 else items
         except (requests.RequestException, ValueError):
             pass
         time.sleep(15 * (attempt + 1))
-    raise RuntimeError(f"{ntype} since {since}: giving up")
+    raise RuntimeError(f"{ntype} {lo}..{hi}: giving up")
 
 
-def cursor_of(ntype, default):
+def progress(ntype, default):
     v = plprod.scalar(
-        "SELECT to_char(max(publication_date) AT TIME ZONE 'UTC', "
-        "'YYYY-MM-DD\"T\"HH24:MI:SS') FROM pl_bzp_notices "
-        f"WHERE notice_type = '{ntype}'")
-    return v or default
+        "SELECT to_char(done_until AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS') "
+        f"FROM pl_bzp_progress WHERE notice_type = '{ntype}'")
+    return dt.datetime.strptime(v or default, FMT)
 
 
-def harvest(ntype, start, max_pages=0):
+def held_ids(ids):
+    held = set()
+    for i in range(0, len(ids), 500):
+        q = ",".join("'" + x.replace("'", "''") + "'" for x in ids[i:i + 500])
+        held |= {r[0] for r in plprod.rows_of(
+            f"SELECT object_id FROM pl_bzp_notices WHERE object_id IN ({q})")}
+    return held
+
+
+def harvest(ntype, start, until):
     s = requests.Session()
     s.headers["User-Agent"] = UA
-    since = cursor_of(ntype, start)
-    total = 0
-    t0 = time.time()
-    pages = 0
-    while True:
-        pages += 1
-        if max_pages and pages > max_pages:
-            break
-        items = fetch(s, ntype, since)
-        if not items:
-            break
-        ids = [x["objectId"] for x in items]
-        held = set()
-        for i in range(0, len(ids), 500):
-            q = ",".join("'" + x.replace("'", "''") + "'" for x in ids[i:i + 500])
-            held |= {r[0] for r in plprod.rows_of(
-                f"SELECT object_id FROM pl_bzp_notices WHERE object_id IN ({q})")}
+    lo = progress(ntype, start)
+    step = dt.timedelta(days=1)
+    total, calls, t0 = 0, 0, time.time()
+    while lo < until:
+        hi = min(lo + step, until)
+        items = fetch(s, ntype, lo, hi)
+        calls += 1
+        time.sleep(PAUSE)
+        if items is None:
+            if step <= dt.timedelta(minutes=1):
+                raise RuntimeError(f"{ntype}: >=500 notices within a minute at {lo}")
+            step = step / 2
+            continue
+        held = held_ids([x["objectId"] for x in items])
         new = [row(x) for x in items if x["objectId"] not in held]
         if new:
             plprod.upsert_rows("pl_bzp_notices", COLS, new, ["object_id"],
                                prefer_new=False, batch=250)
             total += len(new)
-        last = max(x["publicationDate"] for x in items)[:19]
-        print(f"{ntype} {since} -> {last}: {len(items)} got, {len(new)} new, "
-              f"{total} total, {int(time.time() - t0)} s", flush=True)
-        if len(items) < 500:
-            break
-        if last == since:
-            # 500 notices inside one second would stall the cursor; never seen,
-            # but stepping a second is better than looping forever.
-            last = (dt.datetime.fromisoformat(last) + dt.timedelta(seconds=1)
-                    ).strftime("%Y-%m-%dT%H:%M:%S")
-            print(f"  cursor stuck at {since}, stepping one second", flush=True)
-        since = last
-        time.sleep(PAUSE)
+        plprod.psql(
+            "INSERT INTO pl_bzp_progress (notice_type, done_until) "
+            f"VALUES ('{ntype}', '{hi.strftime(FMT)}+00') ON CONFLICT (notice_type) "
+            "DO UPDATE SET done_until = EXCLUDED.done_until, updated_at = now()")
+        if calls % 20 == 0 or len(items) > 250:
+            print(f"{ntype} {lo:%Y-%m-%d %H:%M} +{step}: {len(items)} got, "
+                  f"{len(new)} new, {total} total, {calls} calls, "
+                  f"{int(time.time() - t0)} s", flush=True)
+        lo = hi
+        if len(items) < 150 and step < dt.timedelta(days=7):
+            step = step * 2
     return total
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--types", nargs="+", default=TYPES, choices=TYPES)
-    # --from only seeds an EMPTY type: once a type has rows its cursor is
-    # max(publication_date), so a smoke run must start at the real beginning
-    # and be bounded with --max-pages, or the full run would skip the gap.
+    # --from only seeds a type with no pl_bzp_progress row; after that the
+    # stored done_until wins. A smoke run is bounded with --until, and the
+    # full run then carries on from there.
     ap.add_argument("--from", dest="start", default="2021-01-01T00:00:00")
-    ap.add_argument("--max-pages", type=int, default=0)
+    ap.add_argument("--until", help="default: today 00:00 UTC")
     a = ap.parse_args()
     with open(MIGRATION, encoding="utf-8") as f:
         r = subprocess.run(plprod._argv(), input=f.read(), capture_output=True,
@@ -164,8 +175,11 @@ def main():
     if r.returncode != 0:
         raise SystemExit(f"schema failed: {r.stderr.strip()[:600]}")
     start = a.start if "T" in a.start else a.start + "T00:00:00"
+    until = (dt.datetime.strptime(a.until if "T" in a.until else a.until + "T00:00:00", FMT)
+             if a.until else dt.datetime.utcnow().replace(hour=0, minute=0, second=0,
+                                                          microsecond=0))
     for t in a.types:
-        n = harvest(t, start, a.max_pages)
+        n = harvest(t, start, until)
         print(f"== {t}: {n} new", flush=True)
     return 0
 
