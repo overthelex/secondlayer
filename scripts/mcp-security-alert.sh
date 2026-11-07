@@ -10,6 +10,12 @@
 #      tool-access-policy має бути завжди порожньо; не порожньо = знайшли нову діру).
 #   3. Відповідь більша за MAX_RESPONSE_MB (масове вивантаження).
 #   4. Для WATCH_EMAILS (клієнти під наглядом): новий IP, якого не було раніше, і вхід у веб.
+#   5. Сканування сайту по аналітиці Cloudflare (scripts/http_scan_alert.py): сканерні шляхи
+#      (/.env, /.git, /.aws, swagger, actuator, phpinfo, wp-…), нестандартні порти (:8080/:8443),
+#      перебір багатьох шляхів з 403/404 з одного IP. Бекенд цього трафіку не бачить (SPA або
+#      WAF), тому без цієї секції сканер вразливостей проходив повз аларм. Потребує
+#      CF_ENV_FILE (~/SecondLayer/.env.cloudflare: CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL);
+#      без нього секція пропускається з попередженням у лог.
 #
 # Вікно: від позначки в STATE_FILE до now() з БД; позначка зсувається лише після успішного
 # листа (або коли подій немає), тож подія не губиться, якщо SMTP впав.
@@ -17,6 +23,7 @@
 # Env: MAIL_TO / MAIL_FROM (vladimir@legal.org.ua), SMTP_HOST / SMTP_PORT / SMTP_ENV_FILE —
 #      як у mcp-key-usage-alert.sh; WATCH_EMAILS (через кому, mrbraun013@gmail.com),
 #      MAX_RESPONSE_MB (5), STATE_FILE (~/.mcp-security-alert.since),
+#      CF_ENV_FILE (<repo>/.env.cloudflare), SCAN_MIN_HITS (3), PROBE_MIN_PATHS (20),
 #      DRY_RUN=1 — надрукувати лист і не зсувати позначку.
 # Код виходу: 0 — подій немає, 2 — лист надіслано (або DRY_RUN), 1 — помилка.
 #
@@ -35,8 +42,12 @@ SMTP_ENV_FILE="${SMTP_ENV_FILE-$HOME/.acs-smtp.env}"
 WATCH_EMAILS="${WATCH_EMAILS:-mrbraun013@gmail.com}"
 MAX_RESPONSE_MB="${MAX_RESPONSE_MB:-5}"
 STATE_FILE="${STATE_FILE:-$HOME/.mcp-security-alert.since}"
+CF_ENV_FILE="${CF_ENV_FILE-$DIR/../.env.cloudflare}"
+SCAN_MIN_HITS="${SCAN_MIN_HITS:-3}"
+PROBE_MIN_PATHS="${PROBE_MIN_PATHS:-20}"
 
 [[ "$MAX_RESPONSE_MB" =~ ^[0-9]+$ ]] || { echo "MAX_RESPONSE_MB має бути числом" >&2; exit 1; }
+[[ "$SCAN_MIN_HITS$PROBE_MIN_PATHS" =~ ^[0-9]+$ ]] || { echo "SCAN_MIN_HITS / PROBE_MIN_PATHS мають бути числами" >&2; exit 1; }
 [[ "$WATCH_EMAILS" =~ ^[A-Za-z0-9._%+@,-]*$ ]] || { echo "WATCH_EMAILS: недопустимі символи" >&2; exit 1; }
 
 PSQL=(docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -v ON_ERROR_STOP=1 -X -q)
@@ -54,7 +65,9 @@ WATCH_SQL="ARRAY(SELECT lower(trim(x)) FROM unnest(string_to_array('$WATCH_EMAIL
 win() { echo "$1.created_at > '$SINCE'::timestamptz AND $1.created_at <= '$NOW'::timestamptz"; }
 
 # Кожна секція: заголовок | SQL count | SQL таблиця (psql -H).
-declare -a TITLES COUNTS TABLES
+# Порожні масиви ініціалізуємо явно: під set -u `declare -a X` без присвоєння лишає X unset,
+# і ${#X[@]} у тихому запуску падає з «unbound variable» (позначка тоді не зсувається).
+TITLES=(); COUNTS=(); TABLES=()
 
 section() {
   local title="$1" sql="$2" n
@@ -115,6 +128,23 @@ SELECT email, to_char((last_login AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Kyiv'
  WHERE lower(email) = ANY($WATCH_SQL)
    AND last_login > ('$SINCE'::timestamptz AT TIME ZONE 'UTC') AND last_login <= ('$NOW'::timestamptz AT TIME ZONE 'UTC')"
 
+# 5. Сканування сайту: аналітика Cloudflare, бо фронтенд/WAF у БД не пишуть.
+if [[ -n "$CF_ENV_FILE" && -r "$CF_ENV_FILE" ]]; then
+  if CF_OUT=$(set -a; . "$CF_ENV_FILE"; set +a; \
+        SINCE="$SINCE" NOW="$NOW" SCAN_MIN_HITS="$SCAN_MIN_HITS" PROBE_MIN_PATHS="$PROBE_MIN_PATHS" \
+        PSQL_CMD="${PSQL[*]}" python3 "$DIR/http_scan_alert.py"); then
+    CF_N="${CF_OUT%%$'\n'*}"
+    if [[ "$CF_N" =~ ^[0-9]+$ && "$CF_N" -gt 0 ]]; then
+      TITLES+=("Сканування сайту: підозрілі IP за аналітикою Cloudflare"); COUNTS+=("$CF_N")
+      TABLES+=("${CF_OUT#*$'\n'}")
+    fi
+  else
+    echo "[$(date -Is)] секцію Cloudflare пропущено (http_scan_alert.py повернув помилку)" >&2
+  fi
+else
+  echo "[$(date -Is)] секцію Cloudflare пропущено: немає $CF_ENV_FILE" >&2
+fi
+
 advance() { [[ "${DRY_RUN:-}" == 1 ]] || printf '%s\n' "$NOW" > "$STATE_FILE"; }
 
 if [[ ${#TITLES[@]} -eq 0 ]]; then
@@ -131,7 +161,8 @@ done
 SUBJECT="⚠ MCP legal.org.ua: подія безпеки — ${TITLES[0]}$([[ ${#TITLES[@]} -gt 1 ]] && echo " (+$(( ${#TITLES[@]} - 1 )))")"
 INTRO="Аларм безпеки MCP / API-ключів legal.org.ua, вікно $SINCE … $NOW (UTC).
 ${SUMMARY}Клієнти під наглядом: $WATCH_EMAILS. Показано до 50 рядків на секцію.
-Деталі: ./scripts/mcp-key-usage-report.sh <email> 7; відключити ключ: UPDATE api_keys SET is_active=false WHERE left(key,12)='<key_prefix>';"
+Деталі: ./scripts/mcp-key-usage-report.sh <email> 7; відключити ключ: UPDATE api_keys SET is_active=false WHERE left(key,12)='<key_prefix>';
+Заблокувати IP у Cloudflare: ./scripts/cf-block-ip.sh <ip> \"<примітка>\" (IP Access Rule, зона legal.org.ua)."
 
 echo "[$(date -Is)] $SINCE..$NOW: ${SUMMARY//$'\n'/; }"
 
