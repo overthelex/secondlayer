@@ -25,6 +25,10 @@ beforeAll(async () => {
   writeFileSync(path.join(root, 'claim.docx'), 'binary');
   mkdirSync(path.join(root, '.text'));
   writeFileSync(path.join(root, '.text', 'claim.docx.txt'), 'Позовна заява про скасування іпотеки');
+  writeFileSync(path.join(root, 'letter.eml'), 'X'.repeat(3 * 1024 * 1024)); // over the plain-text cap
+  writeFileSync(path.join(root, '.text', 'letter.eml.txt'), 'Лист з позовом, вкладення: угода');
+  writeFileSync(path.join(root, 'pack.zip'), 'PK');
+  writeFileSync(path.join(root, '.text', 'pack.zip.txt'), 'Архів розпаковано: ухвала слідчого судді');
   writeFileSync(path.join(root, '_rename-map.tsv'), 'old\tnew\ttitle_uk\tdoc_date\nIMG_1.jpg\tcase-1/IMG_1__dohovir-ipoteky.jpg\tДоговір іпотеки, стор. 1\t\n');
   writeFileSync(path.join(root, 'Thumbs.db'), 'x');
   writeFileSync(path.join(root, 'case-1', 'IMG_2__dohovir-ipoteky-st2.txt'), 'Сторінка друга договору');
@@ -83,6 +87,12 @@ describe('PrivateDocsToolset', () => {
     expect(text(await toolset.execute('gorenichi_search_documents', { query: 'позовна іпотеки' }))).toContain('claim.docx');
     expect(text(await toolset.execute('gorenichi_search_documents', { query: 'привіт' }))).toContain('notes');
     expect(text(await toolset.execute('gorenichi_search_documents', { query: 'укрсиббанк позовна' }))).toContain('нічого не знайдено');
+  });
+
+  it('reads mail and archives through their host-side text rendering', async () => {
+    expect(text(await toolset.execute('gorenichi_read_document', { path: 'letter.eml' }))).toContain('Лист з позовом');
+    expect(text(await toolset.execute('gorenichi_read_document', { path: 'pack.zip' }))).toContain('ухвала слідчого судді');
+    expect(text(await toolset.execute('gorenichi_search_documents', { query: 'ухвала слідчого' }))).toContain('pack.zip');
   });
 
   it('reads an image as OCR text plus the image itself', async () => {
