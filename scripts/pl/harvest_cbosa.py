@@ -97,6 +97,23 @@ def parse_list(page_html):
     return total, pages, items
 
 
+RE_TITLE_DATE = re.compile(r"\bz\s+(\d{4}-\d{2}-\d{2})\s*$")
+
+
+def in_window(title, d_from, d_to):
+    """List rows also link related decisions from other dates (the snippet
+    under a hit). Those belong to their own window; keep only hits whose
+    title date falls inside ours. A title without a date is kept."""
+    m = RE_TITLE_DATE.search(title or "")
+    if not m:
+        return True
+    try:
+        d = date.fromisoformat(m.group(1))
+    except ValueError:
+        return True
+    return d_from <= d <= d_to
+
+
 def list_window(session, limiter, d_from, d_to):
     """Yield (hash, title) for every decision dated in [d_from, d_to]."""
     r = request(session, limiter, "POST", f"{BASE}/cbo/search",
@@ -105,9 +122,13 @@ def list_window(session, limiter, d_from, d_to):
     if "Niepoprawny format daty" in r.text:
         raise RuntimeError("CBOSA rejected the date format")
     seen = set()
+    skipped = 0
     for h, t in items:
         seen.add(h)
-        yield h, t
+        if in_window(t, d_from, d_to):
+            yield h, t
+        else:
+            skipped += 1
     for p in range(2, pages + 1):
         r = request(session, limiter, "GET", f"{BASE}/cbo/find", params={"p": p})
         _, _, items = parse_list(r.text)
@@ -115,11 +136,16 @@ def list_window(session, limiter, d_from, d_to):
             log.warning("empty page %d/%d for %s..%s", p, pages, d_from, d_to)
             break
         for h, t in items:
-            if h not in seen:
-                seen.add(h)
+            if h in seen:
+                continue
+            seen.add(h)
+            if in_window(t, d_from, d_to):
                 yield h, t
-    if len(seen) != total:
-        log.warning("window %s..%s: listed %d of %d", d_from, d_to, len(seen), total)
+            else:
+                skipped += 1
+    if len(seen) - skipped != total:
+        log.warning("window %s..%s: listed %d in-window of %d (plus %d related from other dates)",
+                    d_from, d_to, len(seen) - skipped, total, skipped)
 
 
 # ---------------------------------------------------------------- document
