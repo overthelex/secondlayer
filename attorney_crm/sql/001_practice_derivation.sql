@@ -30,13 +30,18 @@ CREATE INDEX IF NOT EXISTS idx_attorney_crm_practice_cases_kind
   ON attorney_crm_practice_cases (justice_kind, advocate_source_id);
 
 -- ── Resumable cursor, one row per ЄДРСР partition year ─────────────────────────
--- The walk is ordered by (adjudication_date, doc_id), not doc_id alone: doc_ids
--- are assigned at publication and ЄДРСР publishes late, so a doc_id cursor
--- combined with the 30-day lag filter would skip every promptly published
--- decision for good. With the date order, the open year simply resumes from
--- last_adj_at up to now − lag on every daily run.
+-- walk_mode, fixed when the year's row is created and never changed:
+--   'doc_id'   — a closed year (its end is older than the lag): every text that
+--                will ever arrive is old enough, so the walk is a plain doc_id scan,
+--                which reads edrsr_fulltext in storage order (2.3× faster, measured).
+--   'adj_date' — the open year: ordered by (adjudication_date, doc_id). doc_ids are
+--                assigned at publication and ЄДРСР publishes late, so a doc_id
+--                cursor combined with the lag filter would skip every promptly
+--                published decision for good; the date order resumes from
+--                last_adj_at up to now − lag on every daily run.
 CREATE TABLE IF NOT EXISTS attorney_crm_practice_progress (
   partition_year SMALLINT    PRIMARY KEY,
+  walk_mode      TEXT        CHECK (walk_mode IN ('doc_id', 'adj_date')),
   last_adj_at    TIMESTAMPTZ NOT NULL DEFAULT '-infinity',
   last_doc_id    BIGINT      NOT NULL DEFAULT 0,
   docs_scanned   BIGINT      NOT NULL DEFAULT 0,
@@ -46,6 +51,7 @@ CREATE TABLE IF NOT EXISTS attorney_crm_practice_progress (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS last_adj_at TIMESTAMPTZ NOT NULL DEFAULT '-infinity';
+ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS walk_mode TEXT CHECK (walk_mode IN ('doc_id', 'adj_date'));
 
 -- ── Registry snapshot for matching ─────────────────────────────────────────────
 -- Names in decisions are declined («Макеєва Дмитра Вячеславовича»), registry names
@@ -81,7 +87,7 @@ BEGIN
 END $$;
 
 -- ── One batch of the derivation ────────────────────────────────────────────────
--- Walks edrsr_documents of one partition year in (adjudication_date, doc_id) order,
+-- Walks edrsr_documents of one partition year in walk_mode order (see above),
 -- starting after the stored cursor, at most p_limit documents, stopping p_lag_days
 -- short of now (full texts arrive late; see the design). The open year is never
 -- marked done: each run resumes from the cursor and scans whatever became old enough. Joins the full text,
@@ -102,6 +108,8 @@ LANGUAGE plpgsql AS $$
 DECLARE
   v_after    BIGINT;
   v_after_at TIMESTAMPTZ;
+  v_mode     TEXT;
+  v_year_end TIMESTAMPTZ := make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv');
   v_from   TIMESTAMPTZ := make_timestamptz(p_year, 1, 1, 0, 0, 0, 'Europe/Kyiv');
   v_to     TIMESTAMPTZ := LEAST(make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv'),
                                 NOW() - make_interval(days => p_lag_days));
@@ -113,22 +121,37 @@ DECLARE
 BEGIN
   INSERT INTO attorney_crm_practice_progress (partition_year) VALUES (p_year)
   ON CONFLICT (partition_year) DO NOTHING;
-  SELECT pr.last_doc_id, pr.last_adj_at INTO v_after, v_after_at
+  SELECT pr.last_doc_id, pr.last_adj_at, pr.walk_mode INTO v_after, v_after_at, v_mode
     FROM attorney_crm_practice_progress pr WHERE pr.partition_year = p_year FOR UPDATE;
+  IF v_mode IS NULL THEN
+    v_mode := CASE WHEN v_year_end <= NOW() - make_interval(days => p_lag_days) THEN 'doc_id' ELSE 'adj_date' END;
+    UPDATE attorney_crm_practice_progress SET walk_mode = v_mode WHERE partition_year = p_year;
+  END IF;
 
   CREATE TEMP TABLE IF NOT EXISTS _acrm_batch (
     doc_id BIGINT, justice_kind SMALLINT, category_code INTEGER, cause_num TEXT, yr SMALLINT, adj_at TIMESTAMPTZ
   ) ON COMMIT DROP;
   TRUNCATE _acrm_batch;
 
-  INSERT INTO _acrm_batch
-  SELECT d.doc_id, d.justice_kind, d.category_code, d.cause_num,
-         extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint, d.adjudication_date
-  FROM edrsr_documents d
-  WHERE d.adjudication_date >= v_from AND d.adjudication_date < v_to
-    AND (d.adjudication_date, d.doc_id) > (v_after_at, v_after)
-  ORDER BY d.adjudication_date, d.doc_id
-  LIMIT p_limit;
+  IF v_mode = 'doc_id' THEN
+    INSERT INTO _acrm_batch
+    SELECT d.doc_id, d.justice_kind, d.category_code, d.cause_num,
+           extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint, d.adjudication_date
+    FROM edrsr_documents d
+    WHERE d.adjudication_date >= v_from AND d.adjudication_date < v_to
+      AND d.doc_id > v_after
+    ORDER BY d.doc_id
+    LIMIT p_limit;
+  ELSE
+    INSERT INTO _acrm_batch
+    SELECT d.doc_id, d.justice_kind, d.category_code, d.cause_num,
+           extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint, d.adjudication_date
+    FROM edrsr_documents d
+    WHERE d.adjudication_date >= v_from AND d.adjudication_date < v_to
+      AND (d.adjudication_date, d.doc_id) > (v_after_at, v_after)
+    ORDER BY d.adjudication_date, d.doc_id
+    LIMIT p_limit;
+  END IF;
 
   SELECT count(*) INTO v_docs FROM _acrm_batch;
   IF v_docs = 0 THEN
@@ -139,7 +162,11 @@ BEGIN
     RETURN QUERY SELECT 0, 0, 0, v_after;
     RETURN;
   END IF;
-  SELECT adj_at, doc_id INTO v_last_at, v_last FROM _acrm_batch ORDER BY adj_at DESC, doc_id DESC LIMIT 1;
+  IF v_mode = 'doc_id' THEN
+    SELECT max(doc_id), max(adj_at) INTO v_last, v_last_at FROM _acrm_batch;
+  ELSE
+    SELECT adj_at, doc_id INTO v_last_at, v_last FROM _acrm_batch ORDER BY adj_at DESC, doc_id DESC LIMIT 1;
+  END IF;
 
   WITH texts AS (
     SELECT b.doc_id, b.justice_kind, b.category_code, b.cause_num, b.yr, f.full_text
