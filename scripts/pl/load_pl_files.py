@@ -92,14 +92,18 @@ def teryt(button):
 
 def patent_attorneys():
     """UPRP register of patent attorneys (rzecznicy.uprp.gov.pl), a paged HTML
-    table. Returns (rows, url, label, bytes-for-hash)."""
+    table. Returns (rows, url, label, bytes-for-hash).
+
+    per_page is capped at 100, and a page past the end returns the LAST page
+    again rather than an empty one, so the loop stops on a short page or on a
+    page identical to the previous one."""
     import html as _html
     base = "https://rzecznicy.uprp.gov.pl/attorneys"
     s = requests.Session()
     s.headers["User-Agent"] = UA
-    rows, hdr, raw, page = [], None, [], 1
+    rows, hdr, raw, page, prev_first = [], None, [], 1, None
     while True:
-        t = s.get(base, params={"per_page": 200, "sort": "registration_number",
+        t = s.get(base, params={"per_page": 100, "sort": "registration_number",
                                 "dir": "asc", "page": page}, timeout=120).text
         trs = re.findall(r"<tr[^>]*>(.*?)</tr>", t, re.S)
         cells = [[re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", c))).strip()
@@ -108,13 +112,16 @@ def patent_attorneys():
         if hdr is None and cells:
             hdr = cells[0]
         body = [c for c in cells[1:] if c and c != hdr]
-        if not body:
+        if not body or (rows and body[0] == prev_first):
             break
+        prev_first = body[0]
         for c in body:
             rec = {h: v for h, v in zip(hdr, c) if h and v and v != "\u2014"}
             if rec:
                 rows.append(("", len(rows) + 1, rec))
         raw.append(t)
+        if len(body) < 100:
+            break
         page += 1
         if page > 200:
             raise RuntimeError("patent attorneys: more than 200 pages, stopping")
