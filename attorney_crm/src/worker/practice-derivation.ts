@@ -27,16 +27,22 @@ export async function runDerivation(pool: Queryable, o: DerivationOptions): Prom
   for (const year of o.years) {
     let yearDocs = 0;
     let yearHits = 0;
+    // A year the backfill split into shards keeps those cursors; continue each one.
+    const shardRows = await pool.query<{ shard: number; shards: number }>(
+      'SELECT shard, shards FROM attorney_crm_practice_progress WHERE partition_year = $1 ORDER BY shard',
+      [year],
+    );
+    const shards = shardRows.rows.length ? shardRows.rows : [{ shard: 0, shards: 1 }];
     try {
-      for (;;) {
+      for (const { shard, shards: total } of shards) for (;;) {
         // One batch per transaction with its own timeout; a timeout leaves the cursor untouched.
         await pool.query('BEGIN');
         let r;
         try {
           await pool.query("SET LOCAL statement_timeout = '180s'");
           r = await pool.query<{ out_docs: number; out_with_text: number; out_hits: number; out_last_doc_id: string }>(
-            'SELECT out_docs, out_with_text, out_hits, out_last_doc_id FROM attorney_crm_derive_batch($1, $2, $3)',
-            [year, o.batch, o.lagDays],
+            'SELECT out_docs, out_with_text, out_hits, out_last_doc_id FROM attorney_crm_derive_batch($1, $2, $3, $4, $5)',
+            [year, o.batch, o.lagDays, Number(shard), Number(total)],
           );
           await pool.query('COMMIT');
         } catch (err) {

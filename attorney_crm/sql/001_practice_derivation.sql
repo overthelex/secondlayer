@@ -39,8 +39,15 @@ CREATE INDEX IF NOT EXISTS idx_attorney_crm_practice_cases_kind
 --                cursor combined with the lag filter would skip every promptly
 --                published decision for good; the date order resumes from
 --                last_adj_at up to now − lag on every daily run.
+-- Shards: the backfill splits a year into N independent cursors by doc_id % N so
+-- several sessions can walk the same year at once (one row per (year, shard),
+-- FOR UPDATE on that row serialises writers of the same shard). The daily worker
+-- reads the existing shard rows of a year and continues each one; a year nobody
+-- backfilled gets a single shard (0 of 1).
 CREATE TABLE IF NOT EXISTS attorney_crm_practice_progress (
-  partition_year SMALLINT    PRIMARY KEY,
+  partition_year SMALLINT    NOT NULL,
+  shard          SMALLINT    NOT NULL DEFAULT 0,
+  shards         SMALLINT    NOT NULL DEFAULT 1,
   walk_mode      TEXT        CHECK (walk_mode IN ('doc_id', 'adj_date')),
   last_adj_at    TIMESTAMPTZ NOT NULL DEFAULT '-infinity',
   last_doc_id    BIGINT      NOT NULL DEFAULT 0,
@@ -48,10 +55,26 @@ CREATE TABLE IF NOT EXISTS attorney_crm_practice_progress (
   docs_with_text BIGINT      NOT NULL DEFAULT 0,
   hits           BIGINT      NOT NULL DEFAULT 0,
   done           BOOLEAN     NOT NULL DEFAULT FALSE,
-  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (partition_year, shard),
+  CHECK (shard >= 0 AND shard < shards)
 );
 ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS last_adj_at TIMESTAMPTZ NOT NULL DEFAULT '-infinity';
 ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS walk_mode TEXT CHECK (walk_mode IN ('doc_id', 'adj_date'));
+ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS shard  SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS shards SMALLINT NOT NULL DEFAULT 1;
+-- Tables created before sharding had PRIMARY KEY (partition_year); move it.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint c
+    WHERE c.conrelid = 'attorney_crm_practice_progress'::regclass AND c.contype = 'p'
+      AND array_length(c.conkey, 1) = 1
+  ) THEN
+    ALTER TABLE attorney_crm_practice_progress DROP CONSTRAINT attorney_crm_practice_progress_pkey;
+    ALTER TABLE attorney_crm_practice_progress ADD PRIMARY KEY (partition_year, shard);
+  END IF;
+END $$;
 
 -- ── Registry snapshot for matching ─────────────────────────────────────────────
 -- Names in decisions are declined («Макеєва Дмитра Вячеславовича»), registry names
@@ -99,16 +122,20 @@ END $$;
 -- they never shadow the progress table's columns inside plpgsql.
 -- OUT column names are part of the signature: renaming one later needs a DROP first
 -- (do it by hand, outside a running backfill), CREATE OR REPLACE alone will refuse.
+DROP FUNCTION IF EXISTS attorney_crm_derive_batch(INTEGER, INTEGER, INTEGER);
 CREATE OR REPLACE FUNCTION attorney_crm_derive_batch(
   p_year     INTEGER,
   p_limit    INTEGER DEFAULT 2000,
-  p_lag_days INTEGER DEFAULT 30
+  p_lag_days INTEGER DEFAULT 30,
+  p_shard    INTEGER DEFAULT 0,
+  p_shards   INTEGER DEFAULT 1
 ) RETURNS TABLE (out_docs INTEGER, out_with_text INTEGER, out_hits INTEGER, out_last_doc_id BIGINT)
 LANGUAGE plpgsql AS $$
 DECLARE
   v_after    BIGINT;
   v_after_at TIMESTAMPTZ;
   v_mode     TEXT;
+  v_shards   INTEGER;
   v_year_end TIMESTAMPTZ := make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv');
   v_from   TIMESTAMPTZ := make_timestamptz(p_year, 1, 1, 0, 0, 0, 'Europe/Kyiv');
   v_to     TIMESTAMPTZ := LEAST(make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv'),
@@ -119,13 +146,16 @@ DECLARE
   v_last   BIGINT;
   v_last_at TIMESTAMPTZ;
 BEGIN
-  INSERT INTO attorney_crm_practice_progress (partition_year) VALUES (p_year)
-  ON CONFLICT (partition_year) DO NOTHING;
-  SELECT pr.last_doc_id, pr.last_adj_at, pr.walk_mode INTO v_after, v_after_at, v_mode
-    FROM attorney_crm_practice_progress pr WHERE pr.partition_year = p_year FOR UPDATE;
+  INSERT INTO attorney_crm_practice_progress (partition_year, shard, shards) VALUES (p_year, p_shard, p_shards)
+  ON CONFLICT (partition_year, shard) DO NOTHING;
+  SELECT pr.last_doc_id, pr.last_adj_at, pr.walk_mode, pr.shards INTO v_after, v_after_at, v_mode, v_shards
+    FROM attorney_crm_practice_progress pr WHERE pr.partition_year = p_year AND pr.shard = p_shard FOR UPDATE;
+  IF v_shards <> p_shards THEN
+    RAISE EXCEPTION 'attorney_crm_derive_batch: year % shard % was created with % shards, called with %', p_year, p_shard, v_shards, p_shards;
+  END IF;
   IF v_mode IS NULL THEN
     v_mode := CASE WHEN v_year_end <= NOW() - make_interval(days => p_lag_days) THEN 'doc_id' ELSE 'adj_date' END;
-    UPDATE attorney_crm_practice_progress SET walk_mode = v_mode WHERE partition_year = p_year;
+    UPDATE attorney_crm_practice_progress SET walk_mode = v_mode WHERE partition_year = p_year AND shard = p_shard;
   END IF;
 
   CREATE TEMP TABLE IF NOT EXISTS _acrm_batch (
@@ -139,7 +169,7 @@ BEGIN
            extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint, d.adjudication_date
     FROM edrsr_documents d
     WHERE d.adjudication_date >= v_from AND d.adjudication_date < v_to
-      AND d.doc_id > v_after
+      AND d.doc_id > v_after AND d.doc_id % p_shards = p_shard
     ORDER BY d.doc_id
     LIMIT p_limit;
   ELSE
@@ -148,7 +178,7 @@ BEGIN
            extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint, d.adjudication_date
     FROM edrsr_documents d
     WHERE d.adjudication_date >= v_from AND d.adjudication_date < v_to
-      AND (d.adjudication_date, d.doc_id) > (v_after_at, v_after)
+      AND (d.adjudication_date, d.doc_id) > (v_after_at, v_after) AND d.doc_id % p_shards = p_shard
     ORDER BY d.adjudication_date, d.doc_id
     LIMIT p_limit;
   END IF;
@@ -158,7 +188,7 @@ BEGIN
     -- A closed year is exhausted for good; the open year just has nothing old enough yet.
     UPDATE attorney_crm_practice_progress
        SET done = (v_to < NOW() - make_interval(days => p_lag_days)), updated_at = NOW()
-     WHERE partition_year = p_year;
+     WHERE partition_year = p_year AND shard = p_shard;
     RETURN QUERY SELECT 0, 0, 0, v_after;
     RETURN;
   END IF;
@@ -218,7 +248,7 @@ BEGIN
   SET last_doc_id = v_last, last_adj_at = v_last_at, docs_scanned = docs_scanned + v_docs,
       docs_with_text = docs_with_text + v_text, hits = hits + v_hits,
       updated_at = NOW()
-  WHERE partition_year = p_year;
+  WHERE partition_year = p_year AND shard = p_shard;
 
   RETURN QUERY SELECT v_docs, v_text, v_hits, v_last;
 END $$;
