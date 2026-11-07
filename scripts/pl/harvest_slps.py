@@ -42,15 +42,20 @@ CAND = "caseCouldHaveBeenAssignedToTheFollowingJudgesReferendaries"
 
 
 def resources(s):
-    out, page = [], 1
+    """Daily report resources, deduplicated. Sorted by id, because the default
+    order shifts between pages and repeats or skips rows. The dataset also
+    holds a JSON schema resource, which is not a report."""
+    out, page = {}, 1
     while True:
         d = s.get(f"{DANE}/datasets/{DATASET}/resources",
-                  params={"per_page": 100, "page": page}, timeout=120).json()
+                  params={"per_page": 100, "page": page, "sort": "id"},
+                  timeout=120).json()
         for r in d["data"]:
             a = r["attributes"]
-            out.append((int(r["id"]), a.get("title"), a.get("download_url")))
+            if re.match(r"Raport \d{4}-\d{2}-\d{2}", a.get("title") or ""):
+                out[int(r["id"])] = (int(r["id"]), a.get("title"), a.get("download_url"))
         if len(d["data"]) < 100:
-            return out
+            return list(out.values())
         page += 1
 
 
