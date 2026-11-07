@@ -19,6 +19,7 @@ export interface AppDeps {
 
 export function createApp(deps: AppDeps): Express {
   const { pool, rateLimit } = deps;
+  const secret = deps.config.sessionSecret;
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -30,12 +31,13 @@ export function createApp(deps: AppDeps): Express {
       await pool.query('SELECT 1');
       res.json({ ok: true });
     } catch (err) {
-      res.status(503).json({ ok: false, error: (err as Error).message });
+      process.stderr.write(`[attorney_crm] healthz: ${(err as Error).message}\n`);
+      res.status(503).json({ ok: false });
     }
   });
 
-  app.use(authRoutes(pool, rateLimit));
-  app.use(requireLogin(pool));
+  app.use(authRoutes(pool, rateLimit, secret));
+  app.use(requireLogin(pool, secret));
   app.use(advocatesRoutes(pool));
   app.use(advocateRoutes(pool));
   app.use(todayRoutes(pool));
@@ -45,7 +47,7 @@ export function createApp(deps: AppDeps): Express {
   });
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     process.stderr.write(`[attorney_crm] ${err.stack ?? err.message}\n`);
-    res.status(500).type('html').send(renderPage({ title: 'Помилка', user: res.locals.user, body: html`<h1>Сталася помилка</h1><p class="muted">${err.message}</p>` }));
+    res.status(500).type('html').send(renderPage({ title: 'Помилка', user: res.locals.user, body: html`<h1>Сталася помилка</h1><p class="muted">Спробуйте ще раз за хвилину. Якщо повторюється, напишіть Володимиру.</p>` }));
   });
   return app;
 }

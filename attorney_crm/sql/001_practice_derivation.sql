@@ -30,8 +30,14 @@ CREATE INDEX IF NOT EXISTS idx_attorney_crm_practice_cases_kind
   ON attorney_crm_practice_cases (justice_kind, advocate_source_id);
 
 -- ── Resumable cursor, one row per ЄДРСР partition year ─────────────────────────
+-- The walk is ordered by (adjudication_date, doc_id), not doc_id alone: doc_ids
+-- are assigned at publication and ЄДРСР publishes late, so a doc_id cursor
+-- combined with the 30-day lag filter would skip every promptly published
+-- decision for good. With the date order, the open year simply resumes from
+-- last_adj_at up to now − lag on every daily run.
 CREATE TABLE IF NOT EXISTS attorney_crm_practice_progress (
   partition_year SMALLINT    PRIMARY KEY,
+  last_adj_at    TIMESTAMPTZ NOT NULL DEFAULT '-infinity',
   last_doc_id    BIGINT      NOT NULL DEFAULT 0,
   docs_scanned   BIGINT      NOT NULL DEFAULT 0,
   docs_with_text BIGINT      NOT NULL DEFAULT 0,
@@ -39,6 +45,7 @@ CREATE TABLE IF NOT EXISTS attorney_crm_practice_progress (
   done           BOOLEAN     NOT NULL DEFAULT FALSE,
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE attorney_crm_practice_progress ADD COLUMN IF NOT EXISTS last_adj_at TIMESTAMPTZ NOT NULL DEFAULT '-infinity';
 
 -- ── Registry snapshot for matching ─────────────────────────────────────────────
 -- Names in decisions are declined («Макеєва Дмитра Вячеславовича»), registry names
@@ -74,9 +81,10 @@ BEGIN
 END $$;
 
 -- ── One batch of the derivation ────────────────────────────────────────────────
--- Walks edrsr_documents of one partition year in doc_id order, starting after the
--- stored cursor, at most p_limit documents, skipping anything adjudicated less than
--- p_lag_days ago (full texts arrive late; see the design). Joins the full text,
+-- Walks edrsr_documents of one partition year in (adjudication_date, doc_id) order,
+-- starting after the stored cursor, at most p_limit documents, stopping p_lag_days
+-- short of now (full texts arrive late; see the design). The open year is never
+-- marked done: each run resumes from the cursor and scans whatever became old enough. Joins the full text,
 -- extracts «адвокат(а|ом|…) Прізвище Ім'я По батькові», keeps only names that match
 -- exactly one registry row, and upserts (advocate, cause_num). Cursor advance and
 -- upsert are one transaction (the function body), so a restart resumes cleanly.
@@ -92,7 +100,8 @@ CREATE OR REPLACE FUNCTION attorney_crm_derive_batch(
 ) RETURNS TABLE (out_docs INTEGER, out_with_text INTEGER, out_hits INTEGER, out_last_doc_id BIGINT)
 LANGUAGE plpgsql AS $$
 DECLARE
-  v_after  BIGINT;
+  v_after    BIGINT;
+  v_after_at TIMESTAMPTZ;
   v_from   TIMESTAMPTZ := make_timestamptz(p_year, 1, 1, 0, 0, 0, 'Europe/Kyiv');
   v_to     TIMESTAMPTZ := LEAST(make_timestamptz(p_year + 1, 1, 1, 0, 0, 0, 'Europe/Kyiv'),
                                 NOW() - make_interval(days => p_lag_days));
@@ -100,31 +109,37 @@ DECLARE
   v_text   INTEGER := 0;
   v_hits   INTEGER := 0;
   v_last   BIGINT;
+  v_last_at TIMESTAMPTZ;
 BEGIN
   INSERT INTO attorney_crm_practice_progress (partition_year) VALUES (p_year)
   ON CONFLICT (partition_year) DO NOTHING;
-  SELECT pr.last_doc_id INTO v_after FROM attorney_crm_practice_progress pr WHERE pr.partition_year = p_year FOR UPDATE;
+  SELECT pr.last_doc_id, pr.last_adj_at INTO v_after, v_after_at
+    FROM attorney_crm_practice_progress pr WHERE pr.partition_year = p_year FOR UPDATE;
 
   CREATE TEMP TABLE IF NOT EXISTS _acrm_batch (
-    doc_id BIGINT, justice_kind SMALLINT, category_code INTEGER, cause_num TEXT, yr SMALLINT
+    doc_id BIGINT, justice_kind SMALLINT, category_code INTEGER, cause_num TEXT, yr SMALLINT, adj_at TIMESTAMPTZ
   ) ON COMMIT DROP;
   TRUNCATE _acrm_batch;
 
   INSERT INTO _acrm_batch
   SELECT d.doc_id, d.justice_kind, d.category_code, d.cause_num,
-         extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint
+         extract(year FROM d.adjudication_date AT TIME ZONE 'Europe/Kyiv')::smallint, d.adjudication_date
   FROM edrsr_documents d
   WHERE d.adjudication_date >= v_from AND d.adjudication_date < v_to
-    AND d.doc_id > v_after
-  ORDER BY d.doc_id
+    AND (d.adjudication_date, d.doc_id) > (v_after_at, v_after)
+  ORDER BY d.adjudication_date, d.doc_id
   LIMIT p_limit;
 
-  SELECT count(*), max(doc_id) INTO v_docs, v_last FROM _acrm_batch;
+  SELECT count(*) INTO v_docs FROM _acrm_batch;
   IF v_docs = 0 THEN
-    UPDATE attorney_crm_practice_progress SET done = TRUE, updated_at = NOW() WHERE partition_year = p_year;
+    -- A closed year is exhausted for good; the open year just has nothing old enough yet.
+    UPDATE attorney_crm_practice_progress
+       SET done = (v_to < NOW() - make_interval(days => p_lag_days)), updated_at = NOW()
+     WHERE partition_year = p_year;
     RETURN QUERY SELECT 0, 0, 0, v_after;
     RETURN;
   END IF;
+  SELECT adj_at, doc_id INTO v_last_at, v_last FROM _acrm_batch ORDER BY adj_at DESC, doc_id DESC LIMIT 1;
 
   WITH texts AS (
     SELECT b.doc_id, b.justice_kind, b.category_code, b.cause_num, b.yr, f.full_text
@@ -173,7 +188,7 @@ BEGIN
   SELECT (SELECT n FROM counted), (SELECT count(*) FROM upserted) INTO v_text, v_hits;
 
   UPDATE attorney_crm_practice_progress
-  SET last_doc_id = v_last, docs_scanned = docs_scanned + v_docs,
+  SET last_doc_id = v_last, last_adj_at = v_last_at, docs_scanned = docs_scanned + v_docs,
       docs_with_text = docs_with_text + v_text, hits = hits + v_hits,
       updated_at = NOW()
   WHERE partition_year = p_year;
@@ -183,7 +198,8 @@ END $$;
 
 -- ── What the CRM reads ─────────────────────────────────────────────────────────
 -- Distinct cases per advocate per proceeding kind and category, with the years.
--- REFRESH MATERIALIZED VIEW CONCURRENTLY needs the unique index below.
+-- Created WITH DATA (empty and instant on a fresh database) so queries never hit an
+-- unpopulated view; REFRESH ... CONCURRENTLY needs the unique index below.
 CREATE MATERIALIZED VIEW IF NOT EXISTS attorney_crm_practice_stats AS
 SELECT advocate_source_id, justice_kind, category_code,
        count(*)::integer AS cases,
@@ -191,7 +207,7 @@ SELECT advocate_source_id, justice_kind, category_code,
        max(last_year)    AS last_year
 FROM attorney_crm_practice_cases
 GROUP BY advocate_source_id, justice_kind, category_code
-WITH NO DATA;
+WITH DATA;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_attorney_crm_practice_stats_pk
   ON attorney_crm_practice_stats (advocate_source_id, justice_kind, category_code);
 CREATE INDEX IF NOT EXISTS idx_attorney_crm_practice_stats_kind

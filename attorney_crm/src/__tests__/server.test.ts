@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { createHash } from 'crypto';
+import { createHmac } from 'crypto';
 import { createApp } from '../server';
 import { LoginRateLimit } from '../auth/rate-limit';
 import { hashPassword } from '../auth/password';
@@ -32,7 +32,7 @@ function appWith(pool: ReturnType<typeof fakePool>, rateLimit = new LoginRateLim
 
 function sessionFor(pool: ReturnType<typeof fakePool>, token: string) {
   pool.on((t, v) =>
-    t.includes('FROM attorney_crm_sessions') && v?.[0] === createHash('sha256').update(token).digest('hex')
+    t.includes('FROM attorney_crm_sessions') && v?.[0] === createHmac('sha256', config.sessionSecret).update(token).digest('hex')
       ? [{ id: 1, email: 'v@legal.org.ua', display_name: 'V', expires_at: new Date('2030-01-01') }]
       : undefined,
   );
@@ -109,6 +109,30 @@ test('POST /logout clears the cookie and redirects to /login', async () => {
   expect(res.status).toBe(302);
   expect(res.headers.location).toBe('/login');
   expect(pool.calls.some((c) => c.text.startsWith('DELETE FROM attorney_crm_sessions'))).toBe(true);
+  const cookie = String(res.headers['set-cookie']);
+  expect(cookie).toMatch(/^acrm_session=;/);
+  expect(cookie).toContain('Expires=Thu, 01 Jan 1970');
+  expect(cookie).not.toContain('Max-Age=2592000');
+});
+
+test('an expired session cookie is cleared and the request redirected', async () => {
+  const pool = fakePool();
+  pool.on((t) => (t.includes('FROM attorney_crm_sessions') ? [{ id: 1, email: 'v@legal.org.ua', display_name: 'V', expires_at: new Date('2020-01-01') }] : undefined));
+  const res = await request(appWith(pool)).get('/advocates').set('Cookie', 'acrm_session=old');
+  expect(res.status).toBe(302);
+  expect(String(res.headers['set-cookie'])).toContain('Expires=Thu, 01 Jan 1970');
+});
+
+test('database errors are not echoed to clients', async () => {
+  const pool = fakePool();
+  pool.on((t) => { if (t === 'SELECT 1' || t.includes('FROM attorney_crm_sessions')) throw new Error('connect ECONNREFUSED postgres-local:5432'); return undefined; });
+  const h = await request(appWith(pool)).get('/healthz');
+  expect(h.status).toBe(503);
+  expect(h.text).not.toContain('postgres-local');
+  const p = await request(appWith(pool)).get('/advocates').set('Cookie', 'acrm_session=x');
+  expect(p.status).toBe(500);
+  expect(p.text).toContain('Сталася помилка');
+  expect(p.text).not.toContain('postgres-local');
 });
 
 test('unknown route renders a Ukrainian 404', async () => {

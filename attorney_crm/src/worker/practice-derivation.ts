@@ -58,7 +58,12 @@ export async function runDerivation(pool: Queryable, o: DerivationOptions): Prom
     hits += yearHits;
   }
   try {
-    await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY attorney_crm_practice_stats');
+    // CONCURRENTLY is refused on a never-populated view (fresh database); do a plain refresh then.
+    const pop = await pool.query<{ relispopulated: boolean }>(
+      "SELECT relispopulated FROM pg_class WHERE relname = 'attorney_crm_practice_stats'",
+    );
+    const populated = pop.rows[0]?.relispopulated === true;
+    await pool.query(`REFRESH MATERIALIZED VIEW ${populated ? 'CONCURRENTLY ' : ''}attorney_crm_practice_stats`);
     o.log('practice stats refreshed');
   } catch (err) {
     o.log(`refresh failed: ${(err as Error).message}`);
