@@ -1,4 +1,5 @@
-# Deploy lawrider.ch (Swiss product) to cthulhu (local.lex), next to legal.org.ua.
+# Deploy lawrider.ch (Swiss product) and lawrider.pl (Polish, same image, full
+# toolset) to cthulhu (local.lex), next to legal.org.ua.
 #
 # Standalone pipeline. It shares the machine with legal.org.ua and nothing else:
 # - its own runner: label `cthulhu-lawrider` (~/actions-runner-lawrider), so it
@@ -115,9 +116,21 @@ jobs:
             docker logs --tail 50 lawrider-app || true
             exit 1
           }
-          # the edge routes both hosts (inside the lawrider network)
+          for i in $(seq 1 40); do
+            state_pl=$(docker inspect -f '{{.State.Health.Status}}' lawrider-app-pl 2>/dev/null || echo starting)
+            [ "$state_pl" = "healthy" ] && break
+            sleep 15
+          done
+          [ "$state_pl" = "healthy" ] || {
+            echo "::error::lawrider-app-pl never went healthy (state=$state_pl)"
+            docker logs --tail 50 lawrider-app-pl || true
+            exit 1
+          }
+          # the edge routes every host (inside the lawrider network)
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: lawrider.ch' http://127.0.0.1/
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: mcp.lawrider.ch' http://127.0.0.1/health/ready
+          docker exec lawrider-edge wget -q -O /dev/null --header 'Host: lawrider.pl' http://127.0.0.1/
+          docker exec lawrider-edge wget -q -O /dev/null --header 'Host: mcp.lawrider.pl' http://127.0.0.1/health/ready
           # public path through the tunnel: only meaningful once DNS points at it
           if getent hosts mcp.lawrider.ch >/dev/null; then
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://mcp.lawrider.ch/health/ready || echo 000)
@@ -140,6 +153,15 @@ jobs:
           stray=$(printf '%s\n' $tools | grep -vE '^ch_' || true)
           if [ -n "$stray" ]; then
             echo "::error::non-Swiss tools advertised on the CH box: $stray"
+            exit 1
+          fi
+          # lawrider-app-pl is the opposite case: it must serve the whole registry
+          # (MCP_TOOLSET=all), so a Swiss-only or empty listing there is the bug.
+          tools_pl=$(docker exec lawrider-app-pl node -e 'require("http").get("http://127.0.0.1:3000/mcp",r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>{const j=JSON.parse(d);const t=(j.tools||(j.result&&j.result.tools)||[]).map(x=>x.name).sort();process.stdout.write(t.join(" "))})})')
+          echo "advertised (pl): $tools_pl"
+          [ -n "$tools_pl" ] || { echo "::error::lawrider-app-pl advertises no tools at all"; exit 1; }
+          if ! printf '%s\n' $tools_pl | grep -qE '^ch_' || ! printf '%s\n' $tools_pl | grep -qvE '^(ch|uk)_'; then
+            echo "::error::lawrider-app-pl must advertise the full registry (ch_ + ua) but got: $tools_pl"
             exit 1
           fi
           echo "lawrider deploy OK"
