@@ -1,6 +1,8 @@
 # lawrider.ch stack on cthulhu (local.lex), next to legal.org.ua.
 # Serves: the static lawrider.ch site + the unified-gateway MCP API
-# (ch_* tools only, MCP_TOOLSET=ch) on mcp.lawrider.ch.
+# (ch_* tools only, MCP_TOOLSET=ch) on mcp.lawrider.ch, and since 2026-11-07
+# the same image once more as `app-pl` for lawrider.pl (MCP_TOOLSET=all on
+# mcp.lawrider.pl; the Polish corpus pl_* lives in this stack's Postgres).
 #
 # Deployed by .github/workflows/deploy-lawrider-cthulhu.yml on its own runner
 # (label cthulhu-lawrider), from its own checkout ~/lawrider/repo.
@@ -197,6 +199,34 @@ services:
           memory: 6G
     networks: [lawrider]
 
+  # lawrider.pl: a second instance of the same image on the same Postgres/Redis,
+  # reached as mcp.lawrider.pl through lawrider-edge. It serves the FULL tool
+  # registry (MCP_TOOLSET=all), which is what the Polish product is meant to
+  # expose; the pl_* tables (164K acts, 673K articles, 2.86M court decisions,
+  # restored 2026-11-07 from the AWS prod archive) live in pg-lawrider next to
+  # the ch_* corpus. mcp.lawrider.ch keeps its Swiss-only gate untouched.
+  app-pl:
+    extends:
+      service: app
+    container_name: lawrider-app-pl
+    environment:
+      MCP_TOOLSET: "all"
+      PUBLIC_URL: https://lawrider.pl
+      FRONTEND_URL: https://lawrider.pl
+      ALLOWED_ORIGINS: https://lawrider.pl,https://mcp.lawrider.pl
+      WEBAUTHN_RP_ID: lawrider.pl
+      WEBAUTHN_ORIGIN: https://lawrider.pl
+      TZ: Europe/Warsaw
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - app_pl_data:/app/data
+
   qdrant:
     image: qdrant/qdrant:v1.19.0
     container_name: qdrant-lawrider
@@ -267,7 +297,8 @@ services:
           memory: 256M
     networks: [lawrider]
 
-  # Internal edge: host routing for lawrider.ch / www / mcp / check.
+  # Internal edge: host routing for lawrider.ch / www / mcp / check and
+  # lawrider.pl / www / mcp.
   # Plain HTTP on the lawrider network only; TLS ends at Cloudflare and the
   # tunnel below is the only way in. No host ports.
   edge:
@@ -317,6 +348,7 @@ services:
 
 volumes:
   app_data:
+  app_pl_data:
   tei_cache:
 
 networks:
