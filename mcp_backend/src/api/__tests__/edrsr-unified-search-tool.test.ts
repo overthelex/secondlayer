@@ -997,4 +997,27 @@ describe('EdsrUnifiedSearchTool', () => {
       expect(mockVectorizer.semanticSearch).toHaveBeenCalledWith('тест', expect.anything(), 3);
     });
   });
+
+  describe('exact mode ordering', () => {
+    it('asks the FTS service for the newest-first page instead of a ranked one', async () => {
+      // Ranking reads every candidate's tsv and timed out cold on legal_prod for a rare
+      // token («Еверлігал», 800 matches, 06.11.2026); every exact hit contains the token,
+      // so recency is the only order that says anything.
+      db = makeDb(() => ({ rows: [] }));
+      tool = new EdsrUnifiedSearchTool(db, mockFtsService);
+
+      const result = await tool.executeTool('search_court_decisions', {
+        mode: 'exact', query: 'Еверлігал', limit: 5, offset: 10,
+      });
+
+      expect(mockFtsService.searchFulltext).toHaveBeenCalledTimes(1);
+      const call = (mockFtsService.searchFulltext as jest.Mock).mock.calls[0] as any[];
+      expect(call[0]).toBe('Еверлігал');
+      expect(call[3]).toBe(5);
+      expect(call[4]).toBe(10);
+      expect(call[7]).toEqual({ orderBy: 'recency' });
+      const parsed = JSON.parse(result?.content[0].text || '{}');
+      expect(parsed.mode).toBe('exact');
+    });
+  });
 });

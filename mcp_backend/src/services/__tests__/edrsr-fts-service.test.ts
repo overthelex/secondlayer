@@ -1335,3 +1335,71 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
   });
 });
+
+describe('EdsrFtsService.searchFulltext orderBy recency (exact mode)', () => {
+  const makeDbWithRows = (rowCount: number, candTotal: number) => {
+    const calls: { sql: string; params: any[] }[] = [];
+    const rows = Array.from({ length: rowCount }, (_v, i) => ({
+      doc_id: i + 1, headline: 'x', rank: 0, cand_total: candTotal,
+    }));
+    return {
+      calls,
+      query: jest.fn((sql: string, params: any[]) => {
+        calls.push({ sql, params });
+        return Promise.resolve({ rows });
+      }),
+    };
+  };
+
+  it('ranks by ts_rank_cd over the whole candidate set by default', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDbWithRows(1, 1);
+    await svc.searchFulltext('Еверлігал', db as any, {}, 3, 0);
+    const sql = db.calls[0].sql;
+    expect(sql).toContain('ts_rank_cd(f.tsv');
+    expect(sql).toMatch(/ORDER BY rank DESC\s+LIMIT \$\d+ OFFSET \$\d+/);
+    expect(sql).not.toContain('page AS MATERIALIZED');
+  });
+
+  it('by recency never reads tsv: no ts_rank_cd, page cut from cand before the fulltext join', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDbWithRows(3, 800);
+    const res = await svc.searchFulltext('Еверлігал', db as any, {}, 3, 0, undefined, undefined, { orderBy: 'recency' });
+    const { sql, params } = db.calls[0];
+    expect(sql).not.toContain('ts_rank_cd');
+    expect(sql).toContain('0::real AS rank');
+    // The page is the sorted head of the materialized candidates, paged by the caller's
+    // limit/offset params, and only those rows are joined back to edrsr_fulltext.
+    expect(sql).toMatch(/page AS MATERIALIZED \(\s*SELECT cand\.doc_id, cand\.adj_year FROM cand\s+ORDER BY cand\.adj_year DESC NULLS LAST, cand\.doc_id DESC\s+LIMIT \$(\d+) OFFSET \$(\d+)\s*\)/);
+    expect(sql).toMatch(/JOIN page ON page\.doc_id = f\.doc_id AND page\.adj_year = f\.adj_year/);
+    expect(sql).toMatch(/ORDER BY page\.adj_year DESC NULLS LAST, page\.doc_id DESC\s*$/);
+    expect(sql).not.toMatch(/JOIN cand ON/);
+    expect(params.slice(-2)).toEqual([4, 0]);
+    expect(res.total).toBe(800);
+    expect(res.returned).toBe(3);
+  });
+
+  it('keeps the metadata join when filters are present, still without ranking', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeDbWithRows(1, 1);
+    await svc.searchFulltext('Еверлігал', db as any, { justice_kind: 4 }, 3, 0, undefined, undefined, { orderBy: 'recency' });
+    const sql = db.calls[0].sql;
+    expect(sql).not.toContain('ts_rank_cd');
+    expect(sql).toMatch(/JOIN page ON page\.doc_id = f\.doc_id AND page\.adj_year = f\.adj_year\s+JOIN edrsr_documents d ON d\.doc_id = f\.doc_id/);
+  });
+
+  it('keys the cache separately from the ranked page of the same query', async () => {
+    const svc = new EdsrFtsService();
+    const cache = {
+      getCachedFtsResults: jest.fn(() => Promise.resolve(null)),
+      setCachedFtsResults: jest.fn(() => Promise.resolve()),
+    };
+    (svc as any).edsrCache = cache;
+    const db = makeDbWithRows(1, 1);
+    await svc.searchFulltext('Еверлігал', db as any, {}, 3, 0);
+    await svc.searchFulltext('Еверлігал', db as any, {}, 3, 0, undefined, undefined, { orderBy: 'recency' });
+    const keys = (cache.getCachedFtsResults.mock.calls as any[]).map((c) => c[0]);
+    expect(keys[0]).toBe('y1|Еверлігал');
+    expect(keys[1]).toBe('y1|Еверлігал|rec');
+  });
+});
