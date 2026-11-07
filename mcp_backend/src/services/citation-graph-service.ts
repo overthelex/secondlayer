@@ -360,6 +360,29 @@ export class CitationGraphService {
     return rows[0] ?? null;
   }
 
+  /**
+   * The decision of a case to draw the article graph for, when the caller gave a case
+   * number rather than a doc_id. A case is many documents (ухвали about the hearing,
+   * the рішення, the постанова of each instance) and most of them cite nothing: for
+   * 200/2129/24 the newest document was a КАС ухвала with no edges while the постанова
+   * had five, so "latest by date" answered an empty graph for a case the graph covers.
+   * Picks the member with the most CITES_ARTICLE edges, newest doc_id on a tie; null
+   * when the case is not in the graph at all (caller falls back to Postgres).
+   */
+  async resolveCaseDocId(causeNum: string): Promise<string | null> {
+    const rows = await this.run(
+      `MATCH (c:Case {cause_num: $cn})<-[:IN_CASE]-(d:Decision)
+       OPTIONAL MATCH (d)-[r:CITES_ARTICLE]->(:Article)
+       WITH d, count(r) AS edges
+       RETURN d.doc_id AS docId, edges
+       ORDER BY edges DESC, toInteger(d.doc_id) DESC
+       LIMIT 1`,
+      { cn: causeNum },
+      (r) => ({ docId: String(r.get('docId')), edges: toNum(r.get('edges')) })
+    );
+    return rows[0]?.docId ?? null;
+  }
+
   /** Decisions that cite a given case (precedent inbound). */
   async getCaseCitedBy(causeNum: string, limit = 100): Promise<string[]> {
     return this.run(

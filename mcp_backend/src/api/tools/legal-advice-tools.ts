@@ -358,7 +358,17 @@ export class LegalAdviceTools extends BaseToolHandler {
 
     // CITATION_BACKEND=neo4j → serve the decision→article graph from Neo4j.
     if (this.citationGraphService?.isEnabled()) {
-      const docId = await this.resolveToEdrsrDocId(input);
+      // A case number names many documents; ask the graph which member actually has
+      // article edges before falling back to "newest by date" from edrsr_documents.
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isCaseNumber = !/^\d+$/.test(input) && !uuidRegex.test(input);
+      const fromGraph = isCaseNumber
+        ? await this.citationGraphService.resolveCaseDocId(input).catch((error: any) => {
+            logger.warn('[LegalAdviceTools] Neo4j case lookup failed; resolving via edrsr_documents', { input, error: error?.message });
+            return null;
+          })
+        : null;
+      const docId = fromGraph ?? await this.resolveToEdrsrDocId(input);
       if (!docId) {
         return this.wrapResponse({
           error: `Не вдалося конвертувати "${input}" у doc_id ЄДРСР для графа цитувань.`,
