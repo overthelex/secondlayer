@@ -7,6 +7,7 @@ import { requireLogin } from './auth/middleware';
 import { authRoutes } from './routes/auth';
 import { advocatesRoutes } from './routes/advocates';
 import { advocateRoutes } from './routes/advocate';
+import { todayRoutes } from './routes/today';
 import { html } from './views/html';
 import { renderPage } from './views/layout';
 
@@ -37,7 +38,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(requireLogin(pool));
   app.use(advocatesRoutes(pool));
   app.use(advocateRoutes(pool));
-  app.get('/', (_req, res) => res.redirect('/advocates'));
+  app.use(todayRoutes(pool));
 
   app.use((_req, res) => {
     res.status(404).type('html').send(renderPage({ title: 'Не знайдено', user: res.locals.user, body: html`<h1>Сторінку не знайдено</h1>` }));

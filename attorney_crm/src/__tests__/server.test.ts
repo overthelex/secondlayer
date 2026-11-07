@@ -171,3 +171,19 @@ describe('advocate page', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('today page', () => {
+  test('GET / lists due leads (overdue marked) and recent notes', async () => {
+    const pool = fakePool();
+    sessionFor(pool, 'tok');
+    pool.on((t) => (t.includes('l.next_contact_at < $1') ? [{ advocate_source_id: '42', family_name: 'Коваль', first_name: 'Іван', patronymic: 'П', city: 'Київ', phone: '+38(044)1', stage: 'contacted', next_contact_at: new Date('2020-01-01'), last_note: 'раніше', last_note_at: new Date() }] : undefined));
+    pool.on((t) => (t.includes('ORDER BY n.created_at DESC') && t.includes('LIMIT $1') ? [{ id: 1, advocate_source_id: '42', kind: 'call', body: 'Домовились', created_at: new Date(), author: 'V', family_name: 'Коваль', first_name: 'Іван', patronymic: 'П' }] : undefined));
+    const res = await request(appWith(pool)).get('/').set('Cookie', 'acrm_session=tok');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Подзвонити сьогодні');
+    expect(res.text).toContain('Нові нотатки');
+    expect(res.text).toContain('прострочено');
+    expect(res.text).toContain('Домовились');
+    expect(res.text).toContain('href="/advocates/42"');
+  });
+});

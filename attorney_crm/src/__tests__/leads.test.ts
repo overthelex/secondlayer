@@ -48,3 +48,29 @@ test('addNote inserts the trimmed body and listNotes orders newest first', async
   await listNotes(pool as any, '42');
   expect(pool.calls[1].text).toContain('ORDER BY n.created_at DESC');
 });
+
+import { dueToday, recentNotes, endOfKyivDay } from '../leads/repo';
+
+test('endOfKyivDay is the next Kyiv midnight in UTC', () => {
+  // 07.11.2026 10:00 UTC → Kyiv (UTC+2) end of day = 08.11 00:00 Kyiv = 07.11 22:00 UTC
+  expect(endOfKyivDay(new Date('2026-11-07T10:00:00Z')).toISOString()).toBe('2026-11-07T22:00:00.000Z');
+  // summer: 01.07.2026 23:30 UTC is already 02.07 02:30 Kyiv (UTC+3) → 03.07 00:00 Kyiv = 02.07 21:00 UTC
+  expect(endOfKyivDay(new Date('2026-07-01T23:30:00Z')).toISOString()).toBe('2026-07-02T21:00:00.000Z');
+});
+
+test('dueToday selects leads before end of today, overdue first', async () => {
+  const pool = fakePool([{ advocate_source_id: '42', family_name: 'Коваль', first_name: 'Іван', patronymic: 'П', city: 'Київ', phone: '1', stage: 'contacted', next_contact_at: new Date('2026-11-01'), last_note: 'x', last_note_at: new Date() }]);
+  const rows = await dueToday(pool as any, new Date('2026-11-07T10:00:00Z'));
+  expect(pool.calls[0].text).toContain('l.next_contact_at < $1');
+  expect(pool.calls[0].text).toContain('ORDER BY l.next_contact_at ASC');
+  expect((pool.calls[0].values![0] as Date).toISOString()).toBe('2026-11-07T22:00:00.000Z');
+  expect(rows[0]).toMatchObject({ sourceId: '42', fullName: 'Коваль Іван П', overdue: true });
+});
+
+test('recentNotes limits to 30 newest with author and advocate name', async () => {
+  const pool = fakePool([]);
+  await recentNotes(pool as any);
+  expect(pool.calls[0].text).toContain('ORDER BY n.created_at DESC');
+  expect(pool.calls[0].values).toEqual([30]);
+  expect(pool.calls[0].text).toContain('opendata_advocates');
+});

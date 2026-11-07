@@ -107,3 +107,99 @@ export async function listNotes(pool: Queryable, sourceId: string): Promise<Note
   );
   return r.rows.map((n) => ({ id: Number(n.id), advocateSourceId: n.advocate_source_id, userId: n.user_id, kind: n.kind, body: n.body, createdAt: new Date(n.created_at), author: n.author }));
 }
+
+// ── Today page ────────────────────────────────────────────────────────────────
+
+/** Midnight that ends the current Kyiv day, as a UTC instant. */
+export function endOfKyivDay(now: Date = new Date()): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(now); // YYYY-MM-DD in Kyiv
+  const [y, m, d] = ymd.split('-').map(Number);
+  const nextUtcMidnight = Date.UTC(y, m - 1, d + 1);
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Kyiv', timeZoneName: 'longOffset' }).formatToParts(new Date(nextUtcMidnight));
+  const off = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+02:00';
+  const om = /GMT([+-])(\d{2}):(\d{2})/.exec(off);
+  const offsetMin = om ? (om[1] === '-' ? -1 : 1) * (Number(om[2]) * 60 + Number(om[3])) : 120;
+  return new Date(nextUtcMidnight - offsetMin * 60_000);
+}
+
+export interface DueRow {
+  sourceId: string;
+  fullName: string;
+  city: string | null;
+  phone: string | null;
+  stage: Stage;
+  nextContactAt: Date;
+  overdue: boolean;
+  lastNote: string | null;
+  lastNoteAt: Date | null;
+}
+
+/** Leads due today or earlier (Kyiv time), earliest first so overdue ones lead. */
+export async function dueToday(pool: Queryable, now: Date = new Date()): Promise<DueRow[]> {
+  const bound = endOfKyivDay(now);
+  const startOfToday = new Date(bound.getTime() - 24 * 3600 * 1000);
+  const r = await pool.query<{
+    advocate_source_id: string; family_name: string; first_name: string; patronymic: string; city: string | null;
+    phone: string | null; stage: Stage; next_contact_at: Date; last_note: string | null; last_note_at: Date | null;
+  }>(
+    `SELECT l.advocate_source_id, a.family_name, a.name AS first_name, a.additional_name AS patronymic,
+            a.work_address->0->>'workAddressCity' AS city,
+            NULLIF(TRIM(a.work_address->0->>'workAddressContacts'), '') AS phone,
+            l.stage, l.next_contact_at, ln.body AS last_note, ln.created_at AS last_note_at
+       FROM attorney_crm_leads l
+       JOIN opendata_advocates a ON a.source_id = l.advocate_source_id
+       LEFT JOIN LATERAL (
+         SELECT body, created_at FROM attorney_crm_notes n
+          WHERE n.advocate_source_id = l.advocate_source_id ORDER BY created_at DESC LIMIT 1
+       ) ln ON true
+      WHERE l.next_contact_at < $1
+      ORDER BY l.next_contact_at ASC, a.family_name ASC
+      LIMIT 500`,
+    [bound],
+  );
+  return r.rows.map((x) => {
+    const nextContactAt = new Date(x.next_contact_at);
+    return {
+      sourceId: x.advocate_source_id,
+      fullName: [x.family_name, x.first_name, x.patronymic].filter(Boolean).join(' '),
+      city: x.city,
+      phone: x.phone,
+      stage: x.stage,
+      nextContactAt,
+      overdue: nextContactAt < startOfToday,
+      lastNote: x.last_note,
+      lastNoteAt: x.last_note_at ? new Date(x.last_note_at) : null,
+    };
+  });
+}
+
+export interface NoteWithAdvocate extends NoteWithAuthor {
+  advocateName: string;
+}
+
+export async function recentNotes(pool: Queryable, limit = 30): Promise<NoteWithAdvocate[]> {
+  const r = await pool.query<{
+    id: number; advocate_source_id: string; user_id: number; kind: NoteKind; body: string; created_at: Date; author: string;
+    family_name: string | null; first_name: string | null; patronymic: string | null;
+  }>(
+    `SELECT n.id, n.advocate_source_id, n.user_id, n.kind, n.body, n.created_at,
+            COALESCE(NULLIF(u.display_name, ''), u.email) AS author,
+            a.family_name, a.name AS first_name, a.additional_name AS patronymic
+       FROM attorney_crm_notes n
+       JOIN attorney_crm_users u ON u.id = n.user_id
+       LEFT JOIN opendata_advocates a ON a.source_id = n.advocate_source_id
+      ORDER BY n.created_at DESC, n.id DESC
+      LIMIT $1`,
+    [limit],
+  );
+  return r.rows.map((n) => ({
+    id: Number(n.id),
+    advocateSourceId: n.advocate_source_id,
+    userId: n.user_id,
+    kind: n.kind,
+    body: n.body,
+    createdAt: new Date(n.created_at),
+    author: n.author,
+    advocateName: [n.family_name, n.first_name, n.patronymic].filter(Boolean).join(' ') || n.advocate_source_id,
+  }));
+}
