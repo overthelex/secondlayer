@@ -110,7 +110,9 @@ def patent_attorneys():
                   for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", tr, re.S)]
                  for tr in trs]
         if hdr is None and cells:
-            hdr = cells[0]
+            # header cells carry the sort arrows of the table UI
+            hdr = [re.sub(r"[\u2191-\u21ff\u25b2-\u25bc]", "", h).strip() for h in cells[0]]
+            cells[0] = hdr
         body = [c for c in cells[1:] if c and c != hdr]
         if not body or (rows and body[0] == prev_first):
             break
