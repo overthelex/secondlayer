@@ -17,6 +17,37 @@ export const HEARING_DAY_SQL = `(CASE
   WHEN hearing_date ~ '^\\d{4}-\\d{2}-\\d{2}' THEN substr(hearing_date, 1, 10)::date
 END)`;
 
+/** Calendar day of a hearing row («DD.MM.YYYY HH:MI» or ISO) for merging and ordering; '' when unparseable. */
+export function hearingDay(hearingDate: unknown): string {
+  const s = String(hearingDate ?? '');
+  const dmy = s.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+  if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : '';
+}
+
+/**
+ * One list out of the two sources. The same hearing can sit in both (the schedule
+ * snapshot and the archive it was later copied into): rows that agree on case
+ * number, day and court are one hearing, and the schedule row wins because it
+ * carries the room and the description. Newest day first, then the schedule's
+ * own time string.
+ */
+export function mergeHearings(schedule: any[], archive: any[]): any[] {
+  const key = (r: any) =>
+    `${String(r.case_number ?? '').replace(/\s+/g, '')}|${hearingDay(r.hearing_date)}|${String(r.court_name ?? '').trim().toLowerCase()}`;
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const row of [...schedule.map((r) => ({ ...r, source: 'schedule' })), ...archive.map((r) => ({ ...r, source: 'archive' }))]) {
+    const k = key(row);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(row);
+  }
+  return out.sort((a, b) => hearingDay(b.hearing_date).localeCompare(hearingDay(a.hearing_date))
+    || String(b.hearing_date ?? '').localeCompare(String(a.hearing_date ?? '')));
+}
+
 export function looksLikeCaseNumber(q: string): boolean {
   const t = q.replace(/\s+/g, '');
   return /^[0-9]{1,4}(-[а-яіїєa-z]{1,3})?\/[0-9]{1,6}\/[0-9]{1,6}(\/[0-9]{1,4})?(-[а-яіїєa-z]{1,3})?$/i.test(t)
@@ -42,7 +73,7 @@ export class CourtSessionTools extends BaseToolHandler {
 
 💰 Примерная стоимость: $0.001-$0.01 USD
 Знаходить заплановані та завершені засідання за номером справи, учасниками, суддею.
-Джерело: відкриті дані судової влади (30M+ засідань). Номер справи в query розпізнається автоматично.`,
+Джерела: опублікований розклад (найближчі засідання) та архів проведених засідань з 2020 року (30M+ з відкритих даних судової влади); кожен рядок позначено source=schedule|archive. Архів шукає за номером справи, учасником або судом (суддя — лише як додатковий фільтр). Номер справи в query розпізнається автоматично.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -169,7 +200,15 @@ export class CourtSessionTools extends BaseToolHandler {
       if (asCaseNumber) odArgs.case_number = query.replace(/\s+/g, '');
       else odArgs.participant = query;
     }
-    opendataResults.push(...await this.searchScheduleFromOpendata(odArgs, limit));
+    // Two tables hold hearings: opendata_court_schedule is the published schedule (the
+    // coming weeks, ~600K rows) and court_sessions the archive of past hearings (30M+).
+    // Reading only the schedule answered "no hearings" for any case whose hearings had
+    // already taken place — 200/2129/24 had four in the archive (client report 06.11.2026).
+    const [scheduleRows, archiveRows] = await Promise.all([
+      this.searchScheduleFromOpendata(odArgs, limit),
+      this.searchArchiveSessions(odArgs, limit),
+    ]);
+    opendataResults.push(...mergeHearings(scheduleRows, archiveRows));
 
     const totalFound = opendataResults.length;
     if (totalFound === 0) {
@@ -184,6 +223,7 @@ export class CourtSessionTools extends BaseToolHandler {
       query: query || undefined,
       source: 'opendata',
       sessions_found: totalFound,
+      sources: { schedule: scheduleRows.length, archive: archiveRows.length },
     };
 
     if (opendataResults.length > 0) {
@@ -191,6 +231,72 @@ export class CourtSessionTools extends BaseToolHandler {
     }
 
     return this.wrapResponse(response);
+  }
+
+  /**
+   * Past hearings from court_sessions (30M+ rows). Only predicates its indexes answer
+   * anchor a statement: case_number (b-tree), participant and court_name (GIN on
+   * to_tsvector('simple', …)). judge_name has no index, so a judge alone would seq-scan
+   * the table: the archive leg is skipped then and the schedule answers on its own.
+   * Rows come back in the schedule's column shape so the two sources merge as one list.
+   */
+  private async searchArchiveSessions(args: any, limit: number): Promise<any[]> {
+    const { case_number, judge, participant, court_name, date_from, date_to, query } = args;
+    const participantText = participant || (query && !case_number ? query : undefined);
+    if (!case_number && !participantText && !court_name) return [];
+
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let pi = 1;
+
+    if (case_number) {
+      conditions.push(`case_number = $${pi}`);
+      values.push(case_number);
+      pi++;
+    }
+    if (participantText) {
+      conditions.push(`to_tsvector('simple', involved_parties) @@ plainto_tsquery('simple', $${pi})`);
+      values.push(participantText);
+      pi++;
+    }
+    if (court_name) {
+      conditions.push(`to_tsvector('simple', court_name) @@ plainto_tsquery('simple', $${pi})`);
+      values.push(court_name);
+      pi++;
+    }
+    if (judge) {
+      conditions.push(`judge_name ILIKE $${pi}`);
+      values.push(`%${judge}%`);
+      pi++;
+    }
+    if (date_from) {
+      conditions.push(`session_date >= $${pi}::date`);
+      values.push(date_from);
+      pi++;
+    }
+    if (date_to) {
+      conditions.push(`session_date <= $${pi}::date`);
+      values.push(date_to);
+      pi++;
+    }
+
+    values.push(Math.min(Number(limit) || 50, 100));
+
+    const sql = `SELECT to_char(session_date, 'DD.MM.YYYY') || COALESCE(' ' || NULLIF(session_time, ''), '') AS hearing_date,
+             court_name, case_number, judge_name AS judges, session_place AS court_room,
+             involved_parties AS case_involved, session_form AS case_description
+      FROM court_sessions
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY session_date DESC NULLS LAST, session_time DESC
+      LIMIT $${pi}`;
+
+    try {
+      const result = await this.db.query(sql, values);
+      return result.rows;
+    } catch (error: any) {
+      logger.error('search_court_schedule archive (court_sessions) error', { error: error.message });
+      return [];
+    }
   }
 
   private async searchScheduleFromOpendata(args: any, limit: number): Promise<any[]> {
