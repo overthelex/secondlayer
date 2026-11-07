@@ -1,5 +1,6 @@
 import { html, raw, type RawHtml } from './html';
 import type { User } from '../auth/users';
+import { assetUrl } from './assets';
 
 export type NavKey = 'today' | 'advocates';
 
@@ -16,10 +17,10 @@ const HEAD = (title: string) => html`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} · legal.org.ua CRM</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="${raw(assetUrl('favicon.svg'))}" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="${raw(assetUrl('app.css'))}">
 </head>`;
 
 export function renderPage(o: PageOptions): string {
@@ -28,7 +29,7 @@ export function renderPage(o: PageOptions): string {
   return html`${HEAD(o.title)}
 <body>
 <header class="topbar">
-  <a class="brand" href="/"><img src="/static/logo-white.png" alt="legal.org.ua" width="36" height="36"><span>legal.org.ua <small>CRM адвокатів</small></span></a>
+  <a class="brand" href="/"><img src="${raw(assetUrl('logo-white.png'))}" alt="legal.org.ua" width="36" height="36"><span>legal.org.ua <small>CRM адвокатів</small></span></a>
   <nav class="nav">${nav('today', '/', 'Сьогодні')}${nav('advocates', '/advocates', 'Адвокати')}</nav>
   ${o.user
     ? html`<form class="user" method="post" action="/logout"><span>${o.user.displayName || o.user.email}</span><button type="submit" class="btn btn-ghost">Вийти</button></form>`
