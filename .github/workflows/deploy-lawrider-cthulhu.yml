@@ -102,6 +102,12 @@ jobs:
         run: |
           # project-scoped: --remove-orphans only ever sees containers of project `lawrider`
           docker compose -p lawrider --env-file "$LR_ENV" up -d --remove-orphans
+          # The edge mounts ./nginx as a directory, so an edited edge.conf lands in the
+          # running container but nginx keeps the config it loaded at start. `up -d`
+          # does not recreate the edge when only that file changed (2026-11-07: the
+          # lawrider.pl hosts answered 444 after a green `up`), so reload it every time.
+          docker exec lawrider-edge nginx -t
+          docker exec lawrider-edge nginx -s reload
 
       - name: Health checks
         if: ${{ !inputs.build_only }}
