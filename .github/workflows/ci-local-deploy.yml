@@ -60,6 +60,7 @@ jobs:
       services_to_deploy: ${{ steps.changes.outputs.services_to_deploy }}
       monitoring: ${{ steps.changes.outputs.monitoring }}
       platform: ${{ steps.changes.outputs.platform }}
+      attorney_crm: ${{ steps.changes.outputs.attorney_crm }}
       frontend_tests_needed: ${{ steps.changes.outputs.frontend_tests_needed }}
       has_changes: ${{ steps.check.outputs.has_changes }}
     steps:
@@ -212,6 +213,10 @@ jobs:
       - name: Build platform
         if: needs.detect-changes.outputs.platform == 'true'
         run: cd platform && npm ci --legacy-peer-deps --no-audit --no-fund && npm run build
+
+      - name: Build and test attorney CRM
+        if: needs.detect-changes.outputs.attorney_crm == 'true'
+        run: cd attorney_crm && npm ci --no-audit --no-fund && npm run build && npx jest --forceExit
 
   # ─── Step 2b: Self-heal build failures with Claude Code (DISABLED) ──
   self-heal-build:
