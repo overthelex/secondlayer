@@ -169,7 +169,7 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
 
 5 режимів пошуку:
 • **structured** — за метаданими: номер справи, суддя, суд, дата, категорія, військові пресети. Найшвидший, коли відомі точні параметри.
-• **exact** — детермінований FTS по точному токену/фразі БЕЗ LLM-обробки: без переформулювання запиту, без term-relaxation і без фільтра релевантності та fallback у hybrid. Для пошуку конкретного номера заявки/свідоцтва/реєстру, коду чи будь-якого непрозорого токена в тексті рішення (напр. "m200604929"). Повертає ВСІ збіги. Латиниця/цифри проходять як є.
+• **exact** — детермінований FTS по точному токену/фразі БЕЗ LLM-обробки: без переформулювання запиту, без term-relaxation і без фільтра релевантності та fallback у hybrid. Для пошуку конкретного номера заявки/свідоцтва/реєстру, коду чи будь-якого непрозорого токена в тексті рішення (напр. "m200604929"). Повертає ВСІ збіги, найновіші першими (за датою, не за релевантністю — кожен збіг містить токен). Латиниця/цифри проходять як є.
 • **fulltext** — повнотекстовий пошук (PostgreSQL tsvector) з підсвіченими фрагментами + LLM-дистиляція запиту в ключові терміни. Для пошуку за ключовими словами та юридичними термінами (природномовний запит).
 • **hybrid** — FTS + семантичний пошук (Qdrant BGE-M3) з мерджем через Reciprocal Rank Fusion. Найкращий recall, коли запит містить і семантику, і точні токени. Семантична нога працює для ВСІХ видів судочинства (justice_kind 1-5).
 • **semantic** — чистий семантичний пошук по векторній базі Qdrant (296M чанків, увесь ЄДРСР). Працює для ВСІХ видів судочинства (justice_kind 1-5); justice_kind не обов'язковий (без нього шукає по всіх кодексах). Найкраще для концептуальних/розмовних запитів.
@@ -641,8 +641,12 @@ export class EdsrUnifiedSearchTool extends BaseToolHandler {
       };
 
       // Raw query straight to plainto_tsquery('simple', $1) — no reformulation, no relaxation.
+      // Newest first, not by rank: every hit contains the token, so relevance says nothing,
+      // while ranking reads every candidate's tsv and timed out cold on legal_prod (16.6 s for
+      // 2000 candidates against the 8 s statement budget — a client's «Еверлігал», 06.11.2026).
       const result = await this.ftsService.searchFulltext(
-        query, this.db, filters, args.limit || 20, args.offset || 0,
+        query, this.db, filters, args.limit || 20, args.offset || 0, undefined, undefined,
+        { orderBy: 'recency' },
       );
       const enriched = await this.enrichResults(result.results);
 

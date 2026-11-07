@@ -355,6 +355,17 @@ export interface EdsrFtsSearchOptions {
    * hybrid FTS leg) pass a smaller cap. Clamped to [1, FTS_CANDIDATE_CAP].
    */
   candidateCap?: number;
+  /**
+   * How the page is ordered. `rank` (default) is ts_rank_cd over the candidate set, which
+   * detoasts every candidate's tsv: measured cold on legal_prod (edrsr_fulltext on the HDD
+   * tablespace) 16.6 s for 2000 candidates against an 8 s statement timeout, so a rare
+   * token that matched 800 decisions came back `timed_out` instead of listing them.
+   * `recency` orders by adj_year, doc_id from the materialized candidate set alone and
+   * touches edrsr_fulltext only for the page it returns (headline), so the statement costs
+   * the GIN scan plus one row per returned hit. Relevance is meaningless for an exact
+   * token anyway: every candidate contains it.
+   */
+  orderBy?: 'rank' | 'recency';
 }
 
 export interface PartyCaseCount {
@@ -1073,7 +1084,12 @@ export class EdsrFtsService {
     // A non-default candidate cap changes `total`, so it is part of the key as well.
     // The `y1|` tag retires results cached before the newest-first candidate order (LEXAI-2109).
     const baseCacheKey = useTsq ? `y1|tsq:${topicalArg}` : `y1|${query}`;
-    const cacheKey = candidateCap === FTS_CANDIDATE_CAP ? baseCacheKey : `${baseCacheKey}|cap:${candidateCap}`;
+    const byRecency = options.orderBy === 'recency';
+    // A recency page and a rank page of the same query hold different rows: keep them apart.
+    const cacheKey = [
+      candidateCap === FTS_CANDIDATE_CAP ? baseCacheKey : `${baseCacheKey}|cap:${candidateCap}`,
+      ...(byRecency ? ['rec'] : []),
+    ].join('|');
 
     // Check cache first
     if (this.edsrCache) {
@@ -1260,14 +1276,17 @@ export class EdsrFtsService {
            'MaxWords=${FTS_HEADLINE_MAX_WORDS}, MinWords=${FTS_HEADLINE_MIN_WORDS}, StartSel=**, StopSel=**') AS headline`
         : `NULL AS headline`;
 
+      // By recency the rank is not computed: reading f.tsv for it is the cost this order exists
+      // to avoid, and the page is already in the order the caller asked for.
+      const rankExpr = byRecency ? `0::real AS rank` : `ts_rank_cd(f.tsv, ${topicalExpr}) AS rank`;
       return hasMetadataFilter
         ? `f.doc_id,
-           ts_rank_cd(f.tsv, ${topicalExpr}) AS rank,
+           ${rankExpr},
            ${headlineExpr},
            d.adjudication_date, d.cause_num, d.judge, d.court_code,
            d.justice_kind, d.judgment_code`
         : `f.doc_id,
-           ts_rank_cd(f.tsv, ${topicalExpr}) AS rank,
+           ${rankExpr},
            ${headlineExpr}`;
     };
 
@@ -1337,19 +1356,38 @@ export class EdsrFtsService {
       // those. AS MATERIALIZED stops the planner from inlining the cap back into the ranked
       // scan. The metadata JOIN (when present) lives in the CTE so its filters bound the
       // candidates; the outer JOIN re-fetches d.* for the returned rows only.
+      // By recency the page is cut from the materialized candidates BEFORE edrsr_fulltext is
+      // joined: adj_year and doc_id are already in `cand`, so the sort needs no heap row, and
+      // the join then fetches only the returned hits (for the headline). The rank order joins
+      // all candidates because ts_rank_cd needs each one's tsv.
+      const pageSource = byRecency ? 'page' : 'cand';
       const outerFrom = hasMetadataFilter
         ? `edrsr_fulltext f
-           JOIN cand ON cand.doc_id = f.doc_id AND cand.adj_year = f.adj_year
+           JOIN ${pageSource} ON ${pageSource}.doc_id = f.doc_id AND ${pageSource}.adj_year = f.adj_year
            JOIN edrsr_documents d ON d.doc_id = f.doc_id`
         : `edrsr_fulltext f
-           JOIN cand ON cand.doc_id = f.doc_id AND cand.adj_year = f.adj_year`;
+           JOIN ${pageSource} ON ${pageSource}.doc_id = f.doc_id AND ${pageSource}.adj_year = f.adj_year`;
 
       // A COUNT(*) over the base table is what the cap-before-rank shape exists to avoid,
       // but counting `cand` is free: it is already materialized and holds at most
       // FTS_CANDIDATE_CAP rows. That yields an exact count below the cap and an honest
       // floor at it — as opposed to the `safeLimit * 10` this used to report, which made
       // `total` a function of the caller's own limit.
-      const dataSql = `
+      const recencyOrder = (alias: string) => `${alias}.adj_year DESC NULLS LAST, ${alias}.doc_id DESC`;
+      const dataSql = byRecency
+        ? `
+        WITH cand AS MATERIALIZED (
+          ${candBody}
+        ),
+        page AS MATERIALIZED (
+          SELECT cand.doc_id, cand.adj_year FROM cand
+          ORDER BY ${recencyOrder('cand')}
+          LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+        )
+        SELECT ${selectFields}, (SELECT count(*)::int FROM cand) AS cand_total
+        FROM ${outerFrom}
+        ORDER BY ${recencyOrder('page')}`
+        : `
         WITH cand AS MATERIALIZED (
           ${candBody}
         )
