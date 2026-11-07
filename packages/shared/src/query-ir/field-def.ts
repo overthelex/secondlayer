@@ -19,6 +19,7 @@ export type MatchType =
   | 'array_contains_text' // $N::text = ANY(col) — text[] array column, val cast to text (LLM may send a number)
   | 'eq_any'         // col = ANY($N)          — col is scalar, val is an array of allowed values
   | 'ilike_cast'     // col::text ILIKE $N  (%val%)
+  | 'prefix'         // col ILIKE $N  (val%) — case-insensitive "starts with", e.g. every surname beginning with А
   | 'fts'            // to_tsvector('english', col) @@ plainto_tsquery('english', $N)
   | 'fts_simple';    // to_tsvector('simple', col) @@ plainto_tsquery('simple', $N)
 
