@@ -319,6 +319,10 @@ export class PrivateDocsToolset {
       return (await readIfExists(sidecar)) ?? t;
     }
     if (kind === 'office') return readIfExists(extracted);
+    // Mail, archives and signature files get a text rendering on the host when they hold content
+    // (an .eml with attachments is usually far over the plain-text size cap).
+    const rendered = await readIfExists(extracted);
+    if (rendered) return rendered;
     if (kind === 'text') return readIfExists(abs);
     return null;
   }
