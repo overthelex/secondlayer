@@ -38,12 +38,13 @@ export function IntegrationsPage() {
         title="claude_desktop_config.json"
       />
 
-      <h2>MCP SSE (застарілий)</h2>
+      <h2>MCP SSE (закритий для API-ключів)</h2>
       <p>
-        Транспорт <code>/v1/sse</code> залишається робочим для вже підключених клієнтів,
-        але нові інтеграції варто робити на Streamable HTTP. Клієнти, які спершу пробують
-        POST без <code>sessionId</code>, отримують на цьому ендпоінті 400 і частина з них
-        не робить fallback на SSE.
+        Транспорт <code>/v1/sse</code> більше не приймає API-ключі: такий запит отримує
+        <code>403 API_KEY_V2_ONLY</code>. Якщо ваш клієнт (зокрема <code>mcp-remote</code>
+        або старий конфіг Claude Desktop) досі вказує на <code>/v1/sse</code>, замініть
+        URL на <code>https://mcp.legal.org.ua/api/v2/mcp</code> і транспорт на
+        Streamable HTTP, як у прикладах вище. Набір інструментів і ключ лишаються тими самими.
       </p>
 
       <h2>REST API</h2>
