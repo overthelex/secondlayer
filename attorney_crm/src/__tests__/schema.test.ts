@@ -1,15 +1,18 @@
 import path from 'path';
 import { applySchema } from '../schema';
 
-function fakePool(calls: string[], recorded: Set<string>) {
+function fakePool(calls: string[], recorded: Set<string>, hashes = new Map<string, string>()) {
   const client = {
     release: () => calls.push('RELEASE'),
     query: async (text: string, values?: unknown[]) => {
       calls.push(text);
-      if (text.includes('SELECT filename FROM attorney_crm_schema_version')) {
-        return { rows: [...recorded].map((filename) => ({ filename })), rowCount: recorded.size };
+      if (text.includes('SELECT filename, sha256 FROM attorney_crm_schema_version')) {
+        return { rows: [...recorded].map((filename) => ({ filename, sha256: hashes.get(filename) ?? null })), rowCount: recorded.size };
       }
-      if (text.includes('INSERT INTO attorney_crm_schema_version')) recorded.add(String(values?.[0]));
+      if (text.includes('INSERT INTO attorney_crm_schema_version')) {
+        recorded.add(String(values?.[0]));
+        hashes.set(String(values?.[0]), String(values?.[1]));
+      }
       return { rows: [], rowCount: 0 };
     },
   };
@@ -27,7 +30,7 @@ test('applies files in order, records them, skips recorded ones, always re-appli
 
 test('fresh database applies every file in lexical order inside transactions', async () => {
   const calls: string[] = [];
-  const applied = await applySchema(fakePool(calls, new Set()) as any, path.join(__dirname, '../../sql'));
+  const applied = await applySchema(fakePool(calls, new Set()) as any, sqlDir);
   expect(applied).toEqual(['001_practice_derivation.sql', '002_crm_core.sql']);
   const i1 = calls.findIndex((q) => q.includes('attorney_crm_practice_cases'));
   const i2 = calls.findIndex((q) => q.includes('attorney_crm_users'));
