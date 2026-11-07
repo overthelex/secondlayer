@@ -93,10 +93,16 @@ def parse(blob, rid):
                         if nm:
                             # later documents of the same day overwrite earlier
                             # ones: the last workload of the day is kept
+                            wl, dlg = c.get("currentWorkload"), c.get("delegatedUnderArticle77_9")
+                            if not isinstance(wl, (int, float)) or isinstance(wl, bool):
+                                # 2024 reports put "Deleg. z art. 77 par. 9" in
+                                # the workload field for delegated judges
+                                if isinstance(wl, str) and "77" in wl:
+                                    dlg = True
+                                wl = None
                             judges[(dday, dep_id, nm)] = (
                                 dday, dep_id, nm, r.get("courtName"),
-                                r.get("departmentName"), c.get("inPool"),
-                                c.get("currentWorkload"), c.get("delegatedUnderArticle77_9"))
+                                r.get("departmentName"), c.get("inPool"), wl, dlg)
     return day0, docs, draws, list(judges.values())
 
 
