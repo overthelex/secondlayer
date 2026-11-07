@@ -1,0 +1,28 @@
+# attorney_crm — internal CRM at attorney.legal.org.ua (see attorney_crm/README.md).
+# Build context is the repo root (compose: context: ..).
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY attorney_crm/package.json attorney_crm/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY attorney_crm/tsconfig.json ./
+COPY attorney_crm/src/ ./src/
+RUN npx tsc
+
+# --- Production stage ---
+FROM node:20-alpine
+
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY attorney_crm/package.json attorney_crm/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+COPY --from=builder /app/dist/ ./dist/
+COPY attorney_crm/sql/ ./sql/
+COPY attorney_crm/static/ ./static/
+
+EXPOSE 3020
+
+CMD ["node", "dist/index.js"]

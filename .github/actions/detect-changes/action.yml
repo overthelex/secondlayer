@@ -38,6 +38,9 @@ outputs:
   opendata_sync:
     description: 'Whether opendata-sync scheduler changed'
     value: ${{ steps.changes.outputs.opendata_sync }}
+  attorney_crm:
+    description: 'Whether attorney_crm (advocate CRM) changed'
+    value: ${{ steps.changes.outputs.attorney_crm }}
   any_backend:
     description: 'Whether any backend service changed (shared/backend/rada/openreyestr)'
     value: ${{ steps.changes.outputs.any_backend }}
@@ -126,6 +129,7 @@ runs:
         PLATFORM=false
 
         OPENDATA_SYNC=false
+        ATTORNEY_CRM=false
         FRONTEND_SRC=false  # true when lexwebapp src/tests/config changed (needs tests)
 
         DEPLOY_INFRA=false  # Dockerfiles, compose files, nginx — triggers full rebuild
@@ -148,10 +152,12 @@ runs:
             # deploy-lawrider-gcp.yml); legal.org.ua эти файлы не читает, поэтому
             # ни DEPLOY_INFRA, ни DEPLOYMENT: иначе правка lawrider пересобирает legal.
             deployment/lawrider/*|deployment/lawrider-gcp/*|deployment/lawrider-cthulhu/*) ;;
+            deployment/Dockerfile.attorney-crm) ATTORNEY_CRM=true; DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             deployment/*) DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             mobile/*) MOBILE=true ;;
             platform/*) PLATFORM=true ;;
             opendata-sync/*) OPENDATA_SYNC=true ;;
+            attorney_crm/*) ATTORNEY_CRM=true ;;
           esac
         done <<< "$CHANGED_FILES"
 
@@ -207,6 +213,10 @@ runs:
           BUILD_LIST="${BUILD_LIST}\"opendata-sync\","
           DEPLOY_LIST="${DEPLOY_LIST}\"opendata-sync\","
         fi
+        if [ "$ATTORNEY_CRM" = "true" ]; then
+          BUILD_LIST="${BUILD_LIST}\"attorney-crm\","
+          DEPLOY_LIST="${DEPLOY_LIST}\"attorney-crm\","
+        fi
 
         # Remove trailing comma and wrap in array
         BUILD_LIST="${BUILD_LIST%,}"
@@ -232,6 +242,7 @@ runs:
         echo "mobile=$MOBILE" >> "$GITHUB_OUTPUT"
         echo "platform=$PLATFORM" >> "$GITHUB_OUTPUT"
         echo "opendata_sync=$OPENDATA_SYNC" >> "$GITHUB_OUTPUT"
+        echo "attorney_crm=$ATTORNEY_CRM" >> "$GITHUB_OUTPUT"
         echo "any_backend=$ANY_BACKEND" >> "$GITHUB_OUTPUT"
         echo "services_to_build=$SERVICES_TO_BUILD" >> "$GITHUB_OUTPUT"
         echo "services_to_deploy=$SERVICES_TO_DEPLOY" >> "$GITHUB_OUTPUT"
@@ -249,5 +260,6 @@ runs:
         echo "  mobile:      $MOBILE"
         echo "  platform:    $PLATFORM"
         echo "  opendata_sync: $OPENDATA_SYNC"
+        echo "  attorney_crm: $ATTORNEY_CRM"
         echo "  services_to_build: $SERVICES_TO_BUILD"
         echo "  services_to_deploy: $SERVICES_TO_DEPLOY"

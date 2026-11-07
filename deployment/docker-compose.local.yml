@@ -1358,6 +1358,47 @@ services:
         reservations:
           memory: 256M
 
+  # Internal CRM for selling legal.org.ua to advocates (attorney.legal.org.ua).
+  # Shares the main Postgres; its tables are prefixed attorney_crm_ and created by
+  # the service itself on boot. Design: docs/superpowers/specs/2026-11-07-attorney-crm-design.md
+  attorney-crm-local:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.attorney-crm
+    image: attorney-crm:latest
+    container_name: attorney-crm-local
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - secondlayer-local
+    environment:
+      NODE_ENV: production
+      PORT: "3020"
+      TZ: Europe/Kiev
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+      # Set in .env.local on the host. Deliberately `:-` and not `:?`: only this
+      # container must fail (the service exits at boot without it), never the stack.
+      ATTORNEY_CRM_SESSION_SECRET: ${ATTORNEY_CRM_SESSION_SECRET:-}
+      ATTORNEY_CRM_DERIVATION: ${ATTORNEY_CRM_DERIVATION:-on}
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3020/healthz', r => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
   # Синхронизация открытых реестров через API бэкенда и openreyestr
   opendata-sync-local:
     build:
