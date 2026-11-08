@@ -134,7 +134,19 @@ CRM tables (`attorney_crm_users`, `_sessions`, `_leads`, `_notes`,
 schema `attorney_crm_pl` of the same database, by starting the service with
 `search_path=attorney_crm_pl,public`. `attorney_crm_leads.advocate_source_id` holds
 `pl_lawyers.lawyer_id`. `sql/001` and `sql/003` (ЄДРСР derivation) are not applied
-for this tenant.
+for this tenant. The schema is created with `CREATE SCHEMA IF NOT EXISTS` at start.
+
+**Team corrections survive re-collection (my call, after the builder check).** A new
+`sql/004_contact_overrides.sql` (applied for both tenants, harmless for UA) adds to
+`attorney_crm_leads`: `do_not_contact BOOLEAN NOT NULL DEFAULT false`,
+`do_not_contact_reason TEXT`, `phone_override TEXT`, `email_override TEXT`. The lawyer
+page gets a "Do not contact" toggle with a reason, and editable override fields. The
+list and lawyer pages show the override when set (marked "manual"), the Today page
+never lists a `do_not_contact` lead, and the list shows a visible badge for them. The
+collector writes only to `pl_lawyers`; it never reads or touches `attorney_crm_*`, so
+overrides and the flag can never be lost by a crawl. Rationale: Polish law requires
+prior consent for direct-marketing calls and e-mails (PKE art. 398, UŚUDE art. 10) and a
+GDPR art. 21 objection must stick; `stage = declined` is a sales state, not a legal one.
 
 ## Practice taxonomy
 
@@ -176,7 +188,8 @@ Three commands, each resumable from `pl_lawyers_crawl` and safe to re-run:
 2. `adwokaci-details [--status active]` — fetches profiles whose `detail_fetched_at`
    is null or older than `--max-age` (default 90 days), practising first; parses the
    blocks listed above; 10 s between requests.
-3. `radcowie-list` — POSTs `GetDataW` for `stan=0`, all pages; upserts.
+3. `radcowie-list` — POSTs `GetDataW` for `stan=0`, all pages; upserts. Rows not seen
+   in a completed full walk are marked `inactive` (the register has no "former").
 4. `szukajradcy` — seeds from the 241 city pages, BFS over "Podobni radcowie", parses
    profiles, joins to `pl_lawyers` by entry number (fallback: surname + given names +
    town, unique match only), sets contacts with `contact_source='szukajradcy'`,
@@ -188,31 +201,56 @@ exponential back-off on 429/5xx, abort after 5 consecutive failures; every run w
 a one-line summary to `~/lawrider/pl-lawyers.log`. Unit tests with saved HTML fixtures
 for each parser (the recon pages under `scripts/pl-lawyers/fixtures/`).
 
-Schedule on cthulhu (lawrider crontab fragment): lists weekly (Sunday night), adwokaci
-details continuously until caught up and then monthly, szukajradcy monthly. Initial
-load: lists ≈ 2 h, szukajradcy ≈ 3 h, practising adwokaci profiles ≈ 3 days.
+**Where it runs (my call, after the builder check):** inside the `lawrider` compose
+stack, not as a host process (the box has no Node toolchain for host jobs and the
+deploy rsyncs without `node_modules`). The collector is compiled into the same image
+as the CRM (`attorney_crm/src/collector/`), and a second service
+`attorney-crm-pl-collector` runs it as a long-lived scheduler process (like the UA
+derivation worker): lists weekly (Sunday night), adwokaci details continuously until
+caught up and then re-fetch older than 90 days, szukajradcy monthly. One process, so
+the per-host crawl delay is enforced in one place. Logs go to the container's stdout
+(json-file, capped). A `--once <command>` mode exists for manual runs via
+`docker compose -p lawrider run --rm attorney-crm-pl-collector`. Initial load: lists
+≈ 2 h, szukajradcy ≈ 3 h, practising adwokaci profiles ≈ 3 days.
 
 ## Polish egress (GCP)
 
-VM `pl-proxy`: project `secondlayer-gpu`, zone `europe-central2-a` (Warsaw),
-`e2-micro`, Ubuntu 24.04, 10 GB disk, static external IP, no HTTP ports open (the
-existing `default-allow-ssh` rule suffices). On it: `tinyproxy` bound to
-`127.0.0.1:8888`. On cthulhu: a user systemd unit `pl-proxy-tunnel.service` running
-`autossh -N -L 127.0.0.1:8118:127.0.0.1:8888 pl-proxy`; the collector runs with
-`HTTPS_PROXY=http://127.0.0.1:8118`. Cost ≈ $7–8/month. Both registers also answer
-cthulhu directly; the proxy is a policy choice (Polish IP for Polish public data), not
-a technical need, and the collector works without it if the tunnel is down only when
-started with `--no-proxy`.
+VM `pl-proxy`: project `secondlayer-gpu` (gcloud account mcvovkes@gmail.com, i.e.
+created from the MacBook), zone `europe-central2-a` (Warsaw), `e2-micro`, Ubuntu
+24.04, 10 GB disk, static external IP, no HTTP ports open (the existing
+`default-allow-ssh` rule suffices). On it: `tinyproxy` bound to `127.0.0.1:8888`, and
+the public key of a dedicated `pl-egress` ed25519 key pair in the instance metadata.
+
+**Tunnel as a sidecar (my call):** service `pl-egress` in the lawrider compose
+(`alpine` + `openssh-client` + `autossh`, the private key mounted read-only from
+`~/lawrider/pl-egress.key`), running
+`autossh -M 0 -N -g -L 0.0.0.0:8118:127.0.0.1:8888 egress@<pl-proxy ip>` with
+`ServerAliveInterval 30`. On the `lawrider` network it is reachable as
+`http://pl-egress:8118`; the collector gets `HTTPS_PROXY=http://pl-egress:8118`.
+No host systemd unit, no host ports. Cost ≈ $7–8/month.
+
+**Order and fallback (my call):** the VM and sidecar come first, and the very first
+collector task is a probe that fetches one page from each of the three sites through
+the proxy and logs status and latency. Both registers also answer cthulhu directly,
+so the proxy is a policy choice (Polish IP for Polish public data), not a technical
+need. If a site refuses the GCP address (403/429 on the probe), the collector stops
+and the choice between direct egress from cthulhu and another Polish egress is
+escalated to the owner; it does not fall back silently. `--no-proxy` exists for that
+decision, off by default.
 
 ## Hosting and deploy
 
 - Service `attorney-crm-pl` in `deployment/lawrider-cthulhu/docker-compose.yml`:
-  image built from `deployment/Dockerfile.attorney-crm` (context `../..`), container
-  `attorney-crm-pl`, network `lawrider`, no host ports, env `ATTORNEY_CRM_TENANT=pl`,
+  image `attorney-crm-pl:latest` built from `deployment/Dockerfile.attorney-crm`
+  (context `../..`; a distinct tag so the UA stack's `attorney-crm:latest` is never
+  shared), container `attorney-crm-pl`, network `lawrider`, no host ports, env
+  `ATTORNEY_CRM_TENANT=pl`,
   `ATTORNEY_CRM_SCHEMA=attorney_crm_pl`, `ATTORNEY_CRM_DERIVATION=off`,
   `DATABASE_URL` → `pg-lawrider`, `ATTORNEY_CRM_SESSION_SECRET` from
-  `~/lawrider/.env.lawrider` (new key, set by hand once), `TZ=Europe/Warsaw`, memory
-  cap 512M, healthcheck `/healthz`.
+  `~/lawrider/.env.lawrider` (new key, set by hand once, `:-` not `:?` so a missing key
+  can never block mcp.lawrider.pl), memory cap 512M, healthcheck `/healthz`. The Today
+  page's "today" is computed in the tenant's timezone (`Europe/Warsaw`; UA keeps
+  `Europe/Kyiv`), not a hard-coded one.
 - Ingress: CNAME `attorney.lawrider.pl` → tunnel `4e367b71-…cfargotunnel.com`
   (proxied); tunnel ingress rule `attorney.lawrider.pl → http://lawrider-edge:80`
   added before the 404 catch-all; `edge.conf` server block → `attorney-crm-pl:3020`
