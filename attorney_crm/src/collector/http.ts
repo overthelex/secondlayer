@@ -44,6 +44,24 @@ export class Collector {
     return this.request(url, { method: 'GET' });
   }
 
+  /** One attempt, no retry, no failure accounting: the health probe. */
+  async probe(url: string): Promise<{ status: number; ms: number }> {
+    const started = Date.now();
+    try {
+      const res = await this.fetchImpl(url, {
+        method: 'GET',
+        headers: { 'user-agent': this.o.userAgent, accept: 'text/html,*/*' },
+        dispatcher: this.dispatcher,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(30_000),
+      } as RequestInit);
+      await res.arrayBuffer();
+      return { status: res.status, ms: Date.now() - started };
+    } catch {
+      return { status: 0, ms: Date.now() - started };
+    }
+  }
+
   post(url: string, form: Record<string, string>): Promise<string> {
     return this.request(url, {
       method: 'POST',
