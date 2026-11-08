@@ -22,7 +22,14 @@ export const uk: Strings = {
     directoryLink: 'Профіль у довіднику', leadSection: 'Робота з лідом', stageField: 'Стадія', nextContactField: 'Наступний контакт', overdue: 'прострочено', manualTags: 'Практики (ручні теги)', save: 'Зберегти',
     notesSection: 'Нотатки', noteBody: 'Опис дзвінка, листа або зустрічі', addNote: 'Додати нотатку', noNotes: 'Нотаток ще немає.', doNotContact: 'Не турбувати', doNotContactReason: 'Причина',
     phoneOverride: 'Телефон (ручний)', emailOverride: 'E-mail (ручний)', manualMark: 'ручний', notFoundTitle: 'Не знайдено', notFoundHeading: 'Сторінку не знайдено', notFoundBody: (id) => `Адвоката з ID ${id} немає в реєстрі.`,
+    suppressed: (reason, date) => `${reason} · ${date}`,
   },
+  unsubscribe: {
+    title: 'Відписка', heading: 'Відписатися від листів', body: (email) => `Ви більше не отримуватимете листи від legal.org.ua на адресу ${email}. Підтвердіть, будь ласка.`,
+    confirm: 'Відписатися', doneHeading: 'Готово', doneBody: (email) => `Адресу ${email} вилучено з розсилки. Ми більше не писатимемо.`,
+    invalidHeading: 'Посилання недійсне', invalidBody: 'Посилання пошкоджене або застаріло. Напишіть на unsubscribe@legal.org.ua, і ми вилучимо адресу вручну.',
+  },
+  suppressionReasons: { unsubscribe: 'Відписався', bounce: 'Відскок', complaint: 'Скарга на спам', manual: 'Не турбувати' },
   today: {
     title: 'Сьогодні', callToday: 'Подзвонити сьогодні', nothingDue: 'На сьогодні контактів не заплановано. Призначте дату на сторінці адвоката.', date: 'Дата', name: 'ПІБ', city: 'Місто', phone: 'Телефон', stage: 'Стадія', lastNote: 'Остання нотатка',
     newNotes: 'Нові нотатки', noNotes: 'Нотаток ще немає.', overdue: 'прострочено',
