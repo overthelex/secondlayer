@@ -24,7 +24,8 @@ function fakePool() {
   };
 }
 
-const config = { port: 0, databaseUrl: 'x', sessionSecret: 's', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false };
+import { loadTenant } from '../tenant';
+const config = { port: 0, databaseUrl: 'x', sessionSecret: 's', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false, tenant: loadTenant({}) };
 
 function appWith(pool: ReturnType<typeof fakePool>, rateLimit = new LoginRateLimit()) {
   return createApp({ pool: pool as any, config, rateLimit });
