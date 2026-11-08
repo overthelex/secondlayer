@@ -55,21 +55,31 @@ class Limiter:
         self.last = time.time()
 
 
-def request(session, limiter, method, url, retries=8, **kw):
-    delay = 10
-    for _ in range(retries):
-        limiter.wait()
-        try:
-            r = session.request(method, url, timeout=120, headers={"User-Agent": UA}, **kw)
-            if r.status_code in (429, 500, 502, 503, 504):
-                raise requests.HTTPError(str(r.status_code))
-            r.raise_for_status()
-            return r
-        except requests.RequestException as e:
-            log.warning("%s %s failed (%s); retry in %ss", method, url, e, delay)
-            time.sleep(delay)
-            delay = min(delay * 2, 600)
-    raise RuntimeError(f"gave up on {url}")
+BLOCK_PAUSE = int(os.environ.get("CBOSA_BLOCK_PAUSE", "1800"))
+
+
+def request(session, limiter, method, url, retries=6, **kw):
+    """GET/POST with backoff. CBOSA answers a too-eager client with closed
+    connections and 500s for hours (seen 07.11 after ~5 min at 4 req/s). When
+    the short retries are exhausted we do not crash: we pause BLOCK_PAUSE
+    seconds and try again, indefinitely, so the run resumes by itself when
+    the block lifts."""
+    while True:
+        delay = 10
+        for _ in range(retries):
+            limiter.wait()
+            try:
+                r = session.request(method, url, timeout=120, headers={"User-Agent": UA}, **kw)
+                if r.status_code in (429, 500, 502, 503, 504):
+                    raise requests.HTTPError(str(r.status_code))
+                r.raise_for_status()
+                return r
+            except requests.RequestException as e:
+                log.warning("%s %s failed (%s); retry in %ss", method, url, e, delay)
+                time.sleep(delay)
+                delay = min(delay * 2, 300)
+        log.error("%s still refused after %d tries; pausing %ds before trying again", url, retries, BLOCK_PAUSE)
+        time.sleep(BLOCK_PAUSE)
 
 
 def text_of(fragment):
