@@ -16,6 +16,11 @@
 #      WAF), тому без цієї секції сканер вразливостей проходив повз аларм. Потребує
 #      CF_ENV_FILE (~/SecondLayer/.env.cloudflare: CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL);
 #      без нього секція пропускається з попередженням у лог.
+#      Негайно в лист ідуть лише IP з акаунтом, з 2xx на сканерний шлях або з нестандартними
+#      портами. Боти, яких WAF уже зарізав (самі 403), складаються в DIGEST_FILE і йдуть одним
+#      листом «за добу» першим запуском після DIGEST_HOUR (Київ). IP без акаунта з
+#      >= AUTO_BLOCK_HITS влучань блокуються в Cloudflare автоматично (AUTO_BLOCK=1,
+#      IP Access Rule через scripts/cf-block-ip.sh, знімається через AUTO_BLOCK_DAYS).
 #
 # Вікно: від позначки в STATE_FILE до now() з БД; позначка зсувається лише після успішного
 # листа (або коли подій немає), тож подія не губиться, якщо SMTP впав.
@@ -24,7 +29,9 @@
 #      як у mcp-key-usage-alert.sh; WATCH_EMAILS (через кому, mrbraun013@gmail.com),
 #      MAX_RESPONSE_MB (5), STATE_FILE (~/.mcp-security-alert.since),
 #      CF_ENV_FILE (<repo>/.env.cloudflare), SCAN_MIN_HITS (3), PROBE_MIN_PATHS (20),
-#      DRY_RUN=1 — надрукувати лист і не зсувати позначку.
+#      AUTO_BLOCK (1), AUTO_BLOCK_HITS (20), AUTO_BLOCK_DAYS (7), DIGEST_FILE
+#      (~/.mcp-security-alert.digest), DIGEST_HOUR (7), DRY_RUN=1 — надрукувати лист, не
+#      зсувати позначку, не блокувати і не чіпати дайджест.
 # Код виходу: 0 — подій немає, 2 — лист надіслано (або DRY_RUN), 1 — помилка.
 #
 # Cron на cthulhu (vovkes), кожні 5 хв. Файл лежить не в deployment/, бо зміна там
@@ -45,9 +52,14 @@ STATE_FILE="${STATE_FILE:-$HOME/.mcp-security-alert.since}"
 CF_ENV_FILE="${CF_ENV_FILE-$DIR/../.env.cloudflare}"
 SCAN_MIN_HITS="${SCAN_MIN_HITS:-3}"
 PROBE_MIN_PATHS="${PROBE_MIN_PATHS:-20}"
+AUTO_BLOCK="${AUTO_BLOCK:-1}"
+AUTO_BLOCK_HITS="${AUTO_BLOCK_HITS:-20}"
+AUTO_BLOCK_DAYS="${AUTO_BLOCK_DAYS:-7}"
+DIGEST_FILE="${DIGEST_FILE:-$HOME/.mcp-security-alert.digest}"
+DIGEST_HOUR="${DIGEST_HOUR:-7}"
 
 [[ "$MAX_RESPONSE_MB" =~ ^[0-9]+$ ]] || { echo "MAX_RESPONSE_MB має бути числом" >&2; exit 1; }
-[[ "$SCAN_MIN_HITS$PROBE_MIN_PATHS" =~ ^[0-9]+$ ]] || { echo "SCAN_MIN_HITS / PROBE_MIN_PATHS мають бути числами" >&2; exit 1; }
+[[ "$SCAN_MIN_HITS$PROBE_MIN_PATHS$AUTO_BLOCK_HITS$AUTO_BLOCK_DAYS$DIGEST_HOUR" =~ ^[0-9]+$ ]] || { echo "SCAN_MIN_HITS / PROBE_MIN_PATHS / AUTO_BLOCK_* / DIGEST_HOUR мають бути числами" >&2; exit 1; }
 [[ "$WATCH_EMAILS" =~ ^[A-Za-z0-9._%+@,-]*$ ]] || { echo "WATCH_EMAILS: недопустимі символи" >&2; exit 1; }
 
 PSQL=(docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -v ON_ERROR_STOP=1 -X -q)
@@ -130,22 +142,45 @@ SELECT email, to_char((last_login AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Kyiv'
 
 # 5. Сканування сайту: аналітика Cloudflare, бо фронтенд/WAF у БД не пишуть.
 if [[ -n "$CF_ENV_FILE" && -r "$CF_ENV_FILE" ]]; then
+  CF_TMP=$(mktemp -d)
   if CF_OUT=$(set -a; . "$CF_ENV_FILE"; set +a; \
-        SINCE="$SINCE" NOW="$NOW" SCAN_MIN_HITS="$SCAN_MIN_HITS" PROBE_MIN_PATHS="$PROBE_MIN_PATHS" \
-        PSQL_CMD="${PSQL[*]}" python3 "$DIR/http_scan_alert.py"); then
-    CF_N="${CF_OUT%%$'\n'*}"
-    if [[ "$CF_N" =~ ^[0-9]+$ && "$CF_N" -gt 0 ]]; then
-      TITLES+=("Сканування сайту: підозрілі IP за аналітикою Cloudflare"); COUNTS+=("$CF_N")
-      TABLES+=("${CF_OUT#*$'\n'}")
+        SINCE="$SINCE" NOW="$NOW" OUT_DIR="$CF_TMP" SCAN_MIN_HITS="$SCAN_MIN_HITS" PROBE_MIN_PATHS="$PROBE_MIN_PATHS" \
+        AUTO_BLOCK="$AUTO_BLOCK" AUTO_BLOCK_HITS="$AUTO_BLOCK_HITS" AUTO_BLOCK_DAYS="$AUTO_BLOCK_DAYS" \
+        DRY_RUN="${DRY_RUN:-}" PSQL_CMD="${PSQL[*]}" python3 "$DIR/http_scan_alert.py"); then
+    read -r CF_URGENT CF_QUIET <<<"$CF_OUT"
+    if [[ "${CF_URGENT:-0}" -gt 0 ]]; then
+      TITLES+=("Сканування сайту: IP з акаунтом, з 2xx повз WAF або з нестандартними портами"); COUNTS+=("$CF_URGENT")
+      TABLES+=("$(<"$CF_TMP/urgent.html")")
+    fi
+    if [[ "${CF_QUIET:-0}" -gt 0 && "${DRY_RUN:-}" != 1 ]]; then
+      # Боти, яких WAF уже зарізав: не лист, а рядок у добовий дайджест.
+      { printf '=== %s … %s (UTC): %s IP ===\n' "$SINCE" "$NOW" "$CF_QUIET"; cat "$CF_TMP/quiet.html"; } >> "$DIGEST_FILE"
+      echo "[$(date -Is)] у дайджест: $CF_QUIET IP (сканери, зарізані WAF)"
     fi
   else
     echo "[$(date -Is)] секцію Cloudflare пропущено (http_scan_alert.py повернув помилку)" >&2
   fi
+  rm -rf "$CF_TMP"
 else
   echo "[$(date -Is)] секцію Cloudflare пропущено: немає $CF_ENV_FILE" >&2
 fi
 
-advance() { [[ "${DRY_RUN:-}" == 1 ]] || printf '%s\n' "$NOW" > "$STATE_FILE"; }
+# Добовий дайджест: перший запуск після DIGEST_HOUR за Києвом, якщо є що показати.
+DIGEST_STAMP="$DIGEST_FILE.sent"
+TODAY_KYIV=$(TZ=Europe/Kyiv date +%F); HOUR_KYIV=$(TZ=Europe/Kyiv date +%-H)
+DIGEST_SENT=0
+if [[ -s "$DIGEST_FILE" && "$HOUR_KYIV" -ge "$DIGEST_HOUR" && "$(cat "$DIGEST_STAMP" 2>/dev/null)" != "$TODAY_KYIV" ]]; then
+  N_DIGEST=$(grep -c '^=== ' "$DIGEST_FILE")
+  TITLES+=("Сканери за добу, зарізані WAF/автоблоком (дайджест, $N_DIGEST вікон)"); COUNTS+=("$N_DIGEST")
+  TABLES+=("$(<"$DIGEST_FILE")")
+  DIGEST_SENT=1
+fi
+
+advance() {
+  [[ "${DRY_RUN:-}" == 1 ]] && return
+  printf '%s\n' "$NOW" > "$STATE_FILE"
+  if [[ "$DIGEST_SENT" == 1 ]]; then : > "$DIGEST_FILE"; printf '%s\n' "$TODAY_KYIV" > "$DIGEST_STAMP"; fi
+}
 
 if [[ ${#TITLES[@]} -eq 0 ]]; then
   advance
@@ -162,7 +197,7 @@ SUBJECT="⚠ MCP legal.org.ua: подія безпеки — ${TITLES[0]}$([[ ${
 INTRO="Аларм безпеки MCP / API-ключів legal.org.ua, вікно $SINCE … $NOW (UTC).
 ${SUMMARY}Клієнти під наглядом: $WATCH_EMAILS. Показано до 50 рядків на секцію.
 Деталі: ./scripts/mcp-key-usage-report.sh <email> 7; відключити ключ: UPDATE api_keys SET is_active=false WHERE left(key,12)='<key_prefix>';
-Заблокувати IP у Cloudflare: ./scripts/cf-block-ip.sh <ip> \"<примітка>\" (IP Access Rule, зона legal.org.ua)."
+Заблокувати IP у Cloudflare: ./scripts/cf-block-ip.sh <ip> \"<примітка>\"; автоблоки (AUTO_BLOCK=$AUTO_BLOCK, від $AUTO_BLOCK_HITS влучань, на $AUTO_BLOCK_DAYS дн.): ~/.cf-autoblock.json, список: ./scripts/cf-block-ip.sh --list."
 
 echo "[$(date -Is)] $SINCE..$NOW: ${SUMMARY//$'\n'/; }"
 
