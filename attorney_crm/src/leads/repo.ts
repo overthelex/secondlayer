@@ -15,6 +15,10 @@ export interface Lead {
   manualPractices: string[];
   updatedAt: Date;
   updatedBy: number | null;
+  doNotContact: boolean;
+  doNotContactReason: string | null;
+  phoneOverride: string | null;
+  emailOverride: string | null;
 }
 
 export interface Note {
@@ -38,6 +42,10 @@ type LeadRow = {
   manual_practices: string[] | null;
   updated_at: Date;
   updated_by: number | null;
+  do_not_contact?: boolean | null;
+  do_not_contact_reason?: string | null;
+  phone_override?: string | null;
+  email_override?: string | null;
 };
 
 function mapLead(r: LeadRow): Lead {
@@ -49,6 +57,10 @@ function mapLead(r: LeadRow): Lead {
     manualPractices: r.manual_practices ?? [],
     updatedAt: new Date(r.updated_at),
     updatedBy: r.updated_by,
+    doNotContact: r.do_not_contact === true,
+    doNotContactReason: r.do_not_contact_reason ?? null,
+    phoneOverride: r.phone_override ?? null,
+    emailOverride: r.email_override ?? null,
   };
 }
 
@@ -61,6 +73,10 @@ export interface LeadPatch {
   stage?: Stage;
   nextContactAt?: Date | null;
   manualPractices?: string[];
+  doNotContact?: boolean;
+  doNotContactReason?: string | null;
+  phoneOverride?: string | null;
+  emailOverride?: string | null;
 }
 
 /** Creates the lead on first save (upsert); validates stage and practice vocabulary. */
@@ -73,16 +89,29 @@ export async function saveLead(pool: Queryable, sourceId: string, patch: LeadPat
     const bad = patch.manualPractices.find((p) => !allowed.includes(p));
     if (bad) throw new ValidationError(tenant().strings.errors.unknownPractice(bad));
   }
+  // $7..$13: the override fields, each with a "was it sent" flag so undefined keeps the
+  // stored value and an explicit null clears it (same pattern as next_contact_at).
   const r = await pool.query<LeadRow>(
-    `INSERT INTO attorney_crm_leads (advocate_source_id, stage, next_contact_at, manual_practices, updated_by)
-     VALUES ($1, COALESCE($2, 'new'), $3, COALESCE($4, '{}'), $5)
+    `INSERT INTO attorney_crm_leads (advocate_source_id, stage, next_contact_at, manual_practices, updated_by,
+                                     do_not_contact, do_not_contact_reason, phone_override, email_override)
+     VALUES ($1, COALESCE($2, 'new'), $3, COALESCE($4, '{}'), $5, COALESCE($7, false), $9, $11, $13)
      ON CONFLICT (advocate_source_id) DO UPDATE SET
        stage = COALESCE($2, attorney_crm_leads.stage),
        next_contact_at = CASE WHEN $6::boolean THEN $3 ELSE attorney_crm_leads.next_contact_at END,
        manual_practices = COALESCE($4, attorney_crm_leads.manual_practices),
+       do_not_contact = COALESCE($7, attorney_crm_leads.do_not_contact),
+       do_not_contact_reason = CASE WHEN $8::boolean THEN $9 ELSE attorney_crm_leads.do_not_contact_reason END,
+       phone_override = CASE WHEN $10::boolean THEN $11 ELSE attorney_crm_leads.phone_override END,
+       email_override = CASE WHEN $12::boolean THEN $13 ELSE attorney_crm_leads.email_override END,
        updated_at = NOW(), updated_by = $5
      RETURNING *`,
-    [sourceId, patch.stage ?? null, patch.nextContactAt ?? null, patch.manualPractices ?? null, userId, patch.nextContactAt !== undefined],
+    [
+      sourceId, patch.stage ?? null, patch.nextContactAt ?? null, patch.manualPractices ?? null, userId, patch.nextContactAt !== undefined,
+      patch.doNotContact ?? null,
+      patch.doNotContactReason !== undefined, patch.doNotContactReason ?? null,
+      patch.phoneOverride !== undefined, patch.phoneOverride ?? null,
+      patch.emailOverride !== undefined, patch.emailOverride ?? null,
+    ],
   );
   return mapLead(r.rows[0]);
 }
@@ -160,7 +189,7 @@ export async function dueToday(pool: Queryable, now: Date = new Date(), tz: stri
   }>(
     `SELECT l.advocate_source_id, ${nameSelect(reg)},
             ${reg.citySqlForToday} AS city,
-            ${reg.phoneSqlForToday} AS phone,
+            COALESCE(l.phone_override, ${reg.phoneSqlForToday}) AS phone,
             l.stage, l.next_contact_at, ln.body AS last_note, ln.created_at AS last_note_at
        FROM attorney_crm_leads l
        JOIN ${reg.table} ON ${reg.idColumn} = l.advocate_source_id
@@ -168,7 +197,7 @@ export async function dueToday(pool: Queryable, now: Date = new Date(), tz: stri
          SELECT body, created_at FROM attorney_crm_notes n
           WHERE n.advocate_source_id = l.advocate_source_id ORDER BY created_at DESC LIMIT 1
        ) ln ON true
-      WHERE l.next_contact_at < $1
+      WHERE l.next_contact_at < $1 AND NOT l.do_not_contact
       ORDER BY l.next_contact_at ASC, a.family_name ASC
       LIMIT 500`,
     [bound],

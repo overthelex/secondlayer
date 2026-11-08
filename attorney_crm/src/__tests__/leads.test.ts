@@ -16,7 +16,7 @@ test('saveLead upserts so a first save creates the row', async () => {
   const lead = await saveLead(pool as any, '42', { stage: 'contacted', manualPractices: ['ДТП'], nextContactAt: null }, 1);
   expect(pool.calls[0].text).toContain('INSERT INTO attorney_crm_leads');
   expect(pool.calls[0].text).toContain('ON CONFLICT (advocate_source_id) DO UPDATE');
-  expect(pool.calls[0].values).toEqual(['42', 'contacted', null, ['ДТП'], 1, true]);
+  expect(pool.calls[0].values!.slice(0, 6)).toEqual(['42', 'contacted', null, ['ДТП'], 1, true]);
   expect(lead.stage).toBe('contacted');
 });
 
@@ -73,4 +73,22 @@ test('recentNotes limits to 30 newest with author and advocate name', async () =
   expect(pool.calls[0].text).toContain('ORDER BY n.created_at DESC');
   expect(pool.calls[0].values).toEqual([30]);
   expect(pool.calls[0].text).toContain('opendata_advocates');
+});
+
+
+test('saveLead stores do_not_contact and overrides', async () => {
+  const pool = fakePool([{ advocate_source_id: 'adw:1', stage: 'new', next_contact_at: null, manual_practices: [], assigned_user_id: null, updated_at: new Date(), updated_by: 1, do_not_contact: true, do_not_contact_reason: 'asked by phone', phone_override: '+48 600 000 000', email_override: null }]);
+  const lead = await saveLead(pool as any, 'adw:1', { doNotContact: true, doNotContactReason: 'asked by phone', phoneOverride: '+48 600 000 000', emailOverride: null }, 1);
+  const ins = pool.calls[0];
+  expect(ins.text).toContain('do_not_contact');
+  expect(ins.text).toContain('phone_override');
+  expect(ins.values).toEqual(expect.arrayContaining([true, 'asked by phone', '+48 600 000 000']));
+  expect(lead.doNotContact).toBe(true);
+  expect(lead.phoneOverride).toBe('+48 600 000 000');
+});
+
+test('dueToday excludes do-not-contact leads', async () => {
+  const pool = fakePool();
+  await dueToday(pool as any, new Date());
+  expect(pool.calls[0].text).toMatch(/NOT l\.do_not_contact/);
 });

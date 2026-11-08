@@ -104,6 +104,7 @@ export function buildAdvocateListQuery(
 
   const sql = `SELECT ${r.select},
   l.stage, l.next_contact_at, l.manual_practices, nt.last_contact, ps.cases AS kind_cases,
+  l.do_not_contact, l.phone_override, l.email_override,
   ${kindSummary} AS kind_summary
   ${from}
   ${orderBy}

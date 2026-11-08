@@ -48,10 +48,15 @@ export function advocateRoutes(pool: Queryable): Router {
   r.post('/advocates/:sourceId/lead', async (req, res, next) => {
     const { sourceId } = req.params;
     try {
+      const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
       await saveLead(pool, sourceId, {
         stage: req.body?.stage as Stage | undefined,
         nextContactAt: parseLocalDate(req.body?.next_contact_at),
         manualPractices: asList(req.body?.manual_practices),
+        doNotContact: req.body?.do_not_contact === '1',
+        doNotContactReason: text(req.body?.do_not_contact_reason),
+        phoneOverride: text(req.body?.phone_override),
+        emailOverride: text(req.body?.email_override),
       }, res.locals.user!.id);
       res.redirect(`/advocates/${encodeURIComponent(sourceId)}`);
     } catch (err) {

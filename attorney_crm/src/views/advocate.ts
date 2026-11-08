@@ -1,6 +1,6 @@
 import { html } from './html';
 import { renderPage } from './layout';
-import { fmtDate, fmtDateTime, isOverdue, practiceChips, stageChip } from './advocates';
+import { dncBadge, fmtDate, fmtDateTime, isOverdue, practiceChips, stageChip } from './advocates';
 import { emailList, orgList, phoneList } from './contacts';
 import type { AdvocateRow, PracticeProfile } from '../advocates/repo';
 import type { Lead, NoteWithAuthor } from '../leads/repo';
@@ -61,11 +61,19 @@ ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
   </section>`}
 </div>
 <section class="card section">
-  <h2>${s.detail.leadSection} ${stageChip(stage)}</h2>
+  <h2>${s.detail.leadSection} ${stageChip(stage)}${dncBadge({ doNotContact: d.lead?.doNotContact === true })}</h2>
   <form method="post" action="/advocates/${a.sourceId}/lead" class="form">
     <div class="row">
       <label>${s.detail.stageField}<select name="stage">${STAGES.map((st) => html`<option value="${st}" ${st === stage ? 'selected' : ''}>${s.stages[st]}</option>`)}</select></label>
       <label>${s.detail.nextContactField}<input type="date" name="next_contact_at" value="${dateInput(next)}">${next && isOverdue(next) ? html`<small class="overdue">${s.detail.overdue}</small>` : ''}</label>
+    </div>
+    <div class="row">
+      <label class="check"><input type="checkbox" name="do_not_contact" value="1" ${d.lead?.doNotContact ? 'checked' : ''}>${s.detail.doNotContact}</label>
+      <label>${s.detail.doNotContactReason}<input type="text" name="do_not_contact_reason" value="${d.lead?.doNotContactReason ?? ''}"></label>
+    </div>
+    <div class="row">
+      <label>${s.detail.phoneOverride}<input type="text" name="phone_override" value="${d.lead?.phoneOverride ?? ''}" placeholder="${a.registryPhone ?? ''}"></label>
+      <label>${s.detail.emailOverride}<input type="email" name="email_override" value="${d.lead?.emailOverride ?? ''}" placeholder="${a.registryEmail ?? ''}"></label>
     </div>
     <p class="muted">${s.detail.manualTags}</p>
     <div>${t.practices.map((p) => html`<label class="check"><input type="checkbox" name="manual_practices" value="${p}" ${manual.has(p) ? 'checked' : ''}>${t.practiceLabel(p)}</label>`)}</div>

@@ -35,9 +35,15 @@ export function practiceChips(a: Pick<AdvocateRow, 'kinds' | 'manualPractices'> 
   )}${a.manualPractices.map((p) => html`<span class="chip chip--manual">${t.practiceLabel(p)}</span>`)}`;
 }
 
-export function contactsCell(a: Pick<AdvocateRow, 'phone' | 'email'>): RawHtml {
-  if (!a.phone && !a.email) return html`<span class="muted">${tenant().strings.list.noContact}</span>`;
-  return html`${phoneList(a.phone)}${emailList(a.email)}`;
+export function contactsCell(a: Pick<AdvocateRow, 'phone' | 'email'> & Partial<Pick<AdvocateRow, 'phoneOverride' | 'emailOverride'>>): RawHtml {
+  const s = tenant().strings;
+  if (!a.phone && !a.email) return html`<span class="muted">${s.list.noContact}</span>`;
+  const manual = a.phoneOverride || a.emailOverride ? html`<span class="sub">${s.detail.manualMark}</span>` : '';
+  return html`${phoneList(a.phone)}${emailList(a.email)}${manual}`;
+}
+
+export function dncBadge(a: Pick<AdvocateRow, 'doNotContact'>): RawHtml {
+  return a.doNotContact ? html`<span class="chip chip--dnc">${tenant().strings.detail.doNotContact}</span>` : html``;
 }
 
 const SORT_COLUMNS = (): { key: SortKey; label: string }[] => {
@@ -136,7 +142,7 @@ ${d.rows.map(
   <td class="col-cert">${a.certificateNum ?? ''}${a.certificateDate ? html`<span class="sub">${fmtDate(a.certificateDate)}</span>` : ''}</td>
   <td class="col-practices">${practiceChips(a)}</td>
   ${t.derivedPractices ? html`<td class="num">${f.justiceKind ? a.kindCases : a.kinds.reduce((sum, k) => sum + k.cases, 0)}</td>` : ''}
-  <td>${stageChip(a.stage)}</td>
+  <td>${stageChip(a.stage)}${dncBadge(a)}</td>
   <td class="col-dates">${a.nextContactAt ? html`<span class="line ${isOverdue(a.nextContactAt) ? 'overdue' : ''}">${fmtDate(a.nextContactAt)}</span>` : ''}${a.lastContact ? html`<span class="sub">${fmtDate(a.lastContact)}</span>` : ''}</td>
 </tr>`,
 )}

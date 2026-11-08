@@ -40,6 +40,12 @@ export interface AdvocateRow {
   practiceTagsRaw: string[];
   profileUrl: string | null;
   directoryUrl: string | null;
+  doNotContact: boolean;
+  phoneOverride: string | null;
+  emailOverride: string | null;
+  /** The registry value as collected (phone/email above are the effective ones, override first). */
+  registryPhone: string | null;
+  registryEmail: string | null;
 }
 
 type RawRow = Record<string, unknown>;
@@ -70,8 +76,13 @@ function mapRow(r: RawRow): AdvocateRow {
     fullName: [familyName, firstName, patronymic].filter(Boolean).join(' '),
     status: (r.status as AdvocateRow['status']) ?? 'active',
     statusDescription: str('status_description'),
-    email: str('email'),
-    phone: str('phone'),
+    email: str('email_override') ?? str('email'),
+    phone: str('phone_override') ?? str('phone'),
+    registryPhone: str('phone'),
+    registryEmail: str('email'),
+    doNotContact: r.do_not_contact === true,
+    phoneOverride: str('phone_override'),
+    emailOverride: str('email_override'),
     workAddress: str('work_address'),
     city: str('city'),
     region: str('region'),
@@ -119,7 +130,7 @@ export async function getAdvocate(pool: Queryable, sourceId: string): Promise<Ad
     : 'NULL::text';
   const r = await pool.query<RawRow>(
     `SELECT ${reg.select},
-       l.stage, l.next_contact_at, l.manual_practices,
+       l.stage, l.next_contact_at, l.manual_practices, l.do_not_contact, l.phone_override, l.email_override,
        (SELECT max(n.created_at) FROM attorney_crm_notes n WHERE n.advocate_source_id = ${reg.idColumn}) AS last_contact,
        0 AS kind_cases,
        ${kindSummary} AS kind_summary

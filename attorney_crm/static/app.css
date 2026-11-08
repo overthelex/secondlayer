@@ -77,6 +77,7 @@ td.nowrap { white-space: nowrap; }
 table.data td:empty::after { content: '—'; color: var(--border); }
 
 .chip { display: inline-block; padding: 1px 8px; margin: 1px 4px 1px 0; border-radius: 999px; font-size: 12px; background: #E8EEF4; color: var(--brand); white-space: nowrap; }
+.chip--dnc { background: #FEE2E2; color: var(--danger); }
 .chip--manual { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
 .chip--stage { background: var(--panel); color: var(--muted); }
 .chip--stage.interested { background: #ECFDF5; color: var(--ok); }
