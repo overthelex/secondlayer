@@ -59,7 +59,8 @@ export interface Tenant {
   lang: 'uk' | 'en';
   timeZone: string;
   locale: string;
-  brand: { name: string; domain: string; logo: string; tagline: string };
+  /** logo: topbar (on the dark bar); mark: square icon for the tab and the login card (both files under static/). */
+  brand: { name: string; domain: string; logo: string; mark: string; tagline: string };
   strings: Strings;
   registry: RegistryAdapter;
   practices: readonly string[];
