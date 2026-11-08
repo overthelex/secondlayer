@@ -16,6 +16,7 @@ export function parseFilters(q: Record<string, unknown>): AdvocateFilters {
     surnamePrefix: s('surname'),
     city: s('city'),
     region: s('region'),
+    profession: s('profession'),
     justiceKind: kind >= 1 && kind <= 5 ? kind : undefined,
     manualPractice: s('practice'),
     stage: s('stage'),

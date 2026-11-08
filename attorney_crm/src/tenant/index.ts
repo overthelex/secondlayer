@@ -5,6 +5,9 @@ export type { Tenant, Strings, RegistryAdapter } from './types';
 
 const TENANTS: Record<string, () => Tenant> = {
   ua: () => UA_TENANT,
+  // required lazily: pl.ts imports the registry adapters, which import nothing from here,
+  // but keeping it lazy means the ua process never loads the Polish taxonomy.
+  pl: () => (require('./pl') as typeof import('./pl')).PL_TENANT,
 };
 
 /** Registers a tenant under its id (the Polish tenant registers itself when imported). */

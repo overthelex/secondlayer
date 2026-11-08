@@ -28,10 +28,16 @@ export function stageChip(stage: Stage): RawHtml {
   return html`<span class="chip chip--stage ${stage}">${tenant().strings.stages[stage] ?? stage}</span>`;
 }
 
-export function practiceChips(a: Pick<AdvocateRow, 'kinds' | 'manualPractices'>): RawHtml {
-  return html`${a.kinds.map((k) => html`<span class="chip" title="${tenant().strings.list.derivedTitle}">${k.name} · ${k.cases}</span>`)}${a.manualPractices.map(
-    (p) => html`<span class="chip chip--manual">${p}</span>`,
-  )}`;
+export function practiceChips(a: Pick<AdvocateRow, 'kinds' | 'manualPractices'> & Partial<Pick<AdvocateRow, 'declaredPractices'>>): RawHtml {
+  const t = tenant();
+  return html`${a.kinds.map((k) => html`<span class="chip" title="${t.strings.list.derivedTitle}">${k.name} · ${k.cases}</span>`)}${(a.declaredPractices ?? []).map(
+    (p) => html`<span class="chip" title="${t.strings.list.declaredPractice}">${t.practiceLabel(p)}</span>`,
+  )}${a.manualPractices.map((p) => html`<span class="chip chip--manual">${t.practiceLabel(p)}</span>`)}`;
+}
+
+export function contactsCell(a: Pick<AdvocateRow, 'phone' | 'email'>): RawHtml {
+  if (!a.phone && !a.email) return html`<span class="muted">${tenant().strings.list.noContact}</span>`;
+  return html`${phoneList(a.phone)}${emailList(a.email)}`;
 }
 
 const SORT_COLUMNS = (): { key: SortKey; label: string }[] => {
@@ -49,6 +55,7 @@ function queryString(f: AdvocateFilters, patch: Partial<AdvocateFilters>): strin
   if (merged.surnamePrefix) p.set('surname', merged.surnamePrefix);
   if (merged.city) p.set('city', merged.city);
   if (merged.region) p.set('region', merged.region);
+  if (merged.profession) p.set('profession', merged.profession);
   if (merged.justiceKind) p.set('justice_kind', String(merged.justiceKind));
   if (merged.manualPractice) p.set('practice', merged.manualPractice);
   if (merged.stage) p.set('stage', merged.stage);
@@ -93,10 +100,15 @@ export function renderAdvocatesPage(d: AdvocatesPageData): string {
   <label>${s.list.surnameStartsWith}<input type="text" name="surname" value="${f.surnamePrefix ?? ''}" placeholder="${s.list.surnamePlaceholder}"></label>
   <label>${s.list.city}<select name="city">${option('', s.list.all, !f.city)}${d.cities.map((c) => option(c, c, f.city === c))}</select></label>
   <label>${s.list.region}<select name="region">${option('', s.list.all, !f.region)}${d.regions.map((c) => option(c, c, f.region === c))}</select></label>
-  <label>${s.list.derivedPractice}<select name="justice_kind">${option('', s.list.all, !f.justiceKind)}${Object.entries(JUSTICE_KINDS).map(([k, v]) =>
-    option(k, v, f.justiceKind === Number(k)),
-  )}</select></label>
-  <label>${s.list.manualPractice}<select name="practice">${option('', s.list.all, !f.manualPractice)}${t.practices.map((p) =>
+  ${t.registry.professionSql
+    ? html`<label>${s.list.profession}<select name="profession">${option('', s.list.all, !f.profession)}${Object.entries(s.profession).map(([k, v]) => option(k, v, f.profession === k))}</select></label>`
+    : ''}
+  ${t.derivedPractices
+    ? html`<label>${s.list.derivedPractice}<select name="justice_kind">${option('', s.list.all, !f.justiceKind)}${Object.entries(JUSTICE_KINDS).map(([k, v]) =>
+        option(k, v, f.justiceKind === Number(k)),
+      )}</select></label>`
+    : ''}
+  <label>${t.derivedPractices ? s.list.manualPractice : s.list.declaredPractice}<select name="practice">${option('', s.list.all, !f.manualPractice)}${t.practices.map((p) =>
     option(p, t.practiceLabel(p), f.manualPractice === p),
   )}</select></label>
   <label>${s.list.stage}<select name="stage">${option('', s.list.all, !f.stage)}${STAGES.map((st) => option(st, s.stages[st], f.stage === st))}</select></label>
@@ -107,21 +119,23 @@ export function renderAdvocatesPage(d: AdvocatesPageData): string {
 <table class="data">
 <thead><tr>
   <th>${SORT_COLUMNS().map((c, i) => html`${i ? raw(' <span class="muted">/</span> ') : ''}${sortLink(f, c.key, c.label)}`)}</th>
+  ${t.registry.professionSql ? html`<th>${s.list.profession}</th>` : ''}
   <th>${s.list.contacts}</th><th>${s.list.orgColumn}</th><th>${s.list.certColumn}</th>
-  <th>${s.list.practicesColumn}</th><th class="num">${sortLink(f, 'cases', casesLabel)}</th><th>${s.list.stageColumn}</th>
+  <th>${s.list.practicesColumn}</th>${t.derivedPractices ? html`<th class="num">${sortLink(f, 'cases', casesLabel)}</th>` : ''}<th>${s.list.stageColumn}</th>
   <th>${sortLink(f, 'next_contact', s.list.nextContact)} <span class="muted">/</span> ${sortLink(f, 'last_contact', s.list.lastContact)} ${s.list.contactWord}</th>
 </tr></thead>
 <tbody>
-${d.rows.length === 0 ? html`<tr><td colspan="8" class="empty">${s.list.empty}</td></tr>` : ''}
+${d.rows.length === 0 ? html`<tr><td colspan="${8 + (t.registry.professionSql ? 1 : 0) - (t.derivedPractices ? 0 : 1)}" class="empty">${s.list.empty}</td></tr>` : ''}
 ${d.rows.map(
   (a) => html`<tr>
   <td class="col-name"><a href="/advocates/${a.sourceId}"><strong>${a.fullName}</strong></a>
     ${a.city || a.region ? html`<span class="sub">${[a.city, a.region].filter(Boolean).join(' · ')}</span>` : ''}</td>
-  <td class="col-contacts stack">${phoneList(a.phone)}${emailList(a.email)}</td>
+  ${t.registry.professionSql ? html`<td class="col-profession">${s.profession[a.profession ?? ''] ?? a.profession ?? ''}</td>` : ''}
+  <td class="col-contacts stack">${contactsCell(a)}</td>
   <td class="col-org stack">${orgList(a.orgForms)}${a.raName ? html`<span class="sub">${a.raName}</span>` : ''}</td>
   <td class="col-cert">${a.certificateNum ?? ''}${a.certificateDate ? html`<span class="sub">${fmtDate(a.certificateDate)}</span>` : ''}</td>
   <td class="col-practices">${practiceChips(a)}</td>
-  <td class="num">${f.justiceKind ? a.kindCases : a.kinds.reduce((s, k) => s + k.cases, 0)}</td>
+  ${t.derivedPractices ? html`<td class="num">${f.justiceKind ? a.kindCases : a.kinds.reduce((sum, k) => sum + k.cases, 0)}</td>` : ''}
   <td>${stageChip(a.stage)}</td>
   <td class="col-dates">${a.nextContactAt ? html`<span class="line ${isOverdue(a.nextContactAt) ? 'overdue' : ''}">${fmtDate(a.nextContactAt)}</span>` : ''}${a.lastContact ? html`<span class="sub">${fmtDate(a.lastContact)}</span>` : ''}</td>
 </tr>`,

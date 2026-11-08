@@ -21,7 +21,7 @@ export function renderAdvocatePage(d: { advocate: AdvocateRow; profile: Practice
   const next = d.lead?.nextContactAt ?? null;
   const body = html`
 <p><a href="/advocates">${s.detail.back}</a></p>
-<h1>${a.fullName} <span class="status ${a.status}">${s.status[a.status] ?? a.status}</span></h1>
+<h1>${a.fullName} <span class="status ${a.status}">${s.status[a.status] ?? a.status}</span>${a.profession ? html` <span class="muted">${s.profession[a.profession] ?? a.profession}</span>` : ''}</h1>
 ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
 <div class="grid-2">
   <section class="card section">
@@ -40,7 +40,8 @@ ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
       <dt>${s.detail.registryId}</dt><dd>${a.sourceId}</dd>
     </dl>
   </section>
-  <section class="card section">
+  ${t.derivedPractices
+    ? html`<section class="card section">
     <h2>${s.detail.practiceSection}</h2>
     ${d.profile.kinds.length === 0
       ? html`<p class="muted">${s.detail.noMentions}</p>`
@@ -49,7 +50,15 @@ ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
         )}</ul>`}
     ${d.profile.topCategories.length ? html`<h3>${s.detail.topCategories}</h3><ul>${d.profile.topCategories.map((c) => html`<li>${c.name} <small>· ${c.cases}</small></li>`)}</ul>` : ''}
     <p>${practiceChips({ kinds: a.kinds, manualPractices: [...manual] })}</p>
-  </section>
+  </section>`
+    : html`<section class="card section">
+    <h2>${s.detail.declaredSection}</h2>
+    ${a.declaredPractices.length === 0 ? html`<p class="muted">${s.detail.declaredNone}</p>` : html`<p>${practiceChips({ kinds: [], declaredPractices: a.declaredPractices, manualPractices: [...manual] })}</p>`}
+    ${a.practiceTagsRaw.length > a.declaredPractices.length
+      ? html`<p class="muted">${s.detail.otherTags}: ${a.practiceTagsRaw.join(', ')}</p>`
+      : ''}
+    <p>${a.profileUrl ? html`<a href="${a.profileUrl}" rel="noopener" target="_blank">${s.detail.profileLink}</a>` : ''}${a.profileUrl && a.directoryUrl ? ' · ' : ''}${a.directoryUrl ? html`<a href="${a.directoryUrl}" rel="noopener" target="_blank">${s.detail.directoryLink}</a>` : ''}</p>
+  </section>`}
 </div>
 <section class="card section">
   <h2>${s.detail.leadSection} ${stageChip(stage)}</h2>
