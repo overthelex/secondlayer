@@ -90,8 +90,10 @@ collected from the two official public registers and one official directory firs
   practice tags (free list, e.g. `cywilne`, `pracy`, `zamówienia publiczne`).
 - Enumeration without `/search`: the 241 city pages `/radca-prawny-{city}` from
   `pages-sitemap.xml` (≤24 profiles each, no pagination) and the "Podobni radcowie"
-  links on every profile (breadth-first from the city seeds). Coverage is measured and
-  reported against the 3,371 figure; whatever is unreachable this way stays without
+  links on every profile (breadth-first from the city seeds). Measured 08.11: the 241
+  city pages alone expose 1,905 distinct profiles (57% of 3,371); the BFS over
+  "Podobni radcowie" (2 links per profile) is expected to add most of the rest and the
+  final coverage is reported against the 3,371 figure; whatever is unreachable this way stays without
   contact. robots.txt disallows only `/search` and `/wp-admin/`; self-imposed
   1 request/2 s.
 
