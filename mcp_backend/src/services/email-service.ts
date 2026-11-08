@@ -428,6 +428,30 @@ export class EmailService {
     }
   }
 
+  /**
+   * Warn a user that the password they just logged in with is in a known data breach
+   * (Cloudflare leaked-credentials detection). Sent at most once a week per user.
+   */
+  async sendLeakedPasswordWarning(email: string): Promise<void> {
+    try {
+      const loginUrl = `${this.frontendUrl}/login`;
+
+      await this.transporter.sendMail({
+        from: `"${this.config.fromName}" <${this.config.from}>`,
+        to: email,
+        subject: 'Ваш пароль є у відомих витоках даних - SecondLayer',
+        html: this.generateLeakedPasswordEmailTemplate(loginUrl),
+      });
+
+      logger.info('Leaked password warning sent', { email });
+    } catch (error: any) {
+      logger.error('Failed to send leaked password warning', {
+        email,
+        error: error.message,
+      });
+    }
+  }
+
   // ─── Consultation Email Notifications ───────────────────────
 
   /**
@@ -786,6 +810,44 @@ export class EmailService {
       <p style="word-break: break-all; font-size: 14px; color: #666;">${verificationUrl}</p>
       <p>This link is valid for 24 hours.</p>
       <p>If you didn't create an account, you can safely ignore this email.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; ${new Date().getFullYear()} SecondLayer Legal Platform. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+  }
+
+  private generateLeakedPasswordEmailTemplate(loginUrl: string): string {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #c62828; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+    .button { display: inline-block; background: #2196F3; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+    .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Змініть пароль</h1>
+    </div>
+    <div class="content">
+      <p>Щойно хтось увійшов у ваш акаунт SecondLayer з паролем, який є у відомих базах витоків даних.</p>
+      <p>Вхід відбувся успішно. Якщо це були ви, це означає, що ваш пароль вже відомий зловмисникам з інших сервісів, і його треба замінити на новий, унікальний для SecondLayer.</p>
+      <p>Як змінити: вийдіть з акаунту, на сторінці входу натисніть «Забули пароль?» і задайте новий.</p>
+      <p style="text-align: center;">
+        <a href="${loginUrl}" class="button">Перейти до входу</a>
+      </p>
+      <p>Якщо це були не ви, змініть пароль негайно і напишіть нам у відповідь на цей лист.</p>
     </div>
     <div class="footer">
       <p>&copy; ${new Date().getFullYear()} SecondLayer Legal Platform. All rights reserved.</p>

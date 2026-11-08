@@ -13,6 +13,7 @@ RUN npm ci
 # Accept build arguments
 ARG BUILD_ENV=production
 ARG VITE_API_URL=https://platform.legal.org.ua
+ARG VITE_TURNSTILE_SITE_KEY=
 ARG GIT_SHA=unknown
 
 # Copy source code
@@ -20,6 +21,7 @@ COPY platform/ ./
 
 # Set env vars for build
 ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
 
 # Build the application
 RUN npm run build
