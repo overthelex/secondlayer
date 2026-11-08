@@ -32,7 +32,7 @@ export interface Strings {
   status: Record<string, string>;
   profession: Record<string, string>;
   errors: {
-    notFound: string; serverError: string; serverErrorBody: string;
+    notFound: string; serverError: string; serverErrorHeading: string; serverErrorBody: string;
     unknownStage: (s: string) => string; unknownPractice: (p: string) => string; unknownNoteKind: (k: string) => string; emptyNote: string;
   };
 }

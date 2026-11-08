@@ -1,5 +1,6 @@
 import type { Queryable } from '../db';
-import { NAAU_PRACTICES, NOTE_KINDS, STAGES, type NoteKind, type Stage } from '../practices';
+import { NOTE_KINDS, STAGES, type NoteKind, type Stage } from '../practices';
+import { tenant } from '../tenant';
 
 export class ValidationError extends Error {
   readonly status = 400;
@@ -64,11 +65,12 @@ export interface LeadPatch {
 /** Creates the lead on first save (upsert); validates stage and practice vocabulary. */
 export async function saveLead(pool: Queryable, sourceId: string, patch: LeadPatch, userId: number): Promise<Lead> {
   if (patch.stage !== undefined && !(STAGES as readonly string[]).includes(patch.stage)) {
-    throw new ValidationError(`Невідома стадія: ${patch.stage}`);
+    throw new ValidationError(tenant().strings.errors.unknownStage(String(patch.stage)));
   }
   if (patch.manualPractices) {
-    const bad = patch.manualPractices.find((p) => !NAAU_PRACTICES.includes(p));
-    if (bad) throw new ValidationError(`Невідома практика: ${bad}`);
+    const allowed = tenant().practices;
+    const bad = patch.manualPractices.find((p) => !allowed.includes(p));
+    if (bad) throw new ValidationError(tenant().strings.errors.unknownPractice(bad));
   }
   const r = await pool.query<LeadRow>(
     `INSERT INTO attorney_crm_leads (advocate_source_id, stage, next_contact_at, manual_practices, updated_by)
@@ -85,9 +87,9 @@ export async function saveLead(pool: Queryable, sourceId: string, patch: LeadPat
 }
 
 export async function addNote(pool: Queryable, sourceId: string, userId: number, kind: NoteKind, body: string): Promise<Note> {
-  if (!(NOTE_KINDS as readonly string[]).includes(kind)) throw new ValidationError(`Невідомий тип нотатки: ${kind}`);
+  if (!(NOTE_KINDS as readonly string[]).includes(kind)) throw new ValidationError(tenant().strings.errors.unknownNoteKind(String(kind)));
   const text = body.trim();
-  if (!text) throw new ValidationError('Порожня нотатка');
+  if (!text) throw new ValidationError(tenant().strings.errors.emptyNote);
   const r = await pool.query<{ id: number; advocate_source_id: string; user_id: number; kind: NoteKind; body: string; created_at: Date }>(
     'INSERT INTO attorney_crm_notes (advocate_source_id, user_id, kind, body) VALUES ($1, $2, $3, $4) RETURNING *',
     [sourceId, userId, kind, text],
@@ -110,17 +112,24 @@ export async function listNotes(pool: Queryable, sourceId: string): Promise<Note
 
 // ── Today page ────────────────────────────────────────────────────────────────
 
-/** Midnight that ends the current Kyiv day, as a UTC instant. */
-export function endOfKyivDay(now: Date = new Date()): Date {
-  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(now); // YYYY-MM-DD in Kyiv
+/** The zone's UTC offset in minutes at the given instant (e.g. Kyiv in summer → 180). */
+export function utcOffsetMinutes(at: Date, tz: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' }).formatToParts(at);
+  const off = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+00:00';
+  const om = /GMT([+-])(\d{2}):(\d{2})/.exec(off);
+  return om ? (om[1] === '-' ? -1 : 1) * (Number(om[2]) * 60 + Number(om[3])) : 0;
+}
+
+/** Midnight that ends the current local day in `tz`, as a UTC instant. */
+export function endOfLocalDay(now: Date = new Date(), tz: string = tenant().timeZone): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now); // YYYY-MM-DD locally
   const [y, m, d] = ymd.split('-').map(Number);
   const nextUtcMidnight = Date.UTC(y, m - 1, d + 1);
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Kyiv', timeZoneName: 'longOffset' }).formatToParts(new Date(nextUtcMidnight));
-  const off = parts.find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+02:00';
-  const om = /GMT([+-])(\d{2}):(\d{2})/.exec(off);
-  const offsetMin = om ? (om[1] === '-' ? -1 : 1) * (Number(om[2]) * 60 + Number(om[3])) : 120;
-  return new Date(nextUtcMidnight - offsetMin * 60_000);
+  return new Date(nextUtcMidnight - utcOffsetMinutes(new Date(nextUtcMidnight), tz) * 60_000);
 }
+
+/** Kept for the Ukrainian tenant and its tests. */
+export const endOfKyivDay = (now: Date = new Date()): Date => endOfLocalDay(now, 'Europe/Kyiv');
 
 export interface DueRow {
   sourceId: string;
@@ -134,9 +143,9 @@ export interface DueRow {
   lastNoteAt: Date | null;
 }
 
-/** Leads due today or earlier (Kyiv time), earliest first so overdue ones lead. */
-export async function dueToday(pool: Queryable, now: Date = new Date()): Promise<DueRow[]> {
-  const bound = endOfKyivDay(now);
+/** Leads due today or earlier (tenant time), earliest first so overdue ones lead. */
+export async function dueToday(pool: Queryable, now: Date = new Date(), tz: string = tenant().timeZone): Promise<DueRow[]> {
+  const bound = endOfLocalDay(now, tz);
   const startOfToday = new Date(bound.getTime() - 24 * 3600 * 1000);
   const r = await pool.query<{
     advocate_source_id: string; family_name: string; first_name: string; patronymic: string; city: string | null;

@@ -32,7 +32,7 @@ export const uk: Strings = {
   status: { active: 'Діє', suspended: 'Право зупинено', terminated: 'Право припинено' },
   profession: {},
   errors: {
-    notFound: 'Не знайдено', serverError: 'Помилка', serverErrorBody: 'Спробуйте ще раз за хвилину. Якщо повторюється, напишіть Володимиру.',
+    notFound: 'Не знайдено', serverError: 'Помилка', serverErrorHeading: 'Сталася помилка', serverErrorBody: 'Спробуйте ще раз за хвилину. Якщо повторюється, напишіть Володимиру.',
     unknownStage: (s) => `Невідома стадія: ${s}`, unknownPractice: (p) => `Невідома практика: ${p}`, unknownNoteKind: (k) => `Невідомий тип нотатки: ${k}`, emptyNote: 'Порожня нотатка',
   },
 };

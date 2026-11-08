@@ -47,7 +47,7 @@ export function parseKindSummary(summary: string | null | undefined): KindCount[
     .filter((p) => p.length === 2)
     .map(([k, c]) => {
       const justiceKind = Number(k);
-      return { justiceKind, name: JUSTICE_KINDS[justiceKind] ?? `Вид ${justiceKind}`, cases: Number(c) };
+      return { justiceKind, name: JUSTICE_KINDS[justiceKind] ?? `#${justiceKind}`, cases: Number(c) };
     });
 }
 
@@ -140,12 +140,12 @@ export async function getPracticeProfile(pool: Queryable, sourceId: string): Pro
   return {
     kinds: kinds.rows.map((k) => ({
       justiceKind: k.justice_kind,
-      name: JUSTICE_KINDS[k.justice_kind] ?? `Вид ${k.justice_kind}`,
+      name: JUSTICE_KINDS[k.justice_kind] ?? `#${k.justice_kind}`,
       cases: Number(k.cases),
       firstYear: k.first_year,
       lastYear: k.last_year,
     })),
-    topCategories: cats.rows.map((c) => ({ categoryCode: c.category_code, name: c.name ?? `Категорія ${c.category_code}`, cases: Number(c.cases) })),
+    topCategories: cats.rows.map((c) => ({ categoryCode: c.category_code, name: c.name ?? `#${c.category_code}`, cases: Number(c.cases) })),
   };
 }
 

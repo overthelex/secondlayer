@@ -31,7 +31,7 @@ export const en: Strings = {
   status: { active: 'Practising', inactive: 'Not practising', former: 'Former', suspended: 'Suspended', terminated: 'Terminated' },
   profession: { adwokat: 'Adwokat', radca: 'Radca prawny' },
   errors: {
-    notFound: 'Not found', serverError: 'Error', serverErrorBody: 'Try again in a minute. If it keeps happening, write to Vladimir.',
+    notFound: 'Not found', serverError: 'Error', serverErrorHeading: 'Something went wrong', serverErrorBody: 'Try again in a minute. If it keeps happening, write to Vladimir.',
     unknownStage: (s) => `Unknown stage: ${s}`, unknownPractice: (p) => `Unknown practice area: ${p}`, unknownNoteKind: (k) => `Unknown note kind: ${k}`, emptyNote: 'Empty note',
   },
 };
