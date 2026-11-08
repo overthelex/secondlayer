@@ -71,3 +71,12 @@ test('post sends a form body', async () => {
   expect(f.calls[0].init.method).toBe('POST');
   expect(String(f.calls[0].init.body)).toBe('stan=1&page=2');
 });
+
+import { fetch as undiciFetch } from 'undici';
+import { defaultFetch } from '../collector/http';
+
+// npm undici's ProxyAgent is only guaranteed to be accepted as `dispatcher` by undici's own fetch,
+// not by the undici bundled inside Node — so the client must default to undici's fetch.
+test('the default fetch is undici fetch, so the ProxyAgent dispatcher is always honoured', () => {
+  expect(defaultFetch).toBe(undiciFetch);
+});

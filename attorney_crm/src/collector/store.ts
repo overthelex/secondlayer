@@ -125,16 +125,25 @@ export async function findByEntryNumber(pool: Queryable, entryNumber: string): P
   return r.rows.length === 1 ? { lawyerId: r.rows[0].lawyer_id, contactSource: r.rows[0].contact_source } : null;
 }
 
-/** Exactly one radca with this surname + given names (case-insensitive), optionally narrowed by city. */
+/**
+ * Radcowie with this surname + given names (case-insensitive). Exactly one nationwide → match;
+ * several → only the one whose city equals the directory's city; a NULL city never wins a tie.
+ */
 export async function findUniqueByName(pool: Queryable, surname: string, givenNames: string, city: string | null): Promise<MatchedLawyer | null> {
-  const r = await pool.query<{ lawyer_id: string; contact_source: string | null }>(
-    `SELECT lawyer_id, contact_source FROM public.pl_lawyers
+  const r = await pool.query<{ lawyer_id: string; contact_source: string | null; city: string | null }>(
+    `SELECT lawyer_id, contact_source, city FROM public.pl_lawyers
      WHERE profession = 'radca' AND upper(surname) = upper($1) AND upper(given_names) = upper($2)
-       AND ($3::text IS NULL OR city IS NULL OR upper(city) = upper($3))
-     LIMIT 2`,
-    [surname, givenNames, city],
+     LIMIT 10`,
+    [surname, givenNames],
   );
-  return r.rows.length === 1 ? { lawyerId: r.rows[0].lawyer_id, contactSource: r.rows[0].contact_source } : null;
+  let rows = r.rows;
+  if (rows.length > 1 && city) rows = rows.filter((x) => x.city && x.city.toUpperCase() === city.toUpperCase());
+  return rows.length === 1 ? { lawyerId: rows[0].lawyer_id, contactSource: rows[0].contact_source } : null;
+}
+
+export async function countByProfession(pool: Queryable, profession: Profession): Promise<number> {
+  const r = await pool.query<{ n: number }>('SELECT count(*)::int AS n FROM public.pl_lawyers WHERE profession = $1', [profession]);
+  return Number(r.rows[0]?.n ?? 0);
 }
 
 export interface DetailCandidate {

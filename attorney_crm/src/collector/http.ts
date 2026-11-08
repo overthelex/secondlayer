@@ -1,6 +1,9 @@
 // Polite HTTP client: one request at a time, per-host minimum spacing, back-off on 429/5xx,
 // hard stop after N consecutive failures, optional HTTP proxy (the pl-egress sidecar).
-import { ProxyAgent } from 'undici';
+import { fetch as undiciFetch, ProxyAgent } from 'undici';
+
+/** undici's own fetch: the only one guaranteed to accept npm undici's ProxyAgent as `dispatcher`. */
+export const defaultFetch = undiciFetch as unknown as typeof fetch;
 
 export class CollectorStopped extends Error {}
 export class HttpStatusError extends Error {
@@ -34,7 +37,7 @@ export class Collector {
   requests = 0;
 
   constructor(private readonly o: CollectorOptions) {
-    this.fetchImpl = o.fetchImpl ?? fetch;
+    this.fetchImpl = o.fetchImpl ?? defaultFetch;
     this.sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.now = o.now ?? Date.now;
     this.dispatcher = o.proxyUrl ? new ProxyAgent(o.proxyUrl) : undefined;

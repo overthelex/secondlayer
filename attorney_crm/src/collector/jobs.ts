@@ -9,8 +9,8 @@ import { parseRadcowieFragment } from './parse-radcowie';
 import { parseCityPage, parseDirectoryProfile } from './parse-szukajradcy';
 import { mapPracticeTag, nraLabelToCode } from '../tenant/pl-practices';
 import {
-  detailCandidates, findByEntryNumber, findUniqueByName, getCursor, markDetailFetched, markUnseen, setCursor, upsertLawyers,
-  type LawyerUpsert, type MatchedLawyer,
+  countByProfession, detailCandidates, findByEntryNumber, findUniqueByName, getCursor, markDetailFetched, markUnseen, setCursor, upsertLawyers,
+  type LawyerUpsert, type MatchedLawyer, type Profession,
 } from './store';
 
 export interface JobDeps {
@@ -29,6 +29,37 @@ export const HOSTS = {
 export const MIN_DELAY_MS: Record<string, number> = { 'rejestradwokatow.pl': 10_000, 'rejestrradcow.pl': 1_000, 'szukajradcy.pl': 2_000 };
 
 const now = (d: JobDeps) => (d.now ?? (() => new Date()))();
+
+/** Below these a "complete" walk is not believed on a first run (register sizes, Nov 2026: 35.2K / 57.5K). */
+const MIN_WALK_ROWS: Record<Profession, number> = { adwokat: 30_000, radca: 50_000 };
+
+/**
+ * A walk may mark the unseen rows only when it is plausible that it really saw the whole register:
+ * at least 90% of what is stored, or the fixed minimum when nothing is stored yet. A 200 that is a
+ * maintenance page, a WAF interstitial or a changed layout would otherwise flip everyone.
+ */
+export function plausibleWalk(profession: Profession, rowsSeen: number, stored: number): boolean {
+  return stored > 0 ? rowsSeen >= Math.floor(stored * 0.9) : rowsSeen >= MIN_WALK_ROWS[profession];
+}
+
+/** A list walk is needed when it never completed or a walk is in progress (cursor has walkStartedAt, no completedAt). */
+export function needsListWalk(cur: Record<string, unknown> | null): boolean {
+  if (!cur) return true;
+  if (typeof cur.walkStartedAt === 'string') return true;
+  return typeof cur.completedAt !== 'string';
+}
+
+async function finishWalk(d: JobDeps, src: string, profession: Profession, rowsSeen: number, walkStartedAt: Date, newStatus: 'former' | 'inactive', extra: Record<string, unknown>): Promise<void> {
+  const stored = await countByProfession(d.pool, profession);
+  if (plausibleWalk(profession, rowsSeen, stored)) {
+    const n = await markUnseen(d.pool, profession, walkStartedAt, newStatus);
+    d.log(`[${src}] walk complete: ${rowsSeen} rows, ${n} marked ${newStatus}`);
+    await setCursor(d.pool, src, { page: 1, ...extra, completedAt: now(d).toISOString(), rowsSeen });
+  } else {
+    d.log(`[${src}] walk complete but implausible (${rowsSeen} rows vs ${stored} stored): nobody marked ${newStatus}; check the register by hand`);
+    await setCursor(d.pool, src, { page: 1, ...extra, completedAt: now(d).toISOString(), rowsSeen, unseenSkipped: true });
+  }
+}
 
 // ── probe ──
 
@@ -51,17 +82,22 @@ export async function probe(d: JobDeps): Promise<{ host: string; status: number;
 export async function adwokaciList(d: JobDeps): Promise<{ pages: number; rows: number }> {
   const SRC = 'adwokaci-list';
   const cur = (await getCursor(d.pool, SRC)) ?? {};
-  let page = typeof cur.page === 'number' && cur.page >= 1 ? cur.page : 1;
-  const walkStartedAt = typeof cur.walkStartedAt === 'string' ? new Date(cur.walkStartedAt) : now(d);
+  const resuming = typeof cur.walkStartedAt === 'string';
+  let page = resuming && typeof cur.page === 'number' && cur.page >= 1 ? cur.page : 1;
+  const walkStartedAt = resuming ? new Date(cur.walkStartedAt as string) : now(d);
   let lastPage: number | null = typeof cur.lastPage === 'number' ? cur.lastPage : null;
+  let rowsSeen = resuming && typeof cur.rowsSeen === 'number' ? cur.rowsSeen : 0;
   let pages = 0;
   let rows = 0;
   for (;;) {
     const html = await d.http.get(`${HOSTS.adwokaci}/adwokat/list/strona/${page}`);
     const parsed = parseAdwokaciList(html);
     if (parsed.lastPage) lastPage = parsed.lastPage;
+    if (parsed.rows.length === 0 && (lastPage === null || page <= lastPage)) {
+      throw new Error(`[${SRC}] page ${page} parsed to zero rows (${html.length} bytes) before the last page ${lastPage ?? '?'}: not the end of the list`);
+    }
     const seenAt = now(d);
-    rows += await upsertLawyers(
+    const n = await upsertLawyers(
       d.pool,
       parsed.rows.map<LawyerUpsert>((r) => ({
         lawyerId: `adw:${r.id}`,
@@ -76,15 +112,15 @@ export async function adwokaciList(d: JobDeps): Promise<{ pages: number; rows: n
       })),
       seenAt,
     );
+    rows += n;
+    rowsSeen += n;
     pages++;
-    d.log(`[adwokaci-list] page ${page}/${lastPage ?? '?'}: ${parsed.rows.length} rows`);
-    if (parsed.rows.length === 0 || (lastPage !== null && page >= lastPage)) break;
+    d.log(`[${SRC}] page ${page}/${lastPage ?? '?'}: ${parsed.rows.length} rows`);
+    if (lastPage !== null && page >= lastPage) break;
     page++;
-    await setCursor(d.pool, SRC, { page, lastPage, walkStartedAt: walkStartedAt.toISOString() });
+    await setCursor(d.pool, SRC, { page, lastPage, rowsSeen, walkStartedAt: walkStartedAt.toISOString() });
   }
-  const former = await markUnseen(d.pool, 'adwokat', walkStartedAt, 'former');
-  d.log(`[adwokaci-list] walk complete: ${rows} rows, ${former} marked former`);
-  await setCursor(d.pool, SRC, { page: 1, lastPage, completedAt: now(d).toISOString() });
+  await finishWalk(d, SRC, 'adwokat', rowsSeen, walkStartedAt, 'former', { lastPage });
   return { pages, rows };
 }
 
@@ -109,14 +145,14 @@ export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit
     const codes = det.practices.map(nraLabelToCode).filter((x): x is string => x !== null);
     const phone = normalisePhone(det.phone) ?? det.phone;
     const phone2 = normalisePhone(det.phone2) ?? det.phone2;
-    const [surname, ...given] = det.name.split(' ');
+    // the list walk owns the name (three clean columns); the store keeps stored values for blanks
     await upsertLawyers(
       d.pool,
       [{
         lawyerId: c.lawyerId,
         profession: 'adwokat',
-        surname: surname || c.lawyerId,
-        givenNames: given.join(' '),
+        surname: '',
+        givenNames: '',
         status: statusFromRaw('adwokat', det.statusRaw ?? ''),
         statusRaw: det.statusRaw ?? '',
         city: det.city,
@@ -132,7 +168,7 @@ export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit
         practices: codes,
         practiceTagsRaw: det.practices,
         detailFetched: true,
-        raw: { detail: { fetchedAt: now(d).toISOString() } },
+        raw: { detail: { fetchedAt: now(d).toISOString(), name: det.name } },
       }],
       now(d),
       false,
@@ -148,8 +184,10 @@ export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit
 export async function radcowieList(d: JobDeps): Promise<{ pages: number; rows: number }> {
   const SRC = 'radcowie-list';
   const cur = (await getCursor(d.pool, SRC)) ?? {};
-  let page = typeof cur.page === 'number' && cur.page >= 1 ? cur.page : 1;
-  const walkStartedAt = typeof cur.walkStartedAt === 'string' ? new Date(cur.walkStartedAt) : now(d);
+  const resuming = typeof cur.walkStartedAt === 'string';
+  let page = resuming && typeof cur.page === 'number' && cur.page >= 1 ? cur.page : 1;
+  const walkStartedAt = resuming ? new Date(cur.walkStartedAt as string) : now(d);
+  let rowsSeen = resuming && typeof cur.rowsSeen === 'number' ? cur.rowsSeen : 0;
   let pages = 0;
   let rows = 0;
   let emptyStreak = 0;
@@ -157,10 +195,10 @@ export async function radcowieList(d: JobDeps): Promise<{ pages: number; rows: n
     const html = await d.http.post(`${HOSTS.radcowie}/Home/GetDataW`, { nazwisko: '', imie: '', nrwpisu: '', districts: '0', cities: '0', stan: '0', page: String(page) });
     const parsed = parseRadcowieFragment(html);
     if (parsed.length === 0) {
-      // the register answers an empty fragment past the last page; two in a row ends the walk
+      // the register answers a row-less fragment past the last page; two in a row ends the walk
       if (++emptyStreak >= 2) break;
     } else emptyStreak = 0;
-    rows += await upsertLawyers(
+    const n = await upsertLawyers(
       d.pool,
       parsed.map<LawyerUpsert>((r) => ({
         lawyerId: `radca:${r.entryNumber}`,
@@ -175,14 +213,19 @@ export async function radcowieList(d: JobDeps): Promise<{ pages: number; rows: n
       })),
       now(d),
     );
+    rows += n;
+    rowsSeen += n;
     pages++;
-    if (page % 100 === 0) d.log(`[radcowie-list] page ${page}: ${rows} rows so far`);
+    if (page % 100 === 0) d.log(`[${SRC}] page ${page}: ${rowsSeen} rows so far`);
     page++;
-    await setCursor(d.pool, SRC, { page, walkStartedAt: walkStartedAt.toISOString() });
+    await setCursor(d.pool, SRC, { page, rowsSeen, walkStartedAt: walkStartedAt.toISOString() });
   }
-  const inactive = await markUnseen(d.pool, 'radca', walkStartedAt, 'inactive');
-  d.log(`[radcowie-list] walk complete: ${pages} pages, ${rows} rows, ${inactive} marked inactive`);
-  await setCursor(d.pool, SRC, { page: 1, completedAt: now(d).toISOString() });
+  // the end came too early to be the real end: a maintenance page or WAF answer with HTTP 200
+  const stored = await countByProfession(d.pool, 'radca');
+  if (!plausibleWalk('radca', rowsSeen, stored)) {
+    throw new Error(`[${SRC}] walk ended early at page ${page} with ${rowsSeen} rows (${stored} stored): leaving the cursor for a retry`);
+  }
+  await finishWalk(d, SRC, 'radca', rowsSeen, walkStartedAt, 'inactive', {});
   return { pages, rows };
 }
 
@@ -309,7 +352,8 @@ export async function szukajradcy(d: JobDeps): Promise<{ profiles: number; match
     await save();
   }
   d.log(`[szukajradcy] done: ${profiles} profiles, ${matched} matched, ${unmatched} unmatched`);
-  await setCursor(d.pool, SRC, { completedAt: now(d).toISOString(), visited: [...visited] });
+  // visited is intra-run resume state only: the next monthly run re-reads every profile
+  await setCursor(d.pool, SRC, { completedAt: now(d).toISOString(), profiles, matched, unmatched });
   return { profiles, matched, unmatched };
 }
 
@@ -342,40 +386,43 @@ export interface Schedule {
 
 const DEFAULT_SCHEDULE: Schedule = { tickMs: 60_000, detailBatch: 200, detailMaxAgeDays: 90, idleMs: 60_000 };
 
-/** Runs probe once, then lists weekly, szukajradcy monthly, and the details loop continuously. */
+/** Runs probe once, then: lists (immediately until the first walk completes, then weekly), szukajradcy monthly, the details loop continuously. */
 export function daemon(d: JobDeps, schedule: Partial<Schedule> = {}): { stop: () => void; done: Promise<void> } {
   const s = { ...DEFAULT_SCHEDULE, ...schedule };
   let stopped = false;
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const lastRun: Record<string, Date | null> = { lists: null, szukajradcy: null };
 
+  const runLists = async () => {
+    if (needsListWalk(await getCursor(d.pool, 'adwokaci-list'))) await adwokaciList(d);
+    if (needsListWalk(await getCursor(d.pool, 'radcowie-list'))) await radcowieList(d);
+  };
   const loop = async () => {
     await probe(d);
     const cur = await getCursor(d.pool, 'daemon');
     for (const k of Object.keys(lastRun)) if (typeof cur?.[k] === 'string') lastRun[k] = new Date(cur[k] as string);
     const remember = () => setCursor(d.pool, 'daemon', Object.fromEntries(Object.entries(lastRun).map(([k, v]) => [k, v?.toISOString() ?? null])));
-    // First start on an empty table: walk the lists right away instead of waiting for Sunday.
-    const empty = (await d.pool.query<{ n: number }>('SELECT count(*)::int AS n FROM public.pl_lawyers')).rows[0]?.n === 0;
-    if (empty) {
-      await adwokaciList(d);
-      await radcowieList(d);
-      lastRun.lists = now(d);
-      await remember();
-    }
     while (!stopped) {
       const t = now(d);
       try {
+        // Lists: a never-completed or interrupted walk continues on every tick (first start, a
+        // crash mid-walk, a failure outside the Sunday slot); the slot only starts a fresh one.
         if (isDue('weekly', t, lastRun.lists)) {
-          await adwokaciList(d);
-          await radcowieList(d);
+          for (const src of ['adwokaci-list', 'radcowie-list']) {
+            const c = await getCursor(d.pool, src);
+            if (c && !needsListWalk(c)) await setCursor(d.pool, src, { page: 1 }); // forget completedAt → fresh walk
+          }
           lastRun.lists = t;
           await remember();
         }
+        await runLists();
         if (isDue('monthly', t, lastRun.szukajradcy)) {
-          await szukajradcy(d);
+          await setCursor(d.pool, 'szukajradcy', {});
           lastRun.szukajradcy = t;
           await remember();
         }
+        const sz = await getCursor(d.pool, 'szukajradcy');
+        if (sz && typeof sz.completedAt !== 'string') await szukajradcy(d); // in progress (or just reset): continue
         const { fetched } = await adwokaciDetails(d, { maxAgeDays: s.detailMaxAgeDays, limit: s.detailBatch });
         if (fetched === 0) await sleep(s.idleMs);
       } catch (e) {
