@@ -127,7 +127,8 @@ def field(v, key):
     return v
 
 
-def entity_row(num, rejestr, d, kind, url):
+def entity_row(num, rejestr, d, kind, url, struck=None):
+    struck = kind == "pelny" if struck is None else struck
     o = d.get("odpis") or {}
     head = o.get("naglowekA") or o.get("naglowekP") or {}
     dane = o.get("dane") or {}
@@ -141,7 +142,7 @@ def entity_row(num, rejestr, d, kind, url):
         last_on, last_no = pl_date(lastw.get("dataWpisu")), lastw.get("numerWpisu")
         first = wpisy[0] if wpisy else {}
         reg_on = pl_date(first.get("dataWpisu"))
-        struck_on = last_on
+        struck_on = last_on if struck else None
     else:
         last_on = pl_date(head.get("dataOstatniegoWpisu"))
         last_no = head.get("numerOstatniegoWpisu")
@@ -149,7 +150,7 @@ def entity_row(num, rejestr, d, kind, url):
         struck_on = None
     opp = field(pod.get("czyPosiadaStatusOPP"), "czyPosiadaStatusOPP")
     return (
-        f"{num:010d}", rejestr, "struck_off" if kind == "pelny" else "current",
+        f"{num:010d}", rejestr, "struck_off" if struck else "current",
         field(pod.get("nazwa"), "nazwa"), field(pod.get("formaPrawna"), "formaPrawna"),
         ids.get("nip") if isinstance(ids, dict) else None,
         ids.get("regon") if isinstance(ids, dict) else None,
@@ -177,6 +178,17 @@ def probe(num):
         if c2 == 200:
             counts["struck"] += 1
             return (num, "P", 204, None, now), entity_row(num, "P", d, "pelny", url)
+        counts["failed"] += 1
+        return None, None
+    if cp == 901:
+        # A few live entities answer OdpisAktualny with 200 and an empty body
+        # every time (0000035662, entry dated 2026-10-12); OdpisPelny works.
+        url = f"{API}/OdpisPelny/{k}?rejestr=P&format=json"
+        d, c2 = get(f"OdpisPelny/{k}?rejestr=P&format=json")
+        if c2 == 200:
+            counts["hits"] += 1
+            return (num, "P", 200, None, now), entity_row(num, "P", d, "pelny", url,
+                                                          struck=False)
         counts["failed"] += 1
         return None, None
     if cp != 404:

@@ -19,8 +19,8 @@ fills the 500 cap, grow (up to a week) while windows come back small.
 pl_bzp_progress.done_until per type is the end of the last complete window,
 so a killed run resumes exactly where it stopped.
 
-`contractors` arrives as a Python repr string ("[{'contractorName': ...}]"),
-not JSON; it is parsed with ast.literal_eval.
+`contractors` arrives as a JSON list; a Python repr string of one is accepted
+too. Text can carry NUL characters, which Postgres rejects, so they are removed.
 """
 import argparse
 import ast
@@ -66,13 +66,26 @@ def contractors(v):
     v = none(v)
     if v is None:
         return None
+    if isinstance(v, (list, dict)):
+        return json.dumps(v, ensure_ascii=False)
     try:
         return json.dumps(ast.literal_eval(v), ensure_ascii=False)
     except (ValueError, SyntaxError):
         return json.dumps({"raw": v}, ensure_ascii=False)
 
 
+def strip_nul(v):
+    if isinstance(v, str):
+        return v.replace("\x00", "")
+    if isinstance(v, list):
+        return [strip_nul(i) for i in v]
+    if isinstance(v, dict):
+        return {k: strip_nul(i) for k, i in v.items()}
+    return v
+
+
 def row(x):
+    x = strip_nul(x)
     below = none(x.get("isTenderAmountBelowEU"))
     return (
         x["objectId"], x["noticeType"], none(x.get("noticeNumber")),
