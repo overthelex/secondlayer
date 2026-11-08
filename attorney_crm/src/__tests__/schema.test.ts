@@ -58,3 +58,12 @@ test('fresh database applies every file in lexical order inside transactions on 
   expect(calls.filter((q) => q === 'COMMIT').length).toBe(4);
   expect(calls[calls.length - 1]).toBe('RELEASE');
 });
+
+test('pl tenant applies 002, 004 and pl/001 only, inside the schema', async () => {
+  const calls: string[] = [];
+  const applied = await applySchema(fakePool(calls, new Map()) as any, sqlDir, ['002_crm_core.sql', '004_contact_overrides.sql', 'pl/001_pl_lawyers.sql'], 'attorney_crm_pl');
+  expect(applied).toEqual(['002_crm_core.sql', '004_contact_overrides.sql', 'pl/001_pl_lawyers.sql']);
+  expect(calls[0]).toBe('CREATE SCHEMA IF NOT EXISTS attorney_crm_pl');
+  expect(calls.some((c) => c.includes('edrsr_'))).toBe(false);
+  expect(calls.some((c) => c.includes('CREATE TABLE IF NOT EXISTS public.pl_lawyers'))).toBe(true);
+});
