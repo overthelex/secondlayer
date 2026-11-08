@@ -92,3 +92,27 @@ test('dueToday excludes do-not-contact leads', async () => {
   await dueToday(pool as any, new Date());
   expect(pool.calls[0].text).toMatch(/NOT l\.do_not_contact/);
 });
+
+// Found on a live throwaway stack (2026-11-08): pg infers COALESCE($4, '{}') as text,
+// so saving a lead with practices failed with "column manual_practices is of type text[]".
+test('saveLead sends manual_practices typed as text[]', async () => {
+  const pool = fakePool([{ advocate_source_id: '42', stage: 'new', next_contact_at: null, manual_practices: ['ДТП'], assigned_user_id: null, updated_at: new Date(), updated_by: 1 }]);
+  await saveLead(pool as any, '42', { manualPractices: ['ДТП'] }, 1);
+  expect(pool.calls[0].text).toMatch(/COALESCE\(\$4::text\[\], '\{\}'\)/);
+  expect(pool.calls[0].text).toMatch(/manual_practices = COALESCE\(\$4::text\[\], attorney_crm_leads\.manual_practices\)/);
+});
+
+// Same stack: the Today page ordered by a hard-coded `a.family_name`, which the pl register lacks.
+test('dueToday orders by the adapter surname column, never a hard-coded UA name', async () => {
+  const { loadTenant, setTenant } = await import('../tenant');
+  await import('../tenant/pl');
+  setTenant(loadTenant({ ATTORNEY_CRM_TENANT: 'pl' }));
+  try {
+    const pool = fakePool();
+    await dueToday(pool as any, new Date());
+    expect(pool.calls[0].text).not.toMatch(/a\.family_name/);
+    expect(pool.calls[0].text).toMatch(/ORDER BY l\.next_contact_at ASC, a\.surname ASC/);
+  } finally {
+    setTenant(loadTenant({}));
+  }
+});

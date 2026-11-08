@@ -94,11 +94,11 @@ export async function saveLead(pool: Queryable, sourceId: string, patch: LeadPat
   const r = await pool.query<LeadRow>(
     `INSERT INTO attorney_crm_leads (advocate_source_id, stage, next_contact_at, manual_practices, updated_by,
                                      do_not_contact, do_not_contact_reason, phone_override, email_override)
-     VALUES ($1, COALESCE($2, 'new'), $3, COALESCE($4, '{}'), $5, COALESCE($7, false), $9, $11, $13)
+     VALUES ($1, COALESCE($2, 'new'), $3, COALESCE($4::text[], '{}'), $5, COALESCE($7, false), $9, $11, $13)
      ON CONFLICT (advocate_source_id) DO UPDATE SET
        stage = COALESCE($2, attorney_crm_leads.stage),
        next_contact_at = CASE WHEN $6::boolean THEN $3 ELSE attorney_crm_leads.next_contact_at END,
-       manual_practices = COALESCE($4, attorney_crm_leads.manual_practices),
+       manual_practices = COALESCE($4::text[], attorney_crm_leads.manual_practices),
        do_not_contact = COALESCE($7, attorney_crm_leads.do_not_contact),
        do_not_contact_reason = CASE WHEN $8::boolean THEN $9 ELSE attorney_crm_leads.do_not_contact_reason END,
        phone_override = CASE WHEN $10::boolean THEN $11 ELSE attorney_crm_leads.phone_override END,
@@ -198,7 +198,7 @@ export async function dueToday(pool: Queryable, now: Date = new Date(), tz: stri
           WHERE n.advocate_source_id = l.advocate_source_id ORDER BY created_at DESC LIMIT 1
        ) ln ON true
       WHERE l.next_contact_at < $1 AND NOT l.do_not_contact
-      ORDER BY l.next_contact_at ASC, a.family_name ASC
+      ORDER BY l.next_contact_at ASC, ${reg.surnameColumn} ASC
       LIMIT 500`,
     [bound],
   );
