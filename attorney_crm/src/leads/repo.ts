@@ -1,6 +1,7 @@
 import type { Queryable } from '../db';
 import { NOTE_KINDS, STAGES, type NoteKind, type Stage } from '../practices';
 import { tenant } from '../tenant';
+import type { RegistryAdapter } from '../tenant/types';
 
 export class ValidationError extends Error {
   readonly status = 400;
@@ -110,6 +111,11 @@ export async function listNotes(pool: Queryable, sourceId: string): Promise<Note
   return r.rows.map((n) => ({ id: Number(n.id), advocateSourceId: n.advocate_source_id, userId: n.user_id, kind: n.kind, body: n.body, createdAt: new Date(n.created_at), author: n.author }));
 }
 
+/** `family_name, first_name, patronymic` from the registry adapter's name columns. */
+function nameSelect(reg: RegistryAdapter): string {
+  return `${reg.surnameColumn} AS family_name, ${reg.firstNameColumn} AS first_name, ${reg.patronymicColumn ?? "''"} AS patronymic`;
+}
+
 // ── Today page ────────────────────────────────────────────────────────────────
 
 /** The zone's UTC offset in minutes at the given instant (e.g. Kyiv in summer → 180). */
@@ -146,17 +152,18 @@ export interface DueRow {
 /** Leads due today or earlier (tenant time), earliest first so overdue ones lead. */
 export async function dueToday(pool: Queryable, now: Date = new Date(), tz: string = tenant().timeZone): Promise<DueRow[]> {
   const bound = endOfLocalDay(now, tz);
+  const reg = tenant().registry;
   const startOfToday = new Date(bound.getTime() - 24 * 3600 * 1000);
   const r = await pool.query<{
     advocate_source_id: string; family_name: string; first_name: string; patronymic: string; city: string | null;
     phone: string | null; stage: Stage; next_contact_at: Date; last_note: string | null; last_note_at: Date | null;
   }>(
-    `SELECT l.advocate_source_id, a.family_name, a.name AS first_name, a.additional_name AS patronymic,
-            a.work_address->0->>'workAddressCity' AS city,
-            NULLIF(TRIM(a.work_address->0->>'workAddressContacts'), '') AS phone,
+    `SELECT l.advocate_source_id, ${nameSelect(reg)},
+            ${reg.citySqlForToday} AS city,
+            ${reg.phoneSqlForToday} AS phone,
             l.stage, l.next_contact_at, ln.body AS last_note, ln.created_at AS last_note_at
        FROM attorney_crm_leads l
-       JOIN opendata_advocates a ON a.source_id = l.advocate_source_id
+       JOIN ${reg.table} ON ${reg.idColumn} = l.advocate_source_id
        LEFT JOIN LATERAL (
          SELECT body, created_at FROM attorney_crm_notes n
           WHERE n.advocate_source_id = l.advocate_source_id ORDER BY created_at DESC LIMIT 1
@@ -187,16 +194,17 @@ export interface NoteWithAdvocate extends NoteWithAuthor {
 }
 
 export async function recentNotes(pool: Queryable, limit = 30): Promise<NoteWithAdvocate[]> {
+  const reg = tenant().registry;
   const r = await pool.query<{
     id: number; advocate_source_id: string; user_id: number; kind: NoteKind; body: string; created_at: Date; author: string;
     family_name: string | null; first_name: string | null; patronymic: string | null;
   }>(
     `SELECT n.id, n.advocate_source_id, n.user_id, n.kind, n.body, n.created_at,
             COALESCE(NULLIF(u.display_name, ''), u.email) AS author,
-            a.family_name, a.name AS first_name, a.additional_name AS patronymic
+            ${nameSelect(reg)}
        FROM attorney_crm_notes n
        JOIN attorney_crm_users u ON u.id = n.user_id
-       LEFT JOIN opendata_advocates a ON a.source_id = n.advocate_source_id
+       LEFT JOIN ${reg.table} ON ${reg.idColumn} = n.advocate_source_id
       ORDER BY n.created_at DESC, n.id DESC
       LIMIT $1`,
     [limit],
