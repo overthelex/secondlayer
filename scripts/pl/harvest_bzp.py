@@ -12,6 +12,7 @@ How the API actually behaves (measured 2026-11-07, not documented anywhere):
     window [A, B) is From=A, To=B-24h (1 h windows 08-09 and 09-10 gave 62 and
     67, the 08-10 window 129)
   * order is by internal id, which is NOT publication order for 2021-2022
+  * one response can carry the same objectId twice (seen 2024-02-13)
 So the harvest walks exact windows: start with one day, halve while a window
 fills the 500 cap, grow (up to a week) while windows come back small.
 
@@ -140,6 +141,8 @@ def harvest(ntype, start, until):
                 raise RuntimeError(f"{ntype}: >=500 notices within a minute at {lo}")
             step = step / 2
             continue
+        # the API can return the same objectId twice in one response
+        items = list({x["objectId"]: x for x in items}.values())
         held = held_ids([x["objectId"] for x in items])
         new = [row(x) for x in items if x["objectId"] not in held]
         if new:
