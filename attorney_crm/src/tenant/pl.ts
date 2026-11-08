@@ -10,7 +10,7 @@ export const PL_TENANT: Tenant = {
   lang: 'en',
   timeZone: 'Europe/Warsaw',
   locale: 'en-GB',
-  brand: { name: 'lawrider.pl', domain: 'lawrider.pl', logo: 'logo-lawrider.png', tagline: en.brandTagline },
+  brand: { name: 'lawrider.pl', domain: 'lawrider.pl', logo: 'logo-lawrider.png', mark: 'logo-lawrider.png', tagline: en.brandTagline },
   strings: en,
   registry: PL_REGISTRY,
   practices: PL_PRACTICE_CODES,

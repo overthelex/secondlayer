@@ -27,7 +27,8 @@ small, .muted { color: var(--muted); }
 .page-narrow { max-width: 420px; padding-top: 10vh; }
 .card { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
 .login { text-align: center; }
-.login-mark { margin-bottom: 8px; }
+.login-mark { margin-bottom: 8px; border-radius: 10px; }
+.brand img { border-radius: 6px; }
 .login .form { text-align: left; }
 
 .form label { display: block; margin: 10px 0; font-weight: 500; }

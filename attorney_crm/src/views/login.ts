@@ -3,11 +3,12 @@ import { renderBare } from './layout';
 import { tenant } from '../tenant';
 
 export function renderLogin(o: { error?: string; email?: string }): string {
-  const s = tenant().strings.login;
+  const t = tenant();
+  const s = t.strings.login;
   return renderBare(
     s.title,
     html`<section class="card login">
-  <img src="/static/favicon.svg" alt="" width="48" height="48" class="login-mark">
+  <img class="login-mark" src="/static/${t.brand.mark}" alt="" width="48" height="48">
   <h1>${s.heading}</h1>
   ${o.error ? html`<p class="error" role="alert">${o.error}</p>` : ''}
   <form method="post" action="/login" class="form">

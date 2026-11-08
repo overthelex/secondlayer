@@ -9,7 +9,7 @@ export const UA_TENANT: Tenant = {
   lang: 'uk',
   timeZone: 'Europe/Kyiv',
   locale: 'uk-UA',
-  brand: { name: 'legal.org.ua', domain: 'legal.org.ua', logo: 'logo-white.png', tagline: uk.brandTagline },
+  brand: { name: 'legal.org.ua', domain: 'legal.org.ua', logo: 'logo-white.png', mark: 'favicon.svg', tagline: uk.brandTagline },
   strings: uk,
   registry: UA_REGISTRY,
   practices: NAAU_PRACTICES,
