@@ -258,6 +258,10 @@ services:
       # Set in ~/lawrider/.env.lawrider. `:-` on purpose: only this container must
       # fail without it (it exits at boot), never the stack.
       ATTORNEY_CRM_SESSION_SECRET: ${ATTORNEY_CRM_PL_SESSION_SECRET:-}
+      # Campaign mail (attorney_crm/README.md "Outbound mail"); unset = dry runs only.
+      ATTORNEY_CRM_SMTP_URL: ${ATTORNEY_CRM_PL_SMTP_URL:-}
+      ATTORNEY_CRM_MAIL_FROM: ${ATTORNEY_CRM_PL_MAIL_FROM:-}
+      ATTORNEY_CRM_PUBLIC_URL: ${ATTORNEY_CRM_PL_PUBLIC_URL:-https://attorney.lawrider.pl}
     depends_on:
       postgres:
         condition: service_healthy

@@ -8,6 +8,7 @@ import { authRoutes } from './routes/auth';
 import { advocatesRoutes } from './routes/advocates';
 import { advocateRoutes } from './routes/advocate';
 import { todayRoutes } from './routes/today';
+import { unsubscribeRoutes } from './routes/unsubscribe';
 import { html } from './views/html';
 import { renderPage } from './views/layout';
 import { tenant } from './tenant';
@@ -38,6 +39,8 @@ export function createApp(deps: AppDeps): Express {
   });
 
   app.use(authRoutes(pool, rateLimit, secret));
+  // Public: the unsubscribe link from List-Unsubscribe / the footer of every campaign mail.
+  app.use(unsubscribeRoutes(pool, secret));
   app.use(requireLogin(pool, secret));
   app.use(advocatesRoutes(pool));
   app.use(advocateRoutes(pool));

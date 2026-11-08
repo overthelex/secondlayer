@@ -25,7 +25,7 @@ function fakePool() {
 }
 
 import { loadTenant } from '../tenant';
-const config = { port: 0, databaseUrl: 'x', sessionSecret: 's', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false, tenant: loadTenant({}) };
+const config = { port: 0, databaseUrl: 'x', sessionSecret: 's', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false, tenant: loadTenant({}), publicUrl: 'https://attorney.legal.org.ua', smtpUrl: null, mailFrom: 'v@legal.org.ua', replyTo: null, unsubscribeMailbox: 'unsubscribe@legal.org.ua' };
 
 function appWith(pool: ReturnType<typeof fakePool>, rateLimit = new LoginRateLimit()) {
   return createApp({ pool: pool as any, config, rateLimit });

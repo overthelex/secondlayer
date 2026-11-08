@@ -1384,6 +1384,12 @@ services:
       # container must fail (the service exits at boot without it), never the stack.
       ATTORNEY_CRM_SESSION_SECRET: ${ATTORNEY_CRM_SESSION_SECRET:-}
       ATTORNEY_CRM_DERIVATION: ${ATTORNEY_CRM_DERIVATION:-on}
+      # Campaign mail (attorney_crm/README.md "Outbound mail"): submission on mail2 → ACS.
+      # Unset = dry runs only; List-Unsubscribe links point at ATTORNEY_CRM_PUBLIC_URL.
+      ATTORNEY_CRM_SMTP_URL: ${ATTORNEY_CRM_SMTP_URL:-}
+      ATTORNEY_CRM_MAIL_FROM: ${ATTORNEY_CRM_MAIL_FROM:-}
+      ATTORNEY_CRM_REPLY_TO: ${ATTORNEY_CRM_REPLY_TO:-}
+      ATTORNEY_CRM_PUBLIC_URL: ${ATTORNEY_CRM_PUBLIC_URL:-https://attorney.legal.org.ua}
     depends_on:
       postgres-local:
         condition: service_healthy

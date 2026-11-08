@@ -11,7 +11,7 @@ test('pl tenant basics', () => {
   expect(pl.lang).toBe('en');
   expect(pl.timeZone).toBe('Europe/Warsaw');
   expect(pl.schema).toBe('attorney_crm_pl');
-  expect(pl.sqlFiles).toEqual(['002_crm_core.sql', '004_contact_overrides.sql', 'pl/001_pl_lawyers.sql']);
+  expect(pl.sqlFiles).toEqual(['002_crm_core.sql', '004_contact_overrides.sql', '005_suppression.sql', 'pl/001_pl_lawyers.sql']);
   expect(pl.derivedPractices).toBe(false);
   expect(PL_PRACTICES).toHaveLength(27);
   expect(mapPracticeTag('zamówienia publiczne')).toBe('public_procurement');

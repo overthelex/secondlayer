@@ -4,6 +4,7 @@ import { dncBadge, fmtDate, fmtDateTime, isOverdue, practiceChips, stageChip } f
 import { emailList, orgList, phoneList } from './contacts';
 import type { AdvocateRow, PracticeProfile } from '../advocates/repo';
 import type { Lead, NoteWithAuthor } from '../leads/repo';
+import type { Suppression } from '../mail/suppression';
 import { NOTE_KINDS, STAGES } from '../practices';
 import type { User } from '../auth/users';
 import { tenant } from '../tenant';
@@ -12,10 +13,13 @@ function dateInput(d: Date | null, tz: string = tenant().timeZone): string {
   return d ? new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d) : '';
 }
 
-export function renderAdvocatePage(d: { advocate: AdvocateRow; profile: PracticeProfile; lead: Lead | null; notes: NoteWithAuthor[]; user: User; error?: string }): string {
+export function renderAdvocatePage(d: { advocate: AdvocateRow; profile: PracticeProfile; lead: Lead | null; notes: NoteWithAuthor[]; suppression?: Suppression | null; user: User; error?: string }): string {
   const a = d.advocate;
   const t = tenant();
   const s = t.strings;
+  const suppressedBadge = d.suppression
+    ? html` <span class="chip chip--dnc" title="${d.suppression.detail ?? d.suppression.source}">${s.detail.suppressed(s.suppressionReasons[d.suppression.reason], fmtDate(d.suppression.createdAt))}</span>`
+    : '';
   const stage = d.lead?.stage ?? 'new';
   const manual = new Set(d.lead?.manualPractices ?? []);
   const next = d.lead?.nextContactAt ?? null;
@@ -28,7 +32,7 @@ ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
     <h2>${s.detail.registrySection}</h2>
     <dl class="props">
       <dt>${s.detail.phone}</dt><dd class="stack">${a.phone ? phoneList(a.phone) : '—'}</dd>
-      <dt>${s.detail.email}</dt><dd class="stack">${a.email ? emailList(a.email) : '—'}</dd>
+      <dt>${s.detail.email}</dt><dd class="stack">${a.email ? emailList(a.email) : '—'}${suppressedBadge}</dd>
       <dt>${s.detail.address}</dt><dd>${a.workAddress ?? '—'}</dd>
       <dt>${s.detail.cityRegion}</dt><dd>${[a.city, a.region].filter(Boolean).join(', ') || '—'}</dd>
       <dt>${s.detail.org}</dt><dd class="stack">${a.orgForms ? orgList(a.orgForms) : '—'}</dd>
