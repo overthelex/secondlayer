@@ -5,6 +5,7 @@ import { loadConfig } from './config';
 import { createPool } from './db';
 import { applySchema } from './schema';
 import { upsertUser } from './auth/users';
+import { setTenant } from './tenant';
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, email, password, ...rest] = argv;
@@ -13,9 +14,10 @@ async function main(argv: string[]): Promise<number> {
     return 2;
   }
   const config = loadConfig(process.env);
-  const pool = createPool(config.databaseUrl);
+  setTenant(config.tenant);
+  const pool = createPool(config.databaseUrl, config.tenant.schema);
   try {
-    await applySchema(pool, path.join(__dirname, '..', 'sql'));
+    await applySchema(pool, path.join(__dirname, '..', 'sql'), config.tenant.sqlFiles, config.tenant.schema);
     await upsertUser(pool, email, password, rest.join(' '));
     process.stdout.write(`ok ${email.trim().toLowerCase()}\n`);
     return 0;

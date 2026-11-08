@@ -24,7 +24,8 @@ function fakePool() {
   };
 }
 
-const config = { port: 0, databaseUrl: 'x', sessionSecret: 's', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false };
+import { loadTenant } from '../tenant';
+const config = { port: 0, databaseUrl: 'x', sessionSecret: 's', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false, tenant: loadTenant({}) };
 
 function appWith(pool: ReturnType<typeof fakePool>, rateLimit = new LoginRateLimit()) {
   return createApp({ pool: pool as any, config, rateLimit });
@@ -213,4 +214,19 @@ describe('today page', () => {
     expect(res.text).toContain('Домовились');
     expect(res.text).toContain('href="/advocates/42"');
   });
+});
+
+test('the list shows the DNC badge and the manual phone instead of the registry one', async () => {
+  const pool = fakePool();
+  sessionFor(pool, 'tok');
+  pool.on((t) =>
+    t.includes('FROM opendata_advocates a') && t.includes('LIMIT 50')
+      ? [{ source_id: '43', family_name: 'Шевченко', first_name: 'Олена', patronymic: '', status: 'active', phone: '111', email: null, city: 'Львів', region: 'Львівська', org_forms: null, ra_name: null, certificate_num: '2/2', certificate_date: null, stage: 'declined', next_contact_at: null, manual_practices: [], last_contact: null, kind_cases: 0, kind_summary: null, do_not_contact: true, phone_override: '+48 600 000 000', email_override: null }]
+      : undefined,
+  );
+  const res = await request(appWith(pool)).get('/advocates').set('Cookie', 'acrm_session=tok');
+  expect(res.status).toBe(200);
+  expect(res.text).toContain('Не турбувати');
+  expect(res.text).toContain('href="tel:+48600000000"');
+  expect(res.text).not.toContain('href="tel:111"');
 });

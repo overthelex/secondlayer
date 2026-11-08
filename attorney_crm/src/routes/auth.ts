@@ -7,9 +7,7 @@ import { parseCookies } from '../auth/cookies';
 import type { LoginRateLimit } from '../auth/rate-limit';
 import { attachUser } from '../auth/middleware';
 import { renderLogin } from '../views/login';
-
-export const BLOCKED_MESSAGE = 'Забагато спроб. Спробуйте за 15 хвилин.';
-export const BAD_CREDENTIALS = 'Невірний e-mail або пароль';
+import { tenant } from '../tenant';
 
 export function authRoutes(pool: Queryable, rateLimit: LoginRateLimit, secret: string): Router {
   const r = Router();
@@ -24,13 +22,13 @@ export function authRoutes(pool: Queryable, rateLimit: LoginRateLimit, secret: s
       const email = String(req.body?.email ?? '').trim().toLowerCase();
       const password = String(req.body?.password ?? '');
       if (rateLimit.isBlocked(email)) {
-        return res.status(429).type('html').send(renderLogin({ error: BLOCKED_MESSAGE, email }));
+        return res.status(429).type('html').send(renderLogin({ error: tenant().strings.login.blocked, email }));
       }
       const user = email ? await findUserByEmail(pool, email) : null;
       const ok = user ? await verifyPassword(password, user.passwordHash) : false;
       if (!user || !ok) {
         rateLimit.recordFailure(email);
-        return res.status(200).type('html').send(renderLogin({ error: BAD_CREDENTIALS, email }));
+        return res.status(200).type('html').send(renderLogin({ error: tenant().strings.login.badCredentials, email }));
       }
       rateLimit.reset(email);
       const value = await createSession(pool, user.id, secret);

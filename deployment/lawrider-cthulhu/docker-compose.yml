@@ -3,6 +3,10 @@
 # (ch_* tools only, MCP_TOOLSET=ch) on mcp.lawrider.ch, and since 2026-11-07
 # the same image once more as `app-pl` for lawrider.pl (MCP_TOOLSET=all on
 # mcp.lawrider.pl; the Polish corpus pl_* lives in this stack's Postgres).
+# Since 2026-11-08 also the Polish attorney CRM (attorney.lawrider.pl): the
+# attorney_crm image with ATTORNEY_CRM_TENANT=pl, its register collector, and
+# the `pl-egress` sidecar that tunnels the collector's HTTP through a GCP VM in
+# Warsaw (see README.md, "Polish attorney CRM").
 #
 # Deployed by .github/workflows/deploy-lawrider-cthulhu.yml on its own runner
 # (label cthulhu-lawrider), from its own checkout ~/lawrider/repo.
@@ -227,6 +231,109 @@ services:
     volumes:
       - app_pl_data:/app/data
 
+  # ---- attorney.lawrider.pl: CRM over Polish adwokaci + radcowie prawni ---------
+  # Same code as attorney.legal.org.ua (attorney_crm/), Polish tenant: English UI,
+  # public.pl_lawyers as the register, CRM tables in schema attorney_crm_pl.
+  # Design: docs/superpowers/specs/2026-11-08-attorney-crm-pl-design.md
+  attorney-crm-pl:
+    build:
+      context: ../..
+      dockerfile: deployment/Dockerfile.attorney-crm
+    image: attorney-crm-pl:latest
+    container_name: attorney-crm-pl
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    environment:
+      NODE_ENV: production
+      PORT: "3020"
+      TZ: Europe/Warsaw
+      ATTORNEY_CRM_TENANT: pl
+      ATTORNEY_CRM_SCHEMA: attorney_crm_pl
+      ATTORNEY_CRM_DERIVATION: "off"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-secondlayer_prod}
+      # Set in ~/lawrider/.env.lawrider. `:-` on purpose: only this container must
+      # fail without it (it exits at boot), never the stack.
+      ATTORNEY_CRM_SESSION_SECRET: ${ATTORNEY_CRM_PL_SESSION_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3020/healthz', r => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    networks: [lawrider]
+
+  # Register collector: rejestradwokatow.pl (10 s/req), rejestrradcow.pl (1 s/req),
+  # szukajradcy.pl (2 s/req), all through the Polish egress below. Resumable
+  # (public.pl_lawyers_crawl), upsert-only, stops itself after 5 consecutive
+  # failures. Not a deploy gate: it may idle while pl-egress has no VM to reach.
+  attorney-crm-pl-collector:
+    image: attorney-crm-pl:latest
+    container_name: attorney-crm-pl-collector
+    restart: unless-stopped
+    command: ["node", "dist/collector/cli.js", "daemon"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    environment:
+      NODE_ENV: production
+      TZ: Europe/Warsaw
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-secondlayer_prod}
+      HTTPS_PROXY: http://pl-egress:8118
+      NO_PROXY: postgres,pg-lawrider
+    depends_on:
+      attorney-crm-pl:
+        condition: service_started
+      pl-egress:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks: [lawrider]
+
+  # Polish egress: an SSH tunnel to the GCP VM `pl-proxy` (europe-central2,
+  # Warsaw) whose tinyproxy listens on 127.0.0.1:8888. The registers then see a
+  # Polish address, not cthulhu's. Key: ~/lawrider/pl-egress.key (box state,
+  # create it BEFORE the first deploy or docker makes a directory of that name).
+  pl-egress:
+    image: alpine:3.20
+    container_name: pl-egress
+    restart: unless-stopped
+    command: >-
+      sh -c "apk add --no-cache openssh-client autossh >/dev/null
+      && exec autossh -M 0 -N -g
+      -o ServerAliveInterval=30 -o ServerAliveCountMax=3
+      -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes
+      -i /run/pl-egress.key -L 0.0.0.0:8118:127.0.0.1:8888 egress@${PL_PROXY_HOST:-127.0.0.1}"
+    volumes:
+      - ${LR_HOME:-/home/vovkes/lawrider}/pl-egress.key:/run/pl-egress.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8118 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    networks: [lawrider]
+
   qdrant:
     image: qdrant/qdrant:v1.19.0
     container_name: qdrant-lawrider
@@ -298,7 +405,7 @@ services:
     networks: [lawrider]
 
   # Internal edge: host routing for lawrider.ch / www / mcp / check and
-  # lawrider.pl / www / mcp.
+  # lawrider.pl / www / mcp / attorney.
   # Plain HTTP on the lawrider network only; TLS ends at Cloudflare and the
   # tunnel below is the only way in. No host ports.
   edge:

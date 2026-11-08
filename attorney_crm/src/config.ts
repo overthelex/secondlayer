@@ -1,3 +1,5 @@
+import { loadTenant, type Tenant } from './tenant';
+
 // Process configuration. Fails fast: a CRM with no session secret or no database
 // must not come up half-working behind nginx.
 
@@ -8,6 +10,7 @@ export interface Config {
   derivationLagDays: number;
   derivationBatch: number;
   derivationEnabled: boolean;
+  tenant: Tenant;
 }
 
 function intOr(value: string | undefined, fallback: number): number {
@@ -27,5 +30,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     derivationLagDays: intOr(env.ATTORNEY_CRM_DERIVATION_LAG_DAYS, 30),
     derivationBatch: intOr(env.ATTORNEY_CRM_DERIVATION_BATCH, 2000),
     derivationEnabled: (env.ATTORNEY_CRM_DERIVATION ?? 'on').toLowerCase() !== 'off',
+    tenant: loadTenant(env),
   };
 }

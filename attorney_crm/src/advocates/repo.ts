@@ -1,7 +1,7 @@
 import type { Queryable } from '../db';
 import { JUSTICE_KINDS, type Stage } from '../practices';
-import { ADVOCATE_SELECT, ACTIVE_WHERE, CITY_SQL, REGION_SQL } from './registry-sql';
 import { buildAdvocateListQuery, PAGE_SIZE, type AdvocateFilters } from './query';
+import { tenant } from '../tenant';
 
 export interface KindCount {
   justiceKind: number;
@@ -35,6 +35,17 @@ export interface AdvocateRow {
   lastContact: Date | null;
   kindCases: number;
   kinds: KindCount[];
+  profession: string | null;
+  declaredPractices: string[];
+  practiceTagsRaw: string[];
+  profileUrl: string | null;
+  directoryUrl: string | null;
+  doNotContact: boolean;
+  phoneOverride: string | null;
+  emailOverride: string | null;
+  /** The registry value as collected (phone/email above are the effective ones, override first). */
+  registryPhone: string | null;
+  registryEmail: string | null;
 }
 
 type RawRow = Record<string, unknown>;
@@ -47,7 +58,7 @@ export function parseKindSummary(summary: string | null | undefined): KindCount[
     .filter((p) => p.length === 2)
     .map(([k, c]) => {
       const justiceKind = Number(k);
-      return { justiceKind, name: JUSTICE_KINDS[justiceKind] ?? `Вид ${justiceKind}`, cases: Number(c) };
+      return { justiceKind, name: JUSTICE_KINDS[justiceKind] ?? `#${justiceKind}`, cases: Number(c) };
     });
 }
 
@@ -65,8 +76,13 @@ function mapRow(r: RawRow): AdvocateRow {
     fullName: [familyName, firstName, patronymic].filter(Boolean).join(' '),
     status: (r.status as AdvocateRow['status']) ?? 'active',
     statusDescription: str('status_description'),
-    email: str('email'),
-    phone: str('phone'),
+    email: str('email_override') ?? str('email'),
+    phone: str('phone_override') ?? str('phone'),
+    registryPhone: str('phone'),
+    registryEmail: str('email'),
+    doNotContact: r.do_not_contact === true,
+    phoneOverride: str('phone_override'),
+    emailOverride: str('email_override'),
     workAddress: str('work_address'),
     city: str('city'),
     region: str('region'),
@@ -83,6 +99,11 @@ function mapRow(r: RawRow): AdvocateRow {
     lastContact: date('last_contact'),
     kindCases: Number(r.kind_cases ?? 0),
     kinds: parseKindSummary(r.kind_summary as string | null),
+    profession: str('profession'),
+    declaredPractices: Array.isArray(r.declared_practices) ? (r.declared_practices as string[]) : [],
+    practiceTagsRaw: Array.isArray(r.practice_tags_raw) ? (r.practice_tags_raw as string[]) : [],
+    profileUrl: str('profile_url'),
+    directoryUrl: str('directory_url'),
   };
 }
 
@@ -100,17 +121,22 @@ export async function listAdvocates(
 
 /** One advocate by source_id, any status (a suspended advocate's page still opens). */
 export async function getAdvocate(pool: Queryable, sourceId: string): Promise<AdvocateRow | null> {
-  const r = await pool.query<RawRow>(
-    `SELECT ${ADVOCATE_SELECT},
-       l.stage, l.next_contact_at, l.manual_practices,
-       (SELECT max(n.created_at) FROM attorney_crm_notes n WHERE n.advocate_source_id = a.source_id) AS last_contact,
-       0 AS kind_cases,
-       (SELECT string_agg(ks.justice_kind || ':' || ks.cases, ',' ORDER BY ks.cases DESC)
+  const t = tenant();
+  const reg = t.registry;
+  const kindSummary = t.derivedPractices
+    ? `(SELECT string_agg(ks.justice_kind || ':' || ks.cases, ',' ORDER BY ks.cases DESC)
           FROM (SELECT justice_kind, sum(cases) AS cases FROM attorney_crm_practice_stats s2
-                WHERE s2.advocate_source_id = a.source_id GROUP BY justice_kind) ks) AS kind_summary
-     FROM opendata_advocates a
-     LEFT JOIN attorney_crm_leads l ON l.advocate_source_id = a.source_id
-     WHERE a.source_id = $1
+                WHERE s2.advocate_source_id = ${reg.idColumn} GROUP BY justice_kind) ks)`
+    : 'NULL::text';
+  const r = await pool.query<RawRow>(
+    `SELECT ${reg.select},
+       l.stage, l.next_contact_at, l.manual_practices, l.do_not_contact, l.phone_override, l.email_override,
+       (SELECT max(n.created_at) FROM attorney_crm_notes n WHERE n.advocate_source_id = ${reg.idColumn}) AS last_contact,
+       0 AS kind_cases,
+       ${kindSummary} AS kind_summary
+     FROM ${reg.table}
+     LEFT JOIN attorney_crm_leads l ON l.advocate_source_id = ${reg.idColumn}
+     WHERE ${reg.idColumn} = $1
      LIMIT 1`,
     [sourceId],
   );
@@ -123,6 +149,7 @@ export interface PracticeProfile {
 }
 
 export async function getPracticeProfile(pool: Queryable, sourceId: string): Promise<PracticeProfile> {
+  if (!tenant().derivedPractices) return { kinds: [], topCategories: [] };
   const kinds = await pool.query<{ justice_kind: number; cases: number; first_year: number | null; last_year: number | null }>(
     `SELECT justice_kind, sum(cases)::int AS cases, min(first_year) AS first_year, max(last_year) AS last_year
        FROM attorney_crm_practice_stats WHERE advocate_source_id = $1
@@ -140,12 +167,12 @@ export async function getPracticeProfile(pool: Queryable, sourceId: string): Pro
   return {
     kinds: kinds.rows.map((k) => ({
       justiceKind: k.justice_kind,
-      name: JUSTICE_KINDS[k.justice_kind] ?? `Вид ${k.justice_kind}`,
+      name: JUSTICE_KINDS[k.justice_kind] ?? `#${k.justice_kind}`,
       cases: Number(k.cases),
       firstYear: k.first_year,
       lastYear: k.last_year,
     })),
-    topCategories: cats.rows.map((c) => ({ categoryCode: c.category_code, name: c.name ?? `Категорія ${c.category_code}`, cases: Number(c.cases) })),
+    topCategories: cats.rows.map((c) => ({ categoryCode: c.category_code, name: c.name ?? `#${c.category_code}`, cases: Number(c.cases) })),
   };
 }
 
@@ -156,8 +183,9 @@ const cache = new Map<string, { at: number; values: string[] }>();
 async function distinctValues(pool: Queryable, key: string, expr: string, now: number): Promise<string[]> {
   const hit = cache.get(key);
   if (hit && now - hit.at <= CACHE_MS) return hit.values;
+  const reg = tenant().registry;
   const r = await pool.query<{ v: string }>(
-    `SELECT DISTINCT ${expr} AS v FROM opendata_advocates a WHERE ${ACTIVE_WHERE} AND NULLIF(TRIM(${expr}), '') IS NOT NULL ORDER BY 1`,
+    `SELECT DISTINCT ${expr} AS v FROM ${reg.table} WHERE ${reg.activeWhere} AND NULLIF(TRIM(${expr}), '') IS NOT NULL ORDER BY 1`,
   );
   const values = r.rows.map((x) => x.v);
   cache.set(key, { at: now, values });
@@ -165,9 +193,9 @@ async function distinctValues(pool: Queryable, key: string, expr: string, now: n
 }
 
 export function listCities(pool: Queryable, now: number = Date.now()): Promise<string[]> {
-  return distinctValues(pool, 'city', CITY_SQL, now);
+  return distinctValues(pool, `${tenant().id}:city`, tenant().registry.citySql, now);
 }
 
 export function listRegions(pool: Queryable, now: number = Date.now()): Promise<string[]> {
-  return distinctValues(pool, 'region', REGION_SQL, now);
+  return distinctValues(pool, `${tenant().id}:region`, tenant().registry.regionSql, now);
 }

@@ -43,3 +43,14 @@ test('NAAU_PRACTICES has 59 unique entries and 5 justice kinds are named', () =>
   expect(JUSTICE_KINDS[2]).toBe('Кримінальне');
   expect(Object.keys(JUSTICE_KINDS)).toHaveLength(5);
 });
+
+import { UA_REGISTRY } from '../advocates/registry-sql';
+
+test('the query is built from the adapter, not from hard-coded table names', () => {
+  const adapter = { ...UA_REGISTRY, table: 'public.pl_lawyers a', idColumn: 'a.lawyer_id', activeWhere: "a.status = 'active'", surnameColumn: 'a.surname' };
+  const q = buildAdvocateListQuery({}, adapter);
+  expect(q.sql).toContain('FROM public.pl_lawyers a');
+  expect(q.sql).toContain("a.status = 'active'");
+  expect(q.sql).toContain('ON l.advocate_source_id = a.lawyer_id');
+  expect(q.sql).not.toContain('opendata_advocates');
+});
