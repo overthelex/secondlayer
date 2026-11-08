@@ -16,7 +16,10 @@
 #                      proprietary sources are overlaid before build
 # Box state (not in git):
 #   ~/lawrider/.env.lawrider  env for compose (pg/redis passwords, LLM keys,
-#                             LAWRIDER_TUNNEL_TOKEN)
+#                             LAWRIDER_TUNNEL_TOKEN, ATTORNEY_CRM_PL_SESSION_SECRET,
+#                             PL_PROXY_HOST)
+#   ~/lawrider/pl-egress.key  ssh key the pl-egress sidecar uses to reach the
+#                             Polish GCP VM (attorney.lawrider.pl collector)
 
 name: Deploy lawrider.ch (cthulhu)
 
@@ -29,6 +32,8 @@ on:
       - "mcp_backend/**"
       - "packages/shared/**"
       - "services/ch-pipeline/**"
+      - "attorney_crm/**"
+      - "deployment/Dockerfile.attorney-crm"
       - ".github/workflows/deploy-lawrider-cthulhu.yml"
   workflow_dispatch:
     inputs:
@@ -94,7 +99,7 @@ jobs:
         working-directory: /home/vovkes/lawrider/repo/deployment/lawrider-cthulhu
         run: |
           # niced: the build shares 16 cores with legal.org.ua's live stack
-          nice -n 10 ionice -c3 docker compose -p lawrider --env-file "$LR_ENV" build migrate
+          nice -n 10 ionice -c3 docker compose -p lawrider --env-file "$LR_ENV" build migrate attorney-crm-pl
 
       - name: Start stack
         if: ${{ !inputs.build_only }}
@@ -132,6 +137,20 @@ jobs:
             docker logs --tail 50 lawrider-app-pl || true
             exit 1
           }
+          # attorney.lawrider.pl (the collector is deliberately not a gate: pl-egress may
+          # have no VM to reach yet, and a stuck collector must not block a CRM fix)
+          for i in $(seq 1 20); do
+            state_crm=$(docker inspect -f '{{.State.Health.Status}}' attorney-crm-pl 2>/dev/null || echo starting)
+            [ "$state_crm" = "healthy" ] && break
+            sleep 15
+          done
+          [ "$state_crm" = "healthy" ] || {
+            echo "::error::attorney-crm-pl never went healthy (state=$state_crm)"
+            docker logs --tail 50 attorney-crm-pl || true
+            exit 1
+          }
+          docker exec lawrider-edge wget -q -O /dev/null --header 'Host: attorney.lawrider.pl' http://127.0.0.1/healthz
+          echo "collector: $(docker inspect -f '{{.State.Status}}' attorney-crm-pl-collector 2>/dev/null || echo absent), pl-egress: $(docker inspect -f '{{.State.Health.Status}}' pl-egress 2>/dev/null || echo absent)"
           # the edge routes every host (inside the lawrider network)
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: lawrider.ch' http://127.0.0.1/
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: mcp.lawrider.ch' http://127.0.0.1/health/ready

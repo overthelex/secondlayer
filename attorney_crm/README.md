@@ -27,3 +27,37 @@ SELECT * FROM attorney_crm_practice_progress;
 cd attorney_crm && npm ci && npm test && npm run build
 DATABASE_URL=postgres://... ATTORNEY_CRM_SESSION_SECRET=dev npm run dev
 ```
+
+## Tenants
+
+One image, two deployments, chosen by `ATTORNEY_CRM_TENANT` (`ua` default, `pl`):
+
+| | `ua` (attorney.legal.org.ua) | `pl` (attorney.lawrider.pl) |
+|---|---|---|
+| register | `opendata_advocates` (НААУ) | `public.pl_lawyers` (adwokaci + radcowie prawni) |
+| practices | derived from ЄДРСР mentions + manual tags | declared on the register profile / szukajradcy tags, mapped to the 27 NRA categories |
+| UI | Ukrainian, Europe/Kyiv | English, Europe/Warsaw |
+| CRM tables | `public` | schema `attorney_crm_pl` (search_path) |
+| schema files | 001–004 | 002, 004, `pl/001_pl_lawyers.sql` |
+
+Everything tenant-specific lives in `src/tenant/` (strings in `src/i18n/`, the
+`RegistryAdapter` SQL fragments in `src/advocates/registry-*.ts`). Views, routes
+and repos read `tenant()` and never name a register table directly.
+
+## Collector (pl)
+
+`src/collector/`: `http.ts` (one request at a time, per-host spacing 10 s /
+1 s / 2 s, back-off on 429/5xx, hard stop after 5 failures, optional HTTP proxy),
+`parse-*.ts` (pure HTML parsers, fixtures in `src/__tests__/fixtures/pl/`),
+`store.ts` (fill-never-erase upserts into `public.pl_lawyers`, cursors in
+`public.pl_lawyers_crawl`), `jobs.ts` (probe, adwokaci-list, adwokaci-details,
+radcowie-list, szukajradcy, daemon), `cli.ts`.
+
+```bash
+node dist/collector/cli.js daemon
+node dist/collector/cli.js once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy [--no-proxy] [--limit N]
+```
+
+Env: `DATABASE_URL`, `HTTPS_PROXY` (ignored with `--no-proxy`), `COLLECTOR_UA`.
+Never uses the registers' search forms, never touches `szukajradcy.pl/search`
+(robots.txt), never bypasses a CAPTCHA.
