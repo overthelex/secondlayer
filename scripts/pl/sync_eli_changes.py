@@ -25,6 +25,7 @@ Steps, each idempotent, so a killed run is resumed by running it again:
      publishes PDF first and HTML weeks or months later (all DU 2025-2026 acts
      were PDF-only on 2026-11-07), so "no html" is a state to re-poll, not a fact
   6. texts pass (harvest_eli_texts.py --mark-no-html, then the fetch pass)
+  7. PDF text for what is still PDF-only (harvest_eli_pdf.py)
 
 Step 2 runs before step 3 and the worklist is the database, so if the run dies
 after step 2 the next run still refetches those acts even though its own --since
@@ -190,10 +191,11 @@ def main():
     run_sql_file(os.path.join(HERE, "build_pl_snapshots.sql"))
     print("snapshots rebuilt", flush=True)
 
-    # 5. re-poll snapshots whose HTML has appeared since we marked them 903
+    # 5. re-poll snapshots whose HTML has appeared since we marked them 903, or
+    #    since we took their text from the PDF (906/907)
     out = plprod.psql(
         "DELETE FROM pl_snapshot_texts t USING pl_act_snapshots s "
-        "WHERE s.snapshot_eli = t.snapshot_eli AND t.http_status = 903 "
+        "WHERE s.snapshot_eli = t.snapshot_eli AND t.http_status IN (903, 906, 907) "
         "AND s.has_html RETURNING 1")
     flipped = sum(1 for line in out.splitlines() if line.strip() == "1")
     print(f"snapshots that gained html: {flipped}", flush=True)
@@ -205,6 +207,10 @@ def main():
             r = subprocess.run([sys.executable, texts, *extra])
             if r.returncode != 0:
                 return r.returncode
+        # 7. PDF-only acts: whole text from the PDF until HTML appears
+        r = subprocess.run([sys.executable, os.path.join(HERE, "harvest_eli_pdf.py")])
+        if r.returncode != 0:
+            return r.returncode
 
     print("after: ", counts_snapshot(), flush=True)
     print(f"sync done in {int(time.time() - t0)} s", flush=True)
