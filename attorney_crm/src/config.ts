@@ -13,7 +13,7 @@ export interface Config {
   tenant: Tenant;
   /** Public origin for unsubscribe links, default https://attorney.<brand domain>. */
   publicUrl: string;
-  /** smtp(s)://user:pass@host:port for submission on mail2; unset = dry runs only. */
+  /** smtp(s)://user:pass@host:port, normally ACS (smtp.azurecomm.net:587); unset = dry runs only. */
   smtpUrl: string | null;
   /** From header for campaign mail; must be an allowed MailFrom on the ACS domain. */
   mailFrom: string;
