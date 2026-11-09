@@ -13,7 +13,10 @@ Rows: id 'kio-<id>', source 'kio', court_type 'NATIONAL_APPEAL_CHAMBER'
 (case_number, decision_date) already exists among the SAOS KIO rows is
 skipped, so the two sources do not double up.
 
-Weekly windows, newest first, state in sqlite, resumable. PG* env. local.lex.
+Calendar-week windows, newest first, state in sqlite, resumable; windows from
+the last --recheck-days are re-listed on every run because the portal
+publishes late. Some documents have an empty PDF on the portal (status
+pdf_error) and one is a test record ('Treść testowa'). PG* env. local.lex.
 """
 import argparse
 import html
@@ -159,6 +162,8 @@ def main():
     ap.add_argument("--db", default=os.path.expanduser("~/lawrider/kio/queue.sqlite"))
     ap.add_argument("--raw-dir", default="/data/pl_kio/raw")
     ap.add_argument("--max-windows", type=int, default=0)
+    ap.add_argument("--recheck-days", type=int, default=120,
+                    help="always re-list windows ending within this many days (late publications)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
@@ -176,7 +181,8 @@ def main():
         cur.execute("SELECT substr(id, 5)::int FROM pl_court_decisions WHERE source = 'kio'")
         known_ids = {r[0] for r in cur.fetchall()}
         cur.execute("""SELECT case_number, decision_date FROM pl_court_decisions
-                       WHERE court_type = 'NATIONAL_APPEAL_CHAMBER' AND case_number IS NOT NULL""")
+                       WHERE court_type = 'NATIONAL_APPEAL_CHAMBER' AND source <> 'kio'
+                         AND case_number IS NOT NULL""")
         known_cases = {(re.sub(r"\s+", " ", c).strip(), d.isoformat()) for c, d in cur.fetchall() if d}
     conn.commit()
     log.info("known kio ids %d, known KIO case/date pairs %d", len(known_ids), len(known_cases))
@@ -187,11 +193,15 @@ def main():
     n_windows = 0
     w_to = d_to
     while w_to >= d_from:
-        w_from = max(w_to - timedelta(days=6), d_from)
+        # Windows are calendar weeks (Mon..Sun), so their keys are the same on every run;
+        # anchoring them to --to made a rerun on another day re-list the whole period.
+        w_from = max(w_to - timedelta(days=w_to.weekday()), d_from)
         w_end = w_to
         wkey = f"{w_from}..{w_end}"
         w_to = w_from - timedelta(days=1)
-        if q.execute("SELECT 1 FROM windows WHERE w=? AND done_at IS NOT NULL", (wkey,)).fetchone():
+        # The portal publishes with a lag of weeks, so a recent window is never final.
+        recent = (date.today() - w_end).days <= args.recheck_days
+        if not recent and q.execute("SELECT 1 FROM windows WHERE w=? AND done_at IS NOT NULL", (wkey,)).fetchone():
             continue
         session = requests.Session()
         listed = list_window(session, limiter, w_from, w_end)
