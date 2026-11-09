@@ -386,6 +386,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [diiaDeeplink, setDiiaDeeplink] = useState<string | null>(null);
   const [diiaSessionId, setDiiaSessionId] = useState<string | null>(null);
   const diiaPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const oauthTokenHandledRef = useRef(false);
 
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -448,12 +449,19 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       }
 
       if (token) {
+        // One attempt per page load, and the token leaves the address bar before it is used.
+        // It used to stay there after a failed login, so an old bookmark of the callback URL
+        // with an expired token made this effect call login() again on every re-render:
+        // ~85 GET /auth/me a minute from one tab, until the edge rate limit answered 429.
+        if (oauthTokenHandledRef.current) return;
+        oauthTokenHandledRef.current = true;
+        window.history.replaceState({}, '', window.location.pathname);
+
         setIsLoading(true);
         setError(null);
 
         try {
           await login(token);
-          window.history.replaceState({}, '', window.location.pathname);
           if (onLoginSuccess) onLoginSuccess();
           navigate(getReturnUrl(), { replace: true });
         } catch (err: unknown) {
