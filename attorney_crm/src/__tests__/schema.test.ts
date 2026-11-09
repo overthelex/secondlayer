@@ -67,3 +67,10 @@ test('pl tenant applies 002, 004, 005 and pl/001 only, inside the schema', async
   expect(calls.some((c) => c.includes('edrsr_'))).toBe(false);
   expect(calls.some((c) => c.includes('CREATE TABLE IF NOT EXISTS public.pl_lawyers'))).toBe(true);
 });
+
+test('pl_lawyers accepts the chamber and ceidg contact sources, on a fresh and on an existing table', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', '..', 'sql', 'pl', '001_pl_lawyers.sql'), 'utf8');
+  expect(sql).toMatch(/contact_source\s+TEXT CHECK \(contact_source IN \('register', 'szukajradcy', 'chamber', 'ceidg'\)\)/);
+  expect(sql).toContain('DROP CONSTRAINT IF EXISTS pl_lawyers_contact_source_check');
+  expect(sql).toMatch(/ADD CONSTRAINT pl_lawyers_contact_source_check\s+CHECK \(contact_source IN \('register', 'szukajradcy', 'chamber', 'ceidg'\)\)/);
+});

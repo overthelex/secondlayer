@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.pl_lawyers (
   phone2             TEXT,
   email              TEXT,
   website            TEXT,
-  contact_source     TEXT CHECK (contact_source IN ('register', 'szukajradcy')),
+  contact_source     TEXT CHECK (contact_source IN ('register', 'szukajradcy', 'chamber', 'ceidg')),
   entry_number       TEXT,
   entry_date         DATE,
   practices          TEXT[] NOT NULL DEFAULT '{}',
@@ -42,3 +42,9 @@ CREATE TABLE IF NOT EXISTS public.pl_lawyers_crawl (
   cursor     JSONB NOT NULL DEFAULT '{}',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 09.11.2026: two more contact sources, the chamber (OIRP) sites and CEIDG. Re-create the check so an
+-- existing table accepts them; the file is re-applied whenever its hash changes.
+ALTER TABLE public.pl_lawyers DROP CONSTRAINT IF EXISTS pl_lawyers_contact_source_check;
+ALTER TABLE public.pl_lawyers ADD CONSTRAINT pl_lawyers_contact_source_check
+  CHECK (contact_source IN ('register', 'szukajradcy', 'chamber', 'ceidg'));
