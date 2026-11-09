@@ -22,7 +22,7 @@ export interface LawyerUpsert {
   phone2?: string | null;
   email?: string | null;
   website?: string | null;
-  contactSource?: 'register' | 'szukajradcy' | 'chamber' | null;
+  contactSource?: 'register' | 'szukajradcy' | 'chamber' | 'ceidg' | null;
   entryNumber?: string | null;
   entryDate?: string | null;
   practices?: string[];
@@ -212,6 +212,26 @@ export async function detailCandidates(pool: Queryable, maxAgeDays: number, limi
     [maxAgeDays, limit],
   );
   return r.rows.map((x) => ({ lawyerId: x.lawyer_id, profileUrl: x.profile_url }));
+}
+
+export interface CeidgCandidate { lawyerId: string; surname: string; givenNames: string; city: string | null }
+
+/** Practising radcowie with no phone and no e-mail that CEIDG was not asked about in the last `maxAgeDays`. */
+export async function ceidgCandidates(pool: Queryable, maxAgeDays: number, limit: number): Promise<CeidgCandidate[]> {
+  const r = await pool.query<{ lawyer_id: string; surname: string; given_names: string; city: string | null }>(
+    `SELECT lawyer_id, surname, given_names, city FROM public.pl_lawyers
+     WHERE profession = 'radca' AND status = 'active' AND phone IS NULL AND email IS NULL
+       AND surname <> '' AND given_names <> ''
+       AND ((raw->'ceidg'->>'checkedAt') IS NULL OR (raw->'ceidg'->>'checkedAt')::timestamptz < NOW() - ($1::int * INTERVAL '1 day'))
+     ORDER BY (raw->'ceidg'->>'checkedAt') ASC NULLS FIRST, lawyer_id
+     LIMIT $2`,
+    [maxAgeDays, limit],
+  );
+  return r.rows.map((x) => ({ lawyerId: x.lawyer_id, surname: x.surname, givenNames: x.given_names, city: x.city }));
+}
+
+export async function markRaw(pool: Queryable, lawyerId: string, raw: unknown): Promise<void> {
+  await pool.query('UPDATE public.pl_lawyers SET raw = raw || $2::jsonb WHERE lawyer_id = $1', [lawyerId, JSON.stringify(raw)]);
 }
 
 export async function markDetailFetched(pool: Queryable, lawyerId: string, raw: unknown): Promise<void> {

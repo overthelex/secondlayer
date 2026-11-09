@@ -298,6 +298,8 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-secondlayer_prod}
       HTTPS_PROXY: http://pl-egress:8118
       NO_PROXY: postgres,pg-lawrider
+      # CEIDG Hurtownia Danych API v3 (dane.biznes.gov.pl); empty = CEIDG enrichment off
+      CEIDG_TOKEN: ${CEIDG_TOKEN:-}
     depends_on:
       attorney-crm-pl:
         condition: service_started

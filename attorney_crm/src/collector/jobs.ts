@@ -9,6 +9,7 @@ import { parseRadcowieFragment } from './parse-radcowie';
 import { parseCityPage, parseDirectoryProfile } from './parse-szukajradcy';
 import { mapPracticeTag, nraLabelToCode } from '../tenant/pl-practices';
 import { chamberCursors, chambers, clearChamberCursors, needsChambersRun } from './jobs-chambers';
+import { ceidg } from './jobs-ceidg';
 import {
   countByProfession, detailCandidates, findByEntryNumber, findUniqueByName, getCursor, markDetailFetched, markUnseen, setCursor, upsertLawyers,
   type LawyerUpsert, type MatchedLawyer, type Profession,
@@ -393,9 +394,13 @@ export interface Schedule {
   detailBatch: number;
   detailMaxAgeDays: number;
   idleMs: number;
+  /** CEIDG: token (null disables the loop), radcowie per batch, days before a radca is asked about again */
+  ceidgToken: string | null;
+  ceidgBatch: number;
+  ceidgRecheckDays: number;
 }
 
-const DEFAULT_SCHEDULE: Schedule = { tickMs: 60_000, detailBatch: 200, detailMaxAgeDays: 90, idleMs: 60_000 };
+const DEFAULT_SCHEDULE: Schedule = { tickMs: 60_000, detailBatch: 200, detailMaxAgeDays: 90, idleMs: 60_000, ceidgToken: null, ceidgBatch: 100, ceidgRecheckDays: 180 };
 
 /**
  * The szukajradcy pass matches against the radca rows, so it waits for a completed radca list;
@@ -409,7 +414,9 @@ export function needsDirectoryRun(sz: Record<string, unknown> | null, radcowieLi
 /**
  * Runs probe once, then two independent loops:
  *  - registers: list walks (until the first completes, then weekly), then profile details in batches;
- *  - directory: the szukajradcy pass and the chamber sites (first run as soon as the radca list is complete, then monthly).
+ *  - directory: the szukajradcy pass and the chamber sites (first run as soon as the radca list is complete, then monthly);
+ *  - ceidg: with a token, practising radcowie still without a contact are looked up in CEIDG in batches
+ *    (the client spaces requests under the 1,000/hour quota); without a token the loop is not started.
  * Every job is isolated: one that throws is logged and retried next tick, the others still run.
  */
 export function daemon(d: JobDeps, schedule: Partial<Schedule> = {}): { stop: () => void; done: Promise<void> } {
@@ -476,11 +483,23 @@ export function daemon(d: JobDeps, schedule: Partial<Schedule> = {}): { stop: ()
       if (!stopped) await sleep(s.tickMs);
     }
   };
+  const ceidgLoop = async () => {
+    while (!stopped) {
+      // the first run waits for the radca list, like the directory passes: the candidates come from it
+      const listReady = !needsListWalk(await getCursor(d.pool, 'radcowie-list'));
+      const r = listReady ? await guarded('ceidg', () => ceidg(d, { token: s.ceidgToken, limit: s.ceidgBatch, recheckDays: s.ceidgRecheckDays })) : null;
+      if (stopped) break;
+      await sleep(r && r.candidates > 0 ? s.tickMs : s.idleMs * 10);
+    }
+  };
   const loop = async () => {
     await probe(d);
     const cur = await getCursor(d.pool, 'daemon');
     for (const k of Object.keys(lastRun)) if (typeof cur?.[k] === 'string') lastRun[k] = new Date(cur[k] as string);
-    await Promise.all([registersLoop(), directoryLoop()]);
+    const loops = [registersLoop(), directoryLoop()];
+    if (s.ceidgToken) loops.push(ceidgLoop());
+    else d.log('[ceidg] CEIDG_TOKEN not set: CEIDG enrichment is off');
+    await Promise.all(loops);
   };
   const done = loop();
   return { stop: () => { stopped = true; }, done };

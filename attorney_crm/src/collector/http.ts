@@ -43,8 +43,8 @@ export class Collector {
     this.dispatcher = o.proxyUrl ? new ProxyAgent(o.proxyUrl) : undefined;
   }
 
-  get(url: string): Promise<string> {
-    return this.request(url, { method: 'GET' });
+  get(url: string, headers?: Record<string, string>): Promise<string> {
+    return this.request(url, { method: 'GET', headers });
   }
 
   /** One attempt, no retry, no failure accounting: the health probe. */
@@ -122,7 +122,7 @@ export class Collector {
         continue;
       }
       this.failures = 0;
-      return await res.text();
+      return res.status === 204 ? '' : await res.text();
     }
   }
 

@@ -111,6 +111,21 @@ collected from the two official public registers and one official directory firs
   one-person firm name reduced to its two or three name words. Partnerships and firms
   naming several people are never attached to anyone. Expected yield ≈1–1.5K radcowie.
 
+### CEIDG, Hurtownia Danych API v3 (added 09.11.2026)
+- `https://dane.biznes.gov.pl/api/ceidg/v3/firmy?nazwisko=&imie=&pkd=6910Z&status=AKTYWNY&limit=10`
+  (204 = no hit) then `/firma/{id}`; `Authorization: Bearer <JWT>` issued to a team member's
+  Profil Zaufany account (`CEIDG_TOKEN`), 1,000 requests per 60 min per token. The firm record
+  has address, NIP, PKD and, only where the entrepreneur consented to publish them, `email`,
+  `telefon`, `www`. Probe of 09.11 on 100 practising radcowie without contacts: 58% have an
+  active 69.10.Z sole-trader firm, 20% of the sample get an e-mail, 22% any contact.
+- Only practising radcowie with neither phone nor e-mail are asked; the owner's surname and
+  first given name must equal the register's, several hits are resolved by the register's
+  city or dropped. Every candidate is stamped `raw.ceidg.checkedAt` and asked again after
+  180 days. Requests are spaced 4.5 s (≈800/h) and the client backs off on 429.
+- Legal note: the 2026 amendment (Dz.U. 2026 poz. 507) publishes contacts with consent only and
+  art. 47(1) makes reuse outside CEIDG subject to terms agreed with the minister; the team
+  decided to proceed and owns that conversation.
+
 ### Numbers to expect
 Adwokaci 35.2K (24.1K practising, most with a phone). Radcowie 57.5K (44.4K
 practising), of whom at most ~3.4K get contacts from szukajradcy.pl and ≈1–1.5K more
