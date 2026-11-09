@@ -1,9 +1,10 @@
 // node dist/collector/cli.js daemon
-// node dist/collector/cli.js once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy|chambers [--no-proxy] [--limit N] [--only src,src]
+// node dist/collector/cli.js once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy|chambers|ceidg [--no-proxy] [--limit N] [--only src,src]
 import { createPool } from '../db';
 import { Collector } from './http';
 import { adwokaciDetails, adwokaciList, daemon, MIN_DELAY_MS, probe, radcowieList, szukajradcy, type JobDeps } from './jobs';
 import { CHAMBER_MIN_DELAY_MS, CHAMBER_SOURCES, chambers, type ChamberSource } from './jobs-chambers';
+import { CEIDG_MIN_DELAY_MS, ceidg } from './jobs-ceidg';
 
 const DEFAULT_UA = 'lawrider.pl attorney-crm collector (+https://lawrider.pl; vladimir@lawrider.pl)';
 
@@ -31,14 +32,15 @@ async function main(argv: string[]) {
   const pool = createPool(databaseUrl, null, 'attorney_crm_pl_collector');
   const onlyIdx = argv.indexOf('--only');
   const only = onlyIdx >= 0 ? (argv[onlyIdx + 1] ?? '').split(',').filter((x): x is ChamberSource => (CHAMBER_SOURCES as string[]).includes(x)) : undefined;
-  const http = new Collector({ userAgent: process.env.COLLECTOR_UA ?? DEFAULT_UA, minDelayMs: { ...MIN_DELAY_MS, ...CHAMBER_MIN_DELAY_MS }, maxConsecutiveFailures: 5, proxyUrl, log });
+  const http = new Collector({ userAgent: process.env.COLLECTOR_UA ?? DEFAULT_UA, minDelayMs: { ...MIN_DELAY_MS, ...CHAMBER_MIN_DELAY_MS, ...CEIDG_MIN_DELAY_MS }, maxConsecutiveFailures: 5, proxyUrl, log });
   const deps: JobDeps = { pool, http, log };
-  log(`[collector] proxy ${proxyUrl ?? 'none'}`);
+  const ceidgToken = process.env.CEIDG_TOKEN?.trim() || null;
+  log(`[collector] proxy ${proxyUrl ?? 'none'}; CEIDG token ${ceidgToken ? 'set' : 'absent'}`);
   const [mode, job] = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--limit', '--only'].includes(argv[i - 1])));
   try {
     if (mode === 'daemon') {
       await waitForTables(pool);
-      const { stop, done } = daemon(deps);
+      const { stop, done } = daemon(deps, { ceidgToken });
       process.on('SIGTERM', stop);
       process.on('SIGINT', stop);
       await done;
@@ -53,9 +55,10 @@ async function main(argv: string[]) {
         case 'radcowie-list': log(JSON.stringify(await radcowieList(deps))); return;
         case 'szukajradcy': log(JSON.stringify(await szukajradcy(deps))); return;
         case 'chambers': log(JSON.stringify(await chambers(deps, { only }))); return;
+        case 'ceidg': log(JSON.stringify(await ceidg(deps, { token: ceidgToken, limit }))); return;
       }
     }
-    throw new Error('usage: cli.js daemon | once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy|chambers [--no-proxy] [--limit N] [--only src,src]');
+    throw new Error('usage: cli.js daemon | once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy|chambers|ceidg [--no-proxy] [--limit N] [--only src,src]');
   } finally {
     await pool.end();
   }
