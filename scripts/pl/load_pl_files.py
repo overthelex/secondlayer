@@ -25,6 +25,7 @@ import sys
 
 import openpyxl
 import requests
+import xlrd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -136,6 +137,9 @@ SOURCES = {
     "sady_teleadres": {"resolve": lambda: dane_latest(985, r"teleadres"), "kind": "xlsx"},
     "sady_lista":     {"resolve": lambda: dane_latest(985, r"^Lista s"), "kind": "xlsx",
                        "header": ["nazwa"]},
+    "sady_struktura": {"resolve": lambda: dane_latest(985, r"^Struktura"), "kind": "xls"},
+    "sady_wlasciwosc": {"resolve": lambda: dane_latest(985, r"^W.a.ciwo"), "kind": "xls",
+                        "sheets": ["Arkusz1"]},
     "kprm_wykaz":     {"resolve": lambda: ("https://www.gov.pl/register-file/Rejestr_20874195.csv",
                                            "gov.pl wykaz prac legislacyjnych RM"),
                        "kind": "csv"},
@@ -178,6 +182,40 @@ def rows_xlsx(blob, header=None):
     return out
 
 
+def rows_xls(blob, sheets=None):
+    """Legacy .xls with one tabular sheet. The header is the first row with at
+    least two cells, which skips the one-cell title; the court is only named on
+    the first of its rows, so appellate/regional cells are filled downward."""
+    wb = xlrd.open_workbook(file_contents=blob)
+    out = []
+    for ws in wb.sheets():
+        if ws.nrows == 0 or (sheets and ws.name not in sheets):
+            continue
+        hdr, last, n = None, {}, 0
+        for i in range(ws.nrows):
+            vals = [cell(v) if v != "" else None for v in ws.row_values(i)]
+            if not any(v is not None for v in vals):
+                continue
+            if hdr is None:
+                if sum(v is not None for v in vals) >= 2:
+                    hdr = [re.sub(r"\s+", " ", str(v)).strip() if v is not None else None
+                           for v in vals]
+                continue
+            rec = {}
+            for h, v in zip(hdr, vals):
+                if not h or h.lower().startswith("l.p"):
+                    continue
+                if v is None:
+                    v = last.get(h)
+                else:
+                    last[h] = v
+                if v is not None:
+                    rec[h] = v
+            n += 1
+            out.append((ws.title, n, rec))
+    return out
+
+
 def rows_csv(blob):
     text = blob.decode("utf-8-sig")
     rd = csv.DictReader(io.StringIO(text), delimiter=";")
@@ -213,6 +251,8 @@ def load(name, cfg, raw_dir, force):
         rows = parsed
     elif ext == "xlsx":
         rows = rows_xlsx(blob, cfg.get("header"))
+    elif ext == "xls":
+        rows = rows_xls(blob, cfg.get("sheets"))
     else:
         rows = rows_csv(blob)
     if not rows:
