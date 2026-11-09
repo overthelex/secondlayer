@@ -33,7 +33,7 @@ test('GET /u/:token with a valid token shows the confirmation and changes nothin
   const res = await request(app(pool)).get(`/u/${token}`);
   expect(res.status).toBe(200);
   expect(res.text).toContain('Відписатися від листів');
-  expect(res.text).toContain('adv@example.ua');
+  expect(res.text).toContain('<!--email_off-->adv@example.ua<!--/email_off-->');
   expect(res.text).toContain(`action="/u/${token}"`);
   expect(res.headers['cache-control']).toBe('no-store');
   expect(pool.calls.some((c) => c.text.includes('attorney_crm_suppression'))).toBe(false);
@@ -53,6 +53,7 @@ test('POST /u/:token from the page records an unsubscribe from the link', async 
   const res = await request(app(pool)).post(`/u/${token}`).type('form').send({});
   expect(res.status).toBe(200);
   expect(res.text).toContain('Готово');
+  expect(res.text).toContain('<!--email_off-->adv@example.ua<!--/email_off-->');
   const ins = pool.calls.find((c) => c.text.includes('INSERT INTO attorney_crm_suppression'));
   expect(ins?.values).toEqual(['adv@example.ua', 'unsubscribe', 'link', null, null]);
 });
