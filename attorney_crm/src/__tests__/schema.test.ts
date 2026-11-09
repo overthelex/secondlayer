@@ -25,7 +25,7 @@ function fakePool(calls: string[], recorded: Map<string, string | null>) {
 
 test('applies unrecorded files and skips recorded ones whose content hash matches', async () => {
   const calls: string[] = [];
-  const recorded = new Map([['001_practice_derivation.sql', sha('001_practice_derivation.sql')], ['003_ctid_backfill.sql', sha('003_ctid_backfill.sql')]]);
+  const recorded = new Map([['001_practice_derivation.sql', sha('001_practice_derivation.sql')], ['003_ctid_backfill.sql', sha('003_ctid_backfill.sql')], ['004_contact_overrides.sql', sha('004_contact_overrides.sql')], ['005_suppression.sql', sha('005_suppression.sql')]]);
   const applied = await applySchema(fakePool(calls, recorded) as any, sqlDir);
   expect(applied).toEqual(['002_crm_core.sql']);
   expect(calls.some((q) => q.includes('CREATE TABLE IF NOT EXISTS attorney_crm_schema_version'))).toBe(true);
@@ -36,13 +36,13 @@ test('applies unrecorded files and skips recorded ones whose content hash matche
 
 test('re-applies a recorded file whose content changed or was recorded without a hash', async () => {
   const calls: string[] = [];
-  const recorded = new Map<string, string | null>([['001_practice_derivation.sql', 'stale'], ['002_crm_core.sql', null], ['003_ctid_backfill.sql', sha('003_ctid_backfill.sql')]]);
+  const recorded = new Map<string, string | null>([['001_practice_derivation.sql', 'stale'], ['002_crm_core.sql', null], ['003_ctid_backfill.sql', sha('003_ctid_backfill.sql')], ['004_contact_overrides.sql', sha('004_contact_overrides.sql')], ['005_suppression.sql', sha('005_suppression.sql')]]);
   expect(await applySchema(fakePool(calls, recorded) as any, sqlDir)).toEqual(['001_practice_derivation.sql', '002_crm_core.sql']);
 });
 
 test('nothing runs when every hash matches', async () => {
   const calls: string[] = [];
-  const recorded = new Map([['001_practice_derivation.sql', sha('001_practice_derivation.sql')], ['002_crm_core.sql', sha('002_crm_core.sql')], ['003_ctid_backfill.sql', sha('003_ctid_backfill.sql')]]);
+  const recorded = new Map([['001_practice_derivation.sql', sha('001_practice_derivation.sql')], ['002_crm_core.sql', sha('002_crm_core.sql')], ['003_ctid_backfill.sql', sha('003_ctid_backfill.sql')], ['004_contact_overrides.sql', sha('004_contact_overrides.sql')], ['005_suppression.sql', sha('005_suppression.sql')]]);
   expect(await applySchema(fakePool(calls, recorded) as any, sqlDir)).toEqual([]);
   expect(calls.filter((q) => q === 'BEGIN')).toHaveLength(0);
 });
@@ -50,11 +50,20 @@ test('nothing runs when every hash matches', async () => {
 test('fresh database applies every file in lexical order inside transactions on one client', async () => {
   const calls: string[] = [];
   const applied = await applySchema(fakePool(calls, new Map()) as any, sqlDir);
-  expect(applied).toEqual(['001_practice_derivation.sql', '002_crm_core.sql', '003_ctid_backfill.sql']);
+  expect(applied).toEqual(['001_practice_derivation.sql', '002_crm_core.sql', '003_ctid_backfill.sql', '004_contact_overrides.sql', '005_suppression.sql']);
   const i1 = calls.findIndex((q) => q.includes('attorney_crm_practice_cases'));
   const i2 = calls.findIndex((q) => q.includes('attorney_crm_users'));
   expect(i1).toBeLessThan(i2);
-  expect(calls.filter((q) => q === 'BEGIN').length).toBe(3);
-  expect(calls.filter((q) => q === 'COMMIT').length).toBe(3);
+  expect(calls.filter((q) => q === 'BEGIN').length).toBe(5);
+  expect(calls.filter((q) => q === 'COMMIT').length).toBe(5);
   expect(calls[calls.length - 1]).toBe('RELEASE');
+});
+
+test('pl tenant applies 002, 004, 005 and pl/001 only, inside the schema', async () => {
+  const calls: string[] = [];
+  const applied = await applySchema(fakePool(calls, new Map()) as any, sqlDir, ['002_crm_core.sql', '004_contact_overrides.sql', '005_suppression.sql', 'pl/001_pl_lawyers.sql'], 'attorney_crm_pl');
+  expect(applied).toEqual(['002_crm_core.sql', '004_contact_overrides.sql', '005_suppression.sql', 'pl/001_pl_lawyers.sql']);
+  expect(calls[0]).toBe('CREATE SCHEMA IF NOT EXISTS attorney_crm_pl');
+  expect(calls.some((c) => c.includes('edrsr_'))).toBe(false);
+  expect(calls.some((c) => c.includes('CREATE TABLE IF NOT EXISTS public.pl_lawyers'))).toBe(true);
 });

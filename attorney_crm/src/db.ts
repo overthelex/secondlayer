@@ -8,12 +8,14 @@ export interface Queryable {
   ): Promise<{ rows: R[]; rowCount: number | null }>;
 }
 
-export function createPool(databaseUrl: string): Pool {
+/** `schema`, when set, becomes the first search_path entry on every connection (CRM tables live there). */
+export function createPool(databaseUrl: string, schema: string | null = null, applicationName = 'attorney_crm'): Pool {
   return new Pool({
     connectionString: databaseUrl,
     max: 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    application_name: 'attorney_crm',
+    application_name: applicationName,
+    options: schema ? `-c search_path=${schema},public` : undefined,
   });
 }

@@ -38,3 +38,22 @@ export const ADVOCATE_SELECT = `
   ${CITY_SQL} AS city, ${REGION_SQL} AS region,
   ${ORG_FORMS_SQL} AS org_forms,
   a.ra_name, a.certificate_num, a.certificate_date, a.decision_num, a.decision_date, a.authority_name`;
+
+import type { RegistryAdapter } from '../tenant/types';
+
+/** The Ukrainian registry as a RegistryAdapter (see tenant/types.ts). */
+export const UA_REGISTRY: RegistryAdapter = {
+  table: 'opendata_advocates a',
+  idColumn: 'a.source_id',
+  select: ADVOCATE_SELECT,
+  activeWhere: ACTIVE_WHERE,
+  surnameColumn: 'a.family_name',
+  firstNameColumn: 'a.name',
+  patronymicColumn: 'a.additional_name',
+  citySql: CITY_SQL,
+  regionSql: REGION_SQL,
+  professionSql: null,
+  declaredPracticesSql: null,
+  phoneSqlForToday: "NULLIF(TRIM(a.work_address->0->>'workAddressContacts'), '')",
+  citySqlForToday: "a.work_address->0->>'workAddressCity'",
+};

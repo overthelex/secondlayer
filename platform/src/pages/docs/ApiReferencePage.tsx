@@ -90,9 +90,12 @@ Content-Type: application/json
 
       <h3>Застарілі ендпоінти</h3>
       <p>
-        <code>GET /v1/sse</code> — транспорт SSE, і <code>POST /api/v1/mcp</code> —
-        Streamable HTTP з повним набором інструментів. Обидва працюють, але нові
-        інтеграції слід робити на <code>/api/v2/mcp</code>.
+        <code>GET /v1/sse</code> (транспорт SSE) і <code>POST /api/v1/mcp</code>
+        (Streamable HTTP з повним реєстром інструментів) для API-ключів закриті:
+        запит з ключем <code>sl_…</code> на будь-який ендпоінт, окрім <code>/api/v2/mcp</code>,
+        отримує <code>403</code> з кодом <code>API_KEY_V2_ONLY</code>. Якщо ваш клієнт
+        налаштований на <code>/v1/sse</code>, змініть URL на
+        <code>https://mcp.legal.org.ua/api/v2/mcp</code> і транспорт на Streamable HTTP.
       </p>
 
       <h2>Health Check</h2>
