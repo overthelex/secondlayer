@@ -38,6 +38,8 @@ import { UkDueDiligenceTools } from '../api/tools/uk-due-diligence-tools.js';
 import { UkSemanticTools } from '../api/tools/uk-semantic-tools.js';
 import { UkJudgmentTools } from '../api/tools/uk-judgment-tools.js';
 import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
+import { PlRegistryTools } from '../api/tools/pl-registry-tools.js';
+import { PlLegalTools } from '../api/tools/pl-legal-tools.js';
 import { ChCommentaryTools } from '../api/tools/ch-commentary-tools.js';
 import { ChEchrTools } from '../api/tools/ch-echr-tools.js';
 import { ChMaterialsTools } from '../api/tools/ch-materials-tools.js';
@@ -219,6 +221,10 @@ export function createToolServices(
   toolRegistry.registerHandler(new ChVerificationTools(coreServices.db));
   // Swiss company registers: Zefix + SHAB gazette + FINMA + SECO sanctions + Kantonsblatt
   toolRegistry.registerHandler(new ChRegistryTools(coreServices.db));
+  // Polish registers (KRS, BZP, SLPS, Sejm, official lists), court decisions and legislation.
+  // Served only where the MCP_TOOLSET gate admits pl_* (lawrider.pl).
+  toolRegistry.registerHandler(new PlRegistryTools(coreServices.db));
+  toolRegistry.registerHandler(new PlLegalTools(coreServices.db));
   // Open-access commentaries on Swiss federal acts (onlinekommentar.ch, CC BY 4.0; LEXAI-2037)
   toolRegistry.registerHandler(new ChCommentaryTools(coreServices.db));
   // Federal Gazette materials: Botschaften, reports, article purpose via provenance (LEXAI-2038)

@@ -8,14 +8,15 @@
  *   unset or 'all' — no narrowing (serves the full registry / curated set)
  *   'ch'           — Swiss tools only, i.e. names starting with 'ch_'
  *   'uk'           — UK tools only, i.e. names starting with 'uk_'
- *   'ua'           — everything except the Swiss and UK tools (mcp.legal.org.ua)
+ *   'pl'           — Polish tools only, i.e. names starting with 'pl_'
+ *   'ua'           — everything except the Swiss, UK and Polish tools (mcp.legal.org.ua)
  *
  * Several may be combined with commas: 'ch,uk' is what mcp.lawrider.ch serves, since that
  * deployment holds both corpora. A tool passes if ANY of the listed values admits it.
  *
  * 'ua' is a complement rather than its own prefix, because the Ukrainian tools carry no
  * shared prefix: search_*, get_*, openreyestr_*, rada_*. No tool name outside the Swiss
- * or UK corpora starts with 'ch_' or 'uk_', so the values partition the registry.
+ * or UK or Polish corpora starts with 'ch_', 'uk_' or 'pl_', so the values partition the registry.
  *
  * Any other value fails closed (no tools at all) with an error log: a typo in the
  * compose file must not quietly re-expose a corpus the deployment is not meant to
@@ -31,6 +32,7 @@ import { logger } from '../utils/logger.js';
 
 const CH_PREFIX = 'ch_';
 const UK_PREFIX = 'uk_';
+const PL_PREFIX = 'pl_';
 
 let warnedUnknown: string | null = null;
 
@@ -38,7 +40,8 @@ function admits(value: string, name: string): boolean | null {
   if (value === 'all') return true;
   if (value === 'ch') return name.startsWith(CH_PREFIX);
   if (value === 'uk') return name.startsWith(UK_PREFIX);
-  if (value === 'ua') return !name.startsWith(CH_PREFIX) && !name.startsWith(UK_PREFIX);
+  if (value === 'pl') return name.startsWith(PL_PREFIX);
+  if (value === 'ua') return !name.startsWith(CH_PREFIX) && !name.startsWith(UK_PREFIX) && !name.startsWith(PL_PREFIX);
   return null;
 }
 
