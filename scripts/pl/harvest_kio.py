@@ -37,6 +37,7 @@ import requests
 BASE = "https://orzeczenia.uzp.gov.pl"
 UA = "lawrider-pl-backfill/1.0 (+https://lawrider.pl)"
 log = logging.getLogger("kio")
+MIN_TEXT = 50  # a ruling with less text than this is a placeholder, not a ruling
 
 
 class Limiter:
@@ -223,6 +224,11 @@ def main():
             except Exception as e:  # noqa: BLE001
                 log.error("pdf failed for %s: %s", did, e)
                 q.execute("UPDATE docs SET status='pdf_error' WHERE id=?", (did,))
+                continue
+            if len(text.strip()) < MIN_TEXT:
+                # e.g. portal id 11469, a test record whose whole PDF is "Treść testowa"
+                log.warning("skipping %s: only %d characters of text", did, len(text.strip()))
+                q.execute("UPDATE docs SET status='no_text' WHERE id=?", (did,))
                 continue
             legal = [x.strip() for x in re.split(r"[;,]\s*(?=art\.)", det.get("Kluczowe przepisy ustawy Pzp", "")) if x.strip()] or None
             meta = {
