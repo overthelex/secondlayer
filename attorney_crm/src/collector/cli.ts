@@ -1,8 +1,9 @@
 // node dist/collector/cli.js daemon
-// node dist/collector/cli.js once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy [--no-proxy] [--limit N]
+// node dist/collector/cli.js once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy|chambers [--no-proxy] [--limit N] [--only src,src]
 import { createPool } from '../db';
 import { Collector } from './http';
 import { adwokaciDetails, adwokaciList, daemon, MIN_DELAY_MS, probe, radcowieList, szukajradcy, type JobDeps } from './jobs';
+import { CHAMBER_MIN_DELAY_MS, CHAMBER_SOURCES, chambers, type ChamberSource } from './jobs-chambers';
 
 const DEFAULT_UA = 'lawrider.pl attorney-crm collector (+https://lawrider.pl; vladimir@lawrider.pl)';
 
@@ -28,10 +29,12 @@ async function main(argv: string[]) {
   const limit = limitIdx >= 0 ? Number(argv[limitIdx + 1]) : 200;
   const proxyUrl = noProxy ? null : process.env.HTTPS_PROXY ?? process.env.https_proxy ?? null;
   const pool = createPool(databaseUrl, null, 'attorney_crm_pl_collector');
-  const http = new Collector({ userAgent: process.env.COLLECTOR_UA ?? DEFAULT_UA, minDelayMs: MIN_DELAY_MS, maxConsecutiveFailures: 5, proxyUrl, log });
+  const onlyIdx = argv.indexOf('--only');
+  const only = onlyIdx >= 0 ? (argv[onlyIdx + 1] ?? '').split(',').filter((x): x is ChamberSource => (CHAMBER_SOURCES as string[]).includes(x)) : undefined;
+  const http = new Collector({ userAgent: process.env.COLLECTOR_UA ?? DEFAULT_UA, minDelayMs: { ...MIN_DELAY_MS, ...CHAMBER_MIN_DELAY_MS }, maxConsecutiveFailures: 5, proxyUrl, log });
   const deps: JobDeps = { pool, http, log };
   log(`[collector] proxy ${proxyUrl ?? 'none'}`);
-  const [mode, job] = argv.filter((a) => !a.startsWith('--') && a !== String(limit));
+  const [mode, job] = argv.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--limit', '--only'].includes(argv[i - 1])));
   try {
     if (mode === 'daemon') {
       await waitForTables(pool);
@@ -49,9 +52,10 @@ async function main(argv: string[]) {
         case 'adwokaci-details': log(JSON.stringify(await adwokaciDetails(deps, { maxAgeDays: 90, limit }))); return;
         case 'radcowie-list': log(JSON.stringify(await radcowieList(deps))); return;
         case 'szukajradcy': log(JSON.stringify(await szukajradcy(deps))); return;
+        case 'chambers': log(JSON.stringify(await chambers(deps, { only }))); return;
       }
     }
-    throw new Error('usage: cli.js daemon | once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy [--no-proxy] [--limit N]');
+    throw new Error('usage: cli.js daemon | once probe|adwokaci-list|adwokaci-details|radcowie-list|szukajradcy|chambers [--no-proxy] [--limit N] [--only src,src]');
   } finally {
     await pool.end();
   }

@@ -102,8 +102,19 @@ export const PL_TAG_MAP: Record<string, string> = {
   'europejskie': 'eu',
   'unii europejskiej': 'eu',
   'prawa człowieka': 'human_rights',
+  // chamber sites (oirp.krakow.pl, oirp.szczecin.pl) word the same areas slightly differently
+  'spółek': 'companies',
+  'umów': 'commercial',
+  'ochrony konsumentów': 'consumer',
+  'niewypłacalność i prawo upadłościowe': 'restructuring',
+  'zatrudnienia': 'labour',
 };
 
+/** Exact tag first; then without a leading "prawo " and a trailing bracket ("prawo pracy (i zatrudnienia)" → "pracy"). */
 export function mapPracticeTag(tag: string): string | null {
-  return PL_TAG_MAP[tag.trim().toLowerCase()] ?? null;
+  const t = tag.trim().toLowerCase();
+  const exact = PL_TAG_MAP[t];
+  if (exact) return exact;
+  const bare = t.replace(/^prawo\s+/, '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return PL_TAG_MAP[bare] ?? null;
 }

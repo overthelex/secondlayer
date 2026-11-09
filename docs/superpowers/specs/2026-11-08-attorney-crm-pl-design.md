@@ -97,9 +97,24 @@ collected from the two official public registers and one official directory firs
   contact. robots.txt disallows only `/search` and `/wp-admin/`; self-imposed
   1 request/2 s.
 
+### Regional chamber (OIRP) sites (added 09.11.2026)
+- Of the 19 chambers, six publish contacts, all opt-in: Kraków (`/radcy/?page=N`, 507 pages of
+  cards with the `KR-` entry number and, on ~7% of them, phone/e-mail; `/kancelarie/?page=N`,
+  67 pages of firm cards with NIP, phone, e-mail, website), Olsztyn (one TablePress table of
+  465 firms), Opole (`/kancelarie?page=N`, 61 pages; e-mail and website on `/kancelarie/{id}`),
+  Zielona Góra (one page of cards with the radca's name and number), Szczecin (103 tiles,
+  contacts on `/kancelaria/{slug}/`), Rzeszów (`/json/kancelaria.json`, 771 firms, 606 with
+  e-mail). Twelve chambers publish names only; Wrocław's robots.txt disallows everything and
+  is not fetched. Self-imposed 1 request/3 s per host.
+- Matching never leaves the chamber: entry number (exact, then with punctuation removed)
+  where printed, else the person's name against the chamber's register rows, with a
+  one-person firm name reduced to its two or three name words. Partnerships and firms
+  naming several people are never attached to anyone. Expected yield ≈1–1.5K radcowie.
+
 ### Numbers to expect
 Adwokaci 35.2K (24.1K practising, most with a phone). Radcowie 57.5K (44.4K
-practising), of whom at most ~3.4K get contacts from szukajradcy.pl. The team's
+practising), of whom at most ~3.4K get contacts from szukajradcy.pl and ≈1–1.5K more
+from the chamber sites. The team's
 callable universe is therefore ≈27K people; the other 41K radcowie are listed for
 completeness and for later CEIDG enrichment.
 

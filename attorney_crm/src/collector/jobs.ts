@@ -1,4 +1,4 @@
-// The four collection jobs and the daemon that schedules them. Each job is resumable from
+// The collection jobs and the daemon that schedules them. Each job is resumable from
 // public.pl_lawyers_crawl and idempotent (upserts only). Sources and politeness rules:
 // docs/superpowers/specs/2026-11-08-attorney-crm-pl-design.md
 import type { Queryable } from '../db';
@@ -8,6 +8,7 @@ import { parseAdwokaciList, parseAdwokatDetail } from './parse-adwokaci';
 import { parseRadcowieFragment } from './parse-radcowie';
 import { parseCityPage, parseDirectoryProfile } from './parse-szukajradcy';
 import { mapPracticeTag, nraLabelToCode } from '../tenant/pl-practices';
+import { chamberCursors, chambers, clearChamberCursors, needsChambersRun } from './jobs-chambers';
 import {
   countByProfession, detailCandidates, findByEntryNumber, findUniqueByName, getCursor, markDetailFetched, markUnseen, setCursor, upsertLawyers,
   type LawyerUpsert, type MatchedLawyer, type Profession,
@@ -408,14 +409,14 @@ export function needsDirectoryRun(sz: Record<string, unknown> | null, radcowieLi
 /**
  * Runs probe once, then two independent loops:
  *  - registers: list walks (until the first completes, then weekly), then profile details in batches;
- *  - directory: the szukajradcy pass (first run as soon as the radca list is complete, then monthly).
+ *  - directory: the szukajradcy pass and the chamber sites (first run as soon as the radca list is complete, then monthly).
  * Every job is isolated: one that throws is logged and retried next tick, the others still run.
  */
 export function daemon(d: JobDeps, schedule: Partial<Schedule> = {}): { stop: () => void; done: Promise<void> } {
   const s = { ...DEFAULT_SCHEDULE, ...schedule };
   let stopped = false;
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-  const lastRun: Record<string, Date | null> = { lists: null, szukajradcy: null };
+  const lastRun: Record<string, Date | null> = { lists: null, szukajradcy: null, chambers: null };
   const remember = () => setCursor(d.pool, 'daemon', Object.fromEntries(Object.entries(lastRun).map(([k, v]) => [k, v?.toISOString() ?? null])));
   const guarded = async <T>(name: string, fn: () => Promise<T>): Promise<T | null> => {
     try {
@@ -461,6 +462,16 @@ export function daemon(d: JobDeps, schedule: Partial<Schedule> = {}): { stop: ()
           await remember();
         }
         if (needsDirectoryRun(await getCursor(d.pool, 'szukajradcy'), await getCursor(d.pool, 'radcowie-list'))) await szukajradcy(d);
+      });
+      if (stopped) break;
+      await guarded('chambers', async () => {
+        const t = now(d);
+        if (isDue('monthly', t, lastRun.chambers)) {
+          await clearChamberCursors(d);
+          lastRun.chambers = t;
+          await remember();
+        }
+        if (needsChambersRun(await chamberCursors(d), await getCursor(d.pool, 'radcowie-list'))) await chambers(d);
       });
       if (!stopped) await sleep(s.tickMs);
     }
