@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/utils/api-client';
 import { setAuth } from '@/utils/auth';
+import { TurnstileWidget, turnstileEnabled } from '@/components/TurnstileWidget';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileReset, setTurnstileReset] = useState(0);
 
   // Handle OAuth callback: /login?token=JWT
   useEffect(() => {
@@ -46,11 +49,15 @@ export function LoginPage() {
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+    if (turnstileEnabled && !turnstileToken) {
+      setError('Підтвердіть, що ви не робот');
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
-      const { data } = await api.post('/auth/login', { email, password });
+      const { data } = await api.post('/auth/login', { email, password, turnstileToken });
       if (data.token && data.user) {
         setAuth(data.token, data.user);
         navigate('/', { replace: true });
@@ -59,6 +66,9 @@ export function LoginPage() {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Помилка входу';
       setError(msg);
       setLoading(false);
+      // Turnstile tokens are single-use
+      setTurnstileToken(null);
+      setTurnstileReset((k) => k + 1);
     }
   };
 
@@ -135,6 +145,8 @@ export function LoginPage() {
               autoComplete="current-password"
             />
           </div>
+          <TurnstileWidget action="login" onToken={setTurnstileToken} resetKey={turnstileReset} />
+
           <button
             type="submit"
             disabled={!email || !password}

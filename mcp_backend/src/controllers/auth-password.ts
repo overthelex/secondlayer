@@ -9,6 +9,7 @@ import { maskEmail } from '../utils/sanitize-log.js';
 import { getUserService } from '../middleware/dual-auth.js';
 import { provisionAuthentikUser } from '../services/authentik-service.js';
 import { provisionNextcloudUser } from '../services/nextcloud-provisioning.js';
+import { requireTurnstile } from '../services/turnstile-service.js';
 import {
   generateToken,
   generateBannerAsync,
@@ -34,6 +35,12 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
         error: 'Bad Request',
         message: 'Email and password are required',
       });
+    }
+
+    // Bot check (Cloudflare Turnstile); no-op when TURNSTILE_SECRET_KEY is unset or for the mobile app
+    const turnstile = await requireTurnstile(req);
+    if (turnstile) {
+      return res.status(turnstile.status).json(turnstile.body);
     }
 
     // Get user service
@@ -85,6 +92,23 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
     // Update last login
     await userService.updateLastLogin(user.id);
 
+    // Cloudflare leaked-credentials detection: a transform rule on the zone sets
+    // "Exposed-Credential-Check: 1" when this email+password pair is in a known breach
+    // (and strips the header otherwise, so clients cannot forge it). The login still
+    // succeeds; we record it, warn the user by mail (at most weekly) and flag the response.
+    const passwordLeaked = req.headers['exposed-credential-check'] === '1';
+    if (passwordLeaked) {
+      logger.warn('Login with a password found in known breaches', {
+        userId: user.id,
+        email: maskEmail(user.email),
+      });
+      const shouldNotify = await userService.markPasswordLeaked(user.id);
+      const authEmailService = getAuthEmailService();
+      if (shouldNotify && authEmailService) {
+        authEmailService.sendLeakedPasswordWarning(user.email).catch(() => {});
+      }
+    }
+
     // Generate JWT token
     const token = generateToken(user);
 
@@ -97,6 +121,7 @@ export async function loginWithPassword(req: Request, res: Response): Promise<Re
     return res.json({
       token,
       expiresIn: JWT_EXPIRES_IN,
+      passwordLeaked,
       user: {
         id: user.id,
         email: user.email,
@@ -146,6 +171,12 @@ export async function registerWithPassword(req: Request, res: Response): Promise
         error: 'Bad Request',
         message: passwordValidation.message,
       });
+    }
+
+    // Bot check (Cloudflare Turnstile); no-op when TURNSTILE_SECRET_KEY is unset or for the mobile app
+    const turnstile = await requireTurnstile(req);
+    if (turnstile) {
+      return res.status(turnstile.status).json(turnstile.body);
     }
 
     const userService = getUserService();

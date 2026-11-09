@@ -26,6 +26,7 @@ export interface User {
   user_type?: 'individual' | 'attorney' | 'company_admin';
   is_beta_tester?: boolean;
   is_admin?: boolean;
+  password_leaked_at?: Date | null;
 }
 
 export interface UserCreate {
@@ -496,6 +497,29 @@ export class UserService {
       );
     } catch (error) {
       logger.error('Error recording failed login:', error);
+    }
+  }
+
+  /**
+   * Record a login whose password Cloudflare flagged as leaked (Exposed-Credential-Check: 1).
+   * Returns true when the user should be notified: first occurrence, or the last warning is older than 7 days.
+   */
+  async markPasswordLeaked(userId: string): Promise<boolean> {
+    try {
+      const previous = await this.db.query(
+        'SELECT password_leaked_at FROM users WHERE id = $1',
+        [userId]
+      );
+      const last = previous.rows[0]?.password_leaked_at as Date | string | null | undefined;
+      await this.db.query(
+        'UPDATE users SET password_leaked_at = NOW() WHERE id = $1',
+        [userId]
+      );
+      if (!last) return true;
+      return Date.now() - new Date(last).getTime() > 7 * 24 * 60 * 60 * 1000;
+    } catch (error) {
+      logger.error('Error marking password as leaked:', error);
+      return false;
     }
   }
 

@@ -20,6 +20,18 @@ const toastMessages = {
   loggedOut: { uk: 'Ви вийшли з системи', es: 'Ha cerrado sesión', en: 'You have been logged out', de: 'Sie wurden abgemeldet' },
   loginSuccess: { uk: 'Вхід виконано успішно!', es: '¡Inicio de sesión exitoso!', en: 'Login successful!', de: 'Anmeldung erfolgreich!' },
   loginError: { uk: 'Помилка входу', es: 'Error de inicio de sesión', en: 'Login error', de: 'Anmeldefehler' },
+  turnstileRequired: {
+    uk: 'Підтвердіть, що ви не робот',
+    es: 'Confirme que no es un robot',
+    en: 'Please confirm you are not a robot',
+    de: 'Bitte bestätigen Sie, dass Sie kein Roboter sind',
+  },
+  passwordLeaked: {
+    uk: 'Цей пароль є у відомих витоках даних. Змініть його: вийдіть і скористайтесь «Забули пароль?».',
+    es: 'Esta contraseña aparece en filtraciones de datos conocidas. Cámbiela: cierre sesión y use «¿Olvidó su contraseña?».',
+    en: 'This password appears in known data breaches. Change it: sign out and use "Forgot password?".',
+    de: 'Dieses Passwort stammt aus bekannten Datenlecks. Ändern Sie es: abmelden und „Passwort vergessen?“ nutzen.',
+  },
   ssoLoginSuccess: { uk: 'Вхід через SSO виконано успішно!', es: '¡Inicio de sesión SSO exitoso!', en: 'SSO login successful!', de: 'SSO-Anmeldung erfolgreich!' },
   ssoError: { uk: 'Помилка SSO', es: 'Error de SSO', en: 'SSO error', de: 'SSO-Fehler' },
   registrationSuccess: {

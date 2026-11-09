@@ -124,6 +124,8 @@ x-app-local-base: &app_local_base
     # OAuth (optional for local - can use API keys instead)
     GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    # Cloudflare Turnstile secret for /auth/login and /auth/register (unset = check disabled)
+    TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
     GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-https://local.legal.org.ua/auth/google/callback}
     FRONTEND_URL: ${FRONTEND_URL:-https://local.legal.org.ua}
     ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://legal.org.ua,https://www.legal.org.ua,https://local.legal.org.ua,https://usa.legal.org.ua,https://uk.legal.org.ua,https://de.legal.org.ua,https://fr.legal.org.ua,https://nl.legal.org.ua,https://ee.legal.org.ua,https://eu.legal.org.ua,https://ua.legal.org.ua,http://localhost:5173,http://localhost:3000}
@@ -1064,6 +1066,7 @@ services:
         - VITE_SHOW_TOOL_SELECTOR=true
         - VITE_ENABLE_THINKING_STEPS=true
         - VITE_AUTO_EXPAND_THINKING=true
+        - VITE_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
         - GIT_SHA=${GIT_SHA:-unknown}
         - APP_VERSION=${APP_VERSION:-local}
         - APP_FRONTEND_VERSION=${APP_FRONTEND_VERSION:-local}
@@ -1118,6 +1121,7 @@ services:
       args:
         - BUILD_ENV=development
         - VITE_API_URL=https://local-platform.legal.org.ua
+        - VITE_TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
     image: platform-local:latest
     container_name: platform-local
     healthcheck:

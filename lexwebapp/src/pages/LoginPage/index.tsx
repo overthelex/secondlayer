@@ -32,6 +32,7 @@ import { hasRecentArticles } from '../BlogPage/articles';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services';
 import showToast from '../../utils/toast';
+import { TurnstileWidget, turnstileEnabled } from '../../components/TurnstileWidget';
 import { toastT } from '../../i18n/toast-i18n';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
 import { GDPRModal } from './GDPRModal';
@@ -378,6 +379,8 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [acceptedDpa, setAcceptedDpa] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileReset, setTurnstileReset] = useState(0);
   const [showSSOForm, setShowSSOForm] = useState(false);
   const [ssoEmail, setSsoEmail] = useState('');
   const [ssoPassword, setSsoPassword] = useState('');
@@ -601,6 +604,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const handlePasswordAuth = async () => {
     setError(null);
 
+    if (turnstileEnabled && !turnstileToken) {
+      setError(toastT('turnstileRequired'));
+      return;
+    }
+
     if (isLogin) {
       if (!email || !password) {
         setError('Введіть email та пароль');
@@ -613,7 +621,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         const response = await fetch(`${BASE_URL}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, turnstileToken }),
         });
 
         const data = await response.json();
@@ -621,6 +629,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
         await login(data.token);
         showToast.success(toastT('loginSuccess'));
+        if (data.passwordLeaked) showToast.error(toastT('passwordLeaked'), 12000);
         if (onLoginSuccess) onLoginSuccess();
         navigate(getReturnUrl(), { replace: true });
       } catch (err: unknown) {
@@ -630,6 +639,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         showToast.error(toastT('loginError'));
       } finally {
         setIsLoading(false);
+        // Turnstile tokens are single-use: ask for a fresh one before the next attempt
+        setTurnstileToken(null);
+        setTurnstileReset((k) => k + 1);
       }
     } else {
       if (!email || !password) {
@@ -650,7 +662,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         const response = await fetch(`${BASE_URL}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name: name || undefined, referralCode }),
+          body: JSON.stringify({ email, password, name: name || undefined, referralCode, turnstileToken }),
         });
 
         const data = await response.json();
@@ -673,6 +685,9 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
         showToast.error(toastT('registrationError'));
       } finally {
         setIsLoading(false);
+        // Turnstile tokens are single-use: ask for a fresh one before the next attempt
+        setTurnstileToken(null);
+        setTurnstileReset((k) => k + 1);
       }
     }
   };
@@ -1265,6 +1280,13 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     </div>
                   )}
                 </div>
+
+                <TurnstileWidget
+                  action={isLogin ? 'login' : 'register'}
+                  onToken={setTurnstileToken}
+                  resetKey={turnstileReset}
+                  className="mt-1"
+                />
 
                 <button
                   type="submit"
