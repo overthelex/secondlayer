@@ -22,7 +22,7 @@ export interface LawyerUpsert {
   phone2?: string | null;
   email?: string | null;
   website?: string | null;
-  contactSource?: 'register' | 'szukajradcy' | null;
+  contactSource?: 'register' | 'szukajradcy' | 'chamber' | null;
   entryNumber?: string | null;
   entryDate?: string | null;
   practices?: string[];
@@ -157,6 +157,37 @@ export async function findUniqueByName(pool: Queryable, surname: string, givenNa
   );
   let rows = r.rows;
   if (rows.length > 1 && city) rows = rows.filter((x) => x.city && x.city.toUpperCase() === city.toUpperCase());
+  return rows.length === 1 ? { lawyerId: rows[0].lawyer_id, contactSource: rows[0].contact_source } : null;
+}
+
+/**
+ * Radca of one chamber whose entry number, with punctuation and spaces removed, equals `key`
+ * (the chamber sites write 'ZG ZG 500' for the register's 'ZG/ZG/500'). Exactly one, else null.
+ */
+export async function findByLooseEntryKey(pool: Queryable, chamber: string, key: string): Promise<MatchedLawyer | null> {
+  const r = await pool.query<{ lawyer_id: string; contact_source: string | null }>(
+    `SELECT lawyer_id, contact_source FROM public.pl_lawyers
+     WHERE profession = 'radca' AND chamber = $1 AND regexp_replace(upper(entry_number), '[^[:alnum:]]', '', 'g') = $2 LIMIT 2`,
+    [chamber, key],
+  );
+  return r.rows.length === 1 ? { lawyerId: r.rows[0].lawyer_id, contactSource: r.rows[0].contact_source } : null;
+}
+
+/**
+ * Radcowie of one chamber with this surname whose given names equal `givenNames` or start with it
+ * (the register keeps both given names, a firm name usually prints one). Exactly one → match;
+ * several → only when exactly one of them is practising.
+ */
+export async function findUniqueByNameInChamber(pool: Queryable, surname: string, givenNames: string, chamber: string): Promise<MatchedLawyer | null> {
+  const r = await pool.query<{ lawyer_id: string; contact_source: string | null; status: string }>(
+    `SELECT lawyer_id, contact_source, status FROM public.pl_lawyers
+     WHERE profession = 'radca' AND upper(surname) = upper($1) AND chamber = $3
+       AND (upper(given_names) = upper($2) OR upper(given_names) LIKE upper($2) || ' %')
+     LIMIT 10`,
+    [surname, givenNames, chamber],
+  );
+  let rows = r.rows;
+  if (rows.length > 1) rows = rows.filter((x) => x.status === 'active');
   return rows.length === 1 ? { lawyerId: rows[0].lawyer_id, contactSource: rows[0].contact_source } : null;
 }
 

@@ -1,0 +1,236 @@
+[
+ {
+  "workplace_id": 20000984,
+  "workplace_type_id": 11,
+  "chancellory_type_id": 1,
+  "workplace_is_chancellory": 1,
+  "workplace_name": "Kancelaria Radcy Prawnego Anna Kostecka-Szyndak",
+  "workplace_shortname": "Kancelaria Radcy Prawnego Anna Kostecka-Szyndak",
+  "workplace_phone": "785 345 294",
+  "workplace_address": "ul. Wojska Polskiego 41 lok. 16",
+  "workplace_fax": null,
+  "workplace_email": "anna.kostecka-szyndak@o2.pl",
+  "workplace_www": null,
+  "workplace_country": null,
+  "KRS_number": null,
+  "KRS_date": null,
+  "workplace_with_advocates": 0,
+  "workplace_coordinate_lat": null,
+  "workplace_coordinate_lng": null,
+  "workplace_coordinate_uptodate": 0,
+  "workplace_city_hash": "c2a0e5a192600c325ce0634eb37254c5",
+  "workplace_type": {
+   "workplace_type_id": 11,
+   "workplace_type_name": "kancelaria"
+  },
+  "chancellory_type": {
+   "chancellory_type_id": 1,
+   "chancellory_type_name": "Kancelaria Radcy Prawnego"
+  },
+  "postcode": {
+   "postcode": "38-400",
+   "province_name": "podkarpackie",
+   "city_name": "Krosno",
+   "powiat": "Krosno",
+   "gmina": "Krosno",
+   "hash": "c2a0e5a192600c325ce0634eb37254c5",
+   "id": 54777
+  },
+  "data_do": null
+ },
+ {
+  "workplace_id": 20000878,
+  "workplace_type_id": 11,
+  "chancellory_type_id": 1,
+  "workplace_is_chancellory": 1,
+  "workplace_name": "Kancelaria Radcy Prawnego Agnieszka Rzeszut",
+  "workplace_shortname": "Kancelaria Radcy Prawnego Agnieszka Rzeszut",
+  "workplace_phone": "601 462 191",
+  "workplace_address": "Kolbuszowa Górna 307",
+  "workplace_fax": null,
+  "workplace_email": "rzeszutagnieszka@gmail.com",
+  "workplace_www": null,
+  "workplace_country": null,
+  "KRS_number": null,
+  "KRS_date": null,
+  "workplace_with_advocates": 0,
+  "workplace_coordinate_lat": null,
+  "workplace_coordinate_lng": null,
+  "workplace_coordinate_uptodate": 0,
+  "workplace_city_hash": "70fd9e1a70b0ffe6e1e60669fe73038a",
+  "workplace_type": {
+   "workplace_type_id": 11,
+   "workplace_type_name": "kancelaria"
+  },
+  "chancellory_type": {
+   "chancellory_type_id": 1,
+   "chancellory_type_name": "Kancelaria Radcy Prawnego"
+  },
+  "postcode": {
+   "postcode": "36-100",
+   "province_name": "podkarpackie",
+   "city_name": "Kolbuszowa",
+   "powiat": "kolbuszowski",
+   "gmina": "Kolbuszowa",
+   "hash": "70fd9e1a70b0ffe6e1e60669fe73038a",
+   "id": 52780
+  },
+  "data_do": null
+ },
+ {
+  "workplace_id": 20000907,
+  "workplace_type_id": 13,
+  "chancellory_type_id": 2,
+  "workplace_is_chancellory": 1,
+  "workplace_name": "Kancelaria Radców Prawnych N. Belcik-Stefańska i M. Jastrzębska",
+  "workplace_shortname": "Kancelaria Radców Prawnych N. Belcik-Stefańska i M. Jastrzębska",
+  "workplace_phone": "785 534 909",
+  "workplace_address": "ul. Grodzka 26/25",
+  "workplace_fax": null,
+  "workplace_email": "nataliabelcik@gmail.com",
+  "workplace_www": null,
+  "workplace_country": null,
+  "KRS_number": null,
+  "KRS_date": null,
+  "workplace_with_advocates": 0,
+  "workplace_coordinate_lat": null,
+  "workplace_coordinate_lng": null,
+  "workplace_coordinate_uptodate": 0,
+  "workplace_city_hash": "c2a0e5a192600c325ce0634eb37254c5",
+  "workplace_type": {
+   "workplace_type_id": 13,
+   "workplace_type_name": "spółka partnerska"
+  },
+  "chancellory_type": {
+   "chancellory_type_id": 2,
+   "chancellory_type_name": "Kancelaria Radców Prawnych"
+  },
+  "postcode": {
+   "postcode": "38-400",
+   "province_name": "podkarpackie",
+   "city_name": "Krosno",
+   "powiat": "Krosno",
+   "gmina": "Krosno",
+   "hash": "c2a0e5a192600c325ce0634eb37254c5",
+   "id": 54777
+  },
+  "data_do": null
+ },
+ {
+  "workplace_id": 20000904,
+  "workplace_type_id": 3,
+  "chancellory_type_id": 2,
+  "workplace_is_chancellory": 1,
+  "workplace_name": "Kancelaria Radców Prawnych AM&M Legal Pukała, Polak sp.k.",
+  "workplace_shortname": "Kancelaria Radców Prawnych AM&M Legal Pukała, Polak sp.k.",
+  "workplace_phone": "887 146 366",
+  "workplace_address": "ul. Śniadeckich 20 D lok. 3",
+  "workplace_fax": null,
+  "workplace_email": "biuro@ammlegal.pl",
+  "workplace_www": "ammlegal.pl",
+  "workplace_country": null,
+  "KRS_number": null,
+  "KRS_date": null,
+  "workplace_with_advocates": 0,
+  "workplace_coordinate_lat": null,
+  "workplace_coordinate_lng": null,
+  "workplace_coordinate_uptodate": 0,
+  "workplace_city_hash": "072a49fcccebfc4425198d23959b32d5",
+  "workplace_type": {
+   "workplace_type_id": 3,
+   "workplace_type_name": "spółka komandytowa"
+  },
+  "chancellory_type": {
+   "chancellory_type_id": 2,
+   "chancellory_type_name": "Kancelaria Radców Prawnych"
+  },
+  "postcode": {
+   "postcode": "35-006",
+   "province_name": "podkarpackie",
+   "city_name": "Rzeszów",
+   "powiat": "Rzeszów",
+   "gmina": "Rzeszów",
+   "hash": "072a49fcccebfc4425198d23959b32d5",
+   "id": 52306
+  },
+  "data_do": null
+ },
+ {
+  "workplace_id": 20000979,
+  "workplace_type_id": 11,
+  "chancellory_type_id": 1,
+  "workplace_is_chancellory": 1,
+  "workplace_name": "Kancelaria Radcy Prawnego Wojciech Migut",
+  "workplace_shortname": "Kancelaria Radcy Prawnego Wojciech Migut",
+  "workplace_phone": "604 60 88 77",
+  "workplace_address": "Rudna Wielka 20 S",
+  "workplace_fax": null,
+  "workplace_email": null,
+  "workplace_www": null,
+  "workplace_country": null,
+  "KRS_number": null,
+  "KRS_date": null,
+  "workplace_with_advocates": 0,
+  "workplace_coordinate_lat": null,
+  "workplace_coordinate_lng": null,
+  "workplace_coordinate_uptodate": 0,
+  "workplace_city_hash": "7644020f0599b087cac60024a366f33f",
+  "workplace_type": {
+   "workplace_type_id": 11,
+   "workplace_type_name": "kancelaria"
+  },
+  "chancellory_type": {
+   "chancellory_type_id": 1,
+   "chancellory_type_name": "Kancelaria Radcy Prawnego"
+  },
+  "postcode": {
+   "postcode": "36-054",
+   "province_name": "podkarpackie",
+   "city_name": "Rudna Wielka",
+   "powiat": "rzeszowski",
+   "gmina": "Świlcza",
+   "hash": "7644020f0599b087cac60024a366f33f",
+   "id": 52696
+  },
+  "data_do": null
+ },
+ {
+  "workplace_id": 20000969,
+  "workplace_type_id": 11,
+  "chancellory_type_id": 1,
+  "workplace_is_chancellory": 1,
+  "workplace_name": "Kancelaria Radcy Prawnego Łukasz Ostrowski",
+  "workplace_shortname": "Kancelaria Radcy Prawnego Łukasz Ostrowski",
+  "workplace_phone": null,
+  "workplace_address": "ul. Bałtycka 39 lok. A 4",
+  "workplace_fax": null,
+  "workplace_email": null,
+  "workplace_www": null,
+  "workplace_country": null,
+  "KRS_number": null,
+  "KRS_date": null,
+  "workplace_with_advocates": 0,
+  "workplace_coordinate_lat": null,
+  "workplace_coordinate_lng": null,
+  "workplace_coordinate_uptodate": 0,
+  "workplace_city_hash": "ddfbe1d36983c96d31d2ea4b67a30947",
+  "workplace_type": {
+   "workplace_type_id": 11,
+   "workplace_type_name": "kancelaria"
+  },
+  "chancellory_type": {
+   "chancellory_type_id": 1,
+   "chancellory_type_name": "Kancelaria Radcy Prawnego"
+  },
+  "postcode": {
+   "postcode": "35-323",
+   "province_name": "podkarpackie",
+   "city_name": "Rzeszów",
+   "powiat": "Rzeszów",
+   "gmina": "Rzeszów",
+   "hash": "ddfbe1d36983c96d31d2ea4b67a30947",
+   "id": 52419
+  },
+  "data_do": null
+ }
+]
