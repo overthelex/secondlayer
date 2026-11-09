@@ -116,8 +116,8 @@ collected from the two official public registers and one official directory firs
   (204 = no hit) then `/firma/{id}`; `Authorization: Bearer <JWT>` issued to a team member's
   Profil Zaufany account (`CEIDG_TOKEN`), 1,000 requests per 60 min per token. The firm record
   has address, NIP, PKD and, only where the entrepreneur consented to publish them, `email`,
-  `telefon`, `www`. Probe of 09.11 on 100 practising radcowie without contacts: 72% have an
-  active 69.10.Z sole-trader firm, ~35% of those firms publish an e-mail.
+  `telefon`, `www`. Probe of 09.11 on 100 practising radcowie without contacts: 58% have an
+  active 69.10.Z sole-trader firm, 20% of the sample get an e-mail, 22% any contact.
 - Only practising radcowie with neither phone nor e-mail are asked; the owner's surname and
   first given name must equal the register's, several hits are resolved by the register's
   city or dropped. Every candidate is stamped `raw.ceidg.checkedAt` and asked again after
