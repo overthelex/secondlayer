@@ -126,9 +126,10 @@ export async function adwokaciList(d: JobDeps): Promise<{ pages: number; rows: n
 
 // ── adwokaci: profile details ──
 
-export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit: number }): Promise<{ fetched: number }> {
+export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit: number }): Promise<{ fetched: number; failed: number }> {
   const todo = await detailCandidates(d.pool, o.maxAgeDays, o.limit);
   let fetched = 0;
+  let failed = 0;
   for (const c of todo) {
     let html: string;
     try {
@@ -141,6 +142,9 @@ export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit
       }
       throw e;
     }
+    // One profile the parser or the database cannot take must not stop the queue: record it on
+    // the row (so it is not retried every minute) and go on. Transport failures are thrown above.
+    try {
     const det = parseAdwokatDetail(html);
     const codes = det.practices.map(nraLabelToCode).filter((x): x is string => x !== null);
     const phone = normalisePhone(det.phone) ?? det.phone;
@@ -174,9 +178,15 @@ export async function adwokaciDetails(d: JobDeps, o: { maxAgeDays: number; limit
       false,
     );
     fetched++;
+    } catch (e) {
+      failed++;
+      const msg = (e as Error).message;
+      d.log(`[adwokaci-details] ${c.lawyerId}: skipped, ${msg}`);
+      await markDetailFetched(d.pool, c.lawyerId, { detailError: msg, at: now(d).toISOString() });
+    }
   }
-  if (fetched) d.log(`[adwokaci-details] fetched ${fetched} profiles`);
-  return { fetched };
+  if (fetched || failed) d.log(`[adwokaci-details] fetched ${fetched} profiles${failed ? `, ${failed} skipped with errors` : ''}`);
+  return { fetched, failed };
 }
 
 // ── radcowie: list walk (POST fragment, 15 per page) ──
@@ -386,51 +396,82 @@ export interface Schedule {
 
 const DEFAULT_SCHEDULE: Schedule = { tickMs: 60_000, detailBatch: 200, detailMaxAgeDays: 90, idleMs: 60_000 };
 
-/** Runs probe once, then: lists (immediately until the first walk completes, then weekly), szukajradcy monthly, the details loop continuously. */
+/**
+ * The szukajradcy pass matches against the radca rows, so it waits for a completed radca list;
+ * then it runs whenever it never ran or was interrupted. The monthly slot only clears its cursor.
+ */
+export function needsDirectoryRun(sz: Record<string, unknown> | null, radcowieList: Record<string, unknown> | null): boolean {
+  if (!radcowieList || needsListWalk(radcowieList)) return false;
+  return !sz || typeof sz.completedAt !== 'string';
+}
+
+/**
+ * Runs probe once, then two independent loops:
+ *  - registers: list walks (until the first completes, then weekly), then profile details in batches;
+ *  - directory: the szukajradcy pass (first run as soon as the radca list is complete, then monthly).
+ * Every job is isolated: one that throws is logged and retried next tick, the others still run.
+ */
 export function daemon(d: JobDeps, schedule: Partial<Schedule> = {}): { stop: () => void; done: Promise<void> } {
   const s = { ...DEFAULT_SCHEDULE, ...schedule };
   let stopped = false;
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const lastRun: Record<string, Date | null> = { lists: null, szukajradcy: null };
+  const remember = () => setCursor(d.pool, 'daemon', Object.fromEntries(Object.entries(lastRun).map(([k, v]) => [k, v?.toISOString() ?? null])));
+  const guarded = async <T>(name: string, fn: () => Promise<T>): Promise<T | null> => {
+    try {
+      return await fn();
+    } catch (e) {
+      d.log(`[daemon] ${name} failed: ${(e as Error).message}; retrying in ${s.tickMs / 1000}s`);
+      return null;
+    }
+  };
 
-  const runLists = async () => {
+  const lists = async () => {
+    const t = now(d);
+    // A never-completed or interrupted walk continues on every tick (first start, a crash
+    // mid-walk, a failure outside the Sunday slot); the slot only starts a fresh one.
+    if (isDue('weekly', t, lastRun.lists)) {
+      for (const src of ['adwokaci-list', 'radcowie-list']) {
+        const c = await getCursor(d.pool, src);
+        if (c && !needsListWalk(c)) await setCursor(d.pool, src, { page: 1 }); // forget completedAt → fresh walk
+      }
+      lastRun.lists = t;
+      await remember();
+    }
     if (needsListWalk(await getCursor(d.pool, 'adwokaci-list'))) await adwokaciList(d);
     if (needsListWalk(await getCursor(d.pool, 'radcowie-list'))) await radcowieList(d);
   };
-  const loop = async () => {
-    await probe(d);
-    const cur = await getCursor(d.pool, 'daemon');
-    for (const k of Object.keys(lastRun)) if (typeof cur?.[k] === 'string') lastRun[k] = new Date(cur[k] as string);
-    const remember = () => setCursor(d.pool, 'daemon', Object.fromEntries(Object.entries(lastRun).map(([k, v]) => [k, v?.toISOString() ?? null])));
+  const registersLoop = async () => {
     while (!stopped) {
-      const t = now(d);
-      try {
-        // Lists: a never-completed or interrupted walk continues on every tick (first start, a
-        // crash mid-walk, a failure outside the Sunday slot); the slot only starts a fresh one.
-        if (isDue('weekly', t, lastRun.lists)) {
-          for (const src of ['adwokaci-list', 'radcowie-list']) {
-            const c = await getCursor(d.pool, src);
-            if (c && !needsListWalk(c)) await setCursor(d.pool, src, { page: 1 }); // forget completedAt → fresh walk
-          }
-          lastRun.lists = t;
-          await remember();
-        }
-        await runLists();
+      const listsOk = (await guarded('lists', lists)) !== null;
+      if (stopped) break;
+      const det = await guarded('adwokaci-details', () => adwokaciDetails(d, { maxAgeDays: s.detailMaxAgeDays, limit: s.detailBatch }));
+      if (stopped) break;
+      if (!listsOk || det === null) await sleep(s.tickMs);
+      else if (det.fetched === 0) await sleep(s.idleMs);
+    }
+  };
+  const directoryLoop = async () => {
+    while (!stopped) {
+      await guarded('szukajradcy', async () => {
+        const t = now(d);
         if (isDue('monthly', t, lastRun.szukajradcy)) {
           await setCursor(d.pool, 'szukajradcy', {});
           lastRun.szukajradcy = t;
           await remember();
         }
-        const sz = await getCursor(d.pool, 'szukajradcy');
-        if (sz && typeof sz.completedAt !== 'string') await szukajradcy(d); // in progress (or just reset): continue
-        const { fetched } = await adwokaciDetails(d, { maxAgeDays: s.detailMaxAgeDays, limit: s.detailBatch });
-        if (fetched === 0) await sleep(s.idleMs);
-      } catch (e) {
-        d.log(`[daemon] job failed: ${(e as Error).message}; retrying in ${s.tickMs / 1000}s`);
-        await sleep(s.tickMs);
-      }
+        if (needsDirectoryRun(await getCursor(d.pool, 'szukajradcy'), await getCursor(d.pool, 'radcowie-list'))) await szukajradcy(d);
+      });
+      if (!stopped) await sleep(s.tickMs);
     }
+  };
+  const loop = async () => {
+    await probe(d);
+    const cur = await getCursor(d.pool, 'daemon');
+    for (const k of Object.keys(lastRun)) if (typeof cur?.[k] === 'string') lastRun[k] = new Date(cur[k] as string);
+    await Promise.all([registersLoop(), directoryLoop()]);
   };
   const done = loop();
   return { stop: () => { stopped = true; }, done };
 }
+

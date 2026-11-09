@@ -76,3 +76,20 @@ test('statusFromRaw', () => {
   expect(statusFromRaw('radca', 'Wykonuje zawód')).toBe('active');
   expect(statusFromRaw('radca', 'Nie wykonuje zawodu')).toBe('inactive');
 });
+
+import { validIsoDate } from '../collector/normalise';
+
+test('validIsoDate keeps real dates and drops the ones the register invents', () => {
+  expect(validIsoDate('1988-02-04')).toBe('1988-02-04');
+  expect(validIsoDate('0000-00-00')).toBeNull();
+  expect(validIsoDate('2023-02-30')).toBeNull();
+  expect(validIsoDate('2023-13-01')).toBeNull();
+  expect(validIsoDate('04.02.1988')).toBeNull();
+  expect(validIsoDate(null)).toBeNull();
+});
+
+test('a profile whose entry date is 0000-00-00 parses to a null date, not a value Postgres rejects', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'fixtures/pl', 'adwokat-adamczyk-andrzej-42384.html'), 'utf8');
+  expect(parseAdwokatDetail(html).entryDate).toBe('1988-02-04');
+  expect(parseAdwokatDetail(html.replace('1988-02-04', '0000-00-00')).entryDate).toBeNull();
+});

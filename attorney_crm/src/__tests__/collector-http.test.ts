@@ -80,3 +80,18 @@ import { defaultFetch } from '../collector/http';
 test('the default fetch is undici fetch, so the ProxyAgent dispatcher is always honoured', () => {
   expect(defaultFetch).toBe(undiciFetch);
 });
+
+test('a slow host does not hold up requests to another host', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  const impl = (async (url: any) => {
+    if (String(url).includes('rejestradwokatow')) await gate;
+    return new Response('ok', { status: 200 });
+  }) as unknown as typeof fetch;
+  const { c } = collector(impl);
+  const slow = c.get('https://rejestradwokatow.pl/adwokat/x');
+  const fast = await Promise.race([c.get('https://szukajradcy.pl/'), new Promise((r) => setTimeout(() => r('BLOCKED'), 200))]);
+  release();
+  await slow;
+  expect(fast).toBe('ok');
+});
