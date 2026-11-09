@@ -7,6 +7,7 @@
 //   mail link <email>                                                      print the unsubscribe URL for an address
 //   mail send --to <email> --subject <s> --text <file> [--html <file>] [--advocate <id>] [--campaign <name>] [--dry-run]
 //   mail stats [campaign]                                                  sent / suppressed / failed counts
+//   mail hook-key                                                          key for the Event Grid webhook (/hooks/acs-events)
 import fs from 'fs';
 import path from 'path';
 import { loadConfig, type Config } from './config';
@@ -17,6 +18,7 @@ import { setTenant } from './tenant';
 import type { Queryable } from './db';
 import { getSuppression, importBounces, isSuppressionReason, parseBounceLines, suppress, suppressedAmong, unsuppress } from './mail/suppression';
 import { unsubscribeUrl } from './mail/headers';
+import { hookKey } from './mail/acs-events';
 import { createMailer } from './mail/sender';
 
 const USAGE = `usage: node dist/cli.js <command>
@@ -27,7 +29,8 @@ const USAGE = `usage: node dist/cli.js <command>
   mail import-bounces [source]            (stdin: Postfix log lines or an address list)
   mail link <email>
   mail send --to <email> --subject <s> --text <file> [--html <file>] [--advocate <id>] [--campaign <name>] [--dry-run]
-  mail stats [campaign]`;
+  mail stats [campaign]
+  mail hook-key                           (key for the Event Grid webhook /hooks/acs-events)`;
 
 function usage(): number {
   process.stderr.write(`${USAGE}\n`);
@@ -134,6 +137,10 @@ async function mail(pool: Queryable, config: Config, args: string[]): Promise<nu
       } finally {
         mailer.close();
       }
+    }
+    case 'hook-key': {
+      out(hookKey(config.sessionSecret));
+      return 0;
     }
     case 'stats': {
       const r = await pool.query<{ campaign: string; status: string; n: string }>(
