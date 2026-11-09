@@ -26,7 +26,7 @@ export function createApp(deps: AppDeps): Express {
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
   app.use(express.urlencoded({ extended: true, limit: '256kb' }));
-  app.use('/static', express.static(path.join(__dirname, '..', 'static'), { maxAge: '1d' }));
+  app.use('/static', express.static(path.join(__dirname, '..', 'static'), { maxAge: '1d', immutable: true }));
 
   app.get('/healthz', async (_req, res) => {
     try {
