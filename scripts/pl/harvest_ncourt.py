@@ -41,6 +41,7 @@ API = "https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api"
 MIGRATION = os.path.join(HERE, "..", "..", "mcp_backend", "src", "migrations",
                          "254_pl_ncourt.sql")
 WORKERS = int(os.environ.get("WORKERS", "4"))
+PASSES = 6
 RATE = float(os.environ.get("RATE", "8"))
 START = dt.date(2012, 1, 1)
 UA = "lawrider.pl ncourt open-data harvester"
@@ -99,11 +100,11 @@ def stamp(v):
     return f"{m.group(1)}{'+02' if m.group(2) == 'CEST' else '+01'}" if m else None
 
 
-def page(prefix, lo, hi):
+def page(prefix, lo, hi, offset=0):
     """(total, rows) of one response for [lo, hi] on the {prefix}From/To filter."""
     body, code = get("judgements", {f"{prefix}From": lo.isoformat(),
                                     f"{prefix}To": hi.isoformat(),
-                                    "limit": 1000, "offset": 0})
+                                    "limit": 1000, "offset": offset})
     if code != 200:
         raise RuntimeError(f"listing {prefix} {lo}..{hi}: HTTP {code}")
     root = ET.fromstring(body, ET.XMLParser(recover=True, huge_tree=True))
@@ -114,6 +115,22 @@ def page(prefix, lo, hi):
     return int(root.get("total") or 0), rows
 
 
+def full_day(prefix, lo, hi, total, first):
+    """A day holding more than one response. The filter ignores the time of
+    day, so it cannot be split further: page through it. Page order is not
+    stable, so repeat the walk until every record has been seen."""
+    seen = {r[0]: r for r in first}
+    for _ in range(PASSES):
+        for off in range(0, total, 1000):
+            seen.update((r[0], r) for r in page(prefix, lo, hi, off)[1])
+        if len(seen) >= total:
+            break
+    if len(seen) < total:
+        print(f"WARNING {prefix} {lo}..{hi}: {total} records, got {len(seen)}",
+              file=sys.stderr, flush=True)
+    return list(seen.values())
+
+
 def listing(prefix, lo, hi):
     """Every record in [lo, hi]. Windows share their boundary day; the upsert
     makes that harmless."""
@@ -121,9 +138,7 @@ def listing(prefix, lo, hi):
     if total <= len(rows):
         return rows
     if hi - lo <= dt.timedelta(days=1):
-        print(f"WARNING {prefix} {lo}..{hi}: {total} records, got {len(rows)}",
-              file=sys.stderr, flush=True)
-        return rows
+        return full_day(prefix, lo, hi, total, rows)
     mid = lo + (hi - lo) / 2
     return listing(prefix, lo, mid) + listing(prefix, mid, hi)
 
@@ -134,6 +149,14 @@ def write_index(rows):
         plprod.upsert_rows("pl_ncourt_index", IDX_COLS, list(uniq.values()), ["id"],
                            prefer_new=False, batch=2000)
     return len(uniq)
+
+
+def do_days(days):
+    """Re-list single days, without touching the progress row."""
+    for d in days:
+        lo = dt.date.fromisoformat(d)
+        n = write_index(listing("publicationDate", lo, lo + dt.timedelta(days=1)))
+        print(f"index day {d}: {n} rows", flush=True)
 
 
 def do_index():
@@ -259,6 +282,7 @@ def main():
     ap.add_argument("--index", action="store_true")
     ap.add_argument("--load", action="store_true")
     ap.add_argument("--report", action="store_true")
+    ap.add_argument("--days", nargs="+", help="re-list these publication days")
     ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()
     with open(MIGRATION, encoding="utf-8") as f:
@@ -268,6 +292,8 @@ def main():
         raise SystemExit(f"schema failed: {r.stderr.strip()[:600]}")
     if a.index:
         do_index()
+    if a.days:
+        do_days(a.days)
     if a.report:
         print("indexed", plprod.scalar("SELECT count(*) FROM pl_ncourt_index"))
         print("to load", plprod.scalar("SELECT count(*) " + WORK))
