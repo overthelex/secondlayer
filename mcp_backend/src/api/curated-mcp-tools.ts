@@ -37,6 +37,22 @@ export const V2_TOOL_NAMES = new Set<string>([
   'get_npa_act',
   // Швейцарія (CH) — судові рішення (entscheidsuche.ch) та федеральне законодавство
   // (Fedlex): пошук, точковий у часі текст статті або повного акта, історія змін акта.
+  // Польща (видно лише там, де MCP_TOOLSET пропускає pl_*)
+  'pl_search_companies',
+  'pl_get_company',
+  'pl_search_procurement',
+  'pl_get_procurement_notice',
+  'pl_search_case_assignments',
+  'pl_get_judge_workload',
+  'pl_search_sejm',
+  'pl_get_sejm_object',
+  'pl_search_register',
+  'pl_search_court_decisions',
+  'pl_get_court_decision',
+  'pl_search_legislation',
+  'pl_get_act',
+  'pl_get_act_article',
+  'pl_get_act_text',
   'ch_search_court_decisions',
   'ch_get_court_decision',
   'ch_search_legislation',
