@@ -45,7 +45,26 @@ const FILL_ONLY = ['chamber', 'city', 'postcode', 'address', 'office_name', 'pho
  * @param seenAt   list_seen_at for inserted rows and (when touchSeen) for updated ones
  * @param touchSeen false for enrichment passes (szukajradcy) so markUnseen still sees the true last list sighting
  */
-export async function upsertLawyers(pool: Queryable, rows: LawyerUpsert[], seenAt: Date, touchSeen = true): Promise<number> {
+/**
+ * One row per lawyer id: the registers themselves repeat an entry number now and then (BŁ/1678 is
+ * listed twice on rejestrradcow.pl with two spellings), and Postgres refuses to touch the same row
+ * twice in one INSERT … ON CONFLICT. The first row wins; its blanks are filled from the duplicates.
+ */
+export function dedupeLawyers(rows: LawyerUpsert[]): LawyerUpsert[] {
+  const byId = new Map<string, LawyerUpsert>();
+  for (const r of rows) {
+    const prev = byId.get(r.lawyerId);
+    if (!prev) { byId.set(r.lawyerId, { ...r }); continue; }
+    for (const k of Object.keys(r) as (keyof LawyerUpsert)[]) {
+      const cur = prev[k];
+      if (cur === undefined || cur === null || cur === '') (prev as unknown as Record<string, unknown>)[k] = r[k];
+    }
+  }
+  return [...byId.values()];
+}
+
+export async function upsertLawyers(pool: Queryable, input: LawyerUpsert[], seenAt: Date, touchSeen = true): Promise<number> {
+  const rows = dedupeLawyers(input);
   if (rows.length === 0) return 0;
   const params: unknown[] = [];
   const tuples = rows.map((r) => {

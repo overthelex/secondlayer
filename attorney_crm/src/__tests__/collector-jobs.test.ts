@@ -39,6 +39,23 @@ test('upsert keeps the old phone when the new fetch has none', async () => {
   expect(q.values).toContain('adw:1');
 });
 
+test('upsert merges rows that share a lawyer id inside one batch (the radca register lists BŁ/1678 twice)', async () => {
+  const pool = fakePool();
+  const n = await upsertLawyers(pool as any, [
+    { lawyerId: 'radca:BŁ/1678', profession: 'radca', surname: 'CZARNOMY', givenNames: 'EDYTA', status: 'inactive', statusRaw: 'Nie wykonuje zawodu', city: null, email: 'e@x.pl' },
+    { lawyerId: 'radca:BŁ/1678', profession: 'radca', surname: 'CZARNOMYS', givenNames: 'EDYTA', status: 'inactive', statusRaw: 'Nie wykonuje zawodu', city: 'BIAŁYSTOK', email: null },
+    { lawyerId: 'radca:BŁ/1679', profession: 'radca', surname: 'INNA', givenNames: 'ANNA', status: 'active', statusRaw: 'Wykonuje zawód' },
+  ], new Date());
+  expect(n).toBe(2);
+  const q = pool.calls[0];
+  expect((q.values ?? []).filter((v: unknown) => v === 'radca:BŁ/1678')).toHaveLength(1);
+  // first row wins for a filled field, blanks are filled from the later duplicate
+  expect(q.values).toContain('CZARNOMY');
+  expect(q.values).not.toContain('CZARNOMYS');
+  expect(q.values).toContain('BIAŁYSTOK');
+  expect(q.values).toContain('e@x.pl');
+});
+
 test('markUnseen only touches rows not seen since the walk started', async () => {
   const pool = fakePool(() => []);
   const t = new Date('2026-11-08T00:00:00Z');
