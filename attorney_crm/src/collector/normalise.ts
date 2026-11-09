@@ -66,3 +66,13 @@ export function splitPostcodeCity(line: string): { postcode: string | null; city
   if (m) return { postcode: m[1], city: m[2].trim() };
   return { postcode: null, city: clean(line) };
 }
+
+/** YYYY-MM-DD that is a real calendar date; the adwokat register prints 0000-00-00 for an unknown entry date. */
+export function validIsoDate(s: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s ?? '');
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (y < 1800) return null;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d ? m[0] : null;
+}

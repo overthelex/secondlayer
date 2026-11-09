@@ -32,11 +32,11 @@ test('endOfLocalDay respects the timezone', () => {
 test('the login mark and the favicon are the tenant brand, not the UA mark', () => {
   setTenant(loadTenant({ ATTORNEY_CRM_TENANT: 'pl' }));
   const page = renderLogin({});
-  expect(page).toContain('src="/static/logo-lawrider.png"');
-  expect(page).toContain('rel="icon" href="/static/logo-lawrider.png"');
+  expect(page).toContain('src="/static/logo-lawrider.png?v=');
+  expect(page).toContain('rel="icon" href="/static/logo-lawrider.png?v=');
   expect(page).not.toContain('favicon.svg');
   setTenant(loadTenant({}));
   const ua = renderLogin({});
-  expect(ua).toContain('rel="icon" href="/static/favicon.svg"');
-  expect(ua).toContain('class="login-mark" src="/static/favicon.svg"');
+  expect(ua).toContain('rel="icon" href="/static/favicon.svg?v=');
+  expect(ua).toContain('class="login-mark" src="/static/favicon.svg?v=');
 });

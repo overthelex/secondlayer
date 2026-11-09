@@ -17,5 +17,5 @@ export const PL_TENANT: Tenant = {
   practiceLabel: plPracticeLabel,
   derivedPractices: false,
   schema: 'attorney_crm_pl',
-  sqlFiles: ['002_crm_core.sql', '004_contact_overrides.sql', 'pl/001_pl_lawyers.sql'],
+  sqlFiles: ['002_crm_core.sql', '004_contact_overrides.sql', '005_suppression.sql', 'pl/001_pl_lawyers.sql'],
 };

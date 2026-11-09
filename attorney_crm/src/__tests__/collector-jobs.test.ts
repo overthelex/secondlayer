@@ -39,6 +39,23 @@ test('upsert keeps the old phone when the new fetch has none', async () => {
   expect(q.values).toContain('adw:1');
 });
 
+test('upsert merges rows that share a lawyer id inside one batch (the radca register lists BŁ/1678 twice)', async () => {
+  const pool = fakePool();
+  const n = await upsertLawyers(pool as any, [
+    { lawyerId: 'radca:BŁ/1678', profession: 'radca', surname: 'CZARNOMY', givenNames: 'EDYTA', status: 'inactive', statusRaw: 'Nie wykonuje zawodu', city: null, email: 'e@x.pl' },
+    { lawyerId: 'radca:BŁ/1678', profession: 'radca', surname: 'CZARNOMYS', givenNames: 'EDYTA', status: 'inactive', statusRaw: 'Nie wykonuje zawodu', city: 'BIAŁYSTOK', email: null },
+    { lawyerId: 'radca:BŁ/1679', profession: 'radca', surname: 'INNA', givenNames: 'ANNA', status: 'active', statusRaw: 'Wykonuje zawód' },
+  ], new Date());
+  expect(n).toBe(2);
+  const q = pool.calls[0];
+  expect((q.values ?? []).filter((v: unknown) => v === 'radca:BŁ/1678')).toHaveLength(1);
+  // first row wins for a filled field, blanks are filled from the later duplicate
+  expect(q.values).toContain('CZARNOMY');
+  expect(q.values).not.toContain('CZARNOMYS');
+  expect(q.values).toContain('BIAŁYSTOK');
+  expect(q.values).toContain('e@x.pl');
+});
+
 test('markUnseen only touches rows not seen since the walk started', async () => {
   const pool = fakePool(() => []);
   const t = new Date('2026-11-08T00:00:00Z');
@@ -216,4 +233,87 @@ test('findUniqueByName: unique nationwide matches; several → only an exact cit
   const one = fakePool((text) => (text.includes('upper(surname)') ? [rows[0]] : []));
   expect((await findUniqueByName(one as any, 'Kowalski', 'Jan', 'Katowice'))?.lawyerId).toBe('radca:A');
   expect(two.calls[0].text).not.toMatch(/city IS NULL/);
+});
+
+import { daemon, needsDirectoryRun } from '../collector/jobs';
+
+const ADAMCZYK = 'https://rejestradwokatow.pl/adwokat/adamczyk-andrzej-42384';
+
+test('one profile the database rejects is skipped and recorded; the rest of the batch goes on', async () => {
+  const { http } = fakeHttp((url) => (url.includes('/adwokat/') ? { status: 200, body: fx('adwokat-adamczyk-andrzej-42384.html') } : undefined));
+  const pool = fakePool((text, values) => {
+    if (text.includes('ORDER BY (status = \'active\') DESC')) return [{ lawyer_id: 'adw:1', profile_url: `${ADAMCZYK}?a` }, { lawyer_id: 'adw:2', profile_url: `${ADAMCZYK}?b` }];
+    if (text.includes('INSERT INTO public.pl_lawyers (') && values?.[0] === 'adw:1') throw new Error('date/time field value out of range: "0000-00-00"');
+    return [];
+  });
+  const logs: string[] = [];
+  const r = await adwokaciDetails({ pool: pool as any, http, log: (m) => logs.push(m) }, { maxAgeDays: 90, limit: 10 });
+  expect(r).toEqual({ fetched: 1, failed: 1 });
+  const mark = pool.calls.find((c) => c.text.startsWith('UPDATE public.pl_lawyers SET detail_fetched_at') && c.values?.[0] === 'adw:1');
+  expect(String(mark?.values?.[1])).toContain('detailError');
+  expect(logs.join('\n')).toMatch(/adw:1.*out of range/);
+});
+
+test('needsDirectoryRun: only after the radca list is complete, and until the directory pass completes', () => {
+  const listDone = { page: 1, completedAt: '2026-11-09T02:11:22Z' };
+  expect(needsDirectoryRun(null, listDone)).toBe(true); // never ran: start without waiting for the monthly slot
+  expect(needsDirectoryRun({ cities: ['x'], page: 3 }, listDone)).toBe(true); // interrupted: continue
+  expect(needsDirectoryRun({ completedAt: '2026-11-09T09:00:00Z' }, listDone)).toBe(false);
+  expect(needsDirectoryRun(null, { page: 40, walkStartedAt: '2026-11-09T00:00:00Z' })).toBe(false); // nothing to match against yet
+  expect(needsDirectoryRun(null, null)).toBe(false);
+});
+
+const TUESDAY = () => new Date('2026-11-10T12:00:00Z');
+const DONE = { page: 1, completedAt: '2026-11-09T02:00:00Z' };
+
+test('daemon: a failing list walk does not starve the details job', async () => {
+  const { http } = fakeHttp((url) => {
+    if (url.endsWith('/adwokat/list/strona/7')) return { status: 200, body: '<html>maintenance</html>' };
+    if (url.includes('/adwokat/list/')) return { status: 200, body: fx('adwokaci-list-page1.html') };
+    if (url.includes('/adwokat/')) return { status: 200, body: fx('adwokat-adamczyk-andrzej-42384.html') };
+    return { status: 200, body: 'ok' };
+  });
+  let served = false;
+  let h: { stop: () => void; done: Promise<void> } | undefined;
+  const pool = fakePool((text, values) => {
+    if (text.includes('FROM public.pl_lawyers_crawl')) {
+      if (values?.[0] === 'adwokaci-list') return [{ cursor: { page: 7, lastPage: 352, walkStartedAt: '2026-11-09T00:00:00Z' } }];
+      if (values?.[0] === 'radcowie-list') return [{ cursor: DONE }];
+      if (values?.[0] === 'szukajradcy') return [{ cursor: { completedAt: '2026-11-09T09:00:00Z' } }];
+      return [];
+    }
+    if (text.includes('ORDER BY (status = \'active\') DESC')) {
+      if (served) return [];
+      served = true;
+      return [{ lawyer_id: 'adw:42384', profile_url: ADAMCZYK }];
+    }
+    if (text.includes('INSERT INTO public.pl_lawyers (')) h?.stop();
+    return [];
+  });
+  h = daemon({ pool: pool as any, http, log: () => {}, now: TUESDAY }, { tickMs: 1, idleMs: 1 });
+  const guard = setTimeout(() => h?.stop(), 1500);
+  await h.done;
+  clearTimeout(guard);
+  expect(pool.calls.some((c) => c.text.includes('INSERT INTO public.pl_lawyers (') && c.values?.[0] === 'adw:42384')).toBe(true);
+});
+
+test('daemon: the directory pass starts by itself once the radca list is complete (no monthly slot needed)', async () => {
+  let h: { stop: () => void; done: Promise<void> } | undefined;
+  const { http, calls } = fakeHttp((url) => {
+    if (url.endsWith('/pages-sitemap.xml')) { h?.stop(); return { status: 200, body: '<urlset></urlset>' }; }
+    if (url.includes('/adwokat/list/')) return { status: 200, body: fx('adwokaci-list-page1.html') };
+    return { status: 200, body: 'ok' };
+  });
+  const pool = fakePool((text, values) => {
+    if (text.includes('FROM public.pl_lawyers_crawl')) {
+      if (values?.[0] === 'adwokaci-list' || values?.[0] === 'radcowie-list') return [{ cursor: DONE }];
+      return []; // no szukajradcy cursor, no daemon cursor
+    }
+    return [];
+  });
+  h = daemon({ pool: pool as any, http, log: () => {}, now: TUESDAY }, { tickMs: 1, idleMs: 1 });
+  const guard = setTimeout(() => h?.stop(), 1500);
+  await h.done;
+  clearTimeout(guard);
+  expect(calls.some((c) => c.url.endsWith('/pages-sitemap.xml'))).toBe(true);
 });

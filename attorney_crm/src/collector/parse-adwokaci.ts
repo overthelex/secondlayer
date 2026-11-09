@@ -1,5 +1,5 @@
 // rejestradwokatow.pl: list pages (/adwokat/list/strona/N, 100 rows) and profile pages (/adwokat/<slug>-<id>).
-import { clean, lines, normaliseEntryNumber, splitPostcodeCity, text } from './normalise';
+import { clean, lines, normaliseEntryNumber, splitPostcodeCity, text, validIsoDate } from './normalise';
 
 export interface AdwokatListRow {
   id: string;
@@ -67,7 +67,7 @@ export function parseAdwokatDetail(html: string): AdwokatDetail {
   const entryNumber = normaliseEntryNumber(/<h3>\s*\(?([^<)]+)\)?\s*<\/h3>/s.exec(sec)?.[1] ?? null)?.replace(/\/ADW\//, '/Adw/') ?? null;
   const statusRaw = clean(text(field(sec, /Status:/) ?? ''));
   const dateRaw = clean(text(field(sec, /Data wpisu/) ?? ''));
-  const entryDate = dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
+  const entryDate = validIsoDate(dateRaw);
   const addrLines = lines(field(sec, /Adres do korespondencji:/) ?? '');
   let officeName: string | null = null;
   let address: string | null = null;

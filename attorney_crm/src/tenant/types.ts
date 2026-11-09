@@ -22,7 +22,15 @@ export interface Strings {
     directoryLink: string; leadSection: string; stageField: string; nextContactField: string; overdue: string; manualTags: string; save: string;
     notesSection: string; noteBody: string; addNote: string; noNotes: string; doNotContact: string; doNotContactReason: string;
     phoneOverride: string; emailOverride: string; manualMark: string; notFoundTitle: string; notFoundHeading: string; notFoundBody: (id: string) => string;
+    /** Badge next to the e-mail when the address is on the suppression list. */
+    suppressed: (reason: string, date: string) => string;
   };
+  /** Public unsubscribe page (/u/:token), shown to the recipient in the tenant's language. */
+  unsubscribe: {
+    title: string; heading: string; body: (email: string) => string; confirm: string;
+    doneHeading: string; doneBody: (email: string) => string; invalidHeading: string; invalidBody: string;
+  };
+  suppressionReasons: Record<'unsubscribe' | 'bounce' | 'complaint' | 'manual', string>;
   today: {
     title: string; callToday: string; nothingDue: string; date: string; name: string; city: string; phone: string; stage: string; lastNote: string;
     newNotes: string; noNotes: string; overdue: string;

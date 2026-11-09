@@ -61,3 +61,58 @@ node dist/collector/cli.js once probe|adwokaci-list|adwokaci-details|radcowie-li
 Env: `DATABASE_URL`, `HTTPS_PROXY` (ignored with `--no-proxy`), `COLLECTOR_UA`.
 Never uses the registers' search forms, never touches `szukajradcy.pl/search`
 (robots.txt), never bypasses a CAPTCHA.
+
+## Outbound mail: unsubscribe, suppression, bounces
+
+Every campaign message goes through `src/mail/sender.ts`, which refuses addresses
+on `attorney_crm_suppression` (and leads ticked "do not contact"), adds
+`List-Unsubscribe` (mailto + https) and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+(RFC 2369 / 8058), and writes every attempt to `attorney_crm_mail_log` so a campaign
+can be resumed without double sends and the failure rate is measurable. The link
+`https://attorney.<domain>/u/<token>` is public: GET shows a confirmation, POST (the
+page button or a mailbox provider's one-click POST) records the unsubscribe. The token
+is `base64url(email).hmac(session secret)`, so no token table exists and a link stays
+valid while the secret does. The mailto target `unsubscribe@<domain>` lands in the team
+mailbox through the mail2 catch-all; add such requests with `mail suppress`.
+
+Env (all optional): `ATTORNEY_CRM_SMTP_URL` (`smtp://user:pass@smtp.azurecomm.net:587`,
+straight to Azure Communication Services with the Entra app login, so a throttle or a
+refusal comes back to the sender and lands in the mail log instead of sitting in a
+Postfix queue; user and password percent-encoded; unset = dry runs only), `ATTORNEY_CRM_MAIL_FROM` (default `<brand> <vladimir@<domain>>`, must be an
+allowed MailFrom on the ACS domain), `ATTORNEY_CRM_REPLY_TO`,
+`ATTORNEY_CRM_PUBLIC_URL` (default `https://attorney.<domain>`),
+`ATTORNEY_CRM_UNSUBSCRIBE_MAILBOX` (default `unsubscribe@<domain>`).
+
+```bash
+C="docker exec -i attorney-crm-local node dist/cli.js mail"
+$C check a@b.ua c@d.ua                       # which are blocked, and why
+$C suppress a@b.ua manual "asked by phone"   # reasons: unsubscribe|bounce|complaint|manual
+$C link a@b.ua                               # the unsubscribe URL for a footer
+$C send --to a@b.ua --subject "..." --text body.txt --advocate 12345 --campaign nov-2026 --dry-run
+$C stats nov-2026                            # sent / suppressed / failed / dry-run per campaign
+# bounces: pipe mail2's log (status=bounced|expired) or an address list / CSV from the Azure portal
+ssh mail2 "grep -h 'status=bounced\|status=expired' /var/log/mail.log*" | $C import-bounces
+```
+
+**Bounces arrive by webhook.** ACS answers `250` to every submission and reports the
+real outcome later through Event Grid, so `POST /hooks/acs-events` is the only place a
+hard bounce shows up. `Bounced` and `Suppressed` become `bounce`, `FilteredSpam` and
+`Quarantined` become `complaint` (source `acs-event`); `Delivered`, `Expanded` and
+`Failed` (possibly transient) suppress nothing. Reports for other sender domains on the
+same ACS resource are ignored. The endpoint is public and authenticated by a key derived
+from the session secret, sent as the `x-acs-hook-key` header (or `?key=`). Wire it once
+per tenant, after the route is deployed (Event Grid validates the endpoint on creation):
+
+```bash
+KEY=$(ssh local.lex docker exec attorney-crm-local node dist/cli.js mail hook-key)
+ACS=$(az communication show -n lexai-acs -g mail-relay --query id -o tsv)
+az eventgrid system-topic create -g mail-relay -n lexai-acs-events --location global \
+  --topic-type Microsoft.Communication.CommunicationServices --source "$ACS"
+az eventgrid system-topic event-subscription create -g mail-relay --system-topic-name lexai-acs-events \
+  -n attorney-crm-ua --endpoint https://attorney.legal.org.ua/hooks/acs-events \
+  --included-event-types Microsoft.Communication.EmailDeliveryReportReceived \
+  --delivery-attribute-mapping x-acs-hook-key static "$KEY" true
+```
+
+Azure quota ticket 2611080050001034 (08.11.2026) was filed on the promise of exactly
+this: unsubscribe link, suppression list, bounce handling, failure rate under 1%.

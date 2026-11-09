@@ -154,7 +154,9 @@ if [[ -n "$CF_ENV_FILE" && -r "$CF_ENV_FILE" ]]; then
     fi
     if [[ "${CF_QUIET:-0}" -gt 0 && "${DRY_RUN:-}" != 1 ]]; then
       # Боти, яких WAF уже зарізав: не лист, а рядок у добовий дайджест.
-      { printf '=== %s … %s (UTC): %s IP ===\n' "$SINCE" "$NOW" "$CF_QUIET"; cat "$CF_TMP/quiet.html"; } >> "$DIGEST_FILE"
+      # quiet.html без завершального \n: без echo наступний заголовок «=== » клеївся до </table>,
+      # лист показував його сирим текстом, а лічильник вікон у темі завжди був 1.
+      { printf '=== %s … %s (UTC): %s IP ===\n' "$SINCE" "$NOW" "$CF_QUIET"; cat "$CF_TMP/quiet.html"; echo; } >> "$DIGEST_FILE"
       echo "[$(date -Is)] у дайджест: $CF_QUIET IP (сканери, зарізані WAF)"
     fi
   else
@@ -170,7 +172,7 @@ DIGEST_STAMP="$DIGEST_FILE.sent"
 TODAY_KYIV=$(TZ=Europe/Kyiv date +%F); HOUR_KYIV=$(TZ=Europe/Kyiv date +%-H)
 DIGEST_SENT=0
 if [[ -s "$DIGEST_FILE" && "$HOUR_KYIV" -ge "$DIGEST_HOUR" && "$(cat "$DIGEST_STAMP" 2>/dev/null)" != "$TODAY_KYIV" ]]; then
-  N_DIGEST=$(grep -c '^=== ' "$DIGEST_FILE")
+  N_DIGEST=$(grep -o '=== [0-9T:.Z-]* … ' "$DIGEST_FILE" | wc -l)   # і для вікон, записаних до виправлення
   TITLES+=("Сканери за добу, зарізані WAF/автоблоком (дайджест, $N_DIGEST вікон)"); COUNTS+=("$N_DIGEST")
   TABLES+=("$(<"$DIGEST_FILE")")
   DIGEST_SENT=1

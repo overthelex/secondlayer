@@ -16,6 +16,11 @@ IP потрапляє у звіт, якщо (1) >= SCAN_MIN_HITS або (2) >= P
   ТЕРМІНОВО (OUT_DIR/urgent.html) — є акаунт з цього IP, або сканерний шлях отримав 2xx,
                                      або запити на нестандартні порти;
   ТИХО     (OUT_DIR/quiet.html)  — решта; аларм складає їх у добовий дайджест.
+Виняток: IP, який уже заблоковано в Cloudflare (IP Access Rule, вручну чи автоблоком) ДО початку
+вікна і який за вікно отримав самі 403, іде в ТИХО, навіть якщо з нього ходив акаунт або він
+стукав у нестандартні порти: усе, що він надіслав, зупинив край, тож лист кожні 5 хвилин нічого
+не додає. Про сам акаунт аларм уже написав, коли IP ще не був заблокований. Якщо список правил
+Cloudflare не прочитався, винятку немає і все лишається ТЕРМІНОВИМ.
 Автоблок (AUTO_BLOCK=1): IP без акаунта з >= AUTO_BLOCK_HITS влучань блокується через
 CF_BLOCK_CMD (scripts/cf-block-ip.sh); rule id і дата пишуться в AUTO_BLOCK_STATE, через
 AUTO_BLOCK_DAYS блок знімається (--unblock). Ніколи не блокує IP з акаунтом і мережі з
@@ -204,6 +209,52 @@ def never_block(ip: str) -> bool:
     return any(a in n for n in AUTO_BLOCK_NEVER)
 
 
+def cf_blocks() -> list[tuple] | None:
+    """Чинні блокування зони (IP Access Rules, mode=block): [(мережа, створено UTC, примітка)].
+
+    None, якщо Cloudflare не відповів: тоді вважаємо, що нічого не заблоковано."""
+    rules, page = [], 1
+    try:
+        while True:
+            req = urllib.request.Request(
+                f"https://api.cloudflare.com/client/v4/zones/{ZONE}/firewall/access_rules/rules"
+                f"?mode=block&per_page=500&page={page}",
+                headers={"X-Auth-Key": os.environ["CLOUDFLARE_GLOBAL_API_KEY"],
+                         "X-Auth-Email": os.environ["CLOUDFLARE_EMAIL"]})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                d = json.load(r)
+            if not d.get("success"):
+                raise RuntimeError(d.get("errors"))
+            for rule in d["result"]:
+                cfg = rule.get("configuration", {})
+                if cfg.get("target") not in ("ip", "ip_range", "ip6"):
+                    continue
+                try:
+                    net = ipaddress.ip_network(cfg["value"], strict=False)
+                    created = datetime.fromisoformat(rule["created_on"][:19]).replace(tzinfo=timezone.utc)
+                except (KeyError, ValueError):
+                    continue
+                rules.append((net, created, rule.get("notes", "")))
+            if page >= (d.get("result_info") or {}).get("total_pages", 1):
+                return rules
+            page += 1
+    except Exception as e:  # noqa: BLE001
+        print(f"список блокувань Cloudflare не прочитано: {e}", file=sys.stderr)
+        return None
+
+
+def blocked_since(ip: str, blocks: list[tuple] | None) -> datetime | None:
+    """Коли IP потрапив під найстаріше чинне блокування; None, якщо не заблокований."""
+    if not blocks:
+        return None
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    hit = [created for net, created, _ in blocks if a.version == net.version and a in net]
+    return min(hit) if hit else None
+
+
 # ---- звіт ---------------------------------------------------------------------------------
 
 def table(rows: list[tuple]) -> str:
@@ -264,11 +315,14 @@ def main() -> int:
                    "clientIP clientRequestPath edgeResponseStatus", 5000)
 
     per = defaultdict(lambda: {"hits": 0, "paths": [], "status": Counter(), "country": set(), "emails": "",
-                               "hosts": set(), "ua": set(), "probe_paths": set(), "ok2xx": 0})
+                               "hosts": set(), "ua": set(), "probe_paths": set(), "ok2xx": 0,
+                               "not403": 0})
     for g in scan:
         d = g["dimensions"]; p = per[d["clientIP"]]
         p["hits"] += g["count"]
         p["status"][d["edgeResponseStatus"]] += g["count"]
+        if d["edgeResponseStatus"] != 403:
+            p["not403"] += g["count"]
         if 200 <= d["edgeResponseStatus"] < 300:
             p["ok2xx"] += g["count"]
         p["country"].add(d["clientCountryName"])
@@ -279,6 +333,9 @@ def main() -> int:
     for g in probe:
         d = g["dimensions"]; p = per[d["clientIP"]]
         p["probe_paths"].add(d["clientRequestPath"])
+        # /cdn-cgi/ віддає сам край ще до правил, тож його 404 не означає, що блок пропустив запит.
+        if d["edgeResponseStatus"] != 403 and not d["clientRequestPath"].startswith("/cdn-cgi/"):
+            p["not403"] += g["count"]
 
     flagged = []
     for ip, p in per.items():
@@ -294,6 +351,8 @@ def main() -> int:
             flagged.append((ip, p, reasons, bool(alt)))
 
     emails = enrich([f[0] for f in flagged])
+    blocks = cf_blocks() if flagged else None
+    since_dt = datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     urgent, quiet = [], []
     for ip, p, reasons, alt in sorted(flagged, key=lambda f: f[1]["hits"] + len(f[1]["probe_paths"]), reverse=True):
         p["emails"] = emails.get(ip, "")
@@ -312,7 +371,12 @@ def main() -> int:
                     action = "АВТОБЛОК у Cloudflare" + (" (dry-run)" if DRY_RUN else "")
                 else:
                     action = "автоблок не вдався, див. лог"
-        is_urgent = bool(p["emails"]) or p["ok2xx"] > 0 or alt
+        # Уже заблокований до початку вікна і край відбив усе: це не подія, а підтвердження блоку.
+        blocked_at = blocked_since(ip, blocks)
+        contained = blocked_at is not None and blocked_at <= since_dt and p["not403"] == 0
+        if contained and ip not in state:
+            action = f"заблоковано в Cloudflare з {blocked_at:%Y-%m-%d}, усе відбито"
+        is_urgent = (bool(p["emails"]) or p["ok2xx"] > 0 or alt) and not contained
         (urgent if is_urgent else quiet).append((ip, p, reasons, action))
 
     if AUTO_BLOCK:

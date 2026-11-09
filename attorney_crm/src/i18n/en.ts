@@ -21,7 +21,14 @@ export const en: Strings = {
     directoryLink: 'Directory profile', leadSection: 'Lead', stageField: 'Stage', nextContactField: 'Next contact', overdue: 'overdue', manualTags: 'Practice areas (manual tags)', save: 'Save',
     notesSection: 'Notes', noteBody: 'What was said in the call, e-mail or meeting', addNote: 'Add note', noNotes: 'No notes yet.', doNotContact: 'Do not contact', doNotContactReason: 'Reason',
     phoneOverride: 'Phone (manual)', emailOverride: 'E-mail (manual)', manualMark: 'manual', notFoundTitle: 'Not found', notFoundHeading: 'Page not found', notFoundBody: (id) => `No lawyer with ID ${id} in the register.`,
+    suppressed: (reason, date) => `${reason} · ${date}`,
   },
+  unsubscribe: {
+    title: 'Unsubscribe', heading: 'Unsubscribe from our e-mails', body: (email) => `You will no longer receive e-mails from lawrider at ${email}. Please confirm.`,
+    confirm: 'Unsubscribe', doneHeading: 'Done', doneBody: (email) => `${email} has been removed from our mailing list. We will not write again.`,
+    invalidHeading: 'Invalid link', invalidBody: 'This link is broken or has expired. Write to unsubscribe@lawrider.pl and we will remove the address by hand.',
+  },
+  suppressionReasons: { unsubscribe: 'Unsubscribed', bounce: 'Bounced', complaint: 'Spam complaint', manual: 'Do not contact' },
   today: {
     title: 'Today', callToday: 'Call today', nothingDue: 'Nothing scheduled for today. Set a date on a lawyer page.', date: 'Date', name: 'Name', city: 'Town', phone: 'Phone', stage: 'Stage', lastNote: 'Last note',
     newNotes: 'New notes', noNotes: 'No notes yet.', overdue: 'overdue',

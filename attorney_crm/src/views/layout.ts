@@ -1,5 +1,6 @@
 import { html, raw, type RawHtml } from './html';
 import type { User } from '../auth/users';
+import { assetUrl } from './assets';
 import { tenant } from '../tenant';
 
 export type NavKey = 'today' | 'advocates';
@@ -19,10 +20,10 @@ const HEAD = (title: string) => {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} · ${t.brand.name} CRM</title>
-<link rel="icon" href="/static/${t.brand.mark}">
+<link rel="icon" href="${raw(assetUrl(t.brand.mark))}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="${raw(assetUrl('app.css'))}">
 </head>`;
 };
 
@@ -34,7 +35,7 @@ export function renderPage(o: PageOptions): string {
   return html`${HEAD(o.title)}
 <body>
 <header class="topbar">
-  <a class="brand" href="/"><img src="/static/${t.brand.logo}" alt="${t.brand.name}" width="36" height="36"><span>${t.brand.name} <small>${t.brand.tagline}</small></span></a>
+  <a class="brand" href="/"><img src="${raw(assetUrl(t.brand.logo))}" alt="${t.brand.name}" width="36" height="36"><span>${t.brand.name} <small>${t.brand.tagline}</small></span></a>
   <nav class="nav">${nav('today', '/', s.nav.today)}${nav('advocates', '/advocates', s.nav.advocates)}</nav>
   ${o.user
     ? html`<form class="user" method="post" action="/logout"><span>${o.user.displayName || o.user.email}</span><button type="submit" class="btn btn-ghost">${s.nav.logout}</button></form>`
