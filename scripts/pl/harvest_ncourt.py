@@ -11,8 +11,13 @@ what SAOS and the HF import lack is loaded; for the rest pl_ncourt_index just
 records that the feed has it.
 
 How the API behaves (measured 2026-11-09, undocumented): deep offsets are slow
-(offset 100,000 takes 25 s, 300,000 times out), so the listing walks windows of
-publicationDateFrom/To with small offsets. lastUpdateFrom catches revisions.
+(offset 100,000 takes 25 s, 300,000 times out), and the order is not stable
+between pages (a 3,443-row month came back as 2,517 distinct ids). So the listing
+never pages: a window whose total exceeds one 1000-row response is halved.
+lastUpdateFrom/To catches revisions.
+
+SAOS stored the feed under three hosts over the years, so the join is on the id
+after "id=", not on the URL.
 """
 import argparse
 import datetime as dt
@@ -94,21 +99,33 @@ def stamp(v):
     return f"{m.group(1)}{'+02' if m.group(2) == 'CEST' else '+01'}" if m else None
 
 
-def listing(params):
-    """Every <judgement> matching params, paged with small offsets."""
-    out, off = [], 0
-    while True:
-        body, code = get("judgements", {**params, "limit": 1000, "offset": off})
-        if code != 200:
-            raise RuntimeError(f"listing {params} offset {off}: HTTP {code}")
-        root = ET.fromstring(body, ET.XMLParser(recover=True, huge_tree=True))
-        items = root.findall("judgement")
-        out += [(txt(j, "id"), txt(j, "signature"), (txt(j, "date") or "")[:10] or None,
-                 stamp(txt(j, "publicationDate")), stamp(txt(j, "lastUpdate")),
-                 txt(j, "courtId"), txt(j, "departmentId"), txt(j, "type")) for j in items]
-        if len(items) < 1000:
-            return out
-        off += 1000
+def page(prefix, lo, hi):
+    """(total, rows) of one response for [lo, hi] on the {prefix}From/To filter."""
+    body, code = get("judgements", {f"{prefix}From": lo.isoformat(),
+                                    f"{prefix}To": hi.isoformat(),
+                                    "limit": 1000, "offset": 0})
+    if code != 200:
+        raise RuntimeError(f"listing {prefix} {lo}..{hi}: HTTP {code}")
+    root = ET.fromstring(body, ET.XMLParser(recover=True, huge_tree=True))
+    rows = [(txt(j, "id"), txt(j, "signature"), (txt(j, "date") or "")[:10] or None,
+             stamp(txt(j, "publicationDate")), stamp(txt(j, "lastUpdate")),
+             txt(j, "courtId"), txt(j, "departmentId"), txt(j, "type"))
+            for j in root.findall("judgement")]
+    return int(root.get("total") or 0), rows
+
+
+def listing(prefix, lo, hi):
+    """Every record in [lo, hi]. Windows share their boundary day; the upsert
+    makes that harmless."""
+    total, rows = page(prefix, lo, hi)
+    if total <= len(rows):
+        return rows
+    if hi - lo <= dt.timedelta(days=1):
+        print(f"WARNING {prefix} {lo}..{hi}: {total} records, got {len(rows)}",
+              file=sys.stderr, flush=True)
+        return rows
+    mid = lo + (hi - lo) / 2
+    return listing(prefix, lo, mid) + listing(prefix, mid, hi)
 
 
 def write_index(rows):
@@ -125,16 +142,16 @@ def do_index():
     if v:
         # daily path: revisions and new publications since two days before
         since = dt.date.fromisoformat(v) - dt.timedelta(days=2)
-        n = write_index(listing({"lastUpdateFrom": since.isoformat()}))
-        n += write_index(listing({"publicationDateFrom": since.isoformat()}))
+        tomorrow = today + dt.timedelta(days=1)
+        n = write_index(listing("lastUpdate", since, tomorrow))
+        n += write_index(listing("publicationDate", since, tomorrow))
         print(f"index delta since {since}: {n} rows", flush=True)
     else:
         lo = START
         n = 0
         while lo <= today:
             hi = lo + dt.timedelta(days=30)
-            n += write_index(listing({"publicationDateFrom": lo.isoformat(),
-                                      "publicationDateTo": hi.isoformat()}))
+            n += write_index(listing("publicationDate", lo, hi))
             print(f"index {lo}..{hi}: {n} rows", flush=True)
             lo = hi
     plprod.psql(f"INSERT INTO pl_ncourt_progress (id, listed_to) VALUES (1, '{today}') "
@@ -144,7 +161,7 @@ def do_index():
 WORK = """
 FROM pl_ncourt_index i
 LEFT JOIN pl_court_decisions s ON s.source = 'saos'
-     AND s.source_url = 'https://apiorzeczenia.wroclaw.sa.gov.pl/ncourt-api/judgement/details?id=' || i.id
+     AND substring(s.source_url from 'id=(.*)$') = i.id
 LEFT JOIN pl_court_decisions h ON h.source = 'hf-pl-court-raw'
      AND h.case_number = i.signature AND h.decision_date = i.decided_on
 WHERE s.id IS NULL AND h.id IS NULL
