@@ -3,7 +3,7 @@
  * Manages user authentication state, token storage, and profile
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState, useEffect, ReactNode } from 'react';
 import { authService } from '../services';
 import { User } from '../types/models';
 import showToast from '../utils/toast';
@@ -65,26 +65,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
   }, []);
 
-  // Auto-refresh token before expiry (7 days - refresh at 6 days)
-  useEffect(() => {
-    if (!token) return;
-
-    // Refresh token every 6 days (518400000 ms)
-    const refreshInterval = setInterval(
-      async () => {
-        try {
-          await refreshToken();
-        } catch (error) {
-          console.error('Token refresh failed:', error);
-        }
-      },
-      6 * 24 * 60 * 60 * 1000
-    ); // 6 days
-
-    return () => clearInterval(refreshInterval);
-  }, [token]);
-
-  const login = async (newToken: string) => {
+  // login/logout/refreshToken/updateUser keep a stable identity: consumers list them in effect
+  // dependencies, and a new function on every render re-ran those effects each time auth state
+  // changed (the /login?token= callback looped on an expired token this way).
+  const login = useCallback(async (newToken: string) => {
     try {
       // Store token
       localStorage.setItem('auth_token', newToken);
@@ -104,9 +88,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(null);
       throw error;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       // Call backend logout (for logging purposes)
       await authService.logout();
@@ -127,9 +111,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
 
     showToast.info(toastT('loggedOut'));
-  };
+  }, []);
 
-  const refreshToken = async () => {
+  const refreshToken = useCallback(async () => {
     try {
       const newToken = await authService.refreshToken();
 
@@ -144,26 +128,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       logout();
       throw error;
     }
-  };
+  }, [logout]);
 
-  const updateUser = (updates: Partial<User>) => {
+  // Auto-refresh token before expiry (7 days - refresh at 6 days)
+  useEffect(() => {
+    if (!token) return;
+
+    // Refresh token every 6 days (518400000 ms)
+    const refreshInterval = setInterval(
+      async () => {
+        try {
+          await refreshToken();
+        } catch (error) {
+          console.error('Token refresh failed:', error);
+        }
+      },
+      6 * 24 * 60 * 60 * 1000
+    ); // 6 days
+
+    return () => clearInterval(refreshInterval);
+  }, [token, refreshToken]);
+
+  const updateUser = useCallback((updates: Partial<User>) => {
     if (!user) return;
 
     const updatedUser = { ...user, ...updates };
     setUser(updatedUser);
     localStorage.setItem('user', JSON.stringify(updatedUser));
-  };
+  }, [user]);
 
-  const value: AuthContextType = {
-    user,
-    token,
-    isAuthenticated: !!token && !!user,
-    isLoading,
-    login,
-    logout,
-    refreshToken,
-    updateUser,
-  };
+  const value: AuthContextType = useMemo(
+    () => ({
+      user,
+      token,
+      isAuthenticated: !!token && !!user,
+      isLoading,
+      login,
+      logout,
+      refreshToken,
+      updateUser,
+    }),
+    [user, token, isLoading, login, logout, refreshToken, updateUser]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
