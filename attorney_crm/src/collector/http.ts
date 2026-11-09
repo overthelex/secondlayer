@@ -32,7 +32,7 @@ export class Collector {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
   private readonly dispatcher: ProxyAgent | undefined;
-  private chain: Promise<unknown> = Promise.resolve();
+  private chains = new Map<string, Promise<unknown>>();
   failures = 0;
   requests = 0;
 
@@ -73,10 +73,14 @@ export class Collector {
     });
   }
 
-  /** Serialised: the next request waits for the previous one, so per-host spacing is exact. */
+  /**
+   * Serialised per host: the next request to a host waits for the previous one to that host, so
+   * the spacing is exact, and a slow register (10 s between requests) never holds up another site.
+   */
   private request(url: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<string> {
-    const run = this.chain.then(() => this.doRequest(url, init));
-    this.chain = run.catch(() => undefined);
+    const host = new URL(url).host.replace(/^www\./, '');
+    const run = (this.chains.get(host) ?? Promise.resolve()).then(() => this.doRequest(url, init));
+    this.chains.set(host, run.catch(() => undefined));
     return run;
   }
 
