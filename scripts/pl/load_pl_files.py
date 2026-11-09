@@ -212,7 +212,7 @@ def rows_xls(blob, sheets=None):
                 if v is not None:
                     rec[h] = v
             n += 1
-            out.append((ws.title, n, rec))
+            out.append((ws.name, n, rec))
     return out
 
 
