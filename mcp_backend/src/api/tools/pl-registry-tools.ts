@@ -18,8 +18,7 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import {
-  htmlToText, identifierDigits, isTimeout, isoDate, nameVariants, pageOf, pageResponse,
-  runQuery, sliceText,
+  htmlToText, identifierDigits, INFLECTED_SEARCH_NOTE, isoDate, isTimeout, nameVariants, pageOf, pageResponse, runQuery, runSearchQuery, sliceText, toTsQuery, wordForms,
 } from './pl-tool-utils.js';
 
 const MAX_JSON_CHARS = 60_000;
@@ -96,7 +95,7 @@ status: current (чинні), struck_off (виключені), all (типово
         annotations: { title: 'Публічні закупівлі Польщі (BZP)', readOnlyHint: true },
         description: `Пошук оголошень польського Бюлетеня публічних закупівель BZP (2,9 млн, з 2021 року), найновіші першими.
 
-Потрібен хоча б один із параметрів: query (назва замовника або предмет закупівлі), organization_nip (замовник), contractor_nip (виконавець), tender_id. ${WORD_FORMS_NOTE}
+Потрібен хоча б один із параметрів: query (назва замовника або предмет закупівлі), organization_nip (замовник), contractor_nip (виконавець), tender_id. ${INFLECTED_SEARCH_NOTE}
 Інші параметри лише звужують результат. Далі: pl_get_procurement_notice для повного тексту.`,
         inputSchema: {
           type: 'object',
@@ -161,7 +160,7 @@ status: current (чинні), struck_off (виключені), all (типово
       {
         name: 'pl_search_sejm',
         annotations: { title: 'Пошук у даних Сейму Польщі', readOnlyHint: true },
-        description: `Пошук за назвою в об'єктах Сейму: bill (законопроєкти), process (законодавчі процеси), print (друки), voting (голосування), interpellation, written_question, proceeding (засідання), committee, mp. Каденції 9 і 10. ${WORD_FORMS_NOTE} Далі: pl_get_sejm_object.`,
+        description: `Пошук за назвою в об'єктах Сейму: bill (законопроєкти), process (законодавчі процеси), print (друки), voting (голосування), interpellation, written_question, proceeding (засідання), committee, mp. Каденції 9 і 10. ${INFLECTED_SEARCH_NOTE} Далі: pl_get_sejm_object.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -321,7 +320,7 @@ komornicy (судові виконавці), rzecznicy_patentowi (патентн
     };
 
     const query = String(args.query ?? '').trim();
-    if (query) add((n) => `${BZP_FTS} @@ plainto_tsquery('simple'::regconfig, $${n})`, query);
+    if (query) add((n) => `${BZP_FTS} @@ $${n}::tsquery`, toTsQuery(await wordForms(this.db, query)));
     if (args.organization_nip) {
       const nip = identifierDigits(args.organization_nip);
       if (!nip) return this.wrapError('organization_nip має складатися з цифр.');
@@ -348,9 +347,13 @@ komornicy (судові виконавці), rzecznicy_patentowi (патентн
     if (to) add((n) => `publication_date < ($${n}::date + 1)`, to);
 
     const page = pageOf(args);
-    const rows = await runQuery(this.db,
-      `SELECT ${NOTICE_COLS} FROM pl_bzp_notices WHERE ${where.join(' AND ')}
-       ORDER BY publication_date DESC, object_id LIMIT ${page.limit + 1} OFFSET ${page.offset}`, params);
+    const rows = await (query ? runSearchQuery : runQuery)(this.db,
+      `WITH page AS MATERIALIZED (
+         SELECT object_id FROM pl_bzp_notices WHERE ${where.join(' AND ')}
+         ORDER BY publication_date DESC, object_id LIMIT ${page.limit + 1} OFFSET ${page.offset}
+       )
+       SELECT ${NOTICE_COLS} FROM pl_bzp_notices JOIN page USING (object_id)
+       ORDER BY pl_bzp_notices.publication_date DESC, object_id`, params);
     return this.wrapResponse(pageResponse(rows, page));
   }
 
@@ -425,8 +428,8 @@ komornicy (судові виконавці), rzecznicy_patentowi (патентн
   private async searchSejm(args: Record<string, unknown>): Promise<ToolResult> {
     const query = String(args.query ?? '').trim();
     if (!query) return this.wrapError('Вкажіть query.');
-    const params: unknown[] = [query];
-    const where = [`to_tsvector('simple'::regconfig, coalesce(title, '')) @@ plainto_tsquery('simple'::regconfig, $1)`];
+    const params: unknown[] = [toTsQuery(await wordForms(this.db, query))];
+    const where = [`to_tsvector('simple'::regconfig, coalesce(title, '')) @@ $1::tsquery`];
     if (args.kind) {
       if (!SEJM_KINDS.includes(String(args.kind))) return this.wrapError(`kind має бути одним з: ${SEJM_KINDS.join(', ')}.`);
       params.push(String(args.kind));
