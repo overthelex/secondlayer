@@ -18,13 +18,55 @@ export function pageOf(args: Record<string, unknown>, defaultLimit = 20): Page {
   return { limit: Math.floor(limit), offset: Math.floor(offset) };
 }
 
-/** Runs one statement under a server-side timeout, so Postgres cancels a runaway scan. */
-export async function runQuery(db: any, sql: string, params: unknown[]): Promise<any[]> {
+async function inTimedTransaction(db: any, settings: string[], sql: string, params: unknown[]): Promise<any[]> {
   const result = await db.transaction(async (client: any) => {
     await client.query(`SET LOCAL statement_timeout = ${QUERY_TIMEOUT_MS}`);
+    for (const setting of settings) await client.query(setting);
     return client.query(sql, params);
   });
   return result.rows;
+}
+
+/** Runs one statement under a server-side timeout, so Postgres cancels a runaway scan. */
+export async function runQuery(db: any, sql: string, params: unknown[]): Promise<any[]> {
+  return inTimedTransaction(db, [], sql, params);
+}
+
+/**
+ * Runs a full-text search that is ordered by date. An expanded query looks common to the
+ * planner, so it walks the date index and recomputes to_tsvector over every full text it
+ * passes. Measured on 2.5M decisions: 'zniesienie współwłasności' hit the 20 s timeout that way
+ * and took 1.2 s through the GIN index, and the common 'wyrok sądu' took 2.4 s.
+ */
+export async function runSearchQuery(db: any, sql: string, params: unknown[]): Promise<any[]> {
+  return inTimedTransaction(db, ['SET LOCAL enable_indexscan = off'], sql, params);
+}
+
+export const INFLECTED_SEARCH_NOTE = 'Слова запиту шукаються в усіх граматичних формах: umowa знаходить також umowy, umowę, umów. У тексті мають бути всі слова запиту.';
+
+export interface WordForms { word: string; forms: string[] }
+
+/**
+ * The words of a query as the 'simple' full-text indexes store them, each with its inflected
+ * forms from pl_word_forms. A word the dictionary does not know stays as it is.
+ */
+export async function wordForms(db: any, text: string): Promise<WordForms[]> {
+  const rows = await runQuery(db,
+    `SELECT q.lexeme AS word, array_remove(array_agg(DISTINCT g.form), NULL) AS forms
+     FROM unnest(to_tsvector('simple'::regconfig, $1)) AS q
+     LEFT JOIN pl_word_forms f ON f.form = q.lexeme
+     LEFT JOIN pl_word_forms g ON g.lemma = f.lemma AND g.pos = f.pos
+     GROUP BY q.lexeme ORDER BY q.lexeme`, [text]);
+  return rows.map((r: any) => ({ word: r.word, forms: [...new Set<string>([r.word, ...r.forms])] }));
+}
+
+function quoteLexeme(lexeme: string): string {
+  return `'${lexeme.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+}
+
+/** Every word must match, in any of its forms. The value is cast with ::tsquery, not parsed again. */
+export function toTsQuery(words: WordForms[]): string {
+  return words.map((w) => `(${w.forms.map(quoteLexeme).join(' | ')})`).join(' & ');
 }
 
 export function pageResponse(rows: any[], page: Page, extra: Record<string, unknown> = {}) {

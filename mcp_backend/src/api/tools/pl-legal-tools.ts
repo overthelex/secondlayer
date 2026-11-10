@@ -18,7 +18,10 @@
 
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
-import { isTimeout, isoDate, normalizeArticle, pageOf, pageResponse, plainText, runQuery, sliceText } from './pl-tool-utils.js';
+import {
+  INFLECTED_SEARCH_NOTE, isTimeout, isoDate, normalizeArticle, pageOf, pageResponse, plainText, runQuery,
+  runSearchQuery, sliceText, toTsQuery, wordForms,
+} from './pl-tool-utils.js';
 
 const DECISION_TEXT_CHARS = 40_000;
 const ACT_TEXT_CHARS = 40_000;
@@ -43,7 +46,6 @@ const ACT_COLS = `eli, publisher, year, pos, display_address, act_type, title, s
   announcement_date, entry_into_force, repeal_date, is_consolidation, consolidates_eli,
   amends_count, amended_by_count, snapshot_count, text_html, text_pdf`;
 
-const WORD_FORMS_NOTE = 'Пошук за точними формами слів (польського стемера немає): усі слова запиту мають бути в тексті саме в цій формі.';
 const PAGING = {
   limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
   offset: { type: 'number', default: 0, maximum: 1000, description: 'Зсув для пагінації' },
@@ -96,7 +98,7 @@ export class PlLegalTools extends BaseToolHandler {
         annotations: { title: 'Пошук судових рішень Польщі', readOnlyHint: true },
         description: `Пошук у 2,5 млн рішень судів Польщі (суди загальної юрисдикції, Верховний суд, адміністративні суди, Конституційний трибунал, KIO), найновіші першими.
 
-Потрібен query (повний текст) або case_number (точна сигнатура, напр. "II CSKP 123/22"). ${WORD_FORMS_NOTE}
+Потрібен query (повний текст) або case_number (точна сигнатура, напр. "II CSKP 123/22"). ${INFLECTED_SEARCH_NOTE}
 court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO). Далі: pl_get_court_decision.`,
         inputSchema: {
           type: 'object',
@@ -127,7 +129,7 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       {
         name: 'pl_search_legislation',
         annotations: { title: 'Пошук актів Польщі (ELI)', readOnlyHint: true },
-        description: `Пошук актів Dziennik Ustaw і Monitor Polski (165 тис.) за словами в назві або за ELI (DU/1964/93). Чинні й найчастіше змінювані акти йдуть першими, тож основний кодекс випереджає акти про внесення змін до нього.
+        description: `Пошук актів Dziennik Ustaw і Monitor Polski (165 тис.) за словами в назві (у будь-якій граматичній формі) або за ELI (DU/1964/93). Чинні й найчастіше змінювані акти йдуть першими, тож основний кодекс випереджає акти про внесення змін до нього.
 
 Оголошення консолідованих текстів типово не показуються; їх вмикає include_consolidated. Далі: pl_get_act, pl_get_act_article, pl_get_act_text.`,
         inputSchema: {
@@ -217,7 +219,7 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       where.push(sql(params.length));
     };
     if (query) {
-      add((n) => `${COURT_FTS} @@ plainto_tsquery('simple'::regconfig, $${n})`, query);
+      add((n) => `${COURT_FTS} @@ $${n}::tsquery`, toTsQuery(await wordForms(this.db, query)));
       // Newest-first would otherwise always open with the source's typos (a 3013-12-04 judgment).
       // Such a row stays reachable by its case number.
       where.push('decision_date <= CURRENT_DATE');
@@ -236,11 +238,17 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       add((n) => `decision_date ${op} $${n}::date`, d);
     }
     const page = pageOf(args);
-    const rows = await runQuery(this.db,
-      `SELECT ${DECISION_COLS},
+    const rows = await (query ? runSearchQuery : runQuery)(this.db,
+      // The page is picked first: a snippet in the sorted query is built from the full text of
+      // every match, which is hundreds of thousands of rows for a common word.
+      `WITH page AS MATERIALIZED (
+         SELECT id FROM pl_court_decisions WHERE ${where.join(' AND ')}
+         ORDER BY decision_date DESC, id LIMIT ${page.limit + 1} OFFSET ${page.offset}
+       )
+       SELECT ${DECISION_COLS},
               left(coalesce(nullif(abstract, ''), full_text), ${SNIPPET_RAW_CHARS}) AS snippet
-       FROM pl_court_decisions WHERE ${where.join(' AND ')}
-       ORDER BY pl_court_decisions.decision_date DESC, id LIMIT ${page.limit + 1} OFFSET ${page.offset}`, params);
+       FROM pl_court_decisions JOIN page USING (id)
+       ORDER BY pl_court_decisions.decision_date DESC, id`, params);
     for (const row of rows) row.snippet = plainText(row.snippet ?? '').slice(0, SNIPPET_CHARS);
     return this.wrapResponse(pageResponse(rows, page));
   }
@@ -274,8 +282,10 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
     if (eli) {
       add((n) => `eli = $${n}`, eli);
     } else {
-      for (const word of query.split(/\s+/)) {
-        add((n) => `title ILIKE $${n}`, `%${word.replace(/[\\%_]/g, '\\$&')}%`);
+      const words = await wordForms(this.db, query);
+      if (!words.length) return this.wrapError('Вкажіть query: слова з назви або ELI.');
+      for (const { forms } of words) {
+        add((n) => `title ILIKE ANY($${n}::text[])`, forms.map((form) => `%${form.replace(/[\\%_]/g, '\\$&')}%`));
       }
       if (!args.include_consolidated) where.push('NOT coalesce(is_consolidation, false)');
     }

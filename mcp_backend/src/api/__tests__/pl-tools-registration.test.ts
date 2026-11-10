@@ -3,7 +3,8 @@
 import { PlRegistryTools } from '../tools/pl-registry-tools.js';
 import { PlLegalTools, pickSnapshot } from '../tools/pl-legal-tools.js';
 import {
-  htmlToText, identifierDigits, isoDate, nameVariants, normalizeArticle, pageOf, plainText, sliceText,
+  htmlToText, identifierDigits, isoDate, nameVariants, normalizeArticle, pageOf, plainText, runSearchQuery, sliceText,
+  toTsQuery, wordForms,
 } from '../tools/pl-tool-utils.js';
 import { V2_TOOL_NAMES } from '../curated-mcp-tools.js';
 import { isToolInToolset } from '../mcp-toolset.js';
@@ -118,5 +119,45 @@ describe('pickSnapshot', () => {
 
   it('finds nothing before the first edition', () => {
     expect(pickSnapshot(rows, '2019-01-01', segmented).chosen).toBeNull();
+  });
+});
+
+describe('PL word forms', () => {
+  const dbWith = (rows: any[]) => {
+    const client = { query: jest.fn().mockResolvedValue({ rows }) };
+    return { client, db: { transaction: (fn: any) => fn(client) } };
+  };
+
+  it('joins forms with OR and words with AND', () => {
+    expect(toTsQuery([
+      { word: 'umowa', forms: ['umowa', 'umowy'] },
+      { word: 'praca', forms: ['praca'] },
+    ])).toBe("('umowa' | 'umowy') & ('praca')");
+  });
+
+  it('quotes characters that are special in a tsquery', () => {
+    expect(toTsQuery([{ word: "o'a\\b", forms: ["o'a\\b"] }])).toBe("('o''a\\\\b')");
+  });
+
+  it('is empty without words', () => {
+    expect(toTsQuery([])).toBe('');
+  });
+
+  it('keeps a word the dictionary does not know', async () => {
+    const { db } = dbWith([{ word: 'xyz', forms: [] }, { word: 'umowy', forms: ['umowa', 'umowy'] }]);
+    await expect(wordForms(db, 'xyz umowy')).resolves.toEqual([
+      { word: 'xyz', forms: ['xyz'] },
+      { word: 'umowy', forms: ['umowy', 'umowa'] },
+    ]);
+  });
+
+  it('turns the date index off for a search', async () => {
+    const { client, db } = dbWith([]);
+    await runSearchQuery(db, 'SELECT 1', []);
+    expect(client.query.mock.calls.map((c: any[]) => c[0])).toEqual([
+      expect.stringContaining('statement_timeout'),
+      'SET LOCAL enable_indexscan = off',
+      'SELECT 1',
+    ]);
   });
 });
