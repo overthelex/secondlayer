@@ -98,7 +98,7 @@ export const mainCodes: Code[] = [
   { id: '2947-14', name: 'Сімейний кодекс', number: '2947-14', icon: '\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67', category: 'main' },
   { id: '2768-14', name: 'Земельний кодекс', number: '2768-14', icon: '\uD83C\uDF33', category: 'main' },
   { id: '322-08', name: 'Трудовий кодекс', number: '322-08', icon: '\uD83D\uDCBC', category: 'main' },
-  { id: '80731-10', name: 'Адміністративний кодекс', number: '80731-10', icon: '\u2699\uFE0F', category: 'main' },
+  { id: '8073-10', name: 'Кодекс про адміністративні правопорушення', number: '8073-10', icon: '\u2699\uFE0F', category: 'main' },
   { id: '2755-17', name: 'Податковий кодекс', number: '2755-17', icon: '\uD83D\uDCB0', category: 'main' },
 ];
 

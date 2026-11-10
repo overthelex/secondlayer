@@ -6,11 +6,12 @@ import { buildLegislationTsquery, extractArticleNumberTokens } from '../services
 import { PLACEHOLDER_VERSION_SQL } from '../services/legislation-as-of.js';
 
 /**
- * КУпАП (Кодекс України про адміністративні правопорушення) is split in RADA
- * into two documents: 80731-10 (статті 1–212-21) and 80732-10 (статті 213–330).
- * Article numbers don't overlap, so a КУпАП article lookup must search BOTH
- * rada_ids (LEXAI-1770). Defined locally to avoid a circular import with
- * legislation-service.ts (which imports this adapter).
+ * The pre-2017 КУпАП halves: 80731-10 (статті 1–212-21) and 80732-10
+ * (статті 213–330), frozen by Rada on 07.05.2017. Article numbers don't overlap,
+ * so a lookup by either half searches BOTH (LEXAI-1770). The in-force code is
+ * 8073-10 and holds every article itself, so it is never widened — see
+ * KUPAP_RADA_ID in legislation-service.ts. Defined locally to avoid a circular
+ * import with legislation-service.ts (which imports this adapter).
  */
 const KUPAP_RADA_IDS = ['80731-10', '80732-10'];
 
@@ -1085,8 +1086,8 @@ export class RadaLegislationAdapter {
   }
 
   async getArticleByNumber(radaId: string, articleNumber: string, asOfDate?: string): Promise<LegislationArticle | null> {
-    // КУпАП spans two RADA documents (80731-10 / 80732-10); search both halves.
-    // Article numbers don't overlap between them, so the match stays unambiguous.
+    // A legacy КУпАП half (80731-10 / 80732-10) searches both halves. Article
+    // numbers don't overlap between them, so the match stays unambiguous.
     const radaIds = expandKupapRadaIds(radaId).map((id) => id.toLowerCase());
     let result;
     if (asOfDate) {

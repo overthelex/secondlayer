@@ -64,4 +64,27 @@ describe('parseLegislationReference', () => {
       articleNumber: '6',
     });
   });
+
+  // КУпАП: Rada keeps the in-force code under 8073-10 since 07.05.2017; the
+  // old halves 80731-10 / 80732-10 are frozen at that date.
+  it('parses "ст. 283 КУпАП" to the in-force code 8073-10', () => {
+    expect(parseLegislationReference('ст. 283 КУпАП')).toEqual({
+      radaId: '8073-10',
+      articleNumber: '283',
+    });
+  });
+
+  it('parses an indexed КУпАП article', () => {
+    expect(parseLegislationReference('ст. 173-2 КУПАП')).toEqual({
+      radaId: '8073-10',
+      articleNumber: '173-2',
+    });
+  });
+
+  it('parses the full name of КУпАП to 8073-10', () => {
+    expect(parseLegislationReference('ст. 283 Кодексу про адміністративні правопорушення')).toEqual({
+      radaId: '8073-10',
+      articleNumber: '283',
+    });
+  });
 });

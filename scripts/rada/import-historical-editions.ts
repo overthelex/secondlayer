@@ -43,7 +43,7 @@ const CODES: Array<{ rada_id: string; short_title: string }> = [
   { rada_id: '1798-12', short_title: 'ГПК' },
   { rada_id: '2747-15', short_title: 'КАС' },
   { rada_id: '2341-14', short_title: 'КК' },
-  { rada_id: '80731-10', short_title: 'КУпАП' },
+  { rada_id: '8073-10', short_title: 'КУпАП' },
   { rada_id: '4651-17', short_title: 'КПК' },
   { rada_id: '1618-15', short_title: 'ЦПК' },
   { rada_id: '4495-17', short_title: 'МК' },

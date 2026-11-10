@@ -83,24 +83,30 @@ export interface LegislationSearchResult {
 }
 
 /**
- * КУпАП (Кодекс України про адміністративні правопорушення) is split in RADA
- * into TWO documents:
- *   - 80731-10 → статті 1–212-21  (loaded as legislation.id=653)
- *   - 80732-10 → статті 213–330   (loaded as legislation.id=22)
- * The alias maps resolve КУпАП to 80731-10, so a citation to ст. 213+ would
- * silently miss its DB row (this caused ~18.7K unresolved statute citations,
- * LEXAI-1770). Article numbers do NOT overlap between the two halves, so
- * searching BOTH rada_ids is safe and unambiguous.
+ * КУпАП (Кодекс України про адміністративні правопорушення) lives in RADA as
+ * THREE documents:
+ *   - 8073-10  → the in-force code, every article, editions from 07.05.2017 on
+ *   - 80731-10 → статті 1–212-21, editions up to 07.05.2017 (legislation.id=653)
+ *   - 80732-10 → статті 213–330, editions up to 07.05.2017 (legislation.id=22)
+ * Rada froze the two halves on 07.05.2017 and renamed them «редакції до
+ * 07.05.2017»; everything since is published under 8073-10 only. Until
+ * migration 258 the aliases pointed at the halves, so «ст. 283 КУпАП» answered
+ * with the 2017 text and a «Чинний» status (found 10.11.2026).
  *
- * Given either КУпАП half, returns both rada_ids; otherwise returns [radaId].
- * Used to widen article lookups to `LOWER(rada_id) = ANY(...)`.
+ * The aliases now resolve to 8073-10. The halves stay for pre-2017 history and
+ * for callers that pass their ids explicitly: given either half, lookups still
+ * widen to both (article numbers do not overlap, LEXAI-1770). The in-force id is
+ * never widened to the halves, or a current lookup would see two «current» rows.
  */
-export const KUPAP_RADA_IDS = ['80731-10', '80732-10'] as const;
+export const KUPAP_RADA_ID = '8073-10';
+export const KUPAP_LEGACY_RADA_IDS = ['80731-10', '80732-10'] as const;
+/** @deprecated the pre-2017 halves; use KUPAP_RADA_ID for the in-force code. */
+export const KUPAP_RADA_IDS = KUPAP_LEGACY_RADA_IDS;
 
 export function expandKupapRadaIds(radaId: string): string[] {
   const lower = String(radaId || '').toLowerCase();
-  if (KUPAP_RADA_IDS.some((id) => id.toLowerCase() === lower)) {
-    return [...KUPAP_RADA_IDS];
+  if (KUPAP_LEGACY_RADA_IDS.some((id) => id.toLowerCase() === lower)) {
+    return [...KUPAP_LEGACY_RADA_IDS];
   }
   return [radaId];
 }
@@ -129,10 +135,9 @@ export function parseLegislationReference(text: string): { radaId: string; artic
     'КК': '2341-14',
     'КУ': '254к/96-вр',
     'КОНСТИТУЦІЯ': '254к/96-вр',
-    // КУпАП resolves to the first half here; article lookups widen to both
-    // halves (80731-10 + 80732-10) via expandKupapRadaIds (LEXAI-1770).
-    'КУПАП': '80731-10',
-    'КУпАП': '80731-10',
+    // The in-force КУпАП; the pre-2017 halves are 80731-10 / 80732-10.
+    'КУПАП': KUPAP_RADA_ID,
+    'КУпАП': KUPAP_RADA_ID,
   };
 
   // Full-name aliases mapping → codeMap key
@@ -149,8 +154,8 @@ export function parseLegislationReference(text: string): { radaId: string; artic
     'СІМЕЙНИЙ КОДЕКС': '2947-14',
     'ЗЕМЕЛЬНИЙ КОДЕКС': '2768-14',
     'КОДЕКС ЗАКОНІВ ПРО ПРАЦЮ': '322-08',
-    'КОДЕКС ПРО АДМІНІСТРАТИВНІ ПРАВОПОРУШЕННЯ': '80731-10',
-    'КОДЕКС АДМІНІСТРАТИВНИХ ПРАВОПОРУШЕНЬ': '80731-10',
+    'КОДЕКС ПРО АДМІНІСТРАТИВНІ ПРАВОПОРУШЕННЯ': KUPAP_RADA_ID,
+    'КОДЕКС АДМІНІСТРАТИВНИХ ПРАВОПОРУШЕНЬ': KUPAP_RADA_ID,
     'ПРО ВІЙСЬКОВИЙ ОБОВ\'ЯЗОК І ВІЙСЬКОВУ СЛУЖБУ': '2232-12',
     'ПРО ВІЙСЬКОВИЙ ОБОВ\'ЯЗОК': '2232-12',
     'ЗАКОН ПРО ВІЙСЬКОВИЙ ОБОВ\'ЯЗОК': '2232-12',
@@ -549,8 +554,8 @@ export class LegislationService {
     }
 
     radaId = normalizeRadaId(radaId);
-    // КУпАП is split across two RADA documents (80731-10 / 80732-10). Accept either
-    // half as "present" so a ст. 213+ lookup doesn't trigger a needless refetch.
+    // A legacy КУпАП half (80731-10 / 80732-10) counts as present when either half
+    // is loaded, so a ст. 213+ lookup doesn't trigger a needless refetch.
     const radaIds = expandKupapRadaIds(radaId).map((id) => id.toLowerCase());
     // Case-insensitive lookup — RADA API may return different casing (e.g. 254к/96-ВР vs 254к/96-вр)
     const result = await this.db.query(
@@ -662,8 +667,8 @@ export class LegislationService {
       return null;
     }
 
-    // For КУпАП the matched article may live in the 80732-10 half even when the
-    // caller passed 80731-10 — use the record's own rada_id for title/URL.
+    // For a legacy КУпАП half the matched article may live in 80732-10 even when
+    // the caller passed 80731-10 — use the record's own rada_id for title/URL.
     const matchedRadaId = article.rada_id || radaId;
 
     // Fetch NPA title from legislation table
@@ -799,8 +804,8 @@ export class LegislationService {
     }
     await this.ensureLegislationExists(radaId);
 
-    // КУпАП spans two RADA documents (80731-10 / 80732-10); widen the lookup to
-    // both halves. Article numbers don't overlap, so this stays unambiguous.
+    // A legacy КУпАП half (80731-10 / 80732-10) widens to both halves. Article
+    // numbers don't overlap, so this stays unambiguous.
     let radaIds = expandKupapRadaIds(radaId).map((id) => id.toLowerCase());
 
     const runQuery = async (ids: string[]) => {
