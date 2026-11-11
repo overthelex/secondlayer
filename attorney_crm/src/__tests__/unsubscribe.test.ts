@@ -22,7 +22,7 @@ function fakePool() {
 
 const config = {
   port: 0, databaseUrl: 'x', sessionSecret: 'secret', derivationLagDays: 30, derivationBatch: 2000, derivationEnabled: false, tenant: loadTenant({}),
-  publicUrl: 'https://attorney.legal.org.ua', smtpUrl: null, mailFrom: 'v@legal.org.ua', replyTo: null, unsubscribeMailbox: 'unsubscribe@legal.org.ua',
+  publicUrl: 'https://attorney.legal.org.ua', smtpUrl: null, mailFrom: 'v@legal.org.ua', replyTo: null, unsubscribeMailbox: 'unsubscribe@legal.org.ua', pbx: null,
 };
 
 const app = (pool: ReturnType<typeof fakePool>) => createApp({ pool: pool as any, config, rateLimit: new LoginRateLimit() });

@@ -116,3 +116,45 @@ az eventgrid system-topic event-subscription create -g mail-relay --system-topic
 
 Azure quota ticket 2611080050001034 (08.11.2026) was filed on the promise of exactly
 this: unsubscribe link, suppression list, bounce handling, failure rate under 1%.
+
+## Telephony: «Подзвонити» and the screen pop
+
+The CRM talks to an Asterisk PBX over ARI (the REST interface plus its event
+WebSocket). It never carries audio: the operator's phone is a SIP softphone
+registered on the PBX, and the CRM only tells the PBX whom to connect.
+
+- **Outbound.** Every phone on a lawyer's card has a «Подзвонити» button. It posts
+  the number to `/advocates/:id/call`; the CRM originates a channel to the signed-in
+  user's endpoint (`PJSIP/<local part of the e-mail>`, or the mapping in
+  `ATTORNEY_CRM_PBX_AGENTS`), and once that phone answers the channel continues in the
+  dialplan's `[outbound]` context, which records the call and dials the lawyer through
+  the trunk. A `call` note is written at once («з’єднуємо») and finished from the
+  events: answered with the duration, busy, no answer, operator did not pick up. A
+  lead still `new` becomes `contacted` after a conversation. The channel id is
+  `crm-<uuid>`, so the PBX's recording `…-out-<number>-crm-<uuid>.wav` matches the
+  note.
+- **Inbound.** The dialplan runs `Stasis(crm,inbound,<caller>)` before ringing the
+  operator. The CRM lets the call continue immediately, looks the caller up by the
+  registry phone or the manual override (last nine digits), writes a `call` note as
+  `ATTORNEY_CRM_PBX_NOTE_USER` (default `vladimir@<domain>`), and every signed-in tab
+  gets a pop with the name and a link to the card (`/pbx/events`, server-sent events;
+  `static/pbx.js`). The note is finished on hangup: answered with the duration, or
+  missed.
+
+Env: `ATTORNEY_CRM_ARI_URL` (e.g. `https://<pbx>:8089/ari`; unset = no button, no
+pop), `ATTORNEY_CRM_ARI_USER`, `ATTORNEY_CRM_ARI_PASSWORD` (the `ari.conf` user),
+`ATTORNEY_CRM_ARI_CERT_SHA256` (SHA-256 fingerprint of the PBX's self-signed
+certificate; the connection accepts only that certificate; unset = normal CA
+verification), `ATTORNEY_CRM_ARI_APP` (default `crm`), `ATTORNEY_CRM_PBX_AGENTS`
+(`user@domain=endpoint,…`), `ATTORNEY_CRM_PBX_NOTE_USER`,
+`ATTORNEY_CRM_PBX_OUTBOUND_CONTEXT` (default `outbound`),
+`ATTORNEY_CRM_PBX_COUNTRY_CODE` (default 380 for `ua`, 48 for `pl`). The fingerprint:
+
+```bash
+openssl x509 -in /etc/asterisk/keys/asterisk.crt -noout -fingerprint -sha256   # on the PBX
+```
+
+The ARI socket is opened with `subscribeAll=true`, so the CRM also sees the events of
+channels that live in the dialplan (an outbound call never enters Stasis). A PBX that
+is down is retried with backoff (2 s … 60 s); meanwhile the button answers 502 and
+the card still shows the plain `tel:` links.

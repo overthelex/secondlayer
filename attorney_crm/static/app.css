@@ -101,3 +101,8 @@ dl.props dt { color: var(--muted); } dl.props dd { margin: 0; }
 .status.suspended { background: #FFFBEB; color: var(--warn); }
 .status.terminated { background: #FEF2F2; color: var(--danger); }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
+.inline { display: inline; }
+.contact--call form { margin-left: 6px; }
+.btn-small { padding: 2px 8px; font-size: 12px; }
+.toast { position: fixed; right: 16px; bottom: 16px; max-width: 360px; background: #fff; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.12); z-index: 50; line-height: 1.4; }
+.toast[hidden] { display: none; }

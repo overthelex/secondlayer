@@ -29,6 +29,14 @@ export function phoneList(value: string | null | undefined): RawHtml {
   return html`${items.map((p) => html`<a class="contact" href="${telHref(p)}">${p}</a>`)}`;
 }
 
+/** Same list, each number with a «Подзвонити» button that posts it to /advocates/:id/call. */
+export function phoneListWithCall(value: string | null | undefined, sourceId: string, labels: { call: string; title: string }): RawHtml {
+  const items = splitContacts(value);
+  return html`${items.map(
+    (p) => html`<span class="contact contact--call"><a href="${telHref(p)}">${p}</a> <form method="post" action="/advocates/${sourceId}/call" class="inline"><input type="hidden" name="number" value="${p}"><button type="submit" class="btn btn-small" title="${labels.title}">☎ ${labels.call}</button></form></span>`,
+  )}`;
+}
+
 export function emailList(value: string | null | undefined): RawHtml {
   const items = splitContacts(value).filter((e) => e.includes('@'));
   return html`${items.map((e) => html`<a class="contact" href="mailto:${e}">${e}</a>`)}`;

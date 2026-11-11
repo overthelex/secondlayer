@@ -42,4 +42,17 @@ export const en: Strings = {
     notFound: 'Not found', serverError: 'Error', serverErrorHeading: 'Something went wrong', serverErrorBody: 'Try again in a minute. If it keeps happening, write to Vladimir.',
     unknownStage: (s) => `Unknown stage: ${s}`, unknownPractice: (p) => `Unknown practice area: ${p}`, unknownNoteKind: (k) => `Unknown note kind: ${k}`, emptyNote: 'Empty note',
   },
+  pbx: {
+    call: 'Call', callTitle: 'Your phone rings first, then the PBX dials the lawyer', incoming: 'Incoming call', unknownCaller: 'unknown number', open: 'Open the card',
+    pbxError: 'The PBX is not answering. Try again or call from your phone.',
+    badNumber: (raw) => `Does not look like a dialable number: ${raw}`,
+    outboundNote: (number, outcome, channelId) => `PBX call to ${number}: ${outcome} (id ${channelId})`,
+    inboundNote: (number, outcome, channelId) => `Inbound call from ${number}: ${outcome} (id ${channelId})`,
+    duration: (m, s) => (m ? `${m} min ${s} s` : `${s} s`),
+    outcomes: {
+      started: 'connecting', ringing: 'ringing', answered: 'answered', busy: 'busy', no_answer: 'no answer', agent_no_answer: 'the operator did not pick up',
+      cancelled: 'cancelled', failed: 'could not connect', missed: 'missed',
+    },
+    status: { ringing_agent: 'Your phone is ringing…', dialing: 'Dialling the lawyer…', answered: 'In call', ended: 'Ended' },
+  },
 };

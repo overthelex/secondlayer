@@ -45,6 +45,18 @@ export interface Strings {
     notFound: string; serverError: string; serverErrorHeading: string; serverErrorBody: string;
     unknownStage: (s: string) => string; unknownPractice: (p: string) => string; unknownNoteKind: (k: string) => string; emptyNote: string;
   };
+  /** Telephony: the «Подзвонити» button, the call notes and the screen pop (static/pbx.js reads these from data attributes). */
+  pbx: {
+    call: string; callTitle: string; incoming: string; unknownCaller: string; open: string; pbxError: string;
+    badNumber: (raw: string) => string;
+    /** «Дзвінок через АТС на +380 …: відповіли, 3 хв 12 с (id crm-…)» */
+    outboundNote: (number: string, outcome: string, channelId: string) => string;
+    inboundNote: (number: string, outcome: string, channelId: string) => string;
+    duration: (minutes: number, seconds: number) => string;
+    outcomes: Record<'started' | 'ringing' | 'answered' | 'busy' | 'no_answer' | 'agent_no_answer' | 'cancelled' | 'failed' | 'missed', string>;
+    /** Live status lines for the toast, keyed by the SSE status. */
+    status: Record<'ringing_agent' | 'dialing' | 'answered' | 'ended', string>;
+  };
 }
 
 /** SQL fragments over the registry table, aliased `a`, producing the AdvocateRow raw columns. */
