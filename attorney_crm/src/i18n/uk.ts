@@ -30,6 +30,7 @@ export const uk: Strings = {
     invalidHeading: 'Посилання недійсне', invalidBody: 'Посилання пошкоджене або застаріло. Напишіть на unsubscribe@legal.org.ua, і ми вилучимо адресу вручну.',
   },
   suppressionReasons: { unsubscribe: 'Відписався', bounce: 'Відскок', complaint: 'Скарга на спам', manual: 'Не турбувати' },
+  mailSentNote: (subject, campaign) => `Надіслано лист «${subject}»${campaign ? ` (розсилка ${campaign})` : ''}`,
   today: {
     title: 'Сьогодні', callToday: 'Подзвонити сьогодні', nothingDue: 'На сьогодні контактів не заплановано. Призначте дату на сторінці адвоката.', date: 'Дата', name: 'ПІБ', city: 'Місто', phone: 'Телефон', stage: 'Стадія', lastNote: 'Остання нотатка',
     newNotes: 'Нові нотатки', noNotes: 'Нотаток ще немає.', overdue: 'прострочено',

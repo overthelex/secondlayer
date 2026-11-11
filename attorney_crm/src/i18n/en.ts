@@ -29,6 +29,7 @@ export const en: Strings = {
     invalidHeading: 'Invalid link', invalidBody: 'This link is broken or has expired. Write to unsubscribe@lawrider.pl and we will remove the address by hand.',
   },
   suppressionReasons: { unsubscribe: 'Unsubscribed', bounce: 'Bounced', complaint: 'Spam complaint', manual: 'Do not contact' },
+  mailSentNote: (subject, campaign) => `E-mail sent: "${subject}"${campaign ? ` (campaign ${campaign})` : ''}`,
   today: {
     title: 'Today', callToday: 'Call today', nothingDue: 'Nothing scheduled for today. Set a date on a lawyer page.', date: 'Date', name: 'Name', city: 'Town', phone: 'Phone', stage: 'Stage', lastNote: 'Last note',
     newNotes: 'New notes', noNotes: 'No notes yet.', overdue: 'overdue',

@@ -90,3 +90,55 @@ test('a real transport result is logged as sent with its message id', async () =
   expect(sendMail.mock.calls[0][0].headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
   expect(sendMail.mock.calls[0][0].from).toBe(cfg.from);
 });
+
+test('with recordAsUserId a sent message is noted on the lead and a new lead becomes contacted', async () => {
+  const pool = fakePool();
+  const sendMail = jest.fn().mockResolvedValue({ messageId: '<id@legal.org.ua>' });
+  const mailer = createMailer(pool as any, { ...cfg, smtpUrl: 'smtp://x', recordAsUserId: 7 }, { sendMail, close: jest.fn() } as any);
+  const res = await mailer.send({ to: 'a@b.ua', subject: 'Привіт', text: 't', advocateSourceId: '42', campaign: 'kyiv-nov' });
+  expect(res.status).toBe('sent');
+  expect(res.crmError).toBeUndefined();
+  const note = pool.calls.find((c) => c.text.includes('INSERT INTO attorney_crm_notes'));
+  expect(note?.values).toEqual(['42', 7, 'Надіслано лист «Привіт» (розсилка kyiv-nov)']);
+  const lead = pool.calls.find((c) => c.text.includes('INSERT INTO attorney_crm_leads'));
+  expect(lead?.values).toEqual(['42', 7]);
+  expect(lead?.text).toContain("WHERE attorney_crm_leads.stage = 'new'");
+});
+
+test('a dry run, a send without an advocate, or no recordAsUserId writes nothing to the lead', async () => {
+  const pool = fakePool();
+  const sendMail = jest.fn().mockResolvedValue({ messageId: '<id@legal.org.ua>' });
+  const dry = createMailer(pool as any, { ...cfg, recordAsUserId: 7 });
+  await dry.send({ to: 'a@b.ua', subject: 's', text: 't', advocateSourceId: '42' });
+  const noAdvocate = createMailer(pool as any, { ...cfg, smtpUrl: 'smtp://x', recordAsUserId: 7 }, { sendMail, close: jest.fn() } as any);
+  await noAdvocate.send({ to: 'a@b.ua', subject: 's', text: 't' });
+  const noUser = createMailer(pool as any, { ...cfg, smtpUrl: 'smtp://x' }, { sendMail, close: jest.fn() } as any);
+  await noUser.send({ to: 'a@b.ua', subject: 's', text: 't', advocateSourceId: '42' });
+  expect(pool.calls.some((c) => c.text.includes('attorney_crm_notes') || c.text.includes('INSERT INTO attorney_crm_leads'))).toBe(false);
+});
+
+test('a CRM failure after the message left is reported as crmError, not as a failed send', async () => {
+  const pool = fakePool((t) => {
+    if (t.includes('INSERT INTO attorney_crm_notes')) throw new Error('notes table locked');
+    return undefined;
+  });
+  const sendMail = jest.fn().mockResolvedValue({ messageId: '<id@legal.org.ua>' });
+  const mailer = createMailer(pool as any, { ...cfg, smtpUrl: 'smtp://x', recordAsUserId: 7 }, { sendMail, close: jest.fn() } as any);
+  const res = await mailer.send({ to: 'a@b.ua', subject: 's', text: 't', advocateSourceId: '42' });
+  expect(res.status).toBe('sent');
+  expect(res.crmError).toContain('notes table locked');
+  const logged = pool.calls.find((c) => c.text.includes('INSERT INTO attorney_crm_mail_log'));
+  expect(logged?.values?.[5]).toBe('sent');
+});
+
+test('{{unsubscribe_url}} in the body becomes the recipient\'s own unsubscribe link', async () => {
+  const pool = fakePool();
+  const sendMail = jest.fn().mockResolvedValue({ messageId: '<id@legal.org.ua>' });
+  const mailer = createMailer(pool as any, { ...cfg, smtpUrl: 'smtp://x' }, { sendMail, close: jest.fn() } as any);
+  await mailer.send({ to: 'adv@example.ua', subject: 's', text: 'Відписатися: {{unsubscribe_url}}', html: '<a href="{{unsubscribe_url}}">x</a> {{unsubscribe_url}}' });
+  const token = signUnsubscribeToken('s', 'adv@example.ua');
+  const link = `https://attorney.legal.org.ua/u/${token}`;
+  expect(sendMail.mock.calls[0][0].text).toBe(`Відписатися: ${link}`);
+  expect(sendMail.mock.calls[0][0].html).toBe(`<a href="${link}">x</a> ${link}`);
+  expect(sendMail.mock.calls[0][0].headers['List-Unsubscribe']).toContain(link);
+});
