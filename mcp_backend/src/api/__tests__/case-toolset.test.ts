@@ -33,6 +33,10 @@ export function makeToolset(over: Partial<CaseToolsetDeps> = {}) {
     now: () => new Date('2026-11-11T10:00:00Z'),
     ...over,
   };
+  if (over.llm) {
+    const inner = over.llm;
+    deps.llm = async (c) => { calls.push(c); return inner(c); };
+  }
   return { root, calls, toolset: new CaseToolset(new PrivateDocsToolset('cases', root, 'Справи'), deps) };
 }
 
@@ -134,5 +138,58 @@ describe('cases_upload_pages', () => {
     expect(bad.isError).toBe(true);
     const big = await toolset.execute('cases_upload_pages', { pages_base64: [{ data: Buffer.alloc(21 * 1024 * 1024).toString('base64'), mime_type: 'image/jpeg' }] });
     expect(big.isError).toBe(true);
+  });
+});
+
+describe('cases_find_violations', () => {
+  async function uploaded() {
+    const t = makeToolset();
+    await t.toolset.execute('cases_upload_pages', { pages_base64: [{ data: (await jpeg()).toString('base64'), mime_type: 'image/jpeg' }] });
+    return { ...t, doc: '369_1234_26/2026-10-15-ухвала-святошинський-районний-суд-м-києва' };
+  }
+
+  it('checks a stored ruling against ЦПК articles as of the document date and prints article texts', async () => {
+    const { toolset, calls, doc } = await uploaded();
+    const asked: Array<[string, string[], string | undefined]> = [];
+    (toolset as any).deps.legislation = { getMultipleArticles: async (r: string, n: string[], d?: string) => {
+      asked.push([r, n, d]);
+      return n.map((x) => ({ rada_id: r, article_number: x, title: `Стаття ${x}`, full_text: `Текст ${x}`, url: `https://zakon.rada.gov.ua/laws/show/${r}#n${x}`, metadata: { edition_date: '20261001' } }));
+    } };
+    calls.length = 0;
+    (toolset as any).deps.llm = async (c: LlmCall) => {
+      calls.push(c);
+      return JSON.stringify({ findings: [
+        { article: '260', requirement: 'ухвала містить мотиви', finding: 'порушення', quote: 'без мотивів', page: 1, severity: 'висока' },
+        { article: '272', requirement: 'вручення копії', finding: 'не видно з фото', quote: '', page: null, severity: 'середня' },
+      ] });
+    };
+    const out = text(await toolset.execute('cases_find_violations', { document: doc, code: 'цпк', doc_kind: 'ухвала' }));
+    expect(asked[0]).toEqual(['1618-15', ['260', '272', '128', '187'], '2026-10-15']);
+    expect(out).toContain('редакцією на 2026-10-15');
+    expect(out).toContain('ст. 260');
+    expect(out).toContain('Текст 260');
+    expect(out).toContain('01.10.2026');
+    expect(out).toContain('не видно з фото');
+    expect(calls[0].tier).toBe('deep');
+    expect(calls[0].user).toContain('Текст 260');
+  });
+
+  it('classifies code and kind with the quick model when not given, and says so when the date is unknown', async () => {
+    const { toolset, calls } = makeToolset({ llm: async (c) => c.tier === 'quick'
+      ? JSON.stringify({ code: 'купап', doc_kind: 'постанова' })
+      : JSON.stringify({ findings: [] }) });
+    const out = text(await toolset.execute('cases_find_violations', { text: 'ПОСТАНОВА про накладення адміністративного стягнення…' }));
+    expect(calls.map((c) => c.tier)).toEqual(['quick', 'deep']);
+    expect(out).toContain('за поточною редакцією');
+    expect(out).toContain('КУпАП');
+    expect(out).toContain('Порушень не знайдено');
+  });
+
+  it('refuses a document path outside the folder and an unknown combination', async () => {
+    const { toolset } = makeToolset();
+    expect((await toolset.execute('cases_find_violations', { document: '../x' })).isError).toBe(true);
+    const r = await toolset.execute('cases_find_violations', { text: 'x', code: 'цпк', doc_kind: 'протокол' });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain('немає');
   });
 });

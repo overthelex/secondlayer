@@ -20,8 +20,10 @@ import sharp from 'sharp';
 import type { ToolDefinition } from '../base-tool-handler.js';
 import type { LegislationReference } from '../../services/legislation-service.js';
 import { logger } from '../../utils/logger.js';
-import { PrivateDocsToolset, PrivateToolResult, DocMeta } from './private-docs-toolset.js';
-import { CASE_CODES, COMPLAINT_KINDS, DOC_KINDS, DocKind } from './case-checklists.js';
+import { PrivateDocsToolset, PrivateToolResult, DocMeta, resolveInsideRoot, PathOutsideRootError } from './private-docs-toolset.js';
+import {
+  CASE_CODES, COMPLAINT_KINDS, DOC_KINDS, CODE_RADA_ID, CODE_TITLE, CaseCode, DocKind, parseCode, violationArticles,
+} from './case-checklists.js';
 
 export interface FetchedFile {
   buffer: Buffer;
@@ -413,13 +415,158 @@ export class CaseToolset {
     );
   }
 
-  private async findViolations(_args: Record<string, any>): Promise<PrivateToolResult> {
-    throw new Error('not implemented');
+  // ── cases_find_violations ──────────────────────────────────────────────
+
+  private async findViolations(args: Record<string, any>): Promise<PrivateToolResult> {
+    const deps = this.deps!;
+    // 1. The document text: pasted, or the stored pages of a document folder.
+    let docText = '';
+    let meta: DocMeta | null = null;
+    let label = 'вставлений текст';
+    if (typeof args.text === 'string' && args.text.trim()) {
+      docText = args.text.trim();
+    } else if (typeof args.document === 'string' && args.document.trim()) {
+      let abs: string;
+      try {
+        abs = await resolveInsideRoot(this.docs.root, args.document.trim());
+      } catch (e) {
+        if (e instanceof PathOutsideRootError || (e as any)?.code === 'ENOENT') return err('Документ не знайдено в папці справ.');
+        throw e;
+      }
+      label = path.relative(await fs.realpath(this.docs.root), abs).split(path.sep).join('/');
+      try {
+        meta = JSON.parse(await fs.readFile(path.join(abs, '_meta.json'), 'utf8'));
+      } catch {
+        meta = null;
+      }
+      const names = (await fs.readdir(abs)).filter((n) => /^\d+\.txt$/.test(n)).sort();
+      const pages: string[] = [];
+      for (const n of names) {
+        const t = (await fs.readFile(path.join(abs, n), 'utf8')).trim();
+        if (t) pages.push(`=== стор. ${Number(n.replace('.txt', ''))} ===\n${t}`);
+      }
+      docText = pages.join('\n\n');
+    } else {
+      return err('Вкажіть document (шлях папки документа) або text.');
+    }
+    if (!docText) return err('У документі немає розпізнаного тексту.');
+    const truncated = docText.length > MAX_DOC_CHARS;
+    if (truncated) docText = docText.slice(0, MAX_DOC_CHARS);
+
+    // 2. Code and document kind: given, from _meta.json, or classified by the quick model.
+    let code: CaseCode | null = parseCode(args.code);
+    let docKind: DocKind | null = asDocKind(args.doc_kind) ?? (meta ? asDocKind(meta.doc_kind) : null);
+    if (docKind === 'інше') docKind = null;
+    if (!code || !docKind) {
+      try {
+        const raw = await deps.llm({
+          tier: 'quick', json: true, system: CLASSIFY_SYSTEM,
+          user: docText.slice(0, 4000),
+        });
+        const j = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, ''));
+        code = code ?? parseCode(j?.code);
+        docKind = docKind ?? asDocKind(j?.doc_kind);
+      } catch (e: any) {
+        logger.warn('[Cases] Classification failed', { error: e?.message });
+      }
+      if (!code || !docKind || docKind === 'інше') return err('Не вдалося визначити кодекс або вид документа. Вкажіть code і doc_kind.');
+    }
+
+    // 3. Articles to check, in the edition that was in force on the document date.
+    const articles = violationArticles(docKind, code);
+    if (articles.length === 0) return err(`Для документа «${docKind}» за ${CODE_TITLE[code]} перевірок немає.`);
+    const asOf = meta?.doc_date ?? undefined;
+    const refs = await deps.legislation.getMultipleArticles(CODE_RADA_ID[code], articles, asOf);
+    const found = new Set(refs.map((r) => String(r.article_number)));
+    const missing = articles.filter((a) => !found.has(a));
+    if (refs.length === 0) return err(`Статті ${CODE_TITLE[code]} ${articles.join(', ')} не знайдено в базі законодавства.`);
+
+    // 4. The deep model compares the document with the norms.
+    const normsText = refs.map((r) => `ст. ${r.article_number}. ${r.title ?? ''}\n${r.full_text}`).join('\n\n');
+    let findings: Finding[];
+    try {
+      const raw = await deps.llm({
+        tier: 'deep', json: true, system: VIOLATIONS_SYSTEM,
+        user: `Вид документа: ${docKind}. Кодекс: ${CODE_TITLE[code]}.\n\n## Норми\n${normsText}\n\n## Документ\n${docText}`,
+      });
+      findings = parseFindings(raw);
+    } catch (e: any) {
+      logger.warn('[Cases] Violations model failed', { error: e?.message });
+      return err('Модель не повернула результат, спробуйте ще раз.');
+    }
+
+    // 5. Answer.
+    const violations = findings.filter((f) => f.finding === 'порушення');
+    const unseen = findings.filter((f) => f.finding === 'не видно з фото');
+    const head = asOf
+      ? `Перевірено ${docKind} (${label}) за ${CODE_TITLE[code]} за редакцією на ${asOf}.`
+      : `Перевірено ${docKind} (${label}) за ${CODE_TITLE[code]} за поточною редакцією, дата документа невідома.`;
+    const parts = [head];
+    if (truncated) parts.push(`Текст документа обрізано до ${MAX_DOC_CHARS.toLocaleString('uk-UA')} символів.`);
+    if (missing.length) parts.push(`Не знайдено в базі: ст. ${missing.join(', ')}.`);
+    parts.push(violations.length
+      ? `## Порушення (${violations.length})\nст.\tвимога\tцитата\tстор.\tвага\n` +
+        violations.map((f) => `${f.article}\t${f.requirement}\t${f.quote || '-'}\t${f.page ?? '-'}\t${f.severity}`).join('\n')
+      : 'Порушень не знайдено.');
+    if (unseen.length) parts.push(`## Статті, яких не видно з фото (дозніміть сторінки)\n` + unseen.map((f) => `ст. ${f.article}: ${f.requirement}`).join('\n'));
+    parts.push(`## Тексти статей\n` + refs.map((r) => `ст. ${r.article_number}. ${r.title ?? ''} (${editionLabel(r)}, ${r.url})\n${r.full_text}`).join('\n\n'));
+    return ok(parts.join('\n\n'));
   }
 
   private async complaintNorms(_args: Record<string, any>): Promise<PrivateToolResult> {
     throw new Error('not implemented');
   }
+}
+
+const MAX_DOC_CHARS = 60_000;
+
+const CLASSIFY_SYSTEM =
+  'За текстом українського судового або адміністративного документа визнач кодекс провадження і вид документа. ' +
+  'Поверни ЛИШЕ JSON: {"code": "<цпк|гпк|кас|кпк|купап>", "doc_kind": "<ухвала|рішення|постанова|вирок|протокол>"}.';
+
+const VIOLATIONS_SYSTEM =
+  'Ти перевіряєш український судовий або адміністративний документ на відповідність наведеним статтям кодексу. ' +
+  'Для КОЖНОЇ наведеної статті дай один запис: finding ∈ {"порушення", "дотримано", "не видно з фото"}; requirement — вимога статті ' +
+  'одним реченням; quote — дослівна цитата з документа, що підтверджує висновок (порожньо, якщо її нема); page — номер сторінки ' +
+  'з позначки "=== стор. N ===" або null; severity ∈ {"висока", "середня", "низька"}. "Не видно з фото" — коли сторінки, де це ' +
+  'мало б бути, бракує або текст нечитабельний. Не вигадуй вимог, яких у статті немає. ' +
+  'Поверни ЛИШЕ JSON: {"findings": [{"article": "...", "requirement": "...", "finding": "...", "quote": "...", "page": 1, "severity": "..."}]}.';
+
+interface Finding {
+  article: string;
+  requirement: string;
+  finding: 'порушення' | 'дотримано' | 'не видно з фото';
+  quote: string;
+  page: number | null;
+  severity: 'висока' | 'середня' | 'низька';
+}
+
+function parseFindings(raw: string): Finding[] {
+  const j = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, ''));
+  const list = Array.isArray(j?.findings) ? j.findings : [];
+  const FINDINGS = ['порушення', 'дотримано', 'не видно з фото'];
+  const SEVERITY = ['висока', 'середня', 'низька'];
+  return list
+    .filter((f: any) => f && typeof f === 'object' && f.article != null)
+    .map((f: any): Finding => ({
+      article: String(f.article).replace(/^ст\.?\s*/i, '').trim(),
+      requirement: String(f.requirement ?? '').trim(),
+      finding: FINDINGS.includes(f.finding) ? f.finding : 'не видно з фото',
+      quote: typeof f.quote === 'string' ? f.quote.trim().slice(0, 500) : '',
+      page: Number.isInteger(f.page) ? f.page : null,
+      severity: SEVERITY.includes(f.severity) ? f.severity : 'середня',
+    }));
+}
+
+function asDocKind(v: unknown): DocKind | null {
+  return typeof v === 'string' && (DOC_KINDS as string[]).includes(v.trim().toLowerCase()) ? (v.trim().toLowerCase() as DocKind) : null;
+}
+
+/** 'редакція від DD.MM.YYYY' from metadata.edition_date (YYYYMMDD or YYYY-MM-DD). */
+function editionLabel(r: LegislationReference): string {
+  const d = String(r.metadata?.edition_date ?? '').replace(/-/g, '');
+  const m = d.match(/^(\d{4})(\d{2})(\d{2})$/);
+  return m ? `редакція від ${m[3]}.${m[2]}.${m[1]}` : 'чинна редакція';
 }
 
 async function exists(p: string): Promise<boolean> {
