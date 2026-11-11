@@ -28,7 +28,7 @@ export interface PrivateToolResult {
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tif', '.tiff']);
 const PLAIN_EXT = new Set(['.txt', '.html', '.htm', '.eml', '.nfo', '.info', '.csv', '.md', '.json', '.xml', '']);
 const HIDDEN = (name: string) =>
-  name.startsWith('.') || name === '_rename-map.tsv' || name === '_index.json' ||
+  name.startsWith('.') || name === '_rename-map.tsv' || name === '_index.json' || name === '_meta.json' ||
   name.startsWith('Thumbs.db') || name.endsWith('.part');
 
 const INDEX_TTL_MS = 5 * 60_000;
@@ -59,6 +59,18 @@ interface Catalog {
   folders: Array<{ path: string; summary: string; documents: CatalogDoc[] }>;
   byId: Map<string, CatalogDoc>;
   byFile: Map<string, CatalogDoc>;
+}
+
+/** `<case>/<document>/_meta.json`, written by the cases toolset for every uploaded document. */
+export interface DocMeta {
+  case_number: string | null;
+  court: string | null;
+  doc_kind: string;
+  doc_date: string | null;
+  parties: string[];
+  uploaded_by?: string;
+  uploaded_at?: string;
+  pages: Array<{ file: string; chars: number; ocr: 'vision' | 'none' | 'failed'; reason?: string }>;
 }
 
 export class PathOutsideRootError extends Error {}
@@ -122,6 +134,11 @@ export class PrivateDocsToolset {
 
   toolNames(): string[] {
     return this.getToolDefinitions().map((t) => t.name);
+  }
+
+  /** Drop the cached index so the next call sees files written since. */
+  invalidate(): void {
+    this.index = null;
   }
 
   getToolDefinitions(): ToolDefinition[] {
@@ -237,7 +254,7 @@ export class PrivateDocsToolset {
 
   private async loadCatalog(): Promise<Catalog | null> {
     const raw = await readIfExists(path.join(this.root, '_index.json'), 50_000_000);
-    if (!raw) return null;
+    if (!raw) return this.loadMetaCatalog();
     try {
       const data = JSON.parse(raw);
       const byId = new Map<string, CatalogDoc>();
@@ -257,6 +274,63 @@ export class PrivateDocsToolset {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Catalog from `<case>/<document>/_meta.json` (exactly two levels), for folders the cases
+   * toolset writes. The document id is its path, so no Dnnn numbering is needed.
+   */
+  private async loadMetaCatalog(): Promise<Catalog | null> {
+    const byId = new Map<string, CatalogDoc>();
+    const byFile = new Map<string, CatalogDoc>();
+    const folders: Catalog['folders'] = [];
+    let cases: string[];
+    try {
+      cases = (await fs.readdir(this.root, { withFileTypes: true }))
+        .filter((d) => d.isDirectory() && !d.name.startsWith('.')).map((d) => d.name).sort();
+    } catch {
+      return null;
+    }
+    for (const c of cases) {
+      const documents: CatalogDoc[] = [];
+      let subdirs: string[] = [];
+      try {
+        subdirs = (await fs.readdir(path.join(this.root, c), { withFileTypes: true }))
+          .filter((d) => d.isDirectory() && !d.name.startsWith('.')).map((d) => d.name).sort();
+      } catch {
+        continue;
+      }
+      let caseNumber = '';
+      for (const d of subdirs) {
+        const raw = await readIfExists(path.join(this.root, c, d, '_meta.json'), 1_000_000);
+        if (!raw) continue;
+        let meta: DocMeta;
+        try {
+          meta = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+        const id = `${c}/${d}`;
+        const pages = Array.isArray(meta.pages) ? meta.pages : [];
+        const doc: CatalogDoc = {
+          id,
+          folder: c,
+          title: [meta.doc_kind, meta.court].filter(Boolean).join(', ') || d,
+          date: meta.doc_date ?? '',
+          kind: String(meta.doc_kind ?? ''),
+          summary: (Array.isArray(meta.parties) ? meta.parties : []).join(', '),
+          files: pages.map((p) => `${id}/${p.file}`),
+        };
+        if (meta.case_number && !caseNumber) caseNumber = meta.case_number;
+        documents.push(doc);
+        byId.set(id.toUpperCase(), doc);
+        for (const f of doc.files) byFile.set(f, doc);
+      }
+      if (documents.length === 0) continue;
+      const listing = documents.map((d) => `${d.date || 'без дати'} ${d.kind || 'документ'}`).join('; ');
+      folders.push({ path: c, summary: `${caseNumber ? `Справа № ${caseNumber}` : 'Документи без номера справи'}: ${listing}`, documents });
+    }
+    return folders.length ? { folders, byId, byFile } : null;
   }
 
   private async loadTitles(): Promise<Map<string, string>> {

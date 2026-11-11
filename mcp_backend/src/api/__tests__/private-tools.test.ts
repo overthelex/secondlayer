@@ -139,6 +139,33 @@ describe('PrivateDocsToolset', () => {
     expect(t).toContain('[D002]');
   });
 
+  it('hides _meta.json and rebuilds the index after invalidate()', async () => {
+    mkdirSync(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський'), { recursive: true });
+    writeFileSync(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський', '_meta.json'),
+      JSON.stringify({ case_number: '369/1234/26', court: 'Святошинський районний суд м. Києва', doc_kind: 'ухвала', doc_date: '2026-10-15', parties: ['Худик'], pages: [{ file: '01.jpg', chars: 0, ocr: 'none' }] }));
+    writeFileSync(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський', '01.txt'), 'Ухвала про відкриття провадження');
+    await sharp({ create: { width: 40, height: 60, channels: 3, background: '#fff' } })
+      .jpeg().toFile(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський', '01.jpg'));
+    expect(text(await toolset.execute('gorenichi_list_documents', { folder: 'sprava-x' }))).not.toContain('_meta.json');
+    toolset.invalidate();
+    expect(text(await toolset.execute('gorenichi_search_documents', { query: 'відкриття провадження' }))).toContain('sprava-x/');
+  });
+
+  it('serves an overview from _meta.json folders when there is no _index.json', async () => {
+    const metaRoot = mkdtempSync(path.join(tmpdir(), 'pdocs-meta-'));
+    mkdirSync(path.join(metaRoot, '369_1234_26', '2026-10-15-ухвала-святошинський'), { recursive: true });
+    writeFileSync(path.join(metaRoot, '369_1234_26', '2026-10-15-ухвала-святошинський', '_meta.json'),
+      JSON.stringify({ case_number: '369/1234/26', court: 'Святошинський районний суд', doc_kind: 'ухвала', doc_date: '2026-10-15', parties: [], pages: [{ file: '01.jpg', chars: 120, ocr: 'vision' }] }));
+    const t = new PrivateDocsToolset('cases', metaRoot, 'Справи');
+    const out = text(await t.execute('cases_get_index', {}));
+    expect(out).toContain('369_1234_26');
+    expect(out).toContain('ухвала');
+    expect(out).toContain('2026-10-15');
+    const folder = text(await t.execute('cases_get_index', { folder: '369_1234_26' }));
+    expect(folder).toContain('369_1234_26/2026-10-15-ухвала-святошинський');
+    expect(folder).toContain('1 стор.');
+  });
+
   it('decodes Windows-1251 when the bytes are not UTF-8', () => {
     expect(decodeText(Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xb3, 0xf2]))).toBe('Привіт');
     expect(decodeText(Buffer.from('Привіт', 'utf8'))).toBe('Привіт');
