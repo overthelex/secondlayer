@@ -23,7 +23,7 @@ import { logger } from '../../utils/logger.js';
 import { PrivateDocsToolset, PrivateToolResult, DocMeta, resolveInsideRoot, PathOutsideRootError } from './private-docs-toolset.js';
 import {
   CASE_CODES, COMPLAINT_KINDS, DOC_KINDS, CODE_RADA_ID, CODE_TITLE, COURT_FEE, CaseCode, ComplaintKind, DocKind,
-  complaintArticles, parseCode, violationArticles,
+  complaintArticles, parseCode, violationArticles, CHECKLIST_VALID_FROM,
 } from './case-checklists.js';
 
 export interface FetchedFile {
@@ -501,6 +501,14 @@ export class CaseToolset {
     const articles = violationArticles(docKind, code);
     if (articles.length === 0) return err(`Для документа «${docKind}» за ${CODE_TITLE[code]} перевірок немає.`);
     const asOf = meta?.doc_date ?? undefined;
+    const validFrom = CHECKLIST_VALID_FROM[code];
+    if (asOf && validFrom && asOf < validFrom) {
+      return err(
+        `Документ від ${asOf} ухвалено за ${CODE_TITLE[code]} у старій нумерації статей (кодекс перенумеровано з ${toDotted(validFrom)}). ` +
+        `Перелік статей цього інструмента охоплює лише редакції з ${toDotted(validFrom)}, тому перевірка за старою редакцією неможлива. ` +
+        `Якщо дата в _meta.json помилкова, виправте її.`
+      );
+    }
     const refs = await deps.legislation.getMultipleArticles(CODE_RADA_ID[code], articles, asOf);
     const found = new Set(refs.map((r) => String(r.article_number)));
     const missing = articles.filter((a) => !found.has(a));
@@ -610,6 +618,12 @@ function asDocKind(v: unknown): DocKind | null {
 }
 
 /** 'редакція від DD.MM.YYYY' from metadata.edition_date (YYYYMMDD or YYYY-MM-DD). */
+/** 2017-12-15 → 15.12.2017 */
+function toDotted(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
 function editionLabel(r: LegislationReference): string {
   const d = String(r.metadata?.edition_date ?? '').replace(/-/g, '');
   const m = d.match(/^(\d{4})(\d{2})(\d{2})$/);

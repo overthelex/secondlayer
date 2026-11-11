@@ -41,6 +41,17 @@ export const CODE_TITLE: Record<CaseCode, string> = {
   'купап': 'КУпАП',
 };
 
+/**
+ * ЦПК, ГПК and КАС were renumbered by Закон 2147-VIII in force 15.12.2017; the article
+ * tables below use the new numbering, so earlier documents cannot be checked with them
+ * (old-numbering tables are a separate piece of work). КПК 2012 and КУпАП kept their numbering.
+ */
+export const CHECKLIST_VALID_FROM: Partial<Record<CaseCode, string>> = {
+  'цпк': '2017-12-15',
+  'гпк': '2017-12-15',
+  'кас': '2017-12-15',
+};
+
 /** Закон «Про судовий збір»: ставки. Not charged for КПК and КУпАП complaints. */
 export const COURT_FEE = { radaId: '3674-17', articles: ['4'] } as const;
 
