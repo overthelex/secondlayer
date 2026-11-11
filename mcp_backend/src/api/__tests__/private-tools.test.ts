@@ -6,6 +6,8 @@ import { PrivateDocsToolset, resolveInsideRoot, PathOutsideRootError, decodeText
 import {
   setConfiguredToolsetsForTest, privateToolDefinitionsFor, executePrivateTool, isPrivateToolName,
 } from '../private-tools/index.js';
+import type { PrivateToolset } from '../private-tools/index.js';
+import { CaseToolset } from '../private-tools/case-toolset.js';
 
 let root: string;
 let outside: string;
@@ -202,6 +204,24 @@ describe('private tool grants', () => {
     setConfiguredToolsetsForTest(new Map());
     expect(await privateToolDefinitionsFor(db, GRANTED)).toEqual([]);
     expect(await executePrivateTool(db, GRANTED, 'gorenichi_read_document', { path: 'notes' })).toBeNull();
+  });
+
+  it('advertises cases_* with the upload tool carrying openai/fileParams, only to the cases grantee', async () => {
+    const casesRoot = mkdtempSync(path.join(tmpdir(), 'cases-'));
+    const cases = new CaseToolset(new PrivateDocsToolset('cases', casesRoot, 'Справи'), null);
+    setConfiguredToolsetsForTest(new Map<string, PrivateToolset>([['gorenichi', toolset], ['cases', cases]]));
+    const casesDb = { query: async (_s: string, p: unknown[]) => ({ rows: p[0] === 'u-cases' ? [{ toolset: 'cases' }] : [] }) };
+    const defs = await privateToolDefinitionsFor(casesDb, 'u-cases');
+    expect(defs.map((d) => d.name).sort()).toEqual([
+      'cases_complaint_norms', 'cases_find_violations', 'cases_get_index', 'cases_list_documents',
+      'cases_read_document', 'cases_search_documents', 'cases_upload_pages',
+    ]);
+    expect(defs.find((d) => d.name === 'cases_upload_pages')!._meta).toEqual({ 'openai/fileParams': ['files'] });
+    expect(await privateToolDefinitionsFor(casesDb, 'u-other')).toEqual([]);
+    expect(isPrivateToolName('cases_upload_pages')).toBe(true);
+    const r = await executePrivateTool(casesDb, 'u-cases', 'cases_upload_pages', { files: [] });
+    expect(r?.isError).toBe(true);
+    expect(text(r)).toContain('не налаштовано');
   });
 
   it('recognises private names by anchored prefix only', () => {

@@ -19,17 +19,33 @@ import { existsSync } from 'fs';
 import { logger } from '../../utils/logger.js';
 import type { ToolDefinition } from '../base-tool-handler.js';
 import { PrivateDocsToolset, PrivateToolResult } from './private-docs-toolset.js';
+import { CaseToolset, CaseToolsetDeps } from './case-toolset.js';
 
 type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: any[] }> };
 
+/** What every private toolset offers to buildMcpServer. */
+export interface PrivateToolset {
+  readonly id: string;
+  toolNames(): string[];
+  getToolDefinitions(): ToolDefinition[];
+  execute(name: string, args: Record<string, any>): Promise<PrivateToolResult>;
+}
+
 /** Toolsets known to the code, keyed by id; each enabled only when its folder is mounted. */
-const KNOWN: Array<{ id: string; env: string; label: string }> = [
-  { id: 'gorenichi', env: 'GORENICHI_DOCS_ROOT', label: 'Гореничі' },
+const KNOWN: Array<{ id: string; env: string; label: string; kind: 'docs' | 'cases' }> = [
+  { id: 'gorenichi', env: 'GORENICHI_DOCS_ROOT', label: 'Гореничі', kind: 'docs' },
+  { id: 'cases', env: 'CASES_DOCS_ROOT', label: 'Справи', kind: 'cases' },
 ];
 
-let configured: Map<string, PrivateDocsToolset> | null = null;
+let configured: Map<string, PrivateToolset> | null = null;
+let privateToolDeps: CaseToolsetDeps | null = null;
 
-export function configuredToolsets(): Map<string, PrivateDocsToolset> {
+/** Wire OCR / LLM / legislation for the cases toolset; call before the first tools/list. */
+export function setPrivateToolDeps(deps: CaseToolsetDeps | null): void {
+  privateToolDeps = deps;
+}
+
+export function configuredToolsets(): Map<string, PrivateToolset> {
   if (configured) return configured;
   configured = new Map();
   for (const k of KNOWN) {
@@ -39,13 +55,19 @@ export function configuredToolsets(): Map<string, PrivateDocsToolset> {
       logger.warn('[PrivateTools] Folder not mounted, toolset disabled', { toolset: k.id, env: k.env });
       continue;
     }
-    configured.set(k.id, new PrivateDocsToolset(k.id, root, k.label));
+    const docs = new PrivateDocsToolset(k.id, root, k.label);
+    if (k.kind === 'cases') {
+      if (!privateToolDeps) logger.warn('[PrivateTools] Cases toolset has no OCR/LLM deps; upload and analysis tools will refuse', { toolset: k.id });
+      configured.set(k.id, new CaseToolset(docs, privateToolDeps));
+    } else {
+      configured.set(k.id, docs);
+    }
   }
   return configured;
 }
 
 /** Test hook. */
-export function setConfiguredToolsetsForTest(map: Map<string, PrivateDocsToolset> | null): void {
+export function setConfiguredToolsetsForTest(map: Map<string, PrivateToolset> | null): void {
   configured = map;
   grantCache.clear();
 }
@@ -59,7 +81,7 @@ const grantCache = new Map<string, { toolsets: Set<string>; at: number }>();
 const GRANT_CACHE_MS = 60_000;
 
 /** Toolset ids granted to the user and configured on this deployment. Fails closed. */
-export async function grantedToolsets(db: Queryable, userId: string | undefined | null): Promise<PrivateDocsToolset[]> {
+export async function grantedToolsets(db: Queryable, userId: string | undefined | null): Promise<PrivateToolset[]> {
   const all = configuredToolsets();
   if (!userId || all.size === 0) return [];
   let hit = grantCache.get(userId);
@@ -77,7 +99,7 @@ export async function grantedToolsets(db: Queryable, userId: string | undefined 
     hit = { toolsets: ids, at: Date.now() };
     grantCache.set(userId, hit);
   }
-  return [...hit.toolsets].map((id) => all.get(id)).filter((t): t is PrivateDocsToolset => Boolean(t));
+  return [...hit.toolsets].map((id) => all.get(id)).filter((t): t is PrivateToolset => Boolean(t));
 }
 
 export async function privateToolDefinitionsFor(db: Queryable, userId: string | undefined | null): Promise<ToolDefinition[]> {
