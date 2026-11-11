@@ -146,6 +146,7 @@ x-app-local-base: &app_local_base
     # Upload temp directory
     UPLOAD_TEMP_DIR: /app/data/uploads
     GORENICHI_DOCS_ROOT: /data/gorenichi
+    CASES_DOCS_ROOT: /data/cases
 
     # Vision/OCR credentials
     VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
@@ -204,6 +205,9 @@ x-app-local-base: &app_local_base
     # Private document archive for the `gorenichi_*` MCP tools (api/private-tools),
     # read-only. Visible only to accounts with a row in private_tool_grants.
     - ${GORENICHI_DOCS_DIR:-/mnt/bulk_storage/GORENICHI}:/data/gorenichi:ro
+    # Court case photos for the `cases_*` MCP tools: writable, cases_upload_pages writes
+    # <case>/<document>/NN.jpg + NN.txt + _meta.json here. Grant-gated like gorenichi.
+    - ${CASES_DOCS_DIR:-/mnt/bulk_storage/CASES}:/data/cases
 
   healthcheck:
     test:

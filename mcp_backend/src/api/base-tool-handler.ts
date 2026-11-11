@@ -18,6 +18,8 @@ export interface ToolDefinition {
   description: string;
   inputSchema: { type: string; properties: Record<string, any>; required?: string[] };
   annotations?: ToolAnnotations;
+  /** Client-specific hints passed through tools/list as-is, e.g. ChatGPT's `openai/fileParams`. */
+  _meta?: Record<string, unknown>;
 }
 
 export interface ToolResult {

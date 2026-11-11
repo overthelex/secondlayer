@@ -6,6 +6,8 @@ import { PrivateDocsToolset, resolveInsideRoot, PathOutsideRootError, decodeText
 import {
   setConfiguredToolsetsForTest, privateToolDefinitionsFor, executePrivateTool, isPrivateToolName,
 } from '../private-tools/index.js';
+import type { PrivateToolset } from '../private-tools/index.js';
+import { CaseToolset } from '../private-tools/case-toolset.js';
 
 let root: string;
 let outside: string;
@@ -139,6 +141,33 @@ describe('PrivateDocsToolset', () => {
     expect(t).toContain('[D002]');
   });
 
+  it('hides _meta.json and rebuilds the index after invalidate()', async () => {
+    mkdirSync(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський'), { recursive: true });
+    writeFileSync(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський', '_meta.json'),
+      JSON.stringify({ case_number: '369/1234/26', court: 'Святошинський районний суд м. Києва', doc_kind: 'ухвала', doc_date: '2026-10-15', parties: ['Худик'], pages: [{ file: '01.jpg', chars: 0, ocr: 'none' }] }));
+    writeFileSync(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський', '01.txt'), 'Ухвала про відкриття провадження');
+    await sharp({ create: { width: 40, height: 60, channels: 3, background: '#fff' } })
+      .jpeg().toFile(path.join(root, 'sprava-x', '2026-10-15-ухвала-святошинський', '01.jpg'));
+    expect(text(await toolset.execute('gorenichi_list_documents', { folder: 'sprava-x' }))).not.toContain('_meta.json');
+    toolset.invalidate();
+    expect(text(await toolset.execute('gorenichi_search_documents', { query: 'відкриття провадження' }))).toContain('sprava-x/');
+  });
+
+  it('serves an overview from _meta.json folders when there is no _index.json', async () => {
+    const metaRoot = mkdtempSync(path.join(tmpdir(), 'pdocs-meta-'));
+    mkdirSync(path.join(metaRoot, '369_1234_26', '2026-10-15-ухвала-святошинський'), { recursive: true });
+    writeFileSync(path.join(metaRoot, '369_1234_26', '2026-10-15-ухвала-святошинський', '_meta.json'),
+      JSON.stringify({ case_number: '369/1234/26', court: 'Святошинський районний суд', doc_kind: 'ухвала', doc_date: '2026-10-15', parties: [], pages: [{ file: '01.jpg', chars: 120, ocr: 'vision' }] }));
+    const t = new PrivateDocsToolset('cases', metaRoot, 'Справи');
+    const out = text(await t.execute('cases_get_index', {}));
+    expect(out).toContain('369_1234_26');
+    expect(out).toContain('ухвала');
+    expect(out).toContain('2026-10-15');
+    const folder = text(await t.execute('cases_get_index', { folder: '369_1234_26' }));
+    expect(folder).toContain('369_1234_26/2026-10-15-ухвала-святошинський');
+    expect(folder).toContain('1 стор.');
+  });
+
   it('decodes Windows-1251 when the bytes are not UTF-8', () => {
     expect(decodeText(Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xb3, 0xf2]))).toBe('Привіт');
     expect(decodeText(Buffer.from('Привіт', 'utf8'))).toBe('Привіт');
@@ -175,6 +204,38 @@ describe('private tool grants', () => {
     setConfiguredToolsetsForTest(new Map());
     expect(await privateToolDefinitionsFor(db, GRANTED)).toEqual([]);
     expect(await executePrivateTool(db, GRANTED, 'gorenichi_read_document', { path: 'notes' })).toBeNull();
+  });
+
+  it('advertises cases_* with the upload tool carrying openai/fileParams, only to the cases grantee', async () => {
+    const casesRoot = mkdtempSync(path.join(tmpdir(), 'cases-'));
+    const cases = new CaseToolset(new PrivateDocsToolset('cases', casesRoot, 'Справи'), null);
+    setConfiguredToolsetsForTest(new Map<string, PrivateToolset>([['gorenichi', toolset], ['cases', cases]]));
+    const casesDb = { query: async (_s: string, p: unknown[]) => ({ rows: p[0] === 'u-cases' ? [{ toolset: 'cases' }] : [] }) };
+    const defs = await privateToolDefinitionsFor(casesDb, 'u-cases');
+    expect(defs.map((d) => d.name).sort()).toEqual([
+      'cases_complaint_norms', 'cases_find_violations', 'cases_get_index', 'cases_list_documents',
+      'cases_read_document', 'cases_search_documents', 'cases_upload_pages',
+    ]);
+    expect(defs.find((d) => d.name === 'cases_upload_pages')!._meta).toEqual({ 'openai/fileParams': ['files'] });
+    expect(await privateToolDefinitionsFor(casesDb, 'u-other')).toEqual([]);
+    expect(isPrivateToolName('cases_upload_pages')).toBe(true);
+    const r = await executePrivateTool(casesDb, 'u-cases', 'cases_upload_pages', { files: [] });
+    expect(r?.isError).toBe(true);
+    expect(text(r)).toContain('не налаштовано');
+  });
+
+  it('passes the calling user to the toolset as execution context', async () => {
+    let seen: any;
+    const fake = {
+      id: 'cases',
+      toolNames: () => ['cases_upload_pages'],
+      getToolDefinitions: () => [],
+      execute: async (_n: string, _a: Record<string, any>, ctx?: { userId?: string }) => { seen = ctx; return { content: [] }; },
+    };
+    setConfiguredToolsetsForTest(new Map<string, PrivateToolset>([['cases', fake]]));
+    const casesDb = { query: async () => ({ rows: [{ toolset: 'cases' }] }) };
+    await executePrivateTool(casesDb, 'u-ctx', 'cases_upload_pages', {});
+    expect(seen).toEqual({ userId: 'u-ctx' });
   });
 
   it('recognises private names by anchored prefix only', () => {
