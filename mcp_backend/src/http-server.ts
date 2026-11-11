@@ -19,6 +19,8 @@ import { createBillingInlineRoutes } from './routes/billing-inline-routes.js';
 import { createChatInlineRoutes } from './routes/chat-inline-routes.js';
 import { createMiscInlineRoutes } from './routes/misc-inline-routes.js';
 import { createMCPSSERoutes } from './routes/mcp-sse-routes.js';
+import { setPrivateToolDeps } from './api/private-tools/index.js';
+import { buildCaseToolsetDeps } from './api/private-tools/case-deps.js';
 import { createToolExecutionRoutes } from './routes/tool-execution-routes.js';
 import { createUKJudgmentAccessRoutes } from './routes/uk-judgment-access-routes.js';
 import { createPaymentRouter, createWebhookRouter } from './routes/payment-routes.js';
@@ -114,6 +116,13 @@ class HTTPMCPServer {
 
     // Initialize tool registry, service proxy, document tools, upload/minio/vault via factory
     this.tools = createToolServices(this.services, this.billing.costTracker, llmAdapter);
+
+    // Private `cases` toolset (api/private-tools): OCR, LLM and article texts, wired before
+    // the first tools/list so the toolset is built with them.
+    setPrivateToolDeps(buildCaseToolsetDeps({
+      documentParser: this.tools.documentParser,
+      legislationService: this.services.legislationService,
+    }));
 
     // Initialize all application services via factory
     this.app_ = createAppServices(this.services, this.billing, this.tools, llmAdapter);

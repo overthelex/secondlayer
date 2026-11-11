@@ -35,6 +35,7 @@ export interface BackendCoreServices {
   citationGraphService: CitationGraphService;
   hallucinationGuard: HallucinationGuard;
   legislationTools: LegislationTools;
+  legislationService: LegislationService;
   reyestrDownloadService: ReyestrDownloadService;
   importTaskService: ImportTaskService;
   echrHudocSyncService: EchrHudocSyncService;
@@ -94,6 +95,7 @@ export function createBackendCoreServices(): BackendCoreServices {
     citationGraphService,
     hallucinationGuard,
     legislationTools,
+    legislationService,
     reyestrDownloadService,
     importTaskService,
     echrHudocSyncService,
