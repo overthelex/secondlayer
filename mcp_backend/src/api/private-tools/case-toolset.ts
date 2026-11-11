@@ -22,7 +22,8 @@ import type { LegislationReference } from '../../services/legislation-service.js
 import { logger } from '../../utils/logger.js';
 import { PrivateDocsToolset, PrivateToolResult, DocMeta, resolveInsideRoot, PathOutsideRootError } from './private-docs-toolset.js';
 import {
-  CASE_CODES, COMPLAINT_KINDS, DOC_KINDS, CODE_RADA_ID, CODE_TITLE, CaseCode, DocKind, parseCode, violationArticles,
+  CASE_CODES, COMPLAINT_KINDS, DOC_KINDS, CODE_RADA_ID, CODE_TITLE, COURT_FEE, CaseCode, ComplaintKind, DocKind,
+  complaintArticles, parseCode, violationArticles,
 } from './case-checklists.js';
 
 export interface FetchedFile {
@@ -513,8 +514,30 @@ export class CaseToolset {
     return ok(parts.join('\n\n'));
   }
 
-  private async complaintNorms(_args: Record<string, any>): Promise<PrivateToolResult> {
-    throw new Error('not implemented');
+  // ── cases_complaint_norms ──────────────────────────────────────────────
+
+  private async complaintNorms(args: Record<string, any>): Promise<PrivateToolResult> {
+    const deps = this.deps!;
+    const code = parseCode(args.code);
+    if (!code) return err(`Невідомий кодекс. Допустимо: ${CASE_CODES.join(', ')}.`);
+    const kind = typeof args.complaint_kind === 'string' ? args.complaint_kind.trim().toLowerCase() : '';
+    if (!(COMPLAINT_KINDS as string[]).includes(kind)) return err(`Невідомий вид скарги. Допустимо: ${COMPLAINT_KINDS.join('; ')}.`);
+    const plan = complaintArticles(code, kind as ComplaintKind);
+    if (!plan) return err(`У ${CODE_TITLE[code]} немає такого виду оскарження: ${kind}.`);
+
+    const refs = await deps.legislation.getMultipleArticles(CODE_RADA_ID[code], plan.articles);
+    const fee = plan.fee ? await deps.legislation.getMultipleArticles(COURT_FEE.radaId, [...COURT_FEE.articles]) : [];
+    const found = new Set(refs.map((r) => String(r.article_number)));
+    const missing = plan.articles.filter((a) => !found.has(a));
+
+    const items = refs.map((r) => `ст. ${r.article_number} ${CODE_TITLE[code]} — ${r.title ?? ''} (${editionLabel(r)}, ${r.url})\n${r.full_text}`);
+    for (const r of fee) items.push(`Закон 3674-17 ст. ${r.article_number} (судовий збір) — ${r.title ?? ''} (${editionLabel(r)}, ${r.url})\n${r.full_text}`);
+    return ok(
+      `Скаргу складає модель; строки рахувати від дати вручення/проголошення з документа; нижче чинні норми для «${kind}» за ${CODE_TITLE[code]}.` +
+      (plan.fee ? '' : ' Судовий збір за цю скаргу не справляється.') +
+      (missing.length ? `\nНе знайдено в базі: ст. ${missing.join(', ')}.` : '') +
+      `\n\n${items.map((t, i) => `${i + 1}. ${t}`).join('\n\n')}`
+    );
   }
 }
 

@@ -193,3 +193,25 @@ describe('cases_find_violations', () => {
     expect(text(r)).toContain('немає');
   });
 });
+
+describe('cases_complaint_norms', () => {
+  it('returns the current texts of the complaint articles plus the court fee article', async () => {
+    const { toolset, calls } = makeToolset();
+    const out = text(await toolset.execute('cases_complaint_norms', { code: 'ЦПК', complaint_kind: 'апеляційна скарга на рішення' }));
+    expect(calls).toHaveLength(0);
+    for (const n of ['352', '354', '355', '356', '357']) expect(out).toContain(`ст. ${n}`);
+    expect(out).toContain('3674-17');
+    expect(out).toContain('Текст статті 4');
+    expect(out).toMatch(/скаргу складає модель/i);
+  });
+
+  it('omits the fee for КУпАП and refuses combinations the code does not have', async () => {
+    const { toolset } = makeToolset();
+    const out = text(await toolset.execute('cases_complaint_norms', { code: 'купап', complaint_kind: 'скарга на постанову у справі про адмінправопорушення' }));
+    expect(out).toContain('ст. 289');
+    expect(out).not.toContain('3674-17');
+    const r = await toolset.execute('cases_complaint_norms', { code: 'купап', complaint_kind: 'касаційна скарга' });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain('КУпАП');
+  });
+});
