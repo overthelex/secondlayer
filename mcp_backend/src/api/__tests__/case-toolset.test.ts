@@ -215,3 +215,31 @@ describe('cases_complaint_norms', () => {
     expect(text(r)).toContain('КУпАП');
   });
 });
+
+describe('review fixes', () => {
+  it('records the calling user in _meta.json from the execution context, not from arguments', async () => {
+    const { root, toolset } = makeToolset();
+    const args = { pages_base64: [{ data: (await jpeg()).toString('base64'), mime_type: 'image/jpeg' }], __userId: 'spoofed' };
+    await toolset.execute('cases_upload_pages', args, { userId: 'u-real' });
+    const dir = path.join(root, '369_1234_26', readdirSync(path.join(root, '369_1234_26'))[0]);
+    expect(JSON.parse(readFileSync(path.join(dir, '_meta.json'), 'utf8')).uploaded_by).toBe('u-real');
+  });
+
+  it('removes its staging folder when the upload fails midway', async () => {
+    const { root, toolset } = makeToolset({ now: () => { throw new Error('clock'); } });
+    const r = await toolset.execute('cases_upload_pages', { pages_base64: [{ data: (await jpeg()).toString('base64'), mime_type: 'image/jpeg' }] });
+    expect(r.isError).toBe(true);
+    expect(readdirSync(root).filter((n) => n.startsWith('.incoming-'))).toEqual([]);
+  });
+
+  it('survives two simultaneous uploads of the same document', async () => {
+    const { root, toolset } = makeToolset();
+    const args = { pages_base64: [{ data: (await jpeg()).toString('base64'), mime_type: 'image/jpeg' }] };
+    const [a, b] = await Promise.all([toolset.execute('cases_upload_pages', args), toolset.execute('cases_upload_pages', args)]);
+    expect(a.isError).toBeUndefined();
+    expect(b.isError).toBeUndefined();
+    expect(readdirSync(path.join(root, '369_1234_26')).sort()).toEqual([
+      '2026-10-15-ухвала-святошинський-районний-суд-м-києва', '2026-10-15-ухвала-святошинський-районний-суд-м-києва-2']);
+    expect(readdirSync(root).filter((n) => n.startsWith('.incoming-'))).toEqual([]);
+  });
+});

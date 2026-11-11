@@ -23,12 +23,17 @@ import { CaseToolset, CaseToolsetDeps } from './case-toolset.js';
 
 type Queryable = { query: (sql: string, params: unknown[]) => Promise<{ rows: any[] }> };
 
+/** Who is calling; set by executePrivateTool from the authenticated session, never from arguments. */
+export interface PrivateToolContext {
+  userId?: string;
+}
+
 /** What every private toolset offers to buildMcpServer. */
 export interface PrivateToolset {
   readonly id: string;
   toolNames(): string[];
   getToolDefinitions(): ToolDefinition[];
-  execute(name: string, args: Record<string, any>): Promise<PrivateToolResult>;
+  execute(name: string, args: Record<string, any>, ctx?: PrivateToolContext): Promise<PrivateToolResult>;
 }
 
 /** Toolsets known to the code, keyed by id; each enabled only when its folder is mounted. */
@@ -118,5 +123,5 @@ export async function executePrivateTool(
 ): Promise<PrivateToolResult | null> {
   const toolset = (await grantedToolsets(db, userId)).find((t) => t.toolNames().includes(name));
   if (!toolset) return null;
-  return toolset.execute(name, args);
+  return toolset.execute(name, args, { userId: userId ?? undefined });
 }

@@ -212,7 +212,7 @@ export class PrivateDocsToolset {
     ];
   }
 
-  async execute(name: string, args: Record<string, any>): Promise<PrivateToolResult> {
+  async execute(name: string, args: Record<string, any>, _ctx?: { userId?: string }): Promise<PrivateToolResult> {
     try {
       if (name === `${this.id}_get_index`) return await this.getIndex(args.folder);
       if (name === `${this.id}_list_documents`) return await this.list(args.folder);

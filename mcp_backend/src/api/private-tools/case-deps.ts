@@ -25,31 +25,51 @@ export function buildCaseToolsetDeps(p: {
   };
 }
 
-/** One chat completion, optionally with the page image, on the tier's model. */
-export async function callOpenAIVision(call: LlmCall): Promise<string> {
-  const model = ModelSelector.getChatModel(call.tier);
+/**
+ * GPT-5-family models spend reasoning tokens out of max_completion_tokens; a deep call over
+ * ten articles plus a 60k-character document needs real headroom or `content` comes back empty.
+ */
+const MAX_COMPLETION_TOKENS = 16_000;
+
+/** The chat.completions request for a call: always the OpenAI provider, whatever LLM_PROVIDER_STRATEGY says. */
+export function buildChatRequest(call: LlmCall): {
+  model: string;
+  messages: Array<{ role: 'system' | 'user'; content: any }>;
+  response_format?: { type: 'json_object' };
+  max_completion_tokens: number;
+} {
   const userContent: any = call.imageJpeg
     ? [
         { type: 'text', text: call.user },
         { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${call.imageJpeg.toString('base64')}`, detail: 'high' } },
       ]
     : call.user;
-  const res: any = await getOpenAIManager().executeWithRetry((client) =>
-    client.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: call.system },
-        { role: 'user', content: userContent },
-      ],
-      ...(call.json ? { response_format: { type: 'json_object' } } : {}),
-      max_completion_tokens: 4000,
-    })
-  );
+  return {
+    model: ModelSelector.getModelSelection(call.tier, 'openai').model,
+    messages: [
+      { role: 'system', content: call.system },
+      { role: 'user', content: userContent },
+    ],
+    ...(call.json ? { response_format: { type: 'json_object' as const } } : {}),
+    max_completion_tokens: MAX_COMPLETION_TOKENS,
+  };
+}
+
+/** One chat completion, optionally with the page image, on the tier's OpenAI model. */
+export async function callOpenAIVision(call: LlmCall): Promise<string> {
+  const req = buildChatRequest(call);
+  const res: any = await getOpenAIManager().executeWithRetry((client) => client.chat.completions.create(req as any));
+  const choice = res?.choices?.[0];
+  const content: string = choice?.message?.content ?? '';
   logger.info('[Cases] LLM call', {
     tier: call.tier,
-    model: res?.model ?? model,
+    model: res?.model ?? req.model,
+    finishReason: choice?.finish_reason,
     promptTokens: res?.usage?.prompt_tokens,
     completionTokens: res?.usage?.completion_tokens,
   });
-  return res?.choices?.[0]?.message?.content ?? '';
+  if (!content || choice?.finish_reason === 'length') {
+    logger.warn('[Cases] LLM answer empty or cut off', { tier: call.tier, finishReason: choice?.finish_reason, chars: content.length });
+  }
+  return content;
 }

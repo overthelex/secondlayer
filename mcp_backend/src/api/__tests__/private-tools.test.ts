@@ -224,6 +224,20 @@ describe('private tool grants', () => {
     expect(text(r)).toContain('не налаштовано');
   });
 
+  it('passes the calling user to the toolset as execution context', async () => {
+    let seen: any;
+    const fake = {
+      id: 'cases',
+      toolNames: () => ['cases_upload_pages'],
+      getToolDefinitions: () => [],
+      execute: async (_n: string, _a: Record<string, any>, ctx?: { userId?: string }) => { seen = ctx; return { content: [] }; },
+    };
+    setConfiguredToolsetsForTest(new Map<string, PrivateToolset>([['cases', fake]]));
+    const casesDb = { query: async () => ({ rows: [{ toolset: 'cases' }] }) };
+    await executePrivateTool(casesDb, 'u-ctx', 'cases_upload_pages', {});
+    expect(seen).toEqual({ userId: 'u-ctx' });
+  });
+
   it('recognises private names by anchored prefix only', () => {
     expect(isPrivateToolName('gorenichi_read_document')).toBe(true);
     expect(isPrivateToolName('search_gorenichi_x')).toBe(false);

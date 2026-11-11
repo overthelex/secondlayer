@@ -281,18 +281,18 @@ export class CaseToolset {
     ];
   }
 
-  async execute(name: string, args: Record<string, any>): Promise<PrivateToolResult> {
+  async execute(name: string, args: Record<string, any>, ctx?: { userId?: string }): Promise<PrivateToolResult> {
     const own = name === `${this.id}_upload_pages` || name === `${this.id}_find_violations` || name === `${this.id}_complaint_norms`;
-    if (!own) return this.docs.execute(name, args);
+    if (!own) return this.docs.execute(name, args, ctx);
     if (!this.deps) return err(NOT_CONFIGURED);
-    if (name === `${this.id}_upload_pages`) return this.upload(args);
+    if (name === `${this.id}_upload_pages`) return this.upload(args, ctx);
     if (name === `${this.id}_find_violations`) return this.findViolations(args);
     return this.complaintNorms(args);
   }
 
   // ── cases_upload_pages ─────────────────────────────────────────────────
 
-  private async upload(args: Record<string, any>): Promise<PrivateToolResult> {
+  private async upload(args: Record<string, any>, ctx?: { userId?: string }): Promise<PrivateToolResult> {
     const deps = this.deps!;
     const files: any[] = Array.isArray(args.files) ? args.files.filter((f) => f && typeof f.download_url === 'string') : [];
     const b64: any[] = Array.isArray(args.pages_base64) ? args.pages_base64.filter((f) => f && typeof f.data === 'string') : [];
@@ -328,8 +328,23 @@ export class CaseToolset {
     });
 
     // 2. Normalise to JPEG and write to a staging folder so nothing is lost after this point.
+    //    Anything that throws from here on removes the staging folder: the shared root must
+    //    not accumulate hidden `.incoming-*` leftovers.
     const staging = path.join(this.docs.root, `.incoming-${Date.now()}-${randomBytes(3).toString('hex')}`);
     await fs.mkdir(staging, { recursive: true });
+    try {
+      return await this.stageAndFile(args, ctx, incoming, staging);
+    } catch (e: any) {
+      await fs.rm(staging, { recursive: true, force: true });
+      logger.warn('[Cases] Upload failed after staging, staging removed', { error: e?.message });
+      return err(`Не вдалося зберегти документ: ${e?.message || 'помилка'}. Спробуйте ще раз.`);
+    }
+  }
+
+  private async stageAndFile(
+    args: Record<string, any>, ctx: { userId?: string } | undefined, incoming: IncomingPage[], staging: string
+  ): Promise<PrivateToolResult> {
+    const deps = this.deps!;
     const pages: StoredPage[] = [];
     for (const p of incoming) {
       const file = `${String(p.index + 1).padStart(2, '0')}.jpg`;
@@ -389,17 +404,26 @@ export class CaseToolset {
     const caseFolder = sanitizeCaseFolder(naming.case_number);
     const baseName = documentFolderName(naming);
     await fs.mkdir(path.join(this.docs.root, caseFolder), { recursive: true });
-    let docFolder = baseName;
-    for (let n = 2; await exists(path.join(this.docs.root, caseFolder, docFolder)); n++) docFolder = `${baseName}-${n}`;
-    const rel = `${caseFolder}/${docFolder}`;
     const meta: DocMeta = {
       ...naming,
-      uploaded_by: typeof args.__userId === 'string' ? args.__userId : undefined,
+      uploaded_by: ctx?.userId,
       uploaded_at: (deps.now ?? (() => new Date()))().toISOString(),
       pages: pages.map((p) => ({ file: p.file, chars: p.text.length, ocr: p.ocr, ...(p.reason ? { reason: p.reason } : {}) })),
     };
     await fs.writeFile(path.join(staging, '_meta.json'), JSON.stringify(meta, null, 2), 'utf8');
-    await fs.rename(staging, path.join(this.docs.root, caseFolder, docFolder));
+    // Claim the first free name with the rename itself: two concurrent uploads of the same
+    // document would both pass an exists() check, and rename onto a non-empty dir fails.
+    let docFolder = baseName;
+    for (let n = 2; ; n++) {
+      try {
+        await fs.rename(staging, path.join(this.docs.root, caseFolder, docFolder));
+        break;
+      } catch (e: any) {
+        if (!['EEXIST', 'ENOTEMPTY', 'EISDIR'].includes(e?.code) || n > 100) throw e;
+        docFolder = `${baseName}-${n}`;
+      }
+    }
+    const rel = `${caseFolder}/${docFolder}`;
     this.docs.invalidate();
 
     const lines = pages.map((p) => {
@@ -590,15 +614,6 @@ function editionLabel(r: LegislationReference): string {
   const d = String(r.metadata?.edition_date ?? '').replace(/-/g, '');
   const m = d.match(/^(\d{4})(\d{2})(\d{2})$/);
   return m ? `редакція від ${m[3]}.${m[2]}.${m[1]}` : 'чинна редакція';
-}
-
-async function exists(p: string): Promise<boolean> {
-  try {
-    await fs.access(p);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function ok(text: string): PrivateToolResult {
