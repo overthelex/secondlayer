@@ -1,20 +1,26 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { Queryable } from '../db';
-import { unsubscribeHeaders, type UnsubscribeConfig } from './headers';
+import { unsubscribeHeaders, unsubscribeUrl, type UnsubscribeConfig } from './headers';
 import { suppressedAmong } from './suppression';
 import { normaliseEmail } from './token';
+import { noteSent } from './crm';
 
 // Every campaign message leaves through here: the suppression list and the lead's
 // "do not contact" flag are checked first, the List-Unsubscribe headers are added,
 // and the attempt is written to attorney_crm_mail_log. Transport is SMTP submission
 // on mail2 (ATTORNEY_CRM_SMTP_URL), which relays to Azure Communication Services;
 // without a URL the message is only built (dry run), so the headers can be inspected.
+// With recordAsUserId set, a sent message is also noted on the lead in the CRM.
+// The literal {{unsubscribe_url}} in the text or HTML body is replaced by the recipient's
+// own unsubscribe link, the same one the List-Unsubscribe header carries.
 
 export interface MailerConfig {
   smtpUrl: string | null;
   from: string;
   replyTo?: string;
   unsubscribe: UnsubscribeConfig;
+  /** CRM user the e-mail note is attributed to. Without it nothing is written to the lead. */
+  recordAsUserId?: number;
 }
 
 export interface OutgoingMail {
@@ -34,6 +40,8 @@ export interface SendResult {
   email: string;
   messageId?: string;
   error?: string;
+  /** Set when the message left but the CRM note could not be written. */
+  crmError?: string;
   /** The RFC 5322 message, on a dry run. */
   raw?: Buffer;
 }
@@ -83,19 +91,30 @@ export function createMailer(pool: Queryable, cfg: MailerConfig, transporter?: T
         return { status: 'suppressed', email, error: dnc ? 'do_not_contact' : 'suppression list' };
       }
       if (await alreadySent(pool, mail.campaign, email)) return { status: 'duplicate', email };
+      const link = unsubscribeUrl(cfg.unsubscribe, email);
+      const fill = (s: string | undefined) => s?.split('{{unsubscribe_url}}').join(link);
       try {
         const info = await transport.sendMail({
           from: cfg.from,
           to: email,
           replyTo: cfg.replyTo,
           subject: mail.subject,
-          text: mail.text,
-          html: mail.html,
+          text: fill(mail.text),
+          html: fill(mail.html),
           headers: { ...unsubscribeHeaders(cfg.unsubscribe, email), Precedence: 'bulk' },
         });
         const status: SendStatus = dryRun ? 'dry-run' : 'sent';
         await log(pool, mail, email, status, info.messageId ?? null, null);
-        return { status, email, messageId: info.messageId, raw: dryRun ? (info.message as Buffer) : undefined };
+        const result: SendResult = { status, email, messageId: info.messageId, raw: dryRun ? (info.message as Buffer) : undefined };
+        if (status === 'sent' && cfg.recordAsUserId && mail.advocateSourceId) {
+          // The message is already out; a CRM failure must not look like a delivery failure.
+          try {
+            await noteSent(pool, mail.advocateSourceId, cfg.recordAsUserId, mail.subject, mail.campaign);
+          } catch (err) {
+            result.crmError = ((err as Error).message ?? String(err)).slice(0, 500);
+          }
+        }
+        return result;
       } catch (err) {
         const message = (err as Error).message ?? String(err);
         await log(pool, mail, email, 'failed', null, message.slice(0, 1000));

@@ -31,6 +31,8 @@ export interface Strings {
     doneHeading: string; doneBody: (email: string) => string; invalidHeading: string; invalidBody: string;
   };
   suppressionReasons: Record<'unsubscribe' | 'bounce' | 'complaint' | 'manual', string>;
+  /** Body of the CRM note written on the lead when a campaign e-mail has been sent. */
+  mailSentNote: (subject: string, campaign: string | undefined) => string;
   today: {
     title: string; callToday: string; nothingDue: string; date: string; name: string; city: string; phone: string; stage: string; lastNote: string;
     newNotes: string; noNotes: string; overdue: string;

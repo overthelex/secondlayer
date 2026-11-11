@@ -5,7 +5,10 @@
 //   mail check <email...>                                                  which of these are blocked
 //   mail import-bounces [source]                                           stdin: Postfix log lines or an address list
 //   mail link <email>                                                      print the unsubscribe URL for an address
-//   mail send --to <email> --subject <s> --text <file> [--html <file>] [--advocate <id>] [--campaign <name>] [--dry-run]
+//   mail send --to <email> --subject <s> --text <file> [--html <file>] [--advocate <id>] [--campaign <name>] [--as <user email>] [--dry-run]
+//   mail send-batch <file.jsonl> [--pace <seconds>] [--limit <n>] [--as <user email>] [--dry-run]
+//       one JSON object per line: {to, subject, text, html?, advocate?, campaign?}; resumable (same campaign + address = skipped)
+//   A sent message is noted on the lead (kind 'email') and a 'new' lead becomes 'contacted'; --as names the CRM user, default vladimir@<domain>.
 //   mail stats [campaign]                                                  sent / suppressed / failed counts
 //   mail hook-key                                                          key for the Event Grid webhook (/hooks/acs-events)
 import fs from 'fs';
@@ -19,7 +22,8 @@ import type { Queryable } from './db';
 import { getSuppression, importBounces, isSuppressionReason, parseBounceLines, suppress, suppressedAmong, unsuppress } from './mail/suppression';
 import { unsubscribeUrl } from './mail/headers';
 import { hookKey } from './mail/acs-events';
-import { createMailer } from './mail/sender';
+import { createMailer, type Mailer, type SendResult } from './mail/sender';
+import { userIdByEmail } from './mail/crm';
 
 const USAGE = `usage: node dist/cli.js <command>
   set-password <email> <password> [display name]
@@ -28,7 +32,8 @@ const USAGE = `usage: node dist/cli.js <command>
   mail check <email...>
   mail import-bounces [source]            (stdin: Postfix log lines or an address list)
   mail link <email>
-  mail send --to <email> --subject <s> --text <file> [--html <file>] [--advocate <id>] [--campaign <name>] [--dry-run]
+  mail send --to <email> --subject <s> --text <file> [--html <file>] [--advocate <id>] [--campaign <name>] [--as <user email>] [--dry-run]
+  mail send-batch <file.jsonl> [--pace <seconds>] [--limit <n>] [--as <user email>] [--dry-run]
   mail stats [campaign]
   mail hook-key                           (key for the Event Grid webhook /hooks/acs-events)`;
 
@@ -61,6 +66,26 @@ function readStdin(): Promise<string> {
     process.stdin.on('data', (c) => (data += c));
     process.stdin.on('end', () => resolve(data));
     process.stdin.on('error', reject);
+  });
+}
+
+function resultLine(res: SendResult): string {
+  return `${res.status} ${res.email}${res.messageId ? ` ${res.messageId}` : ''}${res.error ? `  ${res.error}` : ''}${res.crmError ? `  CRM: ${res.crmError}` : ''}`;
+}
+
+// Shared by `mail send` and `mail send-batch`: a dry run without a transport, otherwise
+// the real one, with sent messages noted on the lead as the CRM user named by --as.
+async function openMailer(pool: Queryable, config: Config, opts: Record<string, string | true>): Promise<Mailer> {
+  const dryRun = opts['dry-run'] === true || !config.smtpUrl;
+  const asEmail = typeof opts.as === 'string' ? opts.as : `vladimir@${config.tenant.brand.domain}`;
+  const userId = await userIdByEmail(pool, asEmail);
+  if (!userId) process.stderr.write(`no CRM user ${asEmail}: sent messages will not be noted on leads (use --as <user email>)\n`);
+  return createMailer(pool, {
+    smtpUrl: dryRun ? null : config.smtpUrl,
+    from: config.mailFrom,
+    replyTo: config.replyTo ?? undefined,
+    unsubscribe: { publicUrl: config.publicUrl, mailbox: config.unsubscribeMailbox, secret: config.sessionSecret },
+    recordAsUserId: userId ?? undefined,
   });
 }
 
@@ -115,13 +140,7 @@ async function mail(pool: Queryable, config: Config, args: string[]): Promise<nu
       const subject = typeof opts.subject === 'string' ? opts.subject : null;
       const textFile = typeof opts.text === 'string' ? opts.text : null;
       if (!to || !subject || !textFile) return usage();
-      const dryRun = opts['dry-run'] === true || !config.smtpUrl;
-      const mailer = createMailer(pool, {
-        smtpUrl: dryRun ? null : config.smtpUrl,
-        from: config.mailFrom,
-        replyTo: config.replyTo ?? undefined,
-        unsubscribe: { publicUrl: config.publicUrl, mailbox: config.unsubscribeMailbox, secret: config.sessionSecret },
-      });
+      const mailer = await openMailer(pool, config, opts);
       try {
         const res = await mailer.send({
           to,
@@ -131,12 +150,38 @@ async function mail(pool: Queryable, config: Config, args: string[]): Promise<nu
           advocateSourceId: typeof opts.advocate === 'string' ? opts.advocate : null,
           campaign: typeof opts.campaign === 'string' ? opts.campaign : undefined,
         });
-        out(`${res.status} ${res.email}${res.messageId ? ` ${res.messageId}` : ''}${res.error ? `  ${res.error}` : ''}`);
+        out(resultLine(res));
         if (res.raw) process.stdout.write(`\n${res.raw.toString('utf8')}\n`);
         return res.status === 'failed' ? 1 : 0;
       } finally {
         mailer.close();
       }
+    }
+    case 'send-batch': {
+      const { opts, rest } = flags(tail);
+      if (!rest[0]) return usage();
+      const pace = typeof opts.pace === 'string' ? Number(opts.pace) : 3;
+      const limit = typeof opts.limit === 'string' ? Number(opts.limit) : Infinity;
+      const lines = fs.readFileSync(rest[0], 'utf8').split('\n').filter((l) => l.trim());
+      const mailer = await openMailer(pool, config, opts);
+      const counts: Record<string, number> = {};
+      let sentNow = 0;
+      try {
+        for (let n = 0; n < lines.length && sentNow < limit; n++) {
+          const item = JSON.parse(lines[n]) as { to: string; subject: string; text: string; html?: string; advocate?: string; campaign?: string };
+          const res = await mailer.send({ to: item.to, subject: item.subject, text: item.text, html: item.html, advocateSourceId: item.advocate ?? null, campaign: item.campaign });
+          counts[res.status] = (counts[res.status] ?? 0) + 1;
+          out(`${n + 1}/${lines.length} ${resultLine(res)}`);
+          if (res.status === 'sent' || res.status === 'dry-run') {
+            sentNow++;
+            if (n < lines.length - 1 && sentNow < limit) await new Promise((r) => setTimeout(r, pace * 1000));
+          }
+        }
+      } finally {
+        mailer.close();
+      }
+      out(Object.entries(counts).map(([k, v]) => `${k}=${v}`).join(' ') || 'nothing to do');
+      return 0;
     }
     case 'hook-key': {
       out(hookKey(config.sessionSecret));
