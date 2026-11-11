@@ -148,6 +148,25 @@ describe('cases_find_violations', () => {
     return { ...t, doc: '369_1234_26/2026-10-15-ухвала-святошинський-районний-суд-м-києва' };
   }
 
+  it('refuses a ЦПК/ГПК/КАС document dated before the 15.12.2017 renumbering instead of checking wrong articles', async () => {
+    const { toolset } = makeToolset({ llm: async () => JSON.stringify({ case_number: '369/1855/15-ц', court: 'Києво-Святошинський районний суд', doc_kind: 'рішення', doc_date: '2015-04-21', parties: [] }) });
+    await toolset.execute('cases_upload_pages', { pages_base64: [{ data: (await jpeg()).toString('base64'), mime_type: 'image/jpeg' }] });
+    const asked: string[] = [];
+    (toolset as any).deps.legislation = { getMultipleArticles: async (r: string) => { asked.push(r); return []; } };
+    const r = await toolset.execute('cases_find_violations', { document: '369_1855_15-ц/2015-04-21-рішення-києво-святошинський-районний-суд', code: 'цпк', doc_kind: 'рішення' });
+    expect(r.isError).toBe(true);
+    expect(text(r)).toContain('2015-04-21');
+    expect(text(r)).toContain('15.12.2017');
+    expect(asked).toEqual([]);
+    // КУпАП and КПК were not renumbered: an old document is still checked.
+    const t2 = makeToolset({ llm: async () => JSON.stringify({ case_number: '1/2015', court: 'суд', doc_kind: 'постанова', doc_date: '2015-04-21', parties: [] }) });
+    await t2.toolset.execute('cases_upload_pages', { pages_base64: [{ data: (await jpeg()).toString('base64'), mime_type: 'image/jpeg' }] });
+    const asked2: Array<[string, string | undefined]> = [];
+    (t2.toolset as any).deps.legislation = { getMultipleArticles: async (r: string, _n: string[], d?: string) => { asked2.push([r, d]); return []; } };
+    await t2.toolset.execute('cases_find_violations', { document: '1_2015/2015-04-21-постанова-суд', code: 'купап', doc_kind: 'постанова' });
+    expect(asked2).toEqual([['8073-10', '2015-04-21']]);
+  });
+
   it('checks a stored ruling against ЦПК articles as of the document date and prints article texts', async () => {
     const { toolset, calls, doc } = await uploaded();
     const asked: Array<[string, string[], string | undefined]> = [];
