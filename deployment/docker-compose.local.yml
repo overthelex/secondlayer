@@ -1398,6 +1398,13 @@ services:
       ATTORNEY_CRM_MAIL_FROM: ${ATTORNEY_CRM_MAIL_FROM:-}
       ATTORNEY_CRM_REPLY_TO: ${ATTORNEY_CRM_REPLY_TO:-}
       ATTORNEY_CRM_PUBLIC_URL: ${ATTORNEY_CRM_PUBLIC_URL:-https://attorney.legal.org.ua}
+      # Telephony (attorney_crm/README.md "Telephony"): Asterisk over ARI. Unset = no
+      # «Подзвонити» button. The certificate pin is the PBX's self-signed cert SHA-256.
+      ATTORNEY_CRM_ARI_URL: ${ATTORNEY_CRM_ARI_URL:-}
+      ATTORNEY_CRM_ARI_USER: ${ATTORNEY_CRM_ARI_USER:-}
+      ATTORNEY_CRM_ARI_PASSWORD: ${ATTORNEY_CRM_ARI_PASSWORD:-}
+      ATTORNEY_CRM_ARI_CERT_SHA256: ${ATTORNEY_CRM_ARI_CERT_SHA256:-}
+      ATTORNEY_CRM_PBX_AGENTS: ${ATTORNEY_CRM_PBX_AGENTS:-}
     depends_on:
       postgres-local:
         condition: service_healthy

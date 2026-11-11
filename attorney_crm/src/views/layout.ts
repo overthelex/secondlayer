@@ -2,6 +2,7 @@ import { html, raw, type RawHtml } from './html';
 import type { User } from '../auth/users';
 import { assetUrl } from './assets';
 import { tenant } from '../tenant';
+import { pbxEnabled } from '../pbx/state';
 
 export type NavKey = 'today' | 'advocates';
 
@@ -42,6 +43,7 @@ export function renderPage(o: PageOptions): string {
     : ''}
 </header>
 <main class="page">${o.body}</main>
+${o.user && pbxEnabled() ? html`<div id="pbx-toast" class="toast" hidden data-incoming="${s.pbx.incoming}" data-open="${s.pbx.open}" data-unknown="${s.pbx.unknownCaller}" data-status="${JSON.stringify(s.pbx.status)}"></div><script src="${raw(assetUrl('pbx.js'))}" defer></script>` : ''}
 </body>
 </html>`.value;
 }

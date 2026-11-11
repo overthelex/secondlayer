@@ -43,4 +43,17 @@ export const uk: Strings = {
     notFound: 'Не знайдено', serverError: 'Помилка', serverErrorHeading: 'Сталася помилка', serverErrorBody: 'Спробуйте ще раз за хвилину. Якщо повторюється, напишіть Володимиру.',
     unknownStage: (s) => `Невідома стадія: ${s}`, unknownPractice: (p) => `Невідома практика: ${p}`, unknownNoteKind: (k) => `Невідомий тип нотатки: ${k}`, emptyNote: 'Порожня нотатка',
   },
+  pbx: {
+    call: 'Подзвонити', callTitle: 'Спочатку задзвонить ваш телефон, потім АТС набере адвоката', incoming: 'Вхідний дзвінок', unknownCaller: 'невідомий номер', open: 'Відкрити картку',
+    pbxError: 'АТС не відповідає. Спробуйте ще раз або подзвоніть з телефона.',
+    badNumber: (raw) => `Не схоже на український номер: ${raw}`,
+    outboundNote: (number, outcome, channelId) => `Дзвінок через АТС на ${number}: ${outcome} (id ${channelId})`,
+    inboundNote: (number, outcome, channelId) => `Вхідний дзвінок з ${number}: ${outcome} (id ${channelId})`,
+    duration: (m, s) => (m ? `${m} хв ${s} с` : `${s} с`),
+    outcomes: {
+      started: 'з’єднуємо', ringing: 'дзвонить', answered: 'розмова відбулася', busy: 'зайнято', no_answer: 'не відповіли', agent_no_answer: 'оператор не взяв слухавку',
+      cancelled: 'скасовано', failed: 'не вдалося з’єднати', missed: 'пропущено',
+    },
+    status: { ringing_agent: 'Дзвонить ваш телефон…', dialing: 'Набираємо адвоката…', answered: 'Розмова', ended: 'Завершено' },
+  },
 };

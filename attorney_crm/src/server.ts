@@ -10,6 +10,10 @@ import { advocateRoutes } from './routes/advocate';
 import { todayRoutes } from './routes/today';
 import { unsubscribeRoutes } from './routes/unsubscribe';
 import { acsEventRoutes } from './routes/acs-events';
+import { pbxRoutes } from './routes/pbx';
+import type { PbxService } from './pbx/calls';
+import type { EventHub } from './pbx/hub';
+import { setPbxEnabled } from './pbx/state';
 import { html } from './views/html';
 import { renderPage } from './views/layout';
 import { tenant } from './tenant';
@@ -18,11 +22,14 @@ export interface AppDeps {
   pool: Pool;
   config: Config;
   rateLimit: LoginRateLimit;
+  /** Present when ATTORNEY_CRM_ARI_URL is set (index.ts builds it). */
+  pbx?: { service: PbxService; hub: EventHub };
 }
 
 export function createApp(deps: AppDeps): Express {
   const { pool, rateLimit } = deps;
   const secret = deps.config.sessionSecret;
+  setPbxEnabled(Boolean(deps.pbx));
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -47,6 +54,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(requireLogin(pool, secret));
   app.use(advocatesRoutes(pool));
   app.use(advocateRoutes(pool));
+  if (deps.pbx) app.use(pbxRoutes(pool, deps.pbx.service, deps.pbx.hub));
   app.use(todayRoutes(pool));
 
   app.use((_req, res) => {

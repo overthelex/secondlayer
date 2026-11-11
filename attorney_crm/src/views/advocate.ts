@@ -1,7 +1,8 @@
 import { html } from './html';
 import { renderPage } from './layout';
 import { dncBadge, fmtDate, fmtDateTime, isOverdue, practiceChips, stageChip } from './advocates';
-import { emailList, orgList, phoneList } from './contacts';
+import { emailList, orgList, phoneList, phoneListWithCall } from './contacts';
+import { pbxEnabled } from '../pbx/state';
 import type { AdvocateRow, PracticeProfile } from '../advocates/repo';
 import type { Lead, NoteWithAuthor } from '../leads/repo';
 import type { Suppression } from '../mail/suppression';
@@ -31,7 +32,7 @@ ${d.error ? html`<p class="error" role="alert">${d.error}</p>` : ''}
   <section class="card section">
     <h2>${s.detail.registrySection}</h2>
     <dl class="props">
-      <dt>${s.detail.phone}</dt><dd class="stack">${a.phone ? phoneList(a.phone) : '—'}</dd>
+      <dt>${s.detail.phone}</dt><dd class="stack">${a.phone ? (pbxEnabled() ? phoneListWithCall(a.phone, a.sourceId, { call: s.pbx.call, title: s.pbx.callTitle }) : phoneList(a.phone)) : '—'}</dd>
       <dt>${s.detail.email}</dt><dd class="stack">${a.email ? emailList(a.email) : '—'}${suppressedBadge}</dd>
       <dt>${s.detail.address}</dt><dd>${a.workAddress ?? '—'}</dd>
       <dt>${s.detail.cityRegion}</dt><dd>${[a.city, a.region].filter(Boolean).join(', ') || '—'}</dd>
