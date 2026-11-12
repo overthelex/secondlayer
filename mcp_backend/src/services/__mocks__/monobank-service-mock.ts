@@ -49,22 +49,6 @@ export class MockMonobankService extends MonobankService {
     return { invoiceId, pageUrl, paymentIntentId: invoiceId };
   }
 
-  async createDonationInvoice(
-    amountUah: number,
-    email?: string
-  ): Promise<{ invoiceId: string; pageUrl: string }> {
-    if (amountUah < 1) {
-      throw new Error('Мінімальна сума донату — 1 ₴');
-    }
-
-    const invoiceId = `mock-donation-${Date.now()}`;
-    const pageUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/success?mock=true&donation=1&invoiceId=${invoiceId}`;
-
-    logger.info('[MockMonobankService] Created mock donation invoice', { amountUah, invoiceId, email });
-
-    return { invoiceId, pageUrl };
-  }
-
   async handleWebhook(_rawBody: Buffer | string, body: MonobankWebhookBody, _signature: string): Promise<{ received: boolean }> {
     logger.info('[MockMonobankService] Mock webhook received', { invoiceId: body.invoiceId, status: body.status });
 

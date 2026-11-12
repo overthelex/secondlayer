@@ -164,66 +164,6 @@ export class MonobankService {
     };
   }
 
-  /**
-   * Create a Monobank donation invoice (no user_id, no balance credit).
-   * Used by the public donation button on the login page.
-   * Reference prefix `DONATION-` lets webhook handlers distinguish donations
-   * from normal top-ups.
-   */
-  async createDonationInvoice(
-    amountUah: number,
-    email?: string
-  ): Promise<{ invoiceId: string; pageUrl: string }> {
-    const key = this.apiKey;
-
-    if (amountUah < 1) {
-      throw new Error('Мінімальна сума донату — 1 ₴');
-    }
-
-    const amountKopecks = Math.round(amountUah * 100);
-    const orderRef = `DONATION-${Date.now()}`;
-    const description = `Донат SecondLayer: ${amountUah.toFixed(0)} ₴`;
-    const redirectBase = this.redirectUrl;
-
-    logger.info('[MonobankService] Creating donation invoice', { amountUah, amountKopecks, orderRef });
-
-    const response = await fetch('https://api.monobank.ua/api/merchant/invoice/create', {
-      method: 'POST',
-      headers: {
-        'X-Token': key,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: amountKopecks,
-        ccy: 980,
-        merchantPaymInfo: {
-          reference: orderRef,
-          destination: description,
-          comment: description,
-        },
-        redirectUrl: `${redirectBase}/payment/success?donation=1`,
-        webHookUrl: `${this.getPublicUrl()}/webhooks/monobank`,
-        validity: 3600,
-      }),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(`Monobank API error: ${response.status} ${body}`);
-    }
-
-    const data = (await response.json()) as { invoiceId: string; pageUrl: string };
-
-    logger.info('[MonobankService] Donation invoice created', {
-      invoiceId: data.invoiceId,
-      amountUah,
-      orderRef,
-      email: email ? '[provided]' : '[none]',
-    });
-
-    return { invoiceId: data.invoiceId, pageUrl: data.pageUrl };
-  }
-
   private cachedPubKey: string | null = null;
   private pubKeyFetchedAt = 0;
 

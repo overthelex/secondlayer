@@ -546,45 +546,6 @@ class HTTPMCPServer {
       }
     }) as any);
 
-    // Public donation endpoint — no auth, no balance credit.
-    // Creates a Monobank invoice with DONATION- reference. Money lands in the
-    // merchant Monobank account; webhook gracefully ignores (payment_intent
-    // lookup returns empty, handler returns {received:true}).
-    this.app.post('/api/donations/create', (async (req: Request, res: Response) => {
-      try {
-        const { amount_usd, amount_uah, email } = req.body || {};
-
-        let amountUah: number;
-        if (typeof amount_uah === 'number' && amount_uah >= 1) {
-          amountUah = amount_uah;
-        } else if (typeof amount_usd === 'number' && amount_usd >= 1) {
-          const converted = await this.billing.currencyService.convertUsdToUah(amount_usd);
-          amountUah = Math.round(converted.amountUah);
-        } else {
-          return res.status(400).json({
-            error: 'Invalid request',
-            message: 'amount_usd (≥1) or amount_uah (≥1) is required',
-          });
-        }
-
-        if (amountUah > 200000) {
-          return res.status(400).json({
-            error: 'Invalid request',
-            message: 'Максимальна сума донату — 200 000 ₴',
-          });
-        }
-
-        const safeEmail = typeof email === 'string' && email.length < 256 ? email : undefined;
-        const result = await this.billing.monobankService.createDonationInvoice(amountUah, safeEmail);
-        res.json({ ...result, amountUah });
-      } catch (error: any) {
-        logger.error('[DonationAPI] Failed to create donation invoice', { error: error.message });
-        res.status(500).json({
-          error: 'Не вдалося створити рахунок для донату',
-        });
-      }
-    }) as any);
-
     // Billing inline routes (balance, history, topup, settings, statistics, invoices)
     this.app.use('/api/billing', requireJWT as any, createBillingInlineRoutes({
       billingService: this.billing.billingService,
