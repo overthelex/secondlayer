@@ -7,7 +7,7 @@
 ---
 
 Limited Liability Company "Lex AI" (LLC "Lex AI")
-EDRPOU code: 45269875
+EDRPOU code: 46011385
 Address: 04132, Ukraine, Kyiv, 47-a Sadova St., 1a
 Email: api@legal.org.ua
 
