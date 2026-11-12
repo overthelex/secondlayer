@@ -252,9 +252,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [ssoPassword, setSsoPassword] = useState('');
   const [showSSOPassword, setShowSSOPassword] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
-  const [diiaDeeplink, setDiiaDeeplink] = useState<string | null>(null);
-  const [diiaSessionId, setDiiaSessionId] = useState<string | null>(null);
-  const diiaPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const oauthTokenHandledRef = useRef(false);
 
   const { login, isAuthenticated } = useAuth();
@@ -283,32 +280,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token');
       const oauthError = urlParams.get('error');
-      const diiaDeeplinkParam = urlParams.get('diia_deeplink');
-      const diiaSessionParam = urlParams.get('diia_session');
-
-      if (diiaSessionParam) {
-        if (diiaDeeplinkParam) {
-          try {
-            const parsed = new URL(diiaDeeplinkParam);
-            if (parsed.origin === 'https://diia.app') {
-              setDiiaDeeplink(parsed.href);
-            }
-          } catch { /* invalid URL, ignore */ }
-        }
-        setDiiaSessionId(diiaSessionParam);
-        window.history.replaceState({}, '', window.location.pathname);
-        return;
-      }
 
       if (oauthError) {
         const errorMap: Record<string, string> = {
           oauth_failed: 'Помилка автентифікації через Google. Спробуйте ще раз.',
           oidc_failed: 'Помилка автентифікації через SSO. Спробуйте ще раз.',
           server_error: 'Помилка сервера. Спробуйте пізніше.',
-          diia_not_configured: 'Дія авторизацію ще не налаштовано.',
-          diia_scope_forbidden: 'Дія авторизація (diiaId:auth) ще не активована для цього акаунта. Зверніться до адміністратора.',
-          diia_failed: 'Помилка автентифікації через Дію. Спробуйте ще раз.',
-          diia_no_result: 'Не отримано дані від Дії. Спробуйте ще раз.',
         };
         const msg = errorMap[oauthError] || 'Помилка автентифікації. Спробуйте ще раз.';
         setError(msg);
@@ -345,38 +322,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
     handleOAuthCallback();
   }, [login, onLoginSuccess]);
-
-  useEffect(() => {
-    if (!diiaSessionId) return;
-
-    diiaPollingRef.current = setInterval(async () => {
-      try {
-        const resp = await fetch(`${BASE_URL}/auth/diia/status/${diiaSessionId}`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-
-        if (data.status === 'complete' && data.token) {
-          clearInterval(diiaPollingRef.current!);
-          setDiiaDeeplink(null);
-          setDiiaSessionId(null);
-          await login(data.token);
-          if (onLoginSuccess) onLoginSuccess();
-          navigate(getReturnUrl(), { replace: true });
-        } else if (data.status === 'expired') {
-          clearInterval(diiaPollingRef.current!);
-          setDiiaDeeplink(null);
-          setDiiaSessionId(null);
-          setError('Сесія Дії закінчилась. Спробуйте ще раз.');
-        }
-      } catch {
-        // ignore polling errors
-      }
-    }, 3000);
-
-    return () => {
-      if (diiaPollingRef.current) clearInterval(diiaPollingRef.current);
-    };
-  }, [diiaSessionId]);
 
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
@@ -443,14 +388,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     window.location.href = `${window.location.origin}/auth/google`;
   };
 
-  const handleDiiaAuth = () => {
-    if (!isLogin && !allConsentsAccepted) {
-      setError('Для реєстрації необхідно прийняти всі документи');
-      return;
-    }
-    setError(null);
-    window.location.href = `${window.location.origin}/auth/diia`;
-  };
 
   const allConsentsAccepted = acceptedTerms && acceptedPrivacy && acceptedDpa;
 
@@ -922,15 +859,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               </button>
             </div>
           )}
-
-          {/* Diia Auth */}
-          <button
-            onClick={handleDiiaAuth}
-            className="w-full flex items-center justify-center gap-1.5 px-4 py-[11px] rounded-lg bg-[#0a0a0a] border border-zinc-800/80 text-zinc-300 text-[0.825rem] font-medium hover:bg-zinc-900 hover:border-zinc-700 active:opacity-80 transition-colors duration-150 mb-2"
-          >
-            <img src="/diia-logo-stroke.png" alt="Дія" width="24" height="24" className="flex-shrink-0" />
-            {t.diiaAuth}
-          </button>
 
           {/* SSO */}
           <button
@@ -1404,105 +1332,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   {t.referralCta}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Diia completing — returned from Diia app, polling in progress */}
-      <AnimatePresence>
-        {diiaSessionId && !diiaDeeplink && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.97, opacity: 0, y: 8 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.97, opacity: 0, y: 8 }}
-              transition={{ duration: 0.2 }}
-              className="relative bg-zinc-950 border border-zinc-800/70 rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center"
-            >
-              <button
-                onClick={() => { setDiiaSessionId(null); }}
-                className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-md text-zinc-700 hover:text-zinc-400 hover:bg-zinc-900 transition-colors"
-              >
-                <X size={13} />
-              </button>
-
-              <img src="/diia-logo-stroke.png" alt="Дія" width="44" height="44" className="mx-auto mb-5" />
-
-              <h2 className="text-[0.9rem] font-semibold text-zinc-100 mb-1.5 tracking-tight">Завершення входу</h2>
-              <p className="text-[0.75rem] text-zinc-500 mb-6 leading-relaxed">
-                Обробка авторизації через Дію…
-              </p>
-
-              <Loader2 size={22} className="animate-spin text-zinc-600 mx-auto mb-4" />
-
-              <p className="text-[10px] text-zinc-700">
-                Очікування підтвердження від Дії
-              </p>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Diia QR Modal */}
-      <AnimatePresence>
-        {diiaDeeplink && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => { setDiiaDeeplink(null); setDiiaSessionId(null); }}
-          >
-            <motion.div
-              initial={{ scale: 0.97, opacity: 0, y: 8 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.97, opacity: 0, y: 8 }}
-              transition={{ duration: 0.2 }}
-              onClick={(e) => e.stopPropagation()}
-              className="relative bg-zinc-950 border border-zinc-800/70 rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center"
-            >
-              <button
-                onClick={() => { setDiiaDeeplink(null); setDiiaSessionId(null); }}
-                className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-md text-zinc-700 hover:text-zinc-400 hover:bg-zinc-900 transition-colors"
-              >
-                <X size={13} />
-              </button>
-
-              <img src="/diia-logo-stroke.png" alt="Дія" width="44" height="44" className="mx-auto mb-5" />
-
-              <h2 className="text-[0.9rem] font-semibold text-zinc-100 mb-1.5 tracking-tight">Авторизація через Дія.Підпис</h2>
-              <p className="text-[0.75rem] text-zinc-500 mb-6 leading-relaxed">
-                Відкрийте застосунок Дія та відскануйте QR-код або натисніть кнопку нижче
-              </p>
-
-              <div className="bg-white rounded-xl p-4 mb-5 inline-block mx-auto">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(diiaDeeplink)}`}
-                  alt="Diia QR code"
-                  className="w-44 h-44"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-
-              <a
-                href={diiaDeeplink}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 rounded-lg font-medium text-sm transition-colors mb-4"
-              >
-                Відкрити в застосунку Дія
-              </a>
-
-              <p className="text-[10px] text-zinc-700 flex items-center justify-center gap-2">
-                <Loader2 size={10} className="animate-spin" />
-                Очікування автентифікації…
-              </p>
             </motion.div>
           </motion.div>
         )}
