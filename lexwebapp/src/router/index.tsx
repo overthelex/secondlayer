@@ -63,6 +63,7 @@ const AiUsagePolicyPage = lazyWithRetry(() => import('../pages/AiUsagePolicyPage
 const AiTransparencyPage = lazyWithRetry(() => import('../pages/AiTransparencyPage').then(m => ({ default: m.AiTransparencyPage })));
 const RefundPolicyPage = lazyWithRetry(() => import('../pages/RefundPolicyPage').then(m => ({ default: m.RefundPolicyPage })));
 const AupPage = lazyWithRetry(() => import('../pages/AupPage').then(m => ({ default: m.AupPage })));
+const ApiTermsPage = lazyWithRetry(() => import('../pages/ApiTermsPage').then(m => ({ default: m.ApiTermsPage })));
 const AbuseReportPage = lazyWithRetry(() => import('../pages/AbuseReportPage').then(m => ({ default: m.AbuseReportPage })));
 const BlogPage = lazyWithRetry(() => import('../pages/BlogPage').then(m => ({ default: m.BlogPage })));
 const BlogArticlePage = lazyWithRetry(() => import('../pages/BlogPage/BlogArticlePage').then(m => ({ default: m.BlogArticlePage })));
@@ -240,6 +241,10 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.AUP,
     element: S(AupPage),
+  },
+  {
+    path: ROUTES.API_TERMS,
+    element: S(ApiTermsPage),
   },
   {
     path: ROUTES.DATA_SOURCES,

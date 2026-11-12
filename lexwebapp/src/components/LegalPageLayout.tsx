@@ -31,6 +31,7 @@ const LEGAL_PAGES = [
   { path: 'marketplace-rules', labelUk: 'Правила маркетплейсу', labelEn: 'Marketplace Rules' },
   { path: 'refund-policy', labelUk: 'Повернення коштів', labelEn: 'Refund Policy' },
   { path: 'aup', labelUk: 'Допустиме використання', labelEn: 'Acceptable Use Policy' },
+  { path: 'api-terms', labelUk: 'Умови використання API', labelEn: 'API Terms of Use' },
 ];
 
 function extractToc(markdown: string): { toc: TocItem[]; title: string; subtitle: string; meta: string } {
