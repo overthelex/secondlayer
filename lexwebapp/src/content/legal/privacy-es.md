@@ -6,15 +6,15 @@
 
 ---
 
-Sociedad de Responsabilidad Limitada "Lex AI"
-Código EDRPOU: 46011385
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
 Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 Contacto de Protección de Datos: info@legal.org.ua
 
 ## 1. Introducción
 
-La presente Política de Privacidad describe cómo LLC "Lex AI" (en adelante, la "Empresa", "nosotros") recopila, trata, almacena y protege los datos personales de los usuarios del servicio LEX AI (en adelante, el "Servicio").
+La presente Política de Privacidad describe cómo Empresario individual Kyrychenko Igor Viktorovych (en adelante, la "Empresa", "nosotros") recopila, trata, almacena y protege los datos personales de los usuarios del servicio LEX AI (en adelante, el "Servicio").
 
 La Empresa trata los datos personales de conformidad con:
 - la Ley de Ucrania "Sobre la Protección de Datos Personales" (N.º 2297-VI);
@@ -271,8 +271,8 @@ Para consultas sobre calidad y seguridad de la IA, contacte: info@legal.org.ua
 
 Para consultas sobre protección de datos, contacte:
 
-LLC "Lex AI"
-EDRPOU: 46011385
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
 Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 Sitio web: https://legal.org.ua

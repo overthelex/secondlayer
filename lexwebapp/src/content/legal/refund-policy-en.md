@@ -1,13 +1,13 @@
 # REFUND POLICY
 
-## Lex AI LLC
+## Individual Entrepreneur Kyrychenko Igor Viktorovych
 
 *Last updated: March 3, 2026*
 
 ---
 
-**Lex AI LLC**
-EDRPOU: 46011385
+**Individual Entrepreneur Kyrychenko Igor Viktorovych**
+Tax ID (RNOKPP): 2967214056
 04132, Ukraine, Kyiv, 47-Sadova, 1a
 Email: info@legal.org.ua
 
@@ -15,7 +15,7 @@ Email: info@legal.org.ua
 
 ## 1. General Provisions
 
-This Refund Policy governs the procedure for refunding payments made to Lex AI LLC for access to software and information services.
+This Refund Policy governs the procedure for refunding payments made to Individual Entrepreneur Kyrychenko Igor Viktorovych for access to software and information services.
 
 ## 2. Grounds for Refund
 
@@ -53,7 +53,7 @@ Refunds are not available in the following cases:
 
 ## 6. Contact Information
 
-**Lex AI LLC**
-EDRPOU: 46011385
+**Individual Entrepreneur Kyrychenko Igor Viktorovych**
+Tax ID (RNOKPP): 2967214056
 04132, Ukraine, Kyiv, 47-Sadova, 1a
 Email: info@legal.org.ua

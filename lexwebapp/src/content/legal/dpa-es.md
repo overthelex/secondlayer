@@ -9,8 +9,8 @@
 El presente Acuerdo de Tratamiento de Datos ("DPA") es parte integrante de las Condiciones de Uso de la plataforma LEX AI ("Contrato Principal") entre:
 
 **Encargado del tratamiento:**
-Sociedad de Responsabilidad Limitada "Lex AI"
-Código EDRPOU: 46011385
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
 Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 (en adelante, el "Encargado", la "Empresa", "LEX AI")
@@ -272,8 +272,8 @@ El presente DPA entra en vigor tras la aceptación de las Condiciones de Uso del
 
 Para consultas sobre el tratamiento de datos y el DPA:
 
-LLC "Lex AI"
-EDRPOU: 46011385
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
 Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 Sitio web: https://legal.org.ua

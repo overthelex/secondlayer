@@ -6,14 +6,14 @@
 
 ---
 
-Limited Liability Company "Lex AI"
-EDRPOU Code: 46011385
+Individual Entrepreneur Kyrychenko Igor Viktorovych
+Tax ID (RNOKPP): 2967214056
 Address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
 Email: info@legal.org.ua
 
 ## 1. General Provisions
 
-1.1. This document is an official public offer by Limited Liability Company "Lex AI" (hereinafter — "Provider", "Company") to enter into an Agreement for the provision of information services (hereinafter — "Agreement") on the terms set forth below, with any individual or legal entity (hereinafter — "Client", "Customer").
+1.1. This document is an official public offer by Individual Entrepreneur Kyrychenko Igor Viktorovych (hereinafter — "Provider", "Company") to enter into an Agreement for the provision of information services (hereinafter — "Agreement") on the terms set forth below, with any individual or legal entity (hereinafter — "Client", "Customer").
 
 1.2. In accordance with Articles 633 and 641 of the Civil Code of Ukraine, this document constitutes a public offer, and upon acceptance of the terms set forth below, the Client undertakes to comply with the terms of this Agreement.
 
@@ -337,8 +337,8 @@ The detailed procedure is defined by the Marketplace Rules.
 
 ## 18. Provider Contact Information
 
-LLC "Lex AI"
-EDRPOU Code: 46011385
-Legal address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
+Individual Entrepreneur Kyrychenko Igor Viktorovych
+Tax ID (RNOKPP): 2967214056
+Address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
 Email: info@legal.org.ua
 Website: https://legal.org.ua
