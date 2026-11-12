@@ -8,7 +8,7 @@
 
 Individual Entrepreneur Kyrychenko Igor Viktorovych
 Tax ID (RNOKPP): 2967214056
-Address: 47-Sadova, 1a, Kyiv 04132, Ukraine
+Address: 04207, Ukraine, Kyiv, 19 Levka Lukianenka St., apt. 110
 Email: info@legal.org.ua
 
 ## 1. General Provisions

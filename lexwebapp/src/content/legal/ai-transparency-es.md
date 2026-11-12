@@ -8,7 +8,7 @@
 
 Empresario individual Kyrychenko Igor Viktorovych
 NIF (RNOKPP): 2967214056
-Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
+Dirección: 04207, Ucrania, Kyiv, calle Levka Lukianenka 19, apt. 110
 Correo electrónico: info@legal.org.ua
 
 ## 1. Finalidad de la Presente Declaración
@@ -158,7 +158,7 @@ Para consultas sobre transparencia de IA y mecanismos de seguridad:
 
 Empresario individual Kyrychenko Igor Viktorovych
 NIF (RNOKPP): 2967214056
-Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
+Dirección: 04207, Ucrania, Kyiv, calle Levka Lukianenka 19, apt. 110
 Correo electrónico: info@legal.org.ua
 Sitio web: https://legal.org.ua
 

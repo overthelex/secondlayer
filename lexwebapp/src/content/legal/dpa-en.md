@@ -11,7 +11,7 @@ This Data Processing Agreement ("DPA") is an integral part of the Terms of Servi
 **Processor:**
 Individual Entrepreneur Kyrychenko Igor Viktorovych
 Tax ID (RNOKPP): 2967214056
-Address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
+Address: 04207, Ukraine, Kyiv, 19 Levka Lukianenka St., apt. 110
 Email: info@legal.org.ua
 (hereinafter — "Processor", "Company", "LEX AI")
 
@@ -274,7 +274,7 @@ For data processing and DPA inquiries:
 
 Individual Entrepreneur Kyrychenko Igor Viktorovych
 Tax ID (RNOKPP): 2967214056
-Address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
+Address: 04207, Ukraine, Kyiv, 19 Levka Lukianenka St., apt. 110
 Email: info@legal.org.ua
 Website: https://legal.org.ua
 
