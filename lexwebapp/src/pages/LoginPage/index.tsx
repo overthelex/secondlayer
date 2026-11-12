@@ -22,11 +22,9 @@ import {
   ChevronRight,
   Gift,
   UserPlus,
-  Heart,
   Sparkles,
   Building2,
 } from 'lucide-react';
-import { ClosedBetaModal } from '../../components/ClosedBetaModal';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { hasRecentArticles } from '../BlogPage/articles';
 import { useAuth } from '../../contexts/AuthContext';
@@ -227,138 +225,6 @@ function PanelDivider() {
   return (
     <div className="hidden lg:block absolute right-0 top-0 bottom-0 w-px">
       <div className="h-full bg-gradient-to-b from-transparent via-zinc-700/35 to-transparent" />
-    </div>
-  );
-}
-
-const DONATION_AMOUNTS_UAH = [200, 400] as const;
-const DONATION_MAX_UAH = 200000;
-
-function DonateCard() {
-  const [selected, setSelected] = useState<number | 'custom'>(200);
-  const [customAmount, setCustomAmount] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showBetaModal, setShowBetaModal] = useState(false);
-
-  const amountUah = selected === 'custom'
-    ? Math.floor(parseFloat(customAmount) || 0)
-    : selected;
-  const canDonate = amountUah >= 1 && amountUah <= DONATION_MAX_UAH;
-
-  const handleDonate = async () => {
-    if (!canDonate) {
-      setError(amountUah < 1 ? 'Мінімум 1 ₴' : `Максимум ${DONATION_MAX_UAH.toLocaleString('uk-UA')} ₴`);
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${BASE_URL}/api/donations/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount_uah: amountUah }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        if (response.status === 403 || data.errCode === 'FORBIDDEN' || (data.message || data.error || '').includes('terminal')) {
-          setShowBetaModal(true);
-          setIsLoading(false);
-          return;
-        }
-        throw new Error(data.message || data.error || 'Не вдалося створити донат');
-      }
-
-      window.location.href = data.pageUrl;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Помилка донату';
-      if (msg.includes('FORBIDDEN') || msg.includes('terminal')) {
-        setShowBetaModal(true);
-        setIsLoading(false);
-        return;
-      }
-      setError(msg);
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="w-full mt-4 px-4 py-4 rounded-lg bg-zinc-900/40 border border-zinc-800/50 hover:border-zinc-700/70 transition-colors duration-150">
-      <div className="flex items-center gap-2 mb-3">
-        <Heart size={11} className="text-rose-500/80" />
-        <span className="text-[9px] font-bold text-zinc-400 tracking-[0.2em] uppercase">
-          Підтримати проект
-        </span>
-      </div>
-      <p className="text-[10px] text-zinc-500 leading-relaxed mb-3">
-        Донат через Monobank допомагає розвивати платформу для всіх.
-      </p>
-      <div className="grid grid-cols-3 gap-1.5 mb-2">
-        {DONATION_AMOUNTS_UAH.map((amount) => (
-          <button
-            key={amount}
-            type="button"
-            onClick={() => { setSelected(amount); setError(null); }}
-            className={`py-2 rounded-md text-[11px] font-medium tracking-wide transition-all duration-150 ${
-              selected === amount
-                ? 'bg-zinc-100 text-zinc-900 border border-zinc-100'
-                : 'bg-zinc-900/60 text-zinc-400 border border-zinc-800/70 hover:border-zinc-700 hover:text-zinc-200'
-            }`}
-          >
-            {amount} ₴
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => { setSelected('custom'); setError(null); }}
-          className={`py-2 rounded-md text-[11px] font-medium tracking-wide transition-all duration-150 ${
-            selected === 'custom'
-              ? 'bg-zinc-100 text-zinc-900 border border-zinc-100'
-              : 'bg-zinc-900/60 text-zinc-400 border border-zinc-800/70 hover:border-zinc-700 hover:text-zinc-200'
-          }`}
-        >
-          Своя
-        </button>
-      </div>
-      {selected === 'custom' && (
-        <div className="relative mb-3">
-          <input
-            type="number"
-            min="1"
-            max={DONATION_MAX_UAH}
-            step="1"
-            inputMode="numeric"
-            value={customAmount}
-            onChange={(e) => { setCustomAmount(e.target.value); setError(null); }}
-            placeholder="Введіть суму"
-            className="block w-full pl-3 pr-8 py-2 bg-zinc-900/60 border border-zinc-800/70 rounded-md text-[12px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600 focus:border-zinc-600 transition-all"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-zinc-500 pointer-events-none">₴</span>
-        </div>
-      )}
-      {error && (
-        <p className="text-[10px] text-red-400 mb-2 flex items-center gap-1">
-          <AlertCircle size={10} />
-          {error}
-        </p>
-      )}
-      <button
-        type="button"
-        onClick={handleDonate}
-        disabled={isLoading || !canDonate}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700/70 hover:border-zinc-600 text-zinc-200 text-[11px] font-medium transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-      >
-        {isLoading ? (
-          <Loader2 size={11} className="animate-spin" />
-        ) : (
-          <>
-            <Heart size={11} className="text-rose-500/80" />
-            {canDonate ? `Задонатити ${amountUah} ₴` : 'Задонатити'}
-          </>
-        )}
-      </button>
-      <ClosedBetaModal isOpen={showBetaModal} onClose={() => setShowBetaModal(false)} variant="dark" />
     </div>
   );
 }
@@ -1390,9 +1256,6 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
               className="text-zinc-800 group-hover:text-zinc-600 flex-shrink-0 transition-all duration-200 group-hover:translate-x-0.5"
             />
           </button>
-
-          {/* Donate */}
-          <DonateCard />
 
           {/* Footer legal links */}
           <div className="mt-5 pb-4 sm:pb-0 flex flex-wrap justify-center gap-x-3 gap-y-1.5">
