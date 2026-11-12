@@ -6,8 +6,8 @@
 
 ---
 
-Sociedad de Responsabilidad Limitada "Lex AI"
-Código EDRPOU: 46011385
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
 Dirección: 47-Sadova, 1a, Kyiv 04132, Ucrania
 Correo electrónico: info@legal.org.ua
 

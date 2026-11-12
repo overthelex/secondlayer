@@ -6,14 +6,14 @@
 
 ---
 
-Sociedad de Responsabilidad Limitada "Lex AI"
-Código EDRPOU: 46011385
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
 Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 
 ## 1. Disposiciones Generales
 
-1.1. El presente documento constituye una oferta pública oficial de la Sociedad de Responsabilidad Limitada "Lex AI" (en adelante — "Proveedor", "Empresa") para celebrar un Contrato de prestación de servicios de información (en adelante — "Contrato") en los términos establecidos a continuación, con cualquier persona física o jurídica (en adelante — "Cliente").
+1.1. El presente documento constituye una oferta pública oficial de la Empresario individual Kyrychenko Igor Viktorovych (en adelante — "Proveedor", "Empresa") para celebrar un Contrato de prestación de servicios de información (en adelante — "Contrato") en los términos establecidos a continuación, con cualquier persona física o jurídica (en adelante — "Cliente").
 
 1.2. De conformidad con los artículos 633 y 641 del Código Civil de Ucrania, el presente documento constituye una oferta pública y, tras la aceptación de los términos establecidos a continuación, el Cliente se compromete a cumplir con los términos del presente Contrato.
 
@@ -335,8 +335,8 @@ El procedimiento detallado se define en las Reglas del Mercado.
 
 ## 18. Datos de Contacto del Proveedor
 
-LLC "Lex AI"
-Código EDRPOU: 46011385
-Dirección legal: 04132, Ucrania, Kyiv, 47-Sadova, 1a
+Empresario individual Kyrychenko Igor Viktorovych
+NIF (RNOKPP): 2967214056
+Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 Sitio web: https://legal.org.ua

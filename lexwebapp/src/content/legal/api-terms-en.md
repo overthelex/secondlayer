@@ -6,14 +6,14 @@
 
 ---
 
-Limited Liability Company "Lex AI" (LLC "Lex AI")
-EDRPOU code: 46011385
+Individual Entrepreneur Kyrychenko Igor Viktorovych
+Tax ID (RNOKPP): 2967214056
 Address: 04132, Ukraine, Kyiv, 47-a Sadova St., 1a
 Email: api@legal.org.ua
 
 ## 1. General Provisions
 
-1.1. This document is an official offer by LLC "Lex AI" (hereinafter — the **"Provider"**), addressed to a legal entity or individual entrepreneur registered in accordance with the laws of its respective jurisdiction (hereinafter — the **"Developer"**), to enter into this Agreement on providing access to the LEX AI Platform API for commercial use (hereinafter — the **"Agreement"**) under the terms set forth below.
+1.1. This document is an official offer by Individual Entrepreneur Kyrychenko Igor Viktorovych (hereinafter — the **"Provider"**), addressed to a legal entity or individual entrepreneur registered in accordance with the laws of its respective jurisdiction (hereinafter — the **"Developer"**), to enter into this Agreement on providing access to the LEX AI Platform API for commercial use (hereinafter — the **"Agreement"**) under the terms set forth below.
 
 1.2. Individuals without business entity status cannot accept this offer.
 

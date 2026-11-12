@@ -1,13 +1,13 @@
 # POLÍTICA DE REEMBOLSO
 
-## Lex AI LLC
+## Empresario individual Kyrychenko Igor Viktorovych
 
 *Última actualización: 3 de marzo de 2026*
 
 ---
 
-**Lex AI LLC**
-EDRPOU: 46011385
+**Empresario individual Kyrychenko Igor Viktorovych**
+NIF (RNOKPP): 2967214056
 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua
 
@@ -15,7 +15,7 @@ Correo electrónico: info@legal.org.ua
 
 ## 1. Disposiciones Generales
 
-La presente Política de Reembolso regula el procedimiento de devolución de los pagos realizados a Lex AI LLC por el acceso a software y servicios de información.
+La presente Política de Reembolso regula el procedimiento de devolución de los pagos realizados a Empresario individual Kyrychenko Igor Viktorovych por el acceso a software y servicios de información.
 
 ## 2. Motivos de Reembolso
 
@@ -53,7 +53,7 @@ No se realizan reembolsos en los siguientes casos:
 
 ## 6. Datos de Contacto
 
-**Lex AI LLC**
-EDRPOU: 46011385
+**Empresario individual Kyrychenko Igor Viktorovych**
+NIF (RNOKPP): 2967214056
 04132, Ucrania, Kyiv, 47-Sadova, 1a
 Correo electrónico: info@legal.org.ua

@@ -6,8 +6,8 @@
 
 ---
 
-Limited Liability Company "Lex AI"
-EDRPOU Code: 46011385
+Individual Entrepreneur Kyrychenko Igor Viktorovych
+Tax ID (RNOKPP): 2967214056
 Address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
 Email: info@legal.org.ua
 
@@ -156,8 +156,8 @@ The Company commits to:
 
 For AI transparency and safety mechanism inquiries:
 
-LLC "Lex AI"
-EDRPOU: 46011385
+Individual Entrepreneur Kyrychenko Igor Viktorovych
+Tax ID (RNOKPP): 2967214056
 Address: 04132, Ukraine, Kyiv, 47-Sadova, 1a
 Email: info@legal.org.ua
 Website: https://legal.org.ua
