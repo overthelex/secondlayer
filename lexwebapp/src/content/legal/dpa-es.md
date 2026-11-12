@@ -11,7 +11,7 @@ El presente Acuerdo de Tratamiento de Datos ("DPA") es parte integrante de las C
 **Encargado del tratamiento:**
 Empresario individual Kyrychenko Igor Viktorovych
 NIF (RNOKPP): 2967214056
-Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
+Dirección: 04207, Ucrania, Kyiv, calle Levka Lukianenka 19, apt. 110
 Correo electrónico: info@legal.org.ua
 (en adelante, el "Encargado", la "Empresa", "LEX AI")
 
@@ -274,7 +274,7 @@ Para consultas sobre el tratamiento de datos y el DPA:
 
 Empresario individual Kyrychenko Igor Viktorovych
 NIF (RNOKPP): 2967214056
-Dirección: 04132, Ucrania, Kyiv, 47-Sadova, 1a
+Dirección: 04207, Ucrania, Kyiv, calle Levka Lukianenka 19, apt. 110
 Correo electrónico: info@legal.org.ua
 Sitio web: https://legal.org.ua
 
