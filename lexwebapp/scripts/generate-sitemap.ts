@@ -55,7 +55,7 @@ const dataSourcePages: SitemapEntry[] = [
 
 const legalSlugs = [
   'offer', 'terms', 'privacy', 'dpa', 'ai-usage', 'ai-transparency',
-  'refund-policy', 'attorney-offer', 'developer-offer', 'marketplace-rules',
+  'refund-policy', 'attorney-offer', 'developer-offer', 'marketplace-rules', 'api-terms',
 ];
 const legalLangs = ['en', 'ua'];
 

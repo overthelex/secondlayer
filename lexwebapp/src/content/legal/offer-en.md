@@ -2,7 +2,7 @@
 
 ## for the provision of information services using the LEX AI platform
 
-*Last updated: March 13, 2026*
+*Last updated: November 12, 2026*
 
 ---
 
@@ -122,6 +122,7 @@ Maximum compensation: 1 (one) month of free access. To claim compensation, the C
 - modify Pricing Plan terms with 30 days' prior notice;
 - temporarily suspend Services for maintenance;
 - restrict or terminate the Client's access to the Service in case of breach of the Agreement;
+- immediately and without notice deactivate MCP tokens used outside the scope defined in the Terms of Service (other Service addresses, non-permitted tools, revoked tokens, transfer of a token to third parties); the remaining balance is not refunded in that case (clause 11.4);
 - make changes to the Service functionality without prior consent;
 - send the Client service notifications related to the provision of Services.
 
@@ -130,6 +131,7 @@ Maximum compensation: 1 (one) month of free access. To claim compensation, the C
 - pay for Services in a timely manner in accordance with the selected Pricing Plan;
 - provide accurate information during registration and keep it up to date;
 - maintain the confidentiality of account credentials, passwords, and MCP tokens;
+- use MCP tokens only on the MCP server `https://mcp.legal.org.ua/api/v2/mcp` and only for the tools available under the pricing plan, in accordance with Section 5 of the Terms of Service;
 - not transfer access rights to the account to third parties;
 - use the Service exclusively for lawful purposes.
 
@@ -259,7 +261,7 @@ The detailed procedure is defined by the Marketplace Rules.
 
 11.4. Upon termination:
 - access to the Service is discontinued;
-- the unused remainder of the paid period is not refunded if the Agreement is terminated at the Client's initiative or due to the Client's breach;
+- the unused remainder of the paid period and of the balance is not refunded if the Agreement is terminated at the Client's initiative or due to the Client's breach of the Agreement or the Terms of Service (including the MCP token rules); such remainder is retained by the Provider as a contractual penalty (Articles 549 and 551 of the Civil Code of Ukraine);
 - the Provider retains the Client's data for 30 (thirty) days for possible recovery, after which it is deleted in accordance with the Privacy Policy.
 
 11.5. Termination of the Agreement does not release the parties from obligations that arose prior to termination.

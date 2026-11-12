@@ -2,7 +2,7 @@
 
 ## LEX AI Platform
 
-*Last updated: March 14, 2026*
+*Last updated: November 12, 2026*
 
 ---
 
@@ -81,6 +81,15 @@ The User is obligated to:
 
 The Company reserves the right to block or delete an account in case of violation of these Terms.
 
+**MCP Tokens and API Keys.** An MCP token is intended exclusively for connecting to the Service's MCP server at `https://mcp.legal.org.ua/api/v2/mcp` (header `Authorization: Bearer <token>` or OAuth sign-in) and for calling only the tools that the Service returns to the User in the list of available tools (`tools/list`) within their pricing plan. The User may connect the token to their own MCP clients and agents (Claude Desktop, Claude Code, Cursor, custom code) operating on their behalf. The following is prohibited:
+- using the token on other Service addresses (`/v1/mcp`, `/v1/sse`, `/sse`, `/api/tools/*`, service and administrative interfaces, the web application), regardless of whether such an address technically accepts the token;
+- calling or attempting to call tools not included in the list of available tools (including import, administration, bulk download and credential search tools), or circumventing a refusal by the Service;
+- using a revoked, deactivated or replaced token after being notified of this, or enumerating or probing tokens that do not belong to the User;
+- transferring the token to third parties, publishing it, or pasting it into third-party services that store or execute code (online sandboxes, chatbots, shared notebooks);
+- creating additional accounts or tokens to circumvent limits.
+
+All requests made with a token are logged (time, address, tool, IP address, client software, authentication outcome); the log constitutes evidence of a violation.
+
 ## 6. Acceptable Use
 
 The User agrees to use the Service exclusively for lawful purposes. The following is prohibited:
@@ -117,6 +126,8 @@ Refunds are available in the following cases:
 
 Refund requests should be sent to info@legal.org.ua within 14 calendar days of the event. Refunds are processed within 10 business days.
 
+No refund is made if access was terminated or a token deactivated due to a violation of these Terms, including the MCP token rules (Section 5): the unused balance is retained by the Company as a contractual penalty for breach under Articles 549 and 551 of the Civil Code of Ukraine, is not transferred to other accounts and is not credited against future payments.
+
 ## 10. Limitation of Liability
 
 The Service is provided "as is." The Company does not guarantee uninterrupted operation and shall not be liable for:
@@ -134,6 +145,8 @@ The User may discontinue use of the Service at any time by deleting their accoun
 The Company may terminate services:
 - with 30 days' written notice;
 - immediately — in case of material breach of these Terms.
+
+If an MCP token is used outside the permitted scope (Section 5), the Company has the right to immediately and without notice deactivate that token or all of the User's tokens and terminate services; the remaining balance is not refunded in that case (Section 9). Access may be restored only by a separate decision of the Company.
 
 After termination, the Company retains data for 30 days for possible recovery, after which it is deleted in accordance with the Privacy Policy.
 

@@ -73,6 +73,7 @@ export const ROUTES = {
   AI_TRANSPARENCY: '/:lang/ai-transparency',
   REFUND_POLICY: '/:lang/refund-policy',
   AUP: '/:lang/aup',
+  API_TERMS: '/:lang/api-terms',
 
   // Abuse report (public)
   ABUSE_REPORT: '/abuse',

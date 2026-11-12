@@ -2,7 +2,7 @@
 
 ## for developers of commercial solutions
 
-*Last updated: March 24, 2026*
+*Last updated: November 12, 2026*
 
 ---
 
@@ -33,7 +33,13 @@ whichever occurs first (Article 642 of the Civil Code of Ukraine).
 
 **"API"** (Application Programming Interface) — the Platform's programming interface that allows the Developer to integrate LEX AI functionality into their own software products via HTTP requests, MCP protocol, or SSE connections.
 
-**"API Key"** — a unique authentication identifier provided to the Developer for API access.
+**"API Key"** — a unique authentication identifier (a string of the form `sl_…`) provided to the Developer for API access.
+
+**"Permitted Endpoint"** — the API address on which the API Key may be used. The only Permitted Endpoint is the Platform's MCP server at `https://mcp.legal.org.ua/api/v2/mcp` (MCP protocol, Streamable HTTP transport), unless otherwise agreed with the Provider in writing.
+
+**"Permitted Tools"** — the MCP server tools that the Platform returns in response to a `tools/list` request for the specific account and API Key, and that are included in the Developer's pricing plan or agreed in a separate agreement.
+
+**"Revoked Key"** — an API Key that has been deactivated or revoked by the Provider or the Developer, has expired, or has been replaced by a new key.
 
 **"SaaS Product"** — Software as a Service created by the Developer using the Platform API, which the Developer provides to its End Users on a commercial basis.
 
@@ -86,6 +92,22 @@ Use of individual API functions (for example, only registry search or only docum
 - mass automated data extraction (scraping) for the purpose of accumulating databases beyond normal API usage.
 
 4.5. In case of doubt regarding the permissibility of specific use, the Developer is obligated to contact the Provider for prior approval.
+
+4.6. **Scope of Access under the API Key. Permitted:**
+- using the API Key exclusively on the Permitted Endpoint (`/api/v2/mcp`) with the header `Authorization: Bearer <key>` or via OAuth authorization of the Developer's account;
+- calling only Permitted Tools within the Rate Limits and the selected pricing plan;
+- connecting the key to the Developer's own software products and to MCP clients (Claude Desktop, Claude Code, Cursor, custom agents) operating on behalf of the Developer;
+- storing the key in the Developer's own infrastructure or in the infrastructure of a contractor bound by a confidentiality obligation.
+
+4.7. **Scope of Access under the API Key. Prohibited:**
+- using the API Key on any other Platform endpoints, including `/v1/mcp`, `/v1/sse`, `/sse`, `/api/tools/*`, service, internal and administrative interfaces, and the web application, regardless of whether such an endpoint technically accepts the key;
+- calling or attempting to call tools that are not Permitted Tools, including data import, administration, bulk download and credential search (OSINT) tools, or circumventing a Platform refusal (responses with codes `TOOL_FORBIDDEN`, `API_KEY_V2_ONLY`);
+- making requests with a Revoked Key after notice of its revocation or replacement, or enumerating, guessing or probing keys that do not belong to the Developer;
+- transferring the key to third parties or End Users, publishing it in open source code, pasting it into third-party services that store or execute code (online sandboxes, chatbots, shared notebooks), or using one key for several independent products or customers;
+- creating additional accounts or keys in order to circumvent Rate Limits or other restrictions;
+- using results obtained through the API to systematically copy the Platform's databases.
+
+4.8. **Logging.** All requests made with an API Key are logged by the Provider (time, endpoint, tool, IP address, client software, response size, authentication outcome). The log constitutes proper evidence of the fact and extent of a breach of the scope of access.
 
 ## 5. Attribution and Branding
 
@@ -240,15 +262,23 @@ Response times are target metrics, not guarantees.
 - a threat to the security or stability of the Platform;
 - the Developer's violation of the prohibition on creating Competing Products;
 - breach of confidentiality or data protection obligations;
-- use of the API for unlawful purposes.
+- use of the API for unlawful purposes;
+- use of the API Key outside the scope of access defined in clauses 4.6–4.7 (other endpoints, non-permitted tools, a Revoked Key, transfer of the key to third parties).
 
-12.4. **Agreement Termination.** Each Party has the right to terminate the Agreement by giving the other Party 30 (thirty) calendar days' written notice. The remaining balance is returned to the Developer within 15 business days after termination, minus the cost of API Requests already used.
+12.4. **Agreement Termination.** Each Party has the right to terminate the Agreement by giving the other Party 30 (thirty) calendar days' written notice. The remaining balance is returned to the Developer within 15 business days after termination, minus the cost of API Requests already used, except in the cases provided for in clause 12.6.
 
 12.5. **Consequences of Termination.** After termination of the Agreement:
 - the Developer's API Keys are deactivated;
 - the Developer must cease using the Provider's attribution and logos within 30 days;
 - API Request logs are retained for 90 days, after which they are deleted;
 - obligations regarding confidentiality and intellectual property remain in effect.
+
+12.6. **Consequences of Breaching the Scope of Access.** If the API Key is used in breach of clauses 4.6–4.7, the Provider has the right to:
+- immediately and without prior notice deactivate the relevant API Key or all of the Developer's API Keys;
+- terminate the Agreement unilaterally as of the moment a notice is sent to the Developer's email address;
+- retain the unused prepaid balance of the Developer's account as a contractual penalty for breach of the Agreement under Articles 549 and 551 of the Civil Code of Ukraine and Article 230 of the Commercial Code of Ukraine. In that case the remaining balance is not refunded, not transferred to other accounts and not credited against future payments, and clause 12.4 does not apply insofar as it concerns refunds.
+
+Retention of the balance does not release the Developer from compensating the Provider's losses exceeding that balance. Access may be restored after such a breach only by a separate written decision of the Provider.
 
 ## 13. Force Majeure
 
