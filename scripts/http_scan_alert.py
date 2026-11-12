@@ -72,10 +72,18 @@ SCAN_PATTERNS = [
     "%/.docker%", "%/.vscode%", "%/.idea%", "%/.claude%", "%/.cursor%",
     "%/actuator%", "%swagger%", "%/api-docs%", "%/v3/api-docs%", "%/openapi.%",
     "%phpinfo%", "%.php", "%/wp-%", "%/xmlrpc%", "%/phpmyadmin%", "%/cgi-bin/%",
-    "%.sql", "%.bak", "%.tfstate", "%credentials%", "%id_rsa%", "%service_account%",
+    "%.sql", "%.bak", "%.tfstate", "%/.aws/credentials%", "%credentials.json%", "%credentials.txt%",
+    "%id_rsa%", "%service_account%",
     "%/server-status", "%/server-info", "%docker-compose%", "%/config.yaml", "%/config.yml", "%/.config%",
     "%/_profiler%", "%/telescope%", "%/console/%", "%/vendor/%", "%/backup%", "%/dump%", "%/storage/logs%",
 ]
+# Власні шляхи фронтенду, які випадково збігаються з шаблонами вище (вони віддають 403/404 і
+# залогіненому користувачу): їх не рахуємо за сканування.
+OWN_PATH_PREFIXES = ("/auth/webauthn/",)
+
+
+def own_path(path: str) -> bool:
+    return path.startswith(OWN_PATH_PREFIXES)
 
 
 def iso(s: str) -> str:
@@ -318,7 +326,10 @@ def main() -> int:
                                "hosts": set(), "ua": set(), "probe_paths": set(), "ok2xx": 0,
                                "not403": 0})
     for g in scan:
-        d = g["dimensions"]; p = per[d["clientIP"]]
+        d = g["dimensions"]
+        if own_path(d["clientRequestPath"]):
+            continue
+        p = per[d["clientIP"]]
         p["hits"] += g["count"]
         p["status"][d["edgeResponseStatus"]] += g["count"]
         if d["edgeResponseStatus"] != 403:
@@ -331,7 +342,10 @@ def main() -> int:
         if d["clientRequestPath"] not in p["paths"]:
             p["paths"].append(d["clientRequestPath"])
     for g in probe:
-        d = g["dimensions"]; p = per[d["clientIP"]]
+        d = g["dimensions"]
+        if own_path(d["clientRequestPath"]):
+            continue
+        p = per[d["clientIP"]]
         p["probe_paths"].add(d["clientRequestPath"])
         # /cdn-cgi/ віддає сам край ще до правил, тож його 404 не означає, що блок пропустив запит.
         if d["edgeResponseStatus"] != 403 and not d["clientRequestPath"].startswith("/cdn-cgi/"):
