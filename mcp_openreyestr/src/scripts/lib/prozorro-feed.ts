@@ -227,16 +227,17 @@ function cleanAmount(v: unknown): number | null {
  * Phones come in any format ("+380 97 700-92-63", "0977009263"). Keep digits,
  * and give a 10-digit national number the 38 prefix, so one phone matches
  * across suppliers. Returns null for anything that is not 9-15 digits and for
- * placeholder numbers whose last 9 digits are one repeated digit.
+ * placeholder numbers whose last 7 digits are one repeated digit.
  */
 export function normalizePhone(v: unknown): string | null {
   if (typeof v !== 'string') return null;
   let d = v.replace(/\D/g, '');
   if (d.length === 10 && d.startsWith('0')) d = `38${d}`;
   if (d.length < 9 || d.length > 15) return null;
-  // Placeholders ("+380000000000", "000000000", "0999999999") would make
-  // dozens of unrelated suppliers look like they share a phone.
-  if (/^(\d)\1+$/.test(d.slice(-9))) return null;
+  // Placeholders ("+380000000000", "044 000-00-00", "0999999999") would make
+  // dozens of unrelated suppliers look like they share a phone. No real
+  // subscriber number ends in seven identical digits.
+  if (/^(\d)\1+$/.test(d.slice(-7))) return null;
   return d;
 }
 
