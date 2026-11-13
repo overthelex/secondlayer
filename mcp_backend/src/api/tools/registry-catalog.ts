@@ -558,6 +558,39 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
 
   // ── US Open Data registries ──────────────────────────────────────
 
+  construction_documents: {
+    title: 'Реєстр будівельної діяльності (ЄДЕССБ)',
+    description: `Пошук документів Реєстру будівельної діяльності ЄДЕССБ: повідомлення та дозволи на початок робіт, декларації про готовність до експлуатації, сертифікати, зміни, скасування, анулювання.
+
+Для перевірки контрагента за ЄДРПОУ в будь-якій ролі (замовник, генпідрядник, проєктувальник, експертна організація, орган, що видав документ) використовуйте поле edrpou. Також пошук за кадастровим номером, адресою, назвою об'єкта, типом документа, класом наслідків (1-3) і датою.
+
+ПОКРИТТЯ: 2021 рік, 01.01–22.02.2022 і 2026 рік (оновлюється щомісяця). Документів з 23.02.2022 по 31.12.2025 у відкритих даних НЕМАЄ, тому відсутність документа за цей період нічого не доводить. Дані про генпідрядника заповнені частково (2021: близько половини документів юросіб; 2026: менше 10%), тому порожній contractor_edrpou не означає, що підрядника не було. Замовники-фізичні особи знеособлені в джерелі. Частину об'єктів приховано з міркувань національної безпеки.
+
+Джерело: Портал ЄДЕССБ, відкриті дані data.gov.ua, ліцензія CC BY 4.0.`,
+    table: 'opendata_edessb_documents',
+    selectColumns: `reg_date::text AS reg_date, doc_type, status_label, consequence_class, build_type, build_way, object_name, address, land_number, customer_type, customer_name, customer_edrpou, contractor_name, contractor_edrpou, contract_date::text AS contract_date, designer_name, designer_edrpou, expertise_name, expertise_edrpou, issuer_name, issuer_edrpou, application_id, incoming_doc_number, history_ids, lat, lon`,
+    orderBy: 'reg_date DESC NULLS LAST',
+    emptyMessage: 'Документів у Реєстрі будівельної діяльності не знайдено (зверніть увагу: даних за 23.02.2022–31.12.2025 у відкритому доступі немає)',
+    defaultLimit: 20,
+    maxLimit: 100,
+    fields: [
+      { name: 'edrpou', description: 'ЄДРПОУ в будь-якій ролі: замовник, генпідрядник, проєктувальник, експертиза, орган, що видав', match: 'exact_multi', columns: ['customer_edrpou', 'contractor_edrpou', 'designer_edrpou', 'expertise_edrpou', 'issuer_edrpou'] },
+      { name: 'customer_edrpou', description: 'ЄДРПОУ замовника будівництва', match: 'exact', columns: ['customer_edrpou'] },
+      { name: 'contractor_edrpou', description: 'ЄДРПОУ генерального підрядника', match: 'exact', columns: ['contractor_edrpou'] },
+      { name: 'designer_edrpou', description: 'ЄДРПОУ проєктувальника (розробника проєктної документації)', match: 'exact', columns: ['designer_edrpou'] },
+      { name: 'customer_name', description: 'Назва замовника (частина назви)', match: 'ilike', columns: ['customer_name'] },
+      { name: 'contractor_name', description: 'Назва генпідрядника (частина назви)', match: 'ilike', columns: ['contractor_name'] },
+      { name: 'land_number', description: 'Кадастровий номер земельної ділянки, напр. "8000000000:75:123:0001"', match: 'exact', columns: ['land_number'] },
+      { name: 'object_name', description: "Назва об'єкта будівництва (частина назви)", match: 'ilike', columns: ['object_name'] },
+      { name: 'address', description: 'Адреса об\'єкта (частина: область, населений пункт, вулиця)', match: 'ilike', columns: ['address'] },
+      { name: 'doc_type', description: 'Тип документа (частина назви): "дозвіл", "декларація про готовність", "сертифікат", "початок виконання будівельних робіт", "скасування"', match: 'ilike', columns: ['doc_type'] },
+      { name: 'consequence_class', description: 'Клас наслідків: 1 (СС1), 2 (СС2), 3 (СС3)', match: 'exact', columns: ['consequence_class'], type: 'number' },
+      { name: 'date_from', description: 'Дата реєстрації документа від (YYYY-MM-DD)', match: 'gte', columns: ['reg_date'] },
+      { name: 'date_to', description: 'Дата реєстрації документа до (YYYY-MM-DD)', match: 'lte', columns: ['reg_date'] },
+      { name: 'application_id', description: 'Реєстраційний номер документа в ЄДЕССБ, напр. "ІУ051260305942"', match: 'exact', columns: ['application_id'] },
+    ],
+  },
+
   us_court_opinions: {
     title: 'US Court Opinions (6.9M decisions)',
     description: 'Full-text search across 6.9M US court opinions from the Caselaw Access Project.\nCovers federal and state courts, 1658–2020. 360 years of legal history.\n\nSearch by text keywords (FTS on preview), reporter series (e.g. f2d, us, s-ct), or text length.',
