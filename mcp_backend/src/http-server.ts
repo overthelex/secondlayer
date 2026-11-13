@@ -83,6 +83,7 @@ import { createJudgeAnalyticsRoutes } from './routes/judge-analytics-routes.js';
 import { createReferralRoutes } from './routes/referral-routes.js';
 import { createSupportRoutes } from './routes/support-routes.js';
 import { createAbuseRoutes } from './routes/abuse-routes.js';
+import { createZakonRoutes } from './routes/zakon-routes.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
 import { createSessionReplayRoutes, createAdminSessionReplayRoutes } from './routes/session-replay-routes.js';
@@ -657,6 +658,11 @@ class HTTPMCPServer {
     // Abuse report — public form, no auth required
     this.app.use('/api/abuse-report', createAbuseRoutes(this.services.db, this.billing.emailService));
     logger.info('Abuse report routes registered at /api/abuse-report');
+
+    // Public SEO pages for the main codes (server-rendered HTML, no auth,
+    // outside /api so they are indexable). The edge nginx proxies /zakon here.
+    this.app.use('/zakon', createZakonRoutes(this.services.db));
+    logger.info('Public code pages registered at /zakon');
 
     // Legislation monitoring routes - subscriptions, changes, notifications
     this.app.use('/api/legislation/monitoring', requireJWT as any, createLegislationMonitoringRoutes(this.app_.legislationMonitoringService));

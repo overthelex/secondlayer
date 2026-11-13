@@ -19,6 +19,8 @@ Allow: /nl/data-sources
 Allow: /ee/data-sources
 Allow: /ua/data-sources
 Allow: /eu/comparison
+Allow: /zakon
+Allow: /zakon/*
 
 Disallow: /chat
 Disallow: /profile

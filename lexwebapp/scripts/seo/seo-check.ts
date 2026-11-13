@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { BASE_URL } from './html';
+import { BACKEND_SITEMAPS } from './sitemap';
 
 function fileFor(distDir: string, urlPath: string): string {
   const rel = urlPath.replace(/^\//, '');
@@ -22,7 +23,10 @@ export function seoCheck(distDir: string): { checked: number; errors: string[] }
   const shell = fs.readFileSync(path.join(distDir, 'index.html'), 'utf-8');
   const shellTitle = shell.match(/<title>([^<]*)<\/title>/)?.[1];
   const index = fs.readFileSync(path.join(distDir, 'sitemap.xml'), 'utf-8');
-  const sitemapFiles = locsOf(index).map(u => path.join(distDir, u.replace(BASE_URL + '/', '')));
+  const backend = new Set(BACKEND_SITEMAPS.map(p => BASE_URL + p));
+  const sitemapFiles = locsOf(index)
+    .filter(u => !backend.has(u)) // served by mcp_backend, checked by its own tests
+    .map(u => path.join(distDir, u.replace(BASE_URL + '/', '')));
 
   const errors: string[] = [];
   const urls: string[] = [];
