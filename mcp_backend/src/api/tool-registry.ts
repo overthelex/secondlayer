@@ -47,6 +47,8 @@ const TOOL_TIMEOUT_OVERRIDES: Record<string, number> = {
   edrsr_get_decision_dispositive: 15_000,
   build_legal_decision: 120_000,
   search_public_spending: 120_000,
+  // ~20 registry sub-calls in parallel (40 s soft deadline each), then courts by name.
+  get_company_dossier: 100_000,
   // Up to 60 instruments and 200 provisions, 3-4 queries per instrument.
   uk_check_citations: 120_000,
   analyze_data: 45_000,
@@ -417,6 +419,7 @@ export class ToolRegistry {
       { clientName: 'openreyestr_search_tax_debt', serviceName: 'search_tax_debt' },
       { clientName: 'openreyestr_search_esv_debt', serviceName: 'search_esv_debt' },
       { clientName: 'openreyestr_search_prozorro', serviceName: 'search_prozorro' },
+      { clientName: 'openreyestr_get_data_freshness', serviceName: 'get_data_freshness' },
       { clientName: 'openreyestr_search_termination_started', serviceName: 'search_termination_started' },
       { clientName: 'openreyestr_search_rnbo_sanctions', serviceName: 'search_rnbo_sanctions' },
       { clientName: 'openreyestr_search_arma_seized_assets', serviceName: 'search_arma_seized_assets' },

@@ -50,6 +50,7 @@ import { OpenDataRegistriesTools } from '../api/tools/opendata-registries-tools.
 import { Tier1OpenDataTools } from '../api/tools/tier1-opendata-tools.js';
 import { RegistrySearchTool } from '../api/tools/registry-search-tool.js';
 import { IpObjectsTools } from '../api/tools/ip-objects-tools.js';
+import { CompanyDossierTool } from '../api/tools/company-dossier-tool.js';
 import { AnalyzeDataTool } from '../api/tools/analyze-data-tool.js';
 import { LLMAdapter } from '../infrastructure/adapters/llm-adapter.js';
 import { DecisionLayerTools } from '../api/tools/decision-layer-tools.js';
@@ -195,6 +196,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new CourtStatusTools(coreServices.db));
   toolRegistry.registerHandler(new RegistrySearchTool(coreServices.db));
   toolRegistry.registerHandler(new IpObjectsTools(coreServices.db, toolRegistry));
+  // One-call company dossier by ЄДРПОУ over the registry tools, with sources (LEXAI-2227).
+  toolRegistry.registerHandler(new CompanyDossierTool(toolRegistry));
   toolRegistry.registerHandler(new AnalyzeDataTool(coreServices.db));
   // Bespoke tools with non-parametric query patterns
   toolRegistry.registerHandler(new OpenDataTools(coreServices.db));

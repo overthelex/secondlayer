@@ -112,6 +112,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'search_amcu_practice',
   // Державні реєстри OpenReyestr — remote (proxied via getAllToolDefinitions on /api/v2/mcp).
   // company/EDRPOU, beneficiaries, debtors, enforcement, bankruptcy, Prozorro, sanctions, ARMA, NAZK, notaries.
+  // Досьє компанії за ЄДРПОУ: оркеструє реєстри нижче, з джерелом і датою на кожен розділ.
+  'get_company_dossier',
   'openreyestr_get_by_edrpou',
   'openreyestr_get_entity_details',
   'openreyestr_search_entities',

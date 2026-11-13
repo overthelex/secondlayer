@@ -171,6 +171,7 @@ const toolGroups: ToolGroup[] = [
     tools: [
       { name: 'openreyestr_search_entities', description: 'Юридичні особи та ФОП у ЄДР', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'record' }, { name: 'entityType' }, { name: 'stan' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
       { name: 'openreyestr_get_entity_details', description: 'Повна картка суб’єкта: засновники, бенефіціари, керівники', params: [{ name: 'record', required: true }, { name: 'entityType' }], cost: '₴0' },
+      { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴0.80 · до ₴1.10' },
       { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0' },
       { name: 'openreyestr_search_beneficiaries', description: 'Кінцеві бенефіціарні власники компаній', params: [{ name: 'query', required: true }, { name: 'limit' }], cost: '₴0' },
       { name: 'openreyestr_search_termination_started', description: 'Юрособи, щодо яких розпочато процедуру припинення', params: [{ name: 'query', required: true }, { name: 'entity_type' }, { name: 'signer_name' }, { name: 'reason' }, { name: 'limit' }, { name: 'offset' }] },
