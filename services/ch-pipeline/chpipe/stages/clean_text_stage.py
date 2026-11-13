@@ -98,7 +98,27 @@ def languages_for(row) -> list[str]:
 def cleans_new_text(row, source: str) -> bool:
     """True for a PDF/OCR decision whose new text the nightly path cleans.
     HTML rows and the spiders that reflow their own text are untouched."""
-    return source != "html" and row["spider"] not in text_clean.OWN_REFLOW_SPIDERS
+    return (source != "html" and not row.get("cleaning_disabled")
+            and row["spider"] not in text_clean.OWN_REFLOW_SPIDERS)
+
+
+def state_table_present(conn) -> bool:
+    """Deploy-order guard for extract/ocr: the code is rsynced before
+    lawrider-migrate runs, and migration 259 may be missing (failed build,
+    build_only dispatch). Without the table every stamp would fail."""
+    row = conn.execute("SELECT to_regclass('public.ch_text_clean_state') AS t").fetchone()
+    present = (row["t"] if isinstance(row, dict) else row[0]) is not None
+    if not present:
+        log.error("ch_text_clean_state (migration 259) is missing: cleaning is "
+                  "DISABLED for this run; PDF text is stored raw, unarchived and "
+                  "unstamped until the migration is applied")
+    return present
+
+
+def disable_cleaning(rows) -> None:
+    """Mark claimed rows so cleans_new_text() leaves them alone."""
+    for r in rows:
+        r["cleaning_disabled"] = True
 
 
 def clean_new_text(settings: Settings, row, raw: str,
@@ -135,21 +155,38 @@ def clean_new_text(settings: Settings, row, raw: str,
     except (FileExistsError, EOFError, OSError, zlib.error, UnicodeDecodeError) as exc:
         # OSError covers gzip.BadGzipFile. ValueError (unsafe doc_id) is not
         # caught: that is a hard failure for the row.
-        log.warning("%s/%s: archive conflict (%s: %s); storing the new raw text "
-                    "uncleaned and unstamped", row["spider"], row["doc_id"],
-                    type(exc).__name__, exc)
-        reason = "re-extracted raw differs from archive"
-        if isinstance(exc, FileExistsError):
+        existed = raw_text_archive.path_for(
+            settings.raw_dir, row["spider"], row["doc_id"]).exists()
+        if not existed:
+            # No archive to conflict with: writing a NEW one failed (ENOSPC,
+            # EACCES, ...). Same handling -- raw stored uncleaned, unstamped;
+            # the backfill archives and cleans it once the disk is fixed.
+            log.error("%s/%s: archive write failed (%s: %s); storing the new "
+                      "raw text uncleaned and unstamped", row["spider"],
+                      row["doc_id"], type(exc).__name__, exc)
+            reason = f"archive write failed ({type(exc).__name__}: {exc})"
+        else:
+            log.warning("%s/%s: archive conflict (%s: %s); storing the new raw "
+                        "text uncleaned and unstamped", row["spider"],
+                        row["doc_id"], type(exc).__name__, exc)
+            reason = "re-extracted raw differs from archive"
+        if existed and isinstance(exc, FileExistsError):
             try:
                 reason += " sha=" + raw_text_archive.sha256_of(
                     raw_text_archive.load(settings.raw_dir, row["spider"],
                                           row["doc_id"]))[:12]
             except Exception:                                   # noqa: BLE001
                 pass
-        else:
+        elif existed:
             reason = f"existing archive unreadable ({type(exc).__name__})"
-        row["archive_conflict"] = "archive conflict: " + reason
+        row["archive_conflict"] = ("archive conflict: " + reason
+                                   if existed else reason)
         quality, relabel = text_quality.score_with_relabel(raw, languages)
+        if quality < text_quality.ACCEPT_THRESHOLD:
+            # The raw text is below the gate, so the row goes to ocr_pending
+            # and full_text is NOT written: the old state stays true. No
+            # un-stamp, and the caller must not count a conflict.
+            row.pop("archive_conflict")
         return raw, quality, relabel
     row["clean_sha256"] = sha
     return clean, quality, relabel

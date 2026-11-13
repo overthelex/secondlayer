@@ -48,6 +48,8 @@ class ExtractReport:
     # the existing raw-text archive: stored raw and unstamped. See
     # clean_text_stage.clean_new_text().
     archive_conflict: int = 0
+    # ch_text_clean_state missing: the run stored raw text (pre-cleaning behaviour).
+    cleaning_disabled: bool = False
 
 
 def extract_one(settings: Settings, row) -> tuple[str, float, str, list[str] | None]:
@@ -99,6 +101,7 @@ def run(settings: Settings, limit: int | None = None,
         spider: str | None = None) -> ExtractReport:
     report = ExtractReport()
     conn = db.connect(settings)
+    report.cleaning_disabled = not clean_text_stage.state_table_present(conn)
     remaining = limit
     # Rows without a doc_id cannot be claimed (see db.claim); say how many
     # are being skipped rather than letting them sit invisibly at this stage.
@@ -124,6 +127,8 @@ def run(settings: Settings, limit: int | None = None,
                                 backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
+                if report.cleaning_disabled:
+                    clean_text_stage.disable_cleaning(rows)
                 futures = {pool.submit(extract_one, settings, r): r for r in rows}
                 # Each future is resolved and completed independently: a
                 # single document that fails to extract, OR whose db.complete
@@ -205,9 +210,11 @@ def run(settings: Settings, limit: int | None = None,
                         report.failed += 1
                 if remaining is not None:
                     remaining -= len(rows)
-                log.info("extracted=%d ocr_pending=%d requeued_for_pdf=%d failed=%d",
+                log.info("extracted=%d ocr_pending=%d requeued_for_pdf=%d failed=%d "
+                         "archive_conflict=%d cleaning_disabled=%s",
                          report.extracted, report.queued_for_ocr,
-                         report.requeued_for_pdf, report.failed)
+                         report.requeued_for_pdf, report.failed,
+                         report.archive_conflict, report.cleaning_disabled)
                 log.debug("extracted=%d ocr_pending=%d failed=%d", report.extracted,
                          report.queued_for_ocr, report.failed)
     finally:
@@ -226,8 +233,9 @@ def main() -> ExtractReport:
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)
     log.info("requeued_for_pdf=%d", result.requeued_for_pdf)
-    log.info("extracted=%d ocr_pending=%d failed=%d", result.extracted,
-             result.queued_for_ocr, result.failed)
+    log.info("extracted=%d ocr_pending=%d failed=%d archive_conflict=%d "
+             "cleaning_disabled=%s", result.extracted, result.queued_for_ocr,
+             result.failed, result.archive_conflict, result.cleaning_disabled)
     return result
 
 

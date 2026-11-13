@@ -662,7 +662,8 @@ def ensure_clean_state_stamped(conn, doc_id: str, spider: str, raw_sha256: str,
         "(doc_id, spider, raw_sha256, cleaner_version, cleaned_at) "
         "VALUES (%s, %s, %s, %s, now()) "
         "ON CONFLICT (doc_id) DO UPDATE SET cleaned_at = now(), "
-        "raw_sha256 = EXCLUDED.raw_sha256, cleaner_version = EXCLUDED.cleaner_version",
+        "raw_sha256 = EXCLUDED.raw_sha256, cleaner_version = EXCLUDED.cleaner_version, "
+        "last_error = NULL",
         (doc_id, spider, raw_sha256, cleaner_version))
 
 

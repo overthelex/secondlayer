@@ -4,6 +4,7 @@ import pathlib
 import psycopg
 from psycopg.rows import dict_row
 import pytest
+from chpipe import raw_text_archive, text_clean
 from chpipe.config import Settings
 from chpipe.stages import ocr_stage
 
@@ -208,9 +209,6 @@ def raw_dir(tmp_path):
     return d
 
 
-
-from chpipe import raw_text_archive, text_clean
-
 OCR_RAW = ("Das Bundesgericht hat die Beschwerde des Beschwerdefüh-\n"
            "rers gegen das Urteil des Obergerichts abgewiesen, soweit darauf "
            "einzutreten ist.\n") * 12
@@ -258,12 +256,17 @@ def test_ocr_leaves_own_reflow_spiders_untouched(conn, raw_dir, monkeypatch, spi
 def test_ocr_archive_conflict_stores_raw_uncleaned_and_does_not_stamp(
         conn, raw_dir, monkeypatch):
     raw_text_archive.save(raw_dir, "CH_ZG", "d", "some earlier raw text " * 30)
+    arch = raw_text_archive.path_for(raw_dir, "CH_ZG", "d")
+    before = arch.read_bytes()
     report = _run_ocr(conn, raw_dir, monkeypatch, "CH_ZG")
     assert report.recovered == 1
     assert report.archive_conflict == 1
     assert conn.execute("SELECT full_text FROM ch_court_decisions WHERE doc_id='d'"
                         ).fetchone()["full_text"] == OCR_RAW
-    assert _state(conn, "d")["cleaned_at"] is None   # not stamped
+    st = _state(conn, "d")
+    assert st["cleaned_at"] is None   # not stamped
+    assert st["raw_sha256"] is None
+    assert arch.read_bytes() == before
 
 
 def test_ocr_text_write_and_stamp_are_one_transaction(conn, raw_dir, monkeypatch):
@@ -276,3 +279,12 @@ def test_ocr_text_write_and_stamp_are_one_transaction(conn, raw_dir, monkeypatch
     assert row["stage"] == "ocr_pending" and row["full_text"] is None
     assert report.failed == 1
     assert _state(conn, "d") is None
+
+
+def test_ocr_runs_raw_when_the_state_table_is_missing(conn, raw_dir, monkeypatch):
+    conn.execute("DROP TABLE ch_text_clean_state")
+    report = _run_ocr(conn, raw_dir, monkeypatch, "CH_ZG")
+    assert report.recovered == 1 and report.cleaning_disabled is True
+    assert conn.execute("SELECT full_text FROM ch_court_decisions WHERE doc_id='d'"
+                        ).fetchone()["full_text"] == OCR_RAW
+    assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "d").exists()

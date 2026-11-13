@@ -36,6 +36,7 @@ class OcrReport:
     still_bad: int = 0
     failed: int = 0
     archive_conflict: int = 0   # see clean_text_stage.clean_new_text()
+    cleaning_disabled: bool = False   # ch_text_clean_state missing
     seconds: float = 0.0
 
 
@@ -59,6 +60,7 @@ def run(settings: Settings, limit: int | None = None,
         spider: str | None = None) -> OcrReport:
     report = OcrReport()
     conn = db.connect(settings)
+    report.cleaning_disabled = not clean_text_stage.state_table_present(conn)
     started = time.monotonic()
     # Rows without a doc_id cannot be claimed (see db.claim); say how many
     # are being skipped rather than letting them sit invisibly at this stage.
@@ -81,6 +83,8 @@ def run(settings: Settings, limit: int | None = None,
                                 backoff_minutes=settings.retry_backoff_minutes)
                 if not rows:
                     break
+                if report.cleaning_disabled:
+                    clean_text_stage.disable_cleaning(rows)
                 futures = {pool.submit(_ocr_one, settings, r): r for r in rows}
                 # Same defect class already fixed in index_stage, fetch_stage
                 # and extract_stage: an exception from one document -- either
@@ -135,8 +139,10 @@ def run(settings: Settings, limit: int | None = None,
                         continue
                 if remaining is not None:
                     remaining -= len(rows)
-                log.info("recovered=%d still_bad=%d failed=%d",
-                         report.recovered, report.still_bad, report.failed)
+                log.info("recovered=%d still_bad=%d failed=%d archive_conflict=%d "
+                         "cleaning_disabled=%s", report.recovered, report.still_bad,
+                         report.failed, report.archive_conflict,
+                         report.cleaning_disabled)
     finally:
         conn.close()
     report.seconds = time.monotonic() - started
@@ -157,8 +163,10 @@ def main() -> OcrReport:
     result = run(Settings.from_env(),
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None)
-    log.info("recovered=%d still_bad=%d failed=%d in %.0fs", result.recovered,
-             result.still_bad, result.failed, result.seconds)
+    log.info("recovered=%d still_bad=%d failed=%d archive_conflict=%d "
+             "cleaning_disabled=%s in %.0fs", result.recovered, result.still_bad,
+             result.failed, result.archive_conflict, result.cleaning_disabled,
+             result.seconds)
     return result
 
 

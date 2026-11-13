@@ -1,12 +1,14 @@
+import logging
 import os
 import pathlib
+import shutil
 
 import psycopg
 from psycopg.rows import dict_row
 import pytest
-from chpipe import text_quality
+from chpipe import raw_text_archive, text_clean, text_damage, text_quality
 from chpipe.config import Settings
-from chpipe.stages import extract_stage
+from chpipe.stages import clean_text_stage, extract_stage
 
 from conftest import apply_migration_200, apply_migration_259
 
@@ -394,14 +396,6 @@ def raw_dir(tmp_path):
     return d
 
 
-
-import gzip
-import logging
-import shutil
-
-from chpipe import raw_text_archive, text_clean, text_damage
-from chpipe.stages import clean_text_stage
-
 # The same real PDF the clean-text tests use: it has hyphen line-wraps.
 ZG_PDF = pathlib.Path(__file__).parent / "fixtures" / "decision_zg.pdf"
 
@@ -503,7 +497,8 @@ def test_a_pdf_queued_for_ocr_is_not_archived(conn, raw_dir, monkeypatch):
     _seed_zg_row(conn, "j")
     monkeypatch.setattr(extract_stage.text_extract, "from_pdf",
                         lambda p: "B u n d e s g e r i c h t " * 40)
-    extract_stage.run(_pdf_settings(raw_dir), spider="CH_ZG", limit=1)
+    report = extract_stage.run(_pdf_settings(raw_dir), spider="CH_ZG", limit=1)
+    assert report.queued_for_ocr == 1
     assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "j").exists()
     assert _state(conn, "j") is None
 
@@ -632,3 +627,79 @@ def test_unreadable_archive_unstamps_the_old_state_too(conn, raw_dir):
         a.parent.mkdir(parents=True, exist_ok=True)
         a.write_bytes(b"not gzip at all")
     _conflict_then_backfill(conn, raw_dir, bad, unreadable=True)
+
+
+# --- fix round 1 ---
+
+def test_missing_state_table_disables_cleaning_for_the_run(conn, raw_dir, caplog):
+    """Deploy order: code is rsynced before migration 259 runs. The stage must
+    behave exactly as before this task: raw text, no archive, no state write."""
+    conn.execute("DROP TABLE ch_text_clean_state")
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    raw = extract_stage.text_extract.from_pdf(raw_dir / "CH_ZG" / "z1.pdf")
+    with caplog.at_level(logging.ERROR):
+        report = extract_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG", limit=1)
+    assert report.extracted == 1 and report.failed == 0
+    assert report.cleaning_disabled is True
+    assert _full_text(conn, "z1")["full_text"] == raw
+    assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "z1").exists()
+    assert sum("ch_text_clean_state" in r.message and r.levelno == logging.ERROR
+               for r in caplog.records) == 1
+
+
+def test_a_new_archive_that_cannot_be_written_is_reported_as_a_write_failure(
+        conn, raw_dir, monkeypatch, caplog):
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    raw = extract_stage.text_extract.from_pdf(raw_dir / "CH_ZG" / "z1.pdf")
+
+    def enospc(*a, **k):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(clean_text_stage.raw_text_archive, "save", enospc)
+    with caplog.at_level(logging.ERROR):
+        report = extract_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG", limit=1)
+    assert report.extracted == 1 and report.archive_conflict == 1
+    assert _full_text(conn, "z1")["full_text"] == raw
+    st = _state(conn, "z1")
+    assert st["cleaned_at"] is None and st["raw_sha256"] is None
+    assert st["last_error"].startswith("archive write failed")
+    assert any("archive write failed" in r.message and r.levelno == logging.ERROR
+               for r in caplog.records)
+
+
+def test_a_conflict_that_sends_the_row_to_ocr_leaves_the_old_state_alone(
+        conn, raw_dir, monkeypatch):
+    """full_text is not written for ocr_pending, so the old stamp stays true
+    and the conflict is neither recorded nor counted."""
+    (raw_dir / "CH_ZG").mkdir()
+    (raw_dir / "CH_ZG" / "q.pdf").write_bytes(b"%PDF-1.4")
+    _seed_zg_row(conn, "q")
+    old_raw = "old archived raw text that differs entirely. " * 20
+    raw_text_archive.save(raw_dir, "CH_ZG", "q", old_raw)
+    _stamp_old(conn, "q", old_raw)
+    # Clean text is good (accepted), the raw it was cleaned from is not.
+    raw = "x"
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf", lambda p: raw)
+    monkeypatch.setattr(clean_text_stage.text_clean, "clean_pdf_text",
+                        lambda r, l: GOOD_DE_TEXT)
+    scores = iter([(0.99, None), (0.1, None)])
+    monkeypatch.setattr(extract_stage.text_quality, "score_with_relabel",
+                        lambda t, l: next(scores))
+    monkeypatch.setattr(clean_text_stage.text_quality, "score_with_relabel",
+                        lambda t, l: next(scores))
+    report = extract_stage.run(_pdf_settings(raw_dir), spider="CH_ZG", limit=1)
+    assert report.queued_for_ocr == 1 and report.archive_conflict == 0
+    st = _state(conn, "q")
+    assert st["cleaned_at"] is not None and st["raw_sha256"] == raw_text_archive.sha256_of(old_raw)
+    assert st["last_error"] is None
+
+
+def test_stamping_clears_a_previous_last_error(conn, raw_dir):
+    conn.execute("INSERT INTO ch_text_clean_state (doc_id, spider, last_error) "
+                 "VALUES ('z1','CH_ZG','archive conflict: old')")
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    extract_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG", limit=1)
+    st = _state(conn, "z1")
+    assert st["cleaned_at"] is not None and st["last_error"] is None
