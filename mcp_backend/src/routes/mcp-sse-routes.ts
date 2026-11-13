@@ -19,6 +19,7 @@ import { requestContext } from '../utils/openai-client.js';
 import { MCPSSEServer } from '../api/mcp-sse-server.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { V2_TOOL_NAMES } from '../api/curated-mcp-tools.js';
+import { presentV2Tools } from '../api/v2-tool-presentation.js';
 import { checkToolAccess, isAdminUser, scopeVaultArgs } from '../api/tool-access-policy.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { executePrivateTool, isPrivateToolName, privateToolDefinitionsFor } from '../api/private-tools/index.js';
@@ -274,6 +275,8 @@ export function createMCPSSERoutes(deps: {
     clientKey: string | undefined,
     opts?: {
       allowedTools?: Set<string>;
+      /** Public-directory presentation (neutral descriptions, annotations): /api/v2/mcp only. */
+      presentForDirectory?: boolean;
       version?: string;
       usageBilling?: boolean;
       /** Transport name and the caller seen when the session was opened (audit fallback). */
@@ -314,7 +317,8 @@ export function createMCPSSERoutes(deps: {
       // Private toolsets (api/private-tools): only for accounts holding a grant, never via
       // the registry, so no other door lists them. Not subject to the toolset/v2 filters.
       const privateTools = await privateToolDefinitionsFor(deps.db, userId);
-      return { tools: [...filterToolsByToolset(tools), ...privateTools] };
+      const publicTools = filterToolsByToolset(tools);
+      return { tools: [...(opts?.presentForDirectory ? presentV2Tools(publicTools) : publicTools), ...privateTools] };
     });
 
     mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -615,10 +619,11 @@ export function createMCPSSERoutes(deps: {
   // /api/v2/mcp also resolves the proxied openreyestr_* tools via getAllToolDefinitions.
 
   // Build an MCP Server exposing only the curated v2 subset. Reuses the fully-wired v1
-  // builder (tools/list + tools/call with billing) with the whitelist applied.
+  // builder (tools/list + tools/call with billing) with the whitelist applied, and presents
+  // the tools for public directories (presentV2Tools: neutral descriptions, annotations).
   function buildMcpServerV2(userId: string | undefined, clientKey: string | undefined, keyOpts: SessionKeyOpts): Server {
     return buildMcpServer(userId, clientKey, {
-      allowedTools: V2_TOOL_NAMES, version: '2.0.0', usageBilling: true, transport: 'v2/mcp', ...keyOpts,
+      allowedTools: V2_TOOL_NAMES, presentForDirectory: true, version: '2.0.0', usageBilling: true, transport: 'v2/mcp', ...keyOpts,
     });
   }
 
