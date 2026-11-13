@@ -16,7 +16,7 @@ whitespace on lines.
 """
 
 import re
-from collections import Counter
+from statistics import median
 
 from chpipe.text_quality import _wordlist
 
@@ -46,12 +46,15 @@ _FOLIO = re.compile(r"^\s*\d{1,3}\s*$")
 _PAGE_LABEL = re.compile(r"^\s*(Seite|Page|Pagina)\s+\d+")
 _DASH_FOLIO = re.compile(r"^\s*-\s*\d{1,3}\s*-\s*$")
 _FOLIO_HEADER = (
-    re.compile(r"^\d{1,3}\s{3,}(\S.{0,99})$"),   # "13     PKG 2001"
-    re.compile(r"^(.{0,99}\S)\s{3,}\d{1,3}$"),   # "PKG 2001       13"
+    re.compile(r"^(\d{1,3})\s{3,}(\S.{0,99})$"),   # "13     PKG 2001"
+    re.compile(r"^(.{0,99}\S)\s{3,}(\d{1,3})$"),   # "PKG 2001       13"
 )
 REPEAT_MIN = 3
 REPEAT_MAX_LEN = 120
-FOLIO_HEADER_MIN = 2
+# Ruling R14: running headers recur once per page, so their occurrences must be
+# at least this many lines apart (median gap). Cost tables repeat "Total 0"
+# rows a few lines apart and must survive.
+PAGE_GAP_MIN = 15
 
 HARD_WRAP_MIN_LINE = 20
 HARD_WRAP_MEDIAN = 100
@@ -59,7 +62,12 @@ HARD_WRAP_MEDIAN = 100
 _PARAGRAPH_MARKER = re.compile(
     r"^(\d{1,3}\.\s|[A-Z]\.\d*(\.\d+)*\s|[a-z]\)\s|[IVX]{1,5}\.\s|Art\.\s|§\s?\d|E\.\s?\d"
     r"|Erwägung|Considérant|Considerando|Sachverhalt|Faits|Fatti|Dispositiv)")
-_CONJUNCTION = re.compile(r"^(und|oder|bzw\.|sowie|et|ou|e|ed|o|od|u|ni)(?=[\s,.;]|$)")
+# Ruling R12: words after which a line-final hyphen is a real (suspended) hyphen.
+_CONJUNCTION = re.compile(
+    r"^(und/oder|und|oder|bzw\.|beziehungsweise|resp\.|respektive|bis|wie|sowie"
+    r"|et/ou|et|ou|à|ed|e|od|o|u|ni)(?=[\s,.;/]|$)")
+_MARKER_PREV_END = ".:;)"
+_TERMINAL = ".:;!?"
 _HEAD_WORD = re.compile(r"([^\W\d_]+)-$")
 _TAIL_WORD = re.compile(r"[^\W\d_]+")
 SHORT_LINE_FACTOR = 0.6
@@ -84,36 +92,63 @@ def normalise_chars(text: str) -> str:
     return text.translate(_CHAR_MAP)
 
 
-def _folio_header_text(stripped: str) -> str | None:
-    for pattern in _FOLIO_HEADER:
-        m = pattern.match(stripped)
-        if m:
-            return " ".join(m.group(1).split())
+def _folio_header(stripped: str) -> tuple[str, int] | None:
+    """("title", folio) for a "NNN   title" / "title   NNN" line, else None."""
+    m = _FOLIO_HEADER[0].match(stripped)
+    if m:
+        return " ".join(m.group(2).split()), int(m.group(1))
+    m = _FOLIO_HEADER[1].match(stripped)
+    if m:
+        return " ".join(m.group(1).split()), int(m.group(2))
     return None
+
+
+def _page_spaced(positions: list[int]) -> bool:
+    gaps = [b - a for a, b in zip(positions, positions[1:])]
+    return bool(gaps) and median(gaps) >= PAGE_GAP_MIN
 
 
 def strip_page_furniture(lines: list[str]) -> list[str]:
     """Drop folios, page labels and running headers.
 
-    Dropped: bare 1-3 digit lines, "Seite/Page/Pagina N", "- N -", any
-    stripped line of at most 120 chars that occurs at least 3 times, and
-    folio headers (a running title and a 1-3 digit folio separated by 3+
-    spaces, e.g. "13     PKG 2001" / "PKG 2001       13") whose title occurs
-    in at least 2 such lines. The title must recur so that a paragraph with a
-    margin number ("13     Text") is never taken for a header.
+    Dropped: bare 1-3 digit lines, "Seite/Page/Pagina N", "- N -", and
+    (ruling R14, page-like spacing) two kinds of running header:
+
+    - a stripped line of at most 120 chars that occurs at least 3 times with
+      a median gap of at least 15 lines between occurrences;
+    - a folio header, a title and a 1-3 digit folio separated by 3+ spaces
+      ("13     PKG 2001" / "PKG 2001       13"), when its title occurs at
+      least 3 times, the folios strictly increase in document order and the
+      median gap is at least 15 lines.
+
+    Amount rows ("Total     620", "Gerichtsgebühr   500") and margin-number
+    paragraphs ("13     Text") fail these tests and are kept.
     """
     stripped = [ln.strip() for ln in lines]
-    counts = Counter(s for s in stripped if s and len(s) <= REPEAT_MAX_LEN)
-    headers = [_folio_header_text(s) for s in stripped]
-    header_counts = Counter(h for h in headers if h)
+    seen: dict[str, list[int]] = {}
+    titles: dict[str, list[tuple[int, int]]] = {}
+    for i, s in enumerate(stripped):
+        if s and len(s) <= REPEAT_MAX_LEN:
+            seen.setdefault(s, []).append(i)
+        header = _folio_header(s) if s else None
+        if header:
+            titles.setdefault(header[0], []).append((i, header[1]))
+    repeated = {s for s, pos in seen.items() if len(pos) >= REPEAT_MIN and _page_spaced(pos)}
+    header_lines: set[int] = set()
+    for occ in titles.values():
+        folios = [f for _, f in occ]
+        if (len(occ) >= REPEAT_MIN
+                and all(a < b for a, b in zip(folios, folios[1:]))
+                and _page_spaced([i for i, _ in occ])):
+            header_lines.update(i for i, _ in occ)
     out = []
-    for line, s, header in zip(lines, stripped, headers):
+    for i, (line, s) in enumerate(zip(lines, stripped)):
         if s and (
             _FOLIO.match(line)
             or _PAGE_LABEL.match(line)
             or _DASH_FOLIO.match(line)
-            or (len(s) <= REPEAT_MAX_LEN and counts[s] >= REPEAT_MIN)
-            or (header and header_counts[header] >= FOLIO_HEADER_MIN)
+            or s in repeated
+            or i in header_lines
         ):
             continue
         out.append(line)
@@ -183,60 +218,106 @@ def _ends_wrap(paragraph: str) -> bool:
     return paragraph.endswith("-") and paragraph[-2:-1].isalpha()
 
 
-def _can_bridge(paragraph: str, nxt: str) -> bool:
-    """A blank-line gap inside a sentence (page break, misaligned OCR column)."""
-    last = paragraph[-1:]
-    return (nxt[:1].islower() and not _PARAGRAPH_MARKER.match(nxt)
-            and (last.isalpha() or last in ",-"))
+def _continues(nxt: str) -> bool:
+    return nxt[:1].islower() and not _PARAGRAPH_MARKER.match(nxt)
+
+
+def _is_furniture_shaped(stripped: str) -> bool:
+    return bool(_FOLIO.match(stripped) or _folio_header(stripped))
+
+
+def _bridge(lines: list[str], i: int, paragraph: str, prev_len: int,
+            short: float) -> tuple[int, list[str]] | None:
+    """Where to continue a paragraph across the blank line at ``i``, or None.
+
+    Bridged only inside a sentence (a page break or a misaligned OCR column):
+    the next non-blank line starts lowercase without a marker, and either the
+    paragraph ends in a word-wrap hyphen, or its last line was full width and
+    ends without terminal punctuation. After a word-wrap hyphen up to two
+    folio-shaped lines ("79", "13     PKG 2001") between the halves of the
+    word are moved out of the way: running headers are returned to be emitted
+    after the paragraph (kept, as R14 does not let us drop them), bare folios
+    are dropped as ``strip_page_furniture`` would.
+    """
+    n = len(lines)
+    wrap = _ends_wrap(paragraph)
+    if not wrap and (prev_len < short or paragraph[-1] in _TERMINAL):
+        return None
+    held: list[str] = []
+    j = i
+    while j < n:
+        s = lines[j].strip()
+        if not s:
+            j += 1
+        elif wrap and len(held) < 2 and _is_furniture_shaped(s):
+            held.append(s)
+            j += 1
+        else:
+            break
+    if j < n and _continues(lines[j].strip()):
+        return j, [h for h in held if not _FOLIO.match(h)]
+    return None
 
 
 def unwrap(lines: list[str], vocabulary: frozenset[str]) -> list[str]:
     """Rebuild paragraphs from hard-wrapped lines; one paragraph per output line.
 
-    A line ends its paragraph when the next line is blank, or the next line
-    starts with a paragraph marker (``_PARAGRAPH_MARKER``), or the line is
+    A line ends its paragraph when the next line is blank, or the line is
     shorter than 0.6 x the column width (90th percentile of non-empty line
-    lengths) and the next line starts with an uppercase letter or a digit.
-    Exception: blank lines are bridged when the paragraph ends in a letter,
-    comma or hyphen and the next non-blank line starts lowercase without a
-    marker (a page break in mid-sentence, e.g. "For-" / folio / "derungen").
+    lengths) and the next line starts with an uppercase letter or a digit, or
+    the next line starts with a paragraph marker (``_PARAGRAPH_MARKER``) and
+    the line ends in . : ; ) or is short (ruling R13: "Urteil vom" /
+    "12. Juli 2019" and "gemäss" / "Art. 8 EMRK" stay one sentence).
+    Blank lines are bridged only inside a sentence, see ``_bridge``.
     Blank lines that end a paragraph are kept as "".
     """
     short = SHORT_LINE_FACTOR * _column_width(lines)
     out: list[str] = []
+    held: list[str] = []
     paragraph = ""
     prev_len = 0
+    prev_end = ""
     i = 0
     n = len(lines)
+
+    def flush() -> None:
+        nonlocal paragraph
+        if paragraph:
+            out.append(paragraph)
+            paragraph = ""
+        out.extend(held)
+        held.clear()
+
     while i < n:
         s = lines[i].strip()
         if not s:
+            bridge = _bridge(lines, i, paragraph, prev_len, short) if paragraph else None
+            if bridge:
+                i = bridge[0]
+                held.extend(bridge[1])
+                continue
             j = i
             while j < n and not lines[j].strip():
                 j += 1
-            if paragraph and j < n and _can_bridge(paragraph, lines[j].strip()):
-                i = j
-                continue
-            if paragraph:
-                out.append(paragraph)
-                paragraph = ""
+            flush()
             out.extend([""] * (j - i))
             i = j
             continue
+        is_short = prev_len < short
         if not paragraph:
             paragraph = s
-        elif _PARAGRAPH_MARKER.match(s) or (
-                prev_len < short and (s[0].isupper() or s[0].isdigit())):
-            out.append(paragraph)
+        elif (_PARAGRAPH_MARKER.match(s) and (is_short or prev_end in _MARKER_PREV_END)) or (
+                is_short and (s[0].isupper() or s[0].isdigit())):
+            flush()
             paragraph = s
         elif _ends_wrap(paragraph):
             paragraph = join_hyphen(paragraph, s, vocabulary)
         else:
             paragraph = paragraph + " " + s
         prev_len = len(lines[i].rstrip())
+        prev_end = s[-1]
         i += 1
-    if paragraph:
-        out.append(paragraph)
+    flush()
     return out
 
 
@@ -255,11 +336,14 @@ def _gaps(line: str) -> list[tuple[int, int, bool]]:
     return out
 
 
-def _fits(line: str, gaps: list[tuple[int, int, bool]], g: int) -> bool:
-    """The line has right-column text and splits cleanly at column g."""
-    if not line[g:].strip():
+def _fits(lead: int, rlen: int, gaps: list[tuple[int, int, bool]], g: int) -> bool:
+    """The line has right-column text and splits cleanly at column g.
+
+    ``lead``/``rlen``: index of the first non-space char and rstripped length.
+    """
+    if rlen <= g:
         return False
-    if not line[:g].strip():
+    if lead >= g:
         return True
     return any(s <= g <= e for s, e, _ in gaps)
 
@@ -288,33 +372,36 @@ def _split_line(line: str, g: int) -> tuple[str, str]:
     return line[:p].rstrip(), line[p:].strip()
 
 
-def _runs_at(lines, gaps, g):
-    """Maximal two-column runs at gutter column g: [(start, end, fits)]."""
+def _runs_at(lines, gaps, leads, rlens, g):
+    """Maximal two-column runs at gutter column g: [(start, end, fits)].
+
+    Linear: the scan stops after 8 non-fitting non-empty lines since the run
+    last qualified, and a failed run resumes after the last line it scanned.
+    """
     runs = []
     n = len(lines)
     i = 0
     while i < n:
-        if not _is_anchor(gaps[i], g):
+        if not gaps[i] or not _is_anchor(gaps[i], g):
             i += 1
             continue
         nonempty = fits = anchors = misses = blanks = 0
         best = None
         j = i
         while j < n:
-            line = lines[j]
-            if not line.strip():
+            if not rlens[j]:
                 blanks += 1
                 if blanks > COLUMN_MAX_BLANKS:
                     break
             else:
                 blanks = 0
                 nonempty += 1
-                if _fits(line, gaps[j], g):
+                if _fits(leads[j], rlens[j], gaps[j], g):
                     fits += 1
-                    misses = 0
                     anchors += _is_anchor(gaps[j], g)
                     if fits >= COLUMN_FIT_SHARE * nonempty:
                         best = (j, fits, anchors)
+                        misses = 0
                 else:
                     misses += 1
                     if misses > COLUMN_MAX_MISSES:
@@ -331,7 +418,7 @@ def _runs_at(lines, gaps, g):
             runs.append((i, end, best[1]))
             i = end + 1
         else:
-            i += 1
+            i = max(i + 1, j + 1)
     return runs
 
 
@@ -343,14 +430,14 @@ def split_columns(lines: list[str]) -> list[str]:
     gutters do not *start* at a common column; they *end* at one):
 
     - An anchor line has a run of 3+ spaces with at least 20 chars of text on
-      each side. Each column covered by an anchor's gap (start..end
-      inclusive) is a candidate gutter column g.
+      each side. Each distinct anchor gap end (the column where the right
+      column's text starts) is a candidate gutter column g.
     - A line fits g when it has text right of g and either nothing left of g
       (a right-column-only line) or a 3+ space run covering g. Right parts may
       be short ("Mehrheit"), so they need not be 20 chars.
     - A run at g starts at an anchor, has at least 4 lines and 2 anchors, ends
       on a fitting line, and at least 60 % of its non-empty lines fit g; it
-      stops after 8 consecutive non-fitting non-empty lines or at 2
+      stops after 8 non-fitting non-empty lines since it last qualified, or at 2
       consecutive blank lines (both columns empty at once: a page header or
       the end of the two-column block, as in CH_VB "title  924  N  date"). Up to 3 directly
       following non-empty lines that end left of g are added (left column
@@ -364,12 +451,14 @@ def split_columns(lines: list[str]) -> list[str]:
       through unchanged.
     """
     gaps = [_gaps(line) for line in lines]
-    candidates = sorted({c for gs in gaps for s, e, a in gs if a for c in range(s, e + 1)})
+    candidates = sorted({e for gs in gaps for _, e, a in gs if a})
     if not candidates:
         return list(lines)
+    leads = [len(ln) - len(ln.lstrip()) for ln in lines]
+    rlens = [len(ln.rstrip()) for ln in lines]
     found = []
     for g in candidates:
-        for start, end, fits in _runs_at(lines, gaps, g):
+        for start, end, fits in _runs_at(lines, gaps, leads, rlens, g):
             found.append((fits, g, start, end))
     found.sort(key=lambda r: (-r[0], -r[1], r[2]))
     taken: list[tuple[int, int, int]] = []
