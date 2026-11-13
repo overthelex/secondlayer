@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from chpipe.text_damage import markers  # noqa: E402
 
 CANTONAL = ("lexfind", "lexwork_pdf", "zhlex")
+# excluded from the decision sample by design
+EXCLUDED_SPIDERS = ("CH_WEKO_RPW", "CH_WEKO")
 
 
 def _pick(cur, table, idcol, where, n, pct):
@@ -32,21 +34,33 @@ def _pick(cur, table, idcol, where, n, pct):
 
 
 def make_sample(conn, n, pct=1.0):
+    """Return (sample, counts, short): counts per class, short = classes below n."""
     cur = conn.cursor()
+    excl = ", ".join(f"'{x}'" for x in EXCLUDED_SPIDERS)
     dec = _pick(cur, "ch_court_decisions", "doc_id",
-                "stage='loaded' AND text_source IN ('pdf','ocr')", n, pct)
-    ed = _pick(cur, "ch_act_version", "version_id", "stage='parsed' AND source='fedlex_pdf'", n, pct)
+                f"stage='loaded' AND text_source IN ('pdf','ocr') AND spider NOT IN ({excl})",
+                n, pct)
+    counts = {"decisions": len(dec)}
+    want = {"decisions": n}
+    fed = _pick(cur, "ch_act_version", "version_id", "stage='parsed' AND source='fedlex_pdf'", n, pct)
+    counts["fedlex_pdf"], want["fedlex_pdf"] = len(fed), n
+    ed = list(fed)
     per = n // len(CANTONAL)
     extra = n - per * len(CANTONAL)
     for i, src in enumerate(CANTONAL):
-        ed += _pick(cur, "ch_act_version", "version_id",
-                    f"stage='parsed' AND source='{src}'", per + (1 if i < extra else 0), pct)
-    return {"decisions": dec, "editions": ed}
+        k = per + (1 if i < extra else 0)
+        got = _pick(cur, "ch_act_version", "version_id",
+                    f"stage='parsed' AND source='{src}'", k, pct)
+        ed += got
+        counts[src], want[src] = len(got), k
+    short = [c for c in counts if counts[c] < want[c]]
+    return {"decisions": dec, "editions": ed}, counts, want, short
 
 
 def measure(conn, sample):
     cur = conn.cursor()
     docs = []
+    missing = {}
     cur.execute(
         "SELECT doc_id, spider, text_source, full_text, text_quality"
         " FROM ch_court_decisions WHERE doc_id = ANY(%s)", (sample["decisions"],))
@@ -60,6 +74,11 @@ def measure(conn, sample):
     for r in cur.fetchall():
         docs.append({"kind": "editions", "id": r["version_id"], "class": r["source"],
                      "lang": r["lang"], "markers": markers(r["full_text"] or "")})
+    seen = {(d["kind"], d["id"]) for d in docs}
+    for kind in ("decisions", "editions"):
+        gone = [i for i in sample[kind] if (kind, i) not in seen]
+        if gone:
+            missing[kind] = len(gone)
     groups = defaultdict(list)
     for d in docs:
         groups[f"{d['kind']}:{d['class']}"].append(d["markers"])
@@ -71,7 +90,7 @@ def measure(conn, sample):
             "mean": {m: sum(x[m] for x in ms) / len(ms) for m in keys},
             "share_nonzero": {m: sum(1 for x in ms if x[m] > 0) / len(ms) for m in keys},
         }
-    return {"documents": docs, "aggregates": agg}
+    return {"documents": docs, "aggregates": agg, "missing_ids": missing}
 
 
 def print_table(agg):
@@ -95,11 +114,19 @@ def main():
     a = ap.parse_args()
     with psycopg.connect(a.dsn, row_factory=dict_row) as conn:
         if a.make_sample:
-            s = make_sample(conn, a.make_sample, a.sample_pct)
+            s, counts, want, short = make_sample(conn, a.make_sample, a.sample_pct)
             Path(a.sample).write_text(json.dumps(s))
-            print(f"sample: {len(s['decisions'])} decisions, {len(s['editions'])} editions -> {a.sample}")
+            for c, v in counts.items():
+                print(f"{c:12} {v:>4} / {want[c]}")
+            print(f"sample written -> {a.sample}")
+            if short:
+                print(f"ERROR: class(es) below requested size: {', '.join(short)}; "
+                      f"raise --sample-pct", file=sys.stderr)
+                sys.exit(1)
             return
         res = measure(conn, json.loads(Path(a.sample).read_text()))
+    for kind, n in res["missing_ids"].items():
+        print(f"WARNING: {n} sampled {kind} ids no longer exist", file=sys.stderr)
     print_table(res["aggregates"])
     if a.out:
         Path(a.out).write_text(json.dumps(res, ensure_ascii=False, indent=1))
