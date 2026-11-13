@@ -1,0 +1,277 @@
+{
+ "COL0": [
+  [
+   "art_1",
+   "1",
+   null,
+   "Die durch gegenwärtigen Bund vereinigten Völkerschaften bilden in ihrer Gesamtheit die Schweizerische Eidgenossenschaft.",
+   0,
+   null
+  ],
+  [
+   "art_2",
+   "2",
+   null,
+   "Der Bund hat zum Zweck: Behauptung der Unabhängigkeit des Vaterlandes gegen aussen, Handhabung von Ruhe und Ordnung im Innern.",
+   1,
+   null
+  ],
+  [
+   "art_3",
+   "3",
+   null,
+   "1 Alle Schweizer sind vor dem Gesetze gleich. Es gibt in der Schweiz keine Untertanenverhältnisse, keine Vorrechte des Orts, der Geburt, der Familien oder Personen. 2 Mann und Frau sind gleichberechtigt.",
+   2,
+   null
+  ],
+  [
+   "art_4",
+   "4",
+   "Grundsatz",
+   "Die Kantone sind souverän, soweit ihre Souveränität nicht durch die Bundesverfassung beschränkt ist.",
+   3,
+   null
+  ]
+ ],
+ "MARGINAL": [
+  [
+   "art_1",
+   "1",
+   "A. Arrondissements de poursuite et de faillite",
+   "1 Le territoire de chaque canton forme un ou plusieurs arrondissements de poursuite pour dettes et d'administration des faillites. 2 Les cantons déterminent le nombre et l'étendue de ces arrondissements.",
+   0,
+   null
+  ],
+  [
+   "art_2",
+   "2",
+   "B. Offices des poursuites et des faillites",
+   "1 Chaque arrondissement de poursuite est pourvu d'un office des poursuites qui est dirigé par le préposé aux poursuites. 2 Chaque arrondissement de faillite est pourvu d'un office des faillites qui est dirigé par le préposé aux faillites.",
+   1,
+   null
+  ],
+  [
+   "art_3",
+   "3",
+   "2 Rémunération",
+   "Le mode de traitement des préposés et de leurs substituts est de la compétence des cantons.",
+   2,
+   null
+  ]
+ ],
+ "ROMAN": [
+  [
+   "art_I",
+   null,
+   null,
+   "Il territorio delle Potenze neutrali è inviolabile.",
+   0,
+   null
+  ],
+  [
+   "art_II",
+   null,
+   null,
+   "È vietato ai belligeranti di far passare attraverso il territorio di una Potenza neutrale truppe o convogli.",
+   1,
+   null
+  ],
+  [
+   "art_V",
+   null,
+   null,
+   "Una Potenza neutrale non deve tollerare sul suo territorio alcuno degli atti menzionati.",
+   2,
+   null
+  ]
+ ],
+ "REPEALS": [
+  [
+   "art_1",
+   "1",
+   "Obligation de s'assurer",
+   "Les dispositions du chapitre premier sont applicables par analogie.",
+   0,
+   null
+  ],
+  [
+   "art_1_bis",
+   "1bis",
+   "Taux des cotisations",
+   "1 Dans les limites du barème dégressif, les cotisations sont calculées.",
+   1,
+   null
+  ],
+  [
+   "art_2",
+   "2",
+   null,
+   "Abrogé",
+   2,
+   null
+  ],
+  [
+   "art_3",
+   "3",
+   null,
+   "",
+   3,
+   null
+  ],
+  [
+   "art_4",
+   "4",
+   null,
+   "",
+   4,
+   null
+  ],
+  [
+   "art_5",
+   "5",
+   null,
+   "",
+   5,
+   null
+  ],
+  [
+   "art_6",
+   "6",
+   null,
+   "",
+   6,
+   null
+  ],
+  [
+   "art_7",
+   "7",
+   null,
+   "",
+   7,
+   null
+  ],
+  [
+   "art_8",
+   "8",
+   null,
+   "",
+   8,
+   null
+  ],
+  [
+   "art_9",
+   "9",
+   null,
+   "",
+   9,
+   null
+  ],
+  [
+   "art_10",
+   "10",
+   "Principe",
+   "Les assurés ont droit aux mesures de réadaptation.",
+   10,
+   null
+  ]
+ ],
+ "DECIMAL": [
+  [
+   "art_0_01",
+   "0.01",
+   "Champ d'application",
+   "La présente ordonnance s'applique au lac de Constance.",
+   0,
+   null
+  ],
+  [
+   "art_0_02",
+   "0.02",
+   "Définitions",
+   "Dans la présente ordonnance le terme «bâtiment» désigne les bateaux.",
+   1,
+   null
+  ],
+  [
+   "art_1_01",
+   "1.01",
+   "Conducteurs",
+   "Tout bâtiment doit avoir un conducteur.",
+   2,
+   null
+  ]
+ ],
+ "MIDSTREAM": [
+  [
+   "art_1",
+   "1",
+   null,
+   "1 In der einem Erben für die Erklärung über den Erwerb der Erbschaft eingeräumten Überlegungsfrist besteht Rechtsstillstand. 2 Eine zu Lebzeiten des Erblassers angehobene Betreibung kann fortgesetzt werden.",
+   0,
+   null
+  ],
+  [
+   "art_2",
+   "2",
+   null,
+   "Wird ein Schuldner verhaftet, so kann er die Betreibung bestreiten. 31 70,46 72,73 72,73 2 Mann und Frau sind gleichberechtigt. Das gilt auch für Bürgschaften.",
+   1,
+   null
+  ]
+ ],
+ "MARGINAL_MIDSTREAM": [
+  [
+   "art_268_a",
+   "268a",
+   "A. Adoption",
+   "1 Die Adoption darf erst nach umfassender Untersuchung aller wesentlichen Umstände ausgesprochen werden. 2 Namentlich ist die Einstellung zur Adoption zu würdigen.",
+   0,
+   null
+  ],
+  [
+   "art_268_b",
+   "268b",
+   "B. Wirkung",
+   "Das Kind erhält die Rechtsstellung eines Kindes der Adoptiveltern.",
+   1,
+   null
+  ]
+ ],
+ "NOTE": [],
+ "CITATION": [
+  [
+   "art_1",
+   "1",
+   null,
+   "Der Kanton regelt die Aufsicht. Die Einzelheiten richten sich nach Art. 45 Abs. 2 der Verordnung vom 1. Januar.",
+   0,
+   null
+  ]
+ ],
+ "SR220_MARGINAL": [
+  [
+   "art_3",
+   "3",
+   "b. Umfang der Ermächtigung",
+   "1 Soweit die Ermächtigung, im Namen eines andern Rechtshandlungen vorzunehmen, aus Verhältnissen des öffentlichen Rechtes hervorgeht, ist sie nach den Vorschriften des öffentlichen Rechtes des Bundes und der Kantone zu beurteilen. 2 Ist die Ermächtigung durch Rechtsgeschäft eingeräumt, so beurteilt sich ihr Umfang nach dessen Inhalt. 3 Wird die Ermächtigung vom Vollmachtgeber einem Dritten mitgeteilt, so beurteilt sich ihr Umfang diesem gegenüber nach Massgabe der erfolgten Kundgebung. eizerischen Zivilgesetzbuches. BG 220",
+   0,
+   null
+  ],
+  [
+   "art_34",
+   "34",
+   "2. Auf Grund",
+   "1 Eine durch Rechtsgeschäft erteilte Ermächtigung kann vom Vollmachtgeber jederzeit beschränkt oder widerrufen werden, unbeschadet der Rechte, die sich aus einem unter den Beteiligten bestehenden anderen Rechtsverhältnis, wie Einzelarbeitsvertrag, Gesellschaftsvertrag, Auftrag, ergeben können. 2 Ein vom Vollmachtgeber zum voraus erklärter Verzicht auf dieses Recht ist ungültig. 3 Hat der Vertretene die Vollmacht ausdrücklich oder tatsächlich kundgegeben, so kann er deren gänzlichen oder teilweisen Widerruf gutgläubigen Dritten nur dann entgegensetzen, wenn er ihnen auch diesen Widerruf mitgeteilt hat.",
+   1,
+   null
+  ],
+  [
+   "art_35",
+   "35",
+   "b. Einfluss von Tod, Handlungsunfähigkeit u.a.",
+   "1 Die durch Rechtsgeschäft erteilte Ermächtigung erlischt, sofern nicht das Gegenteil bestimmt ist oder aus der Natur des Geschäfts hervorgeht, mit dem Verlust der entsprechenden Handlungsfähigkeit, dem Konkurs, dem Tod oder der Verschollenerklärung des Vollmachtgebers oder des Bevollmächtigten. 2 Die nämliche Wirkung hat die Auflösung einer juristischen Person oder einer in das Handelsregister eingetragenen Gesellschaft. 3 Di",
+   2,
+   null
+  ]
+ ]
+}
