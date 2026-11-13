@@ -303,8 +303,8 @@ export class CompanyDossierTool extends BaseToolHandler {
     const source = { name: src.name, tool, as_of: fr.as_of ?? null, ...(fr.basis ? { as_of_basis: fr.basis } : {}),
       ...(src.freshness ? {} : { as_of_basis: 'дати наведено в записах' }), ...(note ? { note } : {}) };
     if (call.status !== 'ok') {
-      return { title, status: call.status, source, count: 0, more_available: false, items: [],
-        message: call.status === 'timeout' ? 'Джерело не відповіло вчасно: результат невідомий.' : 'Помилка запиту до джерела: результат невідомий.' };
+      const why = { timeout: 'Джерело не відповіло вчасно', error: 'Помилка запиту до джерела', unavailable: 'Джерело недоступне' }[call.status];
+      return { title, status: call.status, source, count: 0, more_available: false, items: [], message: `${why}: результат невідомий.` };
     }
     const { rows, total, message } = toRows(call.data);
     const count = total ?? rows.length;
@@ -320,7 +320,10 @@ export class CompanyDossierTool extends BaseToolHandler {
     const source = { name: 'Єдиний державний реєстр судових рішень (ЄДРСР)', tool: 'count_cases_by_party', as_of: null,
       note: `Пошук за назвою сторони «${party ?? '—'}», а не за ЄДРПОУ: можливі однойменні компанії.` };
     if (!party) return { title: 'Судові справи', status: 'unavailable', source, count: 0, more_available: false, items: [], message: 'Назву компанії не отримано з ЄДР.' };
-    if (call.status !== 'ok') return { title: 'Судові справи', status: call.status, source, count: 0, more_available: false, items: [], message: 'Пошук у ЄДРСР не відповів: результат невідомий.' };
+    if (call.status !== 'ok') {
+      return { title: 'Судові справи', status: call.status, source, count: 0, more_available: false, items: [],
+        message: call.status === 'unavailable' ? 'Пошук у ЄДРСР недоступний: результат невідомий.' : 'Пошук у ЄДРСР не відповів: результат невідомий.' };
+    }
     const d = call.data && typeof call.data === 'object' ? call.data : {};
     const count = Number(d.total_cases ?? d.count ?? d.total ?? 0) || 0;
     return { title: 'Судові справи', status: count ? 'found' : 'empty', source, count, more_available: false,
@@ -372,9 +375,12 @@ export class CompanyDossierTool extends BaseToolHandler {
     for (const [key, s] of Object.entries(sections)) {
       if (s.status === 'found') {
         const n = s.more_available ? `${s.count}+` : String(s.count);
-        out.push({ section: key, fact: `${s.title}: ${key === 'courts' ? `${n} справ за назвою` : `знайдено записів: ${n}`}.` });
+        const asOf = s.source.as_of ? ` (джерело станом на ${s.source.as_of})` : '';
+        out.push({ section: key, fact: `${s.title}: ${key === 'courts' ? `${n} справ за назвою` : `знайдено записів: ${n}`}${asOf}.` });
       } else if (s.status === 'timeout' || s.status === 'error') {
         out.push({ section: key, fact: `${s.title}: джерело не відповіло, перевірку не виконано.` });
+      } else if (s.status === 'unavailable') {
+        out.push({ section: key, fact: `${s.title}: джерело недоступне, перевірку не виконано.` });
       }
     }
     const won = sections.prozorro_supplier;

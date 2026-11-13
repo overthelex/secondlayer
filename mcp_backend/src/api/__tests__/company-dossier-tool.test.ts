@@ -91,6 +91,8 @@ describe('get_company_dossier (LEXAI-2227)', () => {
     expect(d.sections.construction.items[0]).not.toHaveProperty('raw');
     expect(d.sections.construction.source.note).toMatch(/2022/);
     expect(d.facts.some((f: any) => f.section === 'tax_debt' && /не відповіло/.test(f.fact))).toBe(true);
+    // a found fact carries the source's as-of date, so a 2022 snapshot is not read as today
+    expect(d.facts.find((f: any) => f.section === 'prozorro_supplier').fact).toMatch(/станом на 2026-11-13/);
   });
 
   it('reports a phone shared with another ProZorro supplier as a fact, not a verdict', async () => {
