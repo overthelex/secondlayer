@@ -18,8 +18,9 @@ citations.extract_statutes keys (abbr, article), text_quality.score and
 text_damage.markers, on raw vs clean_pdf_text(raw, languages). Languages per
 row follow clean_text_stage.languages_for (Sprache first).
 
-Exit 1 when aggregate citations after < 0.99 x before (cases + statutes), or
-mean quality drops by more than 0.01.
+Exit 1 when: the sample compares 0 documents; any document errors; aggregate
+citations after < 0.99 x before; lost keys (per-document, not masked by gains
+elsewhere) > 1% of before; or mean quality drops by more than 0.01.
 """
 import argparse
 import json
@@ -62,17 +63,23 @@ def compare_text(raw, languages):
     }
 
 
-def aggregate(docs):
+def _lost(d):
+    return len(d["cases_lost"]) + len(d["statutes_lost"])
+
+
+def aggregate(docs, errors=()):
     n = len(docs)
     s = lambda k: sum(d[k] for d in docs)  # noqa: E731
     cit_b = s("cases_before") + s("statutes_before")
     cit_a = s("cases_after") + s("statutes_after")
     keys = docs[0]["markers_before"].keys() if docs else []
     return {
-        "n": n,
+        "n": n, "errors": len(errors),
         "cases_before": s("cases_before"), "cases_after": s("cases_after"),
         "statutes_before": s("statutes_before"), "statutes_after": s("statutes_after"),
         "citations_before": cit_b, "citations_after": cit_a,
+        "lost_total": sum(_lost(d) for d in docs),
+        "docs_with_loss": sum(1 for d in docs if _lost(d) > 0),
         "quality_before": s("quality_before") / n if n else 0.0,
         "quality_after": s("quality_after") / n if n else 0.0,
         "markers_before": {m: sum(d["markers_before"][m] for d in docs) / n for m in keys},
@@ -83,46 +90,62 @@ def aggregate(docs):
 def verdict(agg):
     """List of failure reasons (empty = pass)."""
     bad = []
+    if agg["n"] == 0:
+        bad.append("no documents compared (empty sample)")
+    if agg.get("errors", 0) > 0:
+        bad.append(f"{agg['errors']} document(s) raised an error")
     if agg["citations_after"] < CIT_RATIO_MIN * agg["citations_before"]:
         bad.append(f"citations {agg['citations_after']} < {CIT_RATIO_MIN} x {agg['citations_before']}")
+    if agg.get("lost_total", 0) > (1 - CIT_RATIO_MIN) * agg["citations_before"]:
+        bad.append(f"lost citation keys {agg['lost_total']} > 1% of {agg['citations_before']}")
     if agg["quality_before"] - agg["quality_after"] > QUALITY_DROP_MAX:
         bad.append(f"mean quality {agg['quality_before']:.4f} -> {agg['quality_after']:.4f}")
     return bad
 
 
 def worst_losses(docs, k=10):
-    def loss(d):
-        return (d["cases_before"] - d["cases_after"]) + (d["statutes_before"] - d["statutes_after"])
-    return [d for d in sorted(docs, key=loss, reverse=True)[:k] if loss(d) > 0]
+    ranked = sorted(docs, key=_lost, reverse=True)[:k]
+    return [d for d in ranked if _lost(d) > 0]
 
 
 def fetch(conn, sample, raw_dir=None):
-    """Read-only fetch: [(doc_id, raw_text, languages)] for the sample decisions."""
+    """Read-only fetch: ([(doc_id, raw_text, languages)], stats) for the sample decisions."""
     conn.execute("SET TRANSACTION READ ONLY")  # first statement of the txn
     ids = sample.get("decisions", [])
     cur = conn.execute(
         "SELECT doc_id, spider, full_text, languages, metadata_json->>'Sprache' AS sprache"
-        " FROM ch_court_decisions WHERE doc_id = ANY(%s) AND spider <> ALL(%s)",
-        (ids, list(EXCLUDED_SPIDERS)))
+        " FROM ch_court_decisions WHERE doc_id = ANY(%s)", (ids,))
     out = []
+    stats = {"requested": len(ids), "found": 0, "excluded_spider": 0, "empty_text": 0}
     for r in cur.fetchall():
+        stats["found"] += 1
+        if r["spider"] in EXCLUDED_SPIDERS:
+            stats["excluded_spider"] += 1
+            continue
         raw = r["full_text"]
         if raw_dir:
             p = raw_text_archive.path_for(Path(raw_dir), r["spider"], r["doc_id"])
             if p.exists():
                 raw = raw_text_archive.load(Path(raw_dir), r["spider"], r["doc_id"])
-        if raw:
-            out.append((r["doc_id"], raw, languages_for(r)))
-    return out
+        if not raw:
+            stats["empty_text"] += 1
+            continue
+        out.append((r["doc_id"], raw, languages_for(r)))
+    return out, stats
 
 
 def run(rows):
-    docs = []
+    """Compare every row; a document that raises is recorded, not fatal."""
+    docs, errors = [], []
     for doc_id, raw, langs in rows:
-        d = compare_text(raw, langs)
+        try:
+            d = compare_text(raw, langs)
+        except Exception as exc:  # noqa: BLE001
+            errors.append({"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"})
+            continue
         d["doc_id"] = doc_id
         docs.append(d)
-    return docs
+    return docs, errors
 
 
 def main():
@@ -134,21 +157,32 @@ def main():
     a = ap.parse_args()
     sample = json.loads(Path(a.sample).read_text())
     with psycopg.connect(a.dsn, row_factory=dict_row) as conn:
-        rows = fetch(conn, sample, a.raw_dir)
-    docs = run(rows)
-    agg = aggregate(docs)
+        rows, stats = fetch(conn, sample, a.raw_dir)
+    if not a.raw_dir:
+        print("WARNING: no --raw-dir; assuming full_text is still raw for every row",
+              file=sys.stderr)
+    docs, errors = run(rows)
+    agg = aggregate(docs, errors)
+    print(f"sample ids requested {stats['requested']}, found {stats['found']}, "
+          f"excluded spider {stats['excluded_spider']}, empty text {stats['empty_text']}")
+    for e in errors:
+        print(f"  ERROR {e['doc_id']}: {e['error']}")
     print("10 documents with the largest citation loss:")
     for d in worst_losses(docs):
-        print(f"  {d['doc_id']}: cases {d['cases_before']}->{d['cases_after']}, "
+        print(f"  {d['doc_id']}: lost {_lost(d)}, cases {d['cases_before']}->{d['cases_after']}, "
               f"statutes {d['statutes_before']}->{d['statutes_after']}")
-    print(f"documents: {agg['n']}")
+    print(f"documents: {agg['n']}, errors: {agg['errors']}, "
+          f"docs with loss: {agg['docs_with_loss']}, lost keys: {agg['lost_total']}")
     for k in ("cases", "statutes", "citations", "quality"):
         print(f"{k:10} before {agg[k + '_before']:.4f}  after {agg[k + '_after']:.4f}")
+    print("mean raw-side markers: " + ", ".join(
+        f"{m}={agg['markers_before'][m]:.3f}"
+        for m in ("glued_refs", "hyphen_breaks", "mean_line_len") if m in agg["markers_before"]))
     for m in agg["markers_before"]:
         print(f"marker {m:20} {agg['markers_before'][m]:.3f} -> {agg['markers_after'][m]:.3f}")
     bad = verdict(agg)
     if a.out:
-        Path(a.out).write_text(json.dumps({"aggregate": agg, "documents": docs,
+        Path(a.out).write_text(json.dumps({"aggregate": agg, "documents": docs, "errors": errors,
                                            "failures": bad}, ensure_ascii=False, indent=1))
     if bad:
         print("FAIL: " + "; ".join(bad), file=sys.stderr)
