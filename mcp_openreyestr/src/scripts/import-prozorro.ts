@@ -3,7 +3,8 @@
  *
  * Walks the public tenders feed (ascending by dateModified) from a saved cursor,
  * fetches each tender's details, and upserts metadata into prozorro_tenders
- * (ON CONFLICT (tender_id)). Never deletes or truncates.
+ * (ON CONFLICT (tender_id)) and its contracts with the winning supplier into
+ * prozorro_contracts (LEXAI-2227). Never deletes or truncates.
  *
  * Cursor: prozorro_sync_state.next_offset (the feed's opaque next_page.offset),
  * committed in the same transaction as the page's rows. A crash or kill replays
@@ -26,106 +27,25 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { Pool, PoolClient } from 'pg';
-import https from 'https';
 import {
+  buildContractsUpsert,
   buildUpsert,
-  extractTenderData,
+  CONTRACTS_DDL,
   parseArgs,
-  retryDelayMs,
   toUnixSeconds,
-  TenderRecord,
 } from './lib/prozorro-feed';
+import { API_BASE, createProzorroClient, log } from './lib/prozorro-http';
 
-const API_BASE = process.env.PROZORRO_API_BASE || 'https://public-api.prozorro.gov.ua/api/2.5';
 const CONCURRENCY = Math.max(1, parseInt(process.env.PROZORRO_CONCURRENCY || '10', 10));
 const PAGE_SIZE = Math.min(1000, Math.max(1, parseInt(process.env.PROZORRO_PAGE_SIZE || '1000', 10)));
 const DELAY_MS = Math.max(0, parseInt(process.env.PROZORRO_DELAY_MS || '0', 10));
-const MAX_ATTEMPTS = 8;
 const FEED = 'tenders';
 const OVERLAP_SECONDS = 300;
 const LOCK_KEY = 2089_0001; // pg advisory lock: one importer at a time
 
-const agent = new https.Agent({ keepAlive: true, maxSockets: CONCURRENCY + 2 });
+const { fetchJson, fetchDetails, destroy: destroyClient } = createProzorroClient(CONCURRENCY, DELAY_MS);
 
-/** Shared back-off gate: a 429 on any worker pauses all of them. */
-let pausedUntil = 0;
 let stopRequested = false;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-function log(msg: string): void {
-  console.log(`[${new Date().toISOString()}] ${msg}`);
-}
-
-interface HttpResult { status: number; retryAfter: string | null; body: string }
-
-function httpGet(url: string): Promise<HttpResult> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, { agent, timeout: 60_000, headers: { 'User-Agent': 'legal.org.ua openreyestr importer' } }, (res) => {
-      let body = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => (body += c));
-      res.on('end', () => {
-        const ra = res.headers['retry-after'];
-        resolve({ status: res.statusCode || 0, retryAfter: Array.isArray(ra) ? ra[0] : ra || null, body });
-      });
-      res.on('error', reject);
-    });
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
-  });
-}
-
-/** GET JSON with retries. Returns null on 404/410 (tender gone). Throws after MAX_ATTEMPTS. */
-async function fetchJson(url: string): Promise<any | null> {
-  let lastErr = '';
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const wait = pausedUntil - Date.now();
-    if (wait > 0) await sleep(wait);
-    try {
-      const res = await httpGet(url);
-      if (res.status === 200) return JSON.parse(res.body);
-      if (res.status === 404 || res.status === 410) return null;
-      lastErr = `HTTP ${res.status}`;
-      if (res.status === 429 || res.status === 503) {
-        const delay = retryDelayMs(attempt, res.retryAfter);
-        pausedUntil = Math.max(pausedUntil, Date.now() + delay);
-        log(`  ${res.status} from API, all workers pause ${Math.round(delay / 1000)}s`);
-        continue;
-      }
-    } catch (e) {
-      lastErr = (e as Error).message;
-    }
-    await sleep(retryDelayMs(attempt, null));
-  }
-  throw new Error(`${lastErr} after ${MAX_ATTEMPTS} attempts: ${url}`);
-}
-
-async function fetchDetails(ids: string[]): Promise<{ records: TenderRecord[]; missing: number }> {
-  const records: TenderRecord[] = [];
-  let missing = 0;
-  let idx = 0;
-  let failure: Error | null = null;
-  async function worker(): Promise<void> {
-    while (idx < ids.length && !failure) {
-      const id = ids[idx++];
-      try {
-        const json = await fetchJson(`${API_BASE}/tenders/${id}`);
-        const rec = json ? extractTenderData(json.data) : null;
-        if (rec) records.push(rec);
-        else missing++;
-      } catch (e) {
-        failure = e as Error;
-      }
-      if (DELAY_MS) await sleep(DELAY_MS);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
-  if (failure) throw failure;
-  return { records, missing };
-}
 
 async function ensureSchema(pool: Pool): Promise<void> {
   // Same statements as migrations/018_prozorro_sync_state.sql; migrations are
@@ -144,6 +64,7 @@ async function ensureSchema(pool: Pool): Promise<void> {
     SELECT setval(pg_get_serial_sequence('prozorro_tenders', 'id'),
                   GREATEST((SELECT COALESCE(max(id), 1) FROM prozorro_tenders),
                            (SELECT last_value FROM prozorro_tenders_id_seq)))`);
+  await pool.query(CONTRACTS_DDL);
 }
 
 async function resolveStart(pool: Pool, args: ReturnType<typeof parseArgs>): Promise<{ offset: string; source: string }> {
@@ -199,7 +120,7 @@ async function main(): Promise<void> {
 
   const t0 = Date.now();
   let offset = start.offset;
-  let seen = 0, inserted = 0, updated = 0, skippedOlder = 0, missing = 0, pages = 0;
+  let seen = 0, inserted = 0, updated = 0, skippedOlder = 0, missing = 0, pages = 0, contractsWritten = 0;
   let lastModified = '';
   let reason = 'caught up (empty feed page)';
 
@@ -242,6 +163,8 @@ async function main(): Promise<void> {
             updated += r.rows.length - ins;
             skippedOlder += new Set(det.records.map((x) => x.tender_id)).size - r.rows.length;
           }
+          const cq = buildContractsUpsert(det.contracts);
+          if (cq) contractsWritten += (await client.query(cq.text, cq.values)).rowCount || 0;
           if (nextOffset) {
             await client.query(
               `INSERT INTO prozorro_sync_state (feed, next_offset, last_date_modified, updated_at)
@@ -262,7 +185,7 @@ async function main(): Promise<void> {
 
       const secs = (Date.now() - t0) / 1000;
       log(`page ${pages}: +${items.length} (total ${seen}, ${(seen / secs).toFixed(1)}/s) new=${inserted} upd=${updated} ` +
-        `older=${skippedOlder} gone=${missing} | feed at ${lastModified}`);
+        `older=${skippedOlder} gone=${missing} contracts=${contractsWritten} | feed at ${lastModified}`);
 
       if (hitUntil) { reason = untilTs !== null && seen < args.limit ? `--until=${args.until} reached` : `--limit=${args.limit} reached`; break; }
       if (!nextOffset) { reason = 'feed returned no next_page'; break; }
@@ -270,11 +193,11 @@ async function main(): Promise<void> {
     }
   } finally {
     const secs = ((Date.now() - t0) / 1000).toFixed(0);
-    log(`Stopped: ${reason}. ${seen} tenders in ${secs}s: new=${inserted} updated=${updated} older-skipped=${skippedOlder} gone=${missing}; feed at ${lastModified || '-'}`);
+    log(`Stopped: ${reason}. ${seen} tenders in ${secs}s: new=${inserted} updated=${updated} older-skipped=${skippedOlder} gone=${missing} contracts=${contractsWritten}; feed at ${lastModified || '-'}`);
     await lockClient.query('SELECT pg_advisory_unlock($1)', [LOCK_KEY]).catch(() => undefined);
     lockClient.release();
     await pool.end();
-    agent.destroy();
+    destroyClient();
   }
 }
 

@@ -491,18 +491,26 @@ status — стан заходу АРМА (null, якщо заходу не бу
       },
       {
         name: 'search_prozorro',
-        description: `Пошук тендерів у системі ProZorro (публічні закупівлі)
+        description: `Пошук тендерів і договорів у системі ProZorro (публічні закупівлі)
 
 💰 Примерная стоимость: $0.001-$0.005 USD
-Пошук за назвою тендеру, ЄДРПОУ замовника, назвою замовника, статусом або кодом CPV. Тендери з 2015 року, дані синхронізуються з ProZorro.`,
+Пошук за назвою тендеру, замовником (ЄДРПОУ, назва), статусом, кодом CPV, датою, а також за переможцем/постачальником: ЄДРПОУ, назва, телефон або email постачальника.
+Без фільтра постачальника повертає тендери з переможцями (winners: ЄДРПОУ, назва, сума договору). З фільтром постачальника повертає по рядку на договір: що виграла компанія, у яких замовників, на які суми, контакти постачальника. Спільний телефон або email у «різних» постачальників є ознакою пов'язаності або фіктивності.
+Тендери з 2015 року. Переможці дозавантажуються поступово (спочатку будівельні закупівлі CPV 45 з 2021 року), тому відсутність договору ще не означає, що компанія нічого не вигравала.`,
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Назва або предмет закупівлі' },
             buyer_edrpou: { type: 'string', description: 'ЄДРПОУ замовника' },
             buyer_name: { type: 'string', description: 'Назва замовника' },
-            status: { type: 'string', description: 'Статус (complete, active, cancelled, unsuccessful)' },
-            cpv_code: { type: 'string', description: 'Код CPV класифікатора' },
+            supplier_edrpou: { type: 'string', description: 'ЄДРПОУ (або РНОКПП ФОП) переможця/постачальника' },
+            supplier_name: { type: 'string', description: 'Частина назви постачальника' },
+            supplier_phone: { type: 'string', description: 'Телефон постачальника у будь-якому форматі' },
+            supplier_email: { type: 'string', description: 'Email постачальника' },
+            status: { type: 'string', description: 'Статус тендеру (complete, active, cancelled, unsuccessful)' },
+            cpv_code: { type: 'string', description: 'Код CPV або його початок (45 = будівельні роботи)' },
+            date_from: { type: 'string', description: 'Дата створення тендеру від (YYYY-MM-DD)' },
+            date_to: { type: 'string', description: 'Дата створення тендеру до (YYYY-MM-DD)' },
             limit: { type: 'number', default: 50, maximum: 100, minimum: 1 },
             offset: { type: 'number', default: 0 },
           },

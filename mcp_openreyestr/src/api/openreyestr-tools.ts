@@ -1,3 +1,4 @@
+import { normalizePhone } from '../scripts/lib/prozorro-feed';
 import { Pool } from 'pg';
 import { z } from 'zod';
 import { isSyntheticKey, notSyntheticSql, nullSyntheticKeys } from '../services/synthetic-keys';
@@ -1532,56 +1533,96 @@ export class OpenReyestrTools {
   }
 
   /**
-   * Search Prozorro public procurement tenders
+   * Search Prozorro public procurement tenders, with their winners (LEXAI-2227).
+   *
+   * With a supplier filter the search starts from prozorro_contracts (what did
+   * this company win, which suppliers share this phone or email) and returns
+   * one row per contract. Otherwise it starts from prozorro_tenders and attaches
+   * up to 5 contracts with the winner to each tender.
    */
-  async searchProzorro(params: { query?: string; buyer_edrpou?: string; buyer_name?: string; status?: string; cpv_code?: string; limit?: number; offset?: number }): Promise<any[]> {
-    const { query, buyer_edrpou, buyer_name, status, cpv_code, limit = 50, offset = 0 } = params;
+  async searchProzorro(params: {
+    query?: string; buyer_edrpou?: string; buyer_name?: string; status?: string; cpv_code?: string;
+    supplier_edrpou?: string; supplier_name?: string; supplier_phone?: string; supplier_email?: string;
+    date_from?: string; date_to?: string; limit?: number; offset?: number;
+  }): Promise<any[]> {
+    const { query, buyer_edrpou, buyer_name, status, cpv_code, date_from, date_to } = params;
+    const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 100);
+    const offset = Math.max(Number(params.offset) || 0, 0);
+    const supplier_edrpou = params.supplier_edrpou?.trim();
+    const supplier_name = params.supplier_name?.trim();
+    const supplier_email = params.supplier_email?.trim().toLowerCase();
+    const supplier_phone = params.supplier_phone ? normalizePhone(params.supplier_phone) : undefined;
+    if (params.supplier_phone && !supplier_phone) {
+      return [{ found: false, message: 'Некоректний номер телефону: потрібно 9-15 цифр' }];
+    }
+
     const conditions: string[] = [];
     const values: any[] = [];
-    let paramIndex = 1;
+    const add = (sql: string, v: any) => {
+      values.push(v);
+      conditions.push(sql.replace('?', `$${values.length}`));
+    };
 
-    if (buyer_edrpou) {
-      conditions.push(`buyer_edrpou = $${paramIndex}`);
-      values.push(buyer_edrpou);
-      paramIndex++;
-    }
-    if (query) {
-      conditions.push(`title ILIKE $${paramIndex}`);
-      values.push(`%${query}%`);
-      paramIndex++;
-    }
-    if (buyer_name) {
-      conditions.push(`buyer_name ILIKE $${paramIndex}`);
-      values.push(`%${buyer_name}%`);
-      paramIndex++;
-    }
-    if (status) {
-      conditions.push(`status = $${paramIndex}`);
-      values.push(status);
-      paramIndex++;
-    }
-    if (cpv_code) {
-      conditions.push(`cpv_code LIKE $${paramIndex}`);
-      values.push(`${cpv_code}%`);
-      paramIndex++;
-    }
+    if (buyer_edrpou) add('t.buyer_edrpou = ?', buyer_edrpou);
+    if (query) add('t.title ILIKE ?', `%${query}%`);
+    if (buyer_name) add('t.buyer_name ILIKE ?', `%${buyer_name}%`);
+    if (status) add('t.status = ?', status);
+    if (cpv_code) add('t.cpv_code LIKE ?', `${cpv_code}%`);
+    if (date_from) add('t.date_created >= ?', date_from);
+    if (date_to) add('t.date_created < (?::date + 1)', date_to);
+
+    const bySupplier = Boolean(supplier_edrpou || supplier_name || supplier_phone || supplier_email);
+    if (supplier_edrpou) add('c.supplier_edrpou = ?', supplier_edrpou);
+    if (supplier_name) add('c.supplier_name ILIKE ?', `%${supplier_name}%`);
+    if (supplier_phone) add('c.supplier_phone = ?', supplier_phone);
+    if (supplier_email) add('c.supplier_email = ?', supplier_email);
 
     if (conditions.length === 0) {
       return [{ found: false, message: 'Вкажіть параметри пошуку тендерів' }];
     }
 
     values.push(limit, offset);
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
-    const result = await this.pool.query(
-      `SELECT id, tender_id, tender_number, title, status, procurement_method_type, buyer_name, buyer_edrpou, buyer_region, amount, currency, cpv_code, cpv_description, date_created, tender_start, tender_end
-       FROM prozorro_tenders ${whereClause}
-       ORDER BY date_created DESC
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-      values
-    );
+    const lim = `LIMIT $${values.length - 1} OFFSET $${values.length}`;
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const tenderCols = `t.tender_id, t.tender_number, t.title, t.status, t.procurement_method_type, t.buyer_name,
+       t.buyer_edrpou, t.buyer_region, t.amount AS expected_amount, t.currency, t.cpv_code, t.cpv_description,
+       t.date_created, t.tender_start, t.tender_end`;
+
+    const sql = bySupplier
+      ? `SELECT ${tenderCols},
+            c.contract_ua_id, c.status AS contract_status, c.amount AS contract_amount, c.date_signed,
+            c.period_start, c.period_end, c.supplier_edrpou, c.supplier_name, c.supplier_scale,
+            c.supplier_region, c.supplier_locality, c.supplier_address, c.supplier_email, c.supplier_phone,
+            c.supplier_count
+         FROM prozorro_contracts c
+         JOIN prozorro_tenders t ON t.tender_id = c.tender_id
+         ${where}
+         ORDER BY t.date_created DESC NULLS LAST
+         ${lim}`
+      : `SELECT ${tenderCols}, w.winners
+         FROM prozorro_tenders t
+         LEFT JOIN LATERAL (
+           SELECT json_agg(json_build_object(
+                    'supplier_edrpou', c.supplier_edrpou, 'supplier_name', c.supplier_name,
+                    'contract_amount', c.amount, 'contract_status', c.status, 'date_signed', c.date_signed)
+                  ORDER BY c.amount DESC NULLS LAST) AS winners
+           FROM (SELECT * FROM prozorro_contracts c WHERE c.tender_id = t.tender_id LIMIT 5) c
+         ) w ON true
+         ${where}
+         ORDER BY t.date_created DESC NULLS LAST
+         ${lim}`;
+
+    const result = await this.pool.query(sql, values);
 
     if (result.rows.length === 0) {
-      return [{ found: false, query: query || buyer_edrpou || buyer_name || '', message: 'Тендерів не знайдено' }];
+      const what = supplier_edrpou || supplier_name || supplier_phone || supplier_email || query || buyer_edrpou || buyer_name || '';
+      return [{
+        found: false,
+        query: what,
+        message: bySupplier
+          ? 'Договорів з таким постачальником не знайдено. Переможці завантажені не за всю історію: дані поступово доповнюються.'
+          : 'Тендерів не знайдено',
+      }];
     }
     return result.rows;
   }
