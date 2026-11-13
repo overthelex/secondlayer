@@ -94,7 +94,7 @@ Expected: the aggregates agree with the spec §1 within sampling noise (fedlex_p
 **Files:**
 - Create: `services/ch-pipeline/chpipe/text_clean.py`
 - Test: `services/ch-pipeline/tests/test_text_clean.py`
-- Fixtures: `services/ch-pipeline/tests/fixtures/pdftext_decision_gr_hardwrap.txt` (first 3,000 chars of the raw `full_text` of `ECLI:CH:GR_Gerichte:GR_KG_001_PKG-2001-13_0000-00-00`, pulled from the DB), `tests/fixtures/pdftext_decision_portal_reflowed.txt` (3,000 chars of a `CH_VB` row whose `mean_line_len` > 200 per Task 0).
+- Fixtures (already extracted from prod by the controller; copy from the SDD workspace `fixtures/` dir into `tests/fixtures/`): `pdftext_decision_gr_hardwrap.txt` (GR_FIXTURE), `pdftext_decision_vb_twocolumn.txt` (VB_TWOCOL, CH_VB_001_88-062_1989-06-19), `pdftext_decision_unibe_twocolumn.txt` (UNIBE_TWOCOL), `decision_bger_html_reflowed.txt` (HTML_FIXTURE: an HTML-source decision, the canonical already-reflowed shape; portal PDFs turned out NOT to be reflowed).
 
 **Interfaces:**
 - Produces: `CLEANER_VERSION: int = 1`; `OWN_REFLOW_SPIDERS: frozenset[str] = {"CH_WEKO_RPW", "CH_WEKO"}`.
@@ -103,7 +103,9 @@ Expected: the aggregates agree with the spec §1 within sampling noise (fedlex_p
 - Produces: `is_hard_wrapped(text: str) -> bool` (True when the median length of non-empty lines ≥ 20 chars is < 100).
 - Produces: `join_hyphen(head: str, tail: str, vocabulary: frozenset[str]) -> str` where `head` ends with `-`: conjunction start of `tail` (`und|oder|bzw.|sowie|et|ou|e|ed|o|od|u|ni`) → `head + " " + tail` keeping the hyphen; `tail[0].isupper()` → keep hyphen, no space; else join without hyphen unless the joined lowercase word is absent from `vocabulary` while both parts (lowercase, letters only) are present → keep the hyphen.
 - Produces: `unwrap(lines: list[str], vocabulary: frozenset[str]) -> list[str]` (paragraphs; a line ends a paragraph when the next line is blank, or the next line starts with a paragraph marker `^(\d{1,3}\.\s|[A-Z]\.\d*(\.\d+)*\s|[a-z]\)\s|[IVX]{1,5}\.\s|Art\.\s|§\s?\d|E\.\s?\d|Erwägung|Considérant|Considerando|Sachverhalt|Faits|Fatti|Dispositiv)`, or the line is shorter than 0.6 × the document's column width (90th percentile of non-empty line lengths) and the next line starts with an uppercase letter or digit).
-- Produces: `clean_pdf_text(raw: str, languages: list[str]) -> str`: `normalise_chars` → split lines → `strip_page_furniture` → (`unwrap` only if `is_hard_wrapped`) → collapse runs of blank lines to one → `strip()`. Vocabulary via `text_quality._vocabulary(languages)`.
+- Produces: `split_columns(lines: list[str]) -> list[str]`: find maximal runs of ≥ 4 consecutive non-empty-or-blank lines in which ≥ 60 % of the non-empty lines have a gutter (a run of ≥ 3 spaces) starting within ±3 chars of one common column `g` with ≥ 20 chars of text on each side; inside a run emit every line's left part `line[:g].rstrip()` first, then every line's right part `line[g:].strip()` (blank parts kept as blank lines); lines outside runs pass through. Two-column text measured 13.11: ~23K PDF decisions (CH_UNIBE book spreads ≈ 94 %, CH_VB newspaper columns ≈ 29 %).
+- Produces: `hyphen_vocabulary(languages: list[str]) -> frozenset[str]` (ledger ruling R2: fr/it/rm wordlists only, German excluded).
+- Produces: `clean_pdf_text(raw: str, languages: list[str]) -> str`: `normalise_chars` → split lines → `strip_page_furniture` → `split_columns` → (`unwrap` only if `is_hard_wrapped`) → collapse runs of blank lines to one → `strip()`. Vocabulary via `hyphen_vocabulary(languages)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -128,7 +130,17 @@ def test_clean_pdf_text_hardwrapped_fixture():
     assert markers(out)["hyphen_breaks"] == 0 and markers(out)["page_number_lines"] == 0
     assert markers(out)["mean_line_len"] > 300
 def test_clean_pdf_text_reflowed_is_noop_except_chars():
-    assert clean_pdf_text(PORTAL_FIXTURE, ["de"]) == normalise_chars(PORTAL_FIXTURE).strip()
+    assert clean_pdf_text(HTML_FIXTURE, ["de"]) == normalise_chars(HTML_FIXTURE).strip()
+def test_split_columns_deinterleaves_two_column_run():
+    out = "\n".join(split_columns(VB_TWOCOL.splitlines()))
+    # left column sentence is contiguous after the split, not interleaved with "Proposition de la commission"
+    assert "sich von diesen Aeusserun-\ngen des Chefbeamten" in out
+    assert "Aeusserun-       Proposition" not in out
+def test_split_columns_passes_single_column_through():
+    assert split_columns(GR_FIXTURE.splitlines()) == GR_FIXTURE.splitlines()
+def test_clean_pdf_text_twocolumn_unibe():
+    out = clean_pdf_text(UNIBE_TWOCOL, ["fr"])
+    assert "nn decret     mune" not in out and "convoquer" in out or "eonvoquer" in out
 def test_normalise_chars(): assert normalise_chars("ﬁnanz x­y") == "finanz xy"
 ```
 
