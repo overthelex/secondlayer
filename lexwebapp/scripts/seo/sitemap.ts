@@ -87,6 +87,12 @@ function urlset(entries: SitemapEntry[]): string {
   return ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">', ...urls, '</urlset>', ''].join('\n');
 }
 
+/**
+ * Sitemaps generated at request time by mcp_backend (routes/zakon-routes.ts),
+ * listed in the index but not written here. seo-check skips them.
+ */
+export const BACKEND_SITEMAPS = ['/zakon/sitemap.xml'];
+
 /** Writes sitemap.xml (index) + sitemap-<section>.xml into outDir. Returns URL count. */
 export function writeSitemaps(outDir: string, posts: BlogPostRef[]): number {
   const sections = buildSections(posts);
@@ -95,6 +101,8 @@ export function writeSitemaps(outDir: string, posts: BlogPostRef[]): number {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ...Object.keys(sections).map(name => `  <sitemap>\n    <loc>${BASE_URL}/sitemap-${name}.xml</loc>\n    <lastmod>${today}</lastmod>\n  </sitemap>`),
+    // served by mcp_backend, not part of this build (no lastmod: the backend's own urlset carries per-URL dates)
+    ...BACKEND_SITEMAPS.map(p => `  <sitemap>\n    <loc>${BASE_URL}${p}</loc>\n  </sitemap>`),
     '</sitemapindex>',
     '',
   ].join('\n');
