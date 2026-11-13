@@ -301,7 +301,7 @@ def _parsed_pdf_row(conn, text, count=None, consolidation=None, lang="de"):
     return vid
 
 
-def test_resplit_gives_articles_and_keeps_full_text_unchanged(conn, settings):
+def test_resplit_gives_articles_and_moves_raw_to_akn_xml(conn, settings):
     vid = _parsed_pdf_row(conn, RESPLIT_TEXT)
     stub = _parsed_pdf_row(conn, STUB_TEXT, consolidation=URL + "#stub", lang="it")
 
@@ -312,7 +312,10 @@ def test_resplit_gives_articles_and_keeps_full_text_unchanged(conn, settings):
     full_text, count = conn.execute(
         "SELECT full_text, article_count FROM ch_act_version WHERE version_id=%s",
         (vid,)).fetchone()
-    assert full_text == RESPLIT_TEXT            # byte for byte what the backfill wrote
+    assert full_text != RESPLIT_TEXT and "Art. 2" in full_text   # clean text now
+    assert conn.execute("SELECT akn_xml FROM ch_act_version WHERE version_id=%s",
+                        (vid,)).fetchone()[0] == RESPLIT_TEXT   # raw kept
+    assert report.cleaned == 2
     assert count == 2
     rows = conn.execute(
         "SELECT e_id, article_number, text FROM ch_act_article "
@@ -320,12 +323,14 @@ def test_resplit_gives_articles_and_keeps_full_text_unchanged(conn, settings):
     assert [(r[0], r[1]) for r in rows] == [("art_1", "1"), ("art_2", "2")]
     assert "sorgt für die Sache" in rows[0][2]
     assert "AS 1950 1" not in rows[0][2] and "AS 1950 1" not in rows[1][2]
-    # the stub gained nothing and stays selectable (article_count still NULL)
+    # the stub gained no articles (article_count still NULL) but is cleaned
     assert conn.execute("SELECT article_count FROM ch_act_version WHERE version_id=%s",
                         (stub,)).fetchone()[0] is None
+    assert conn.execute("SELECT akn_xml FROM ch_act_version WHERE version_id=%s",
+                        (stub,)).fetchone()[0] == STUB_TEXT
 
-    # idempotent: the recovered row has left the selection, the stub is
-    # walked again and still yields nothing
+    # idempotent: the recovered row has left the selection, the stub (no
+    # articles) is walked again and still yields nothing
     again = fedlex_pdf_text_stage.resplit(settings)
     assert (again.resplit, again.recovered, again.empty) == (1, 0, 1)
 
@@ -333,6 +338,7 @@ def test_resplit_gives_articles_and_keeps_full_text_unchanged(conn, settings):
 def test_resplit_walks_only_parsed_article_less_fedlex_pdf_rows(conn, settings):
     # already has articles -- not selected
     done = _parsed_pdf_row(conn, RESPLIT_TEXT, count=3, consolidation=URL + "#done")
+    conn.execute("UPDATE ch_act_version SET akn_xml=full_text WHERE version_id=%s", (done,))
     # an AKN row of another source -- never selected
     akn_row = _row(conn, source="fedlex", url="https://fedlex.data.admin.ch/x.xml",
                    consolidation="fedlex/x")
@@ -359,3 +365,77 @@ def test_resplit_honours_the_limit_across_batches(conn, settings, monkeypatch):
         "SELECT count(*) FROM ch_act_version WHERE source='fedlex_pdf' "
         "AND stage='parsed' AND article_count IS NULL").fetchone()[0]
     assert left == 2
+
+
+# --- Phase A: raw text in akn_xml, clean text in full_text ---
+
+COL0 = RESPLIT_TEXT
+
+
+def _insert_pdf_edition(conn, full_text, akn_xml, stage="parsed", lang="de"):
+    vid = _parsed_pdf_row(conn, full_text, consolidation=f"{URL}#{abs(hash((full_text, akn_xml)))}",
+                          lang=lang)
+    conn.execute("UPDATE ch_act_version SET akn_xml=%s WHERE version_id=%s", (akn_xml, vid))
+    return vid
+
+
+def _vrow(conn, vid):
+    cur = conn.execute("SELECT akn_xml, full_text, article_count FROM ch_act_version "
+                       "WHERE version_id=%s", (vid,))
+    a, f, n = cur.fetchone()
+    return {"akn_xml": a, "full_text": f, "article_count": n}
+
+
+def test_resplit_moves_raw_to_akn_xml_and_cleans_full_text(conn, settings):
+    vid = _insert_pdf_edition(conn, full_text=COL0, akn_xml=None)
+    fedlex_pdf_text_stage.resplit(settings, everything=True)
+    row = _vrow(conn, vid)
+    assert row["akn_xml"] == COL0
+    assert "AS 1950 1" not in row["full_text"] and row["article_count"] == 2
+
+
+def test_resplit_is_idempotent_reads_akn_xml(conn, settings):
+    vid = _insert_pdf_edition(conn, full_text="already clean", akn_xml=COL0)
+    fedlex_pdf_text_stage.resplit(settings, everything=True)
+    row = _vrow(conn, vid)
+    assert row["akn_xml"] == COL0 and "Art. 2" in row["full_text"] \
+        and row["full_text"] != "already clean"
+
+
+def test_resplit_articleless_edition_still_cleaned(conn, settings):
+    vid = _insert_pdf_edition(conn, full_text="Titel\n8\nText ohne Artikel\n", akn_xml=None)
+    report = fedlex_pdf_text_stage.resplit(settings, everything=True)
+    row = _vrow(conn, vid)
+    assert row["akn_xml"].startswith("Titel") and "\n8\n" not in row["full_text"]
+    assert (row["article_count"] or 0) == 0 and report.cleaned == 1
+
+
+def test_resplit_one_converts_rows_with_articles_but_no_akn_xml(conn, settings):
+    vid = _insert_pdf_edition(conn, full_text=COL0, akn_xml=None)
+    conn.execute("UPDATE ch_act_version SET article_count=2 WHERE version_id=%s", (vid,))
+    fedlex_pdf_text_stage.resplit(settings)
+    assert _vrow(conn, vid)["akn_xml"] == COL0
+
+
+def test_resplit_writes_are_one_transaction(conn, settings, monkeypatch):
+    vid = _insert_pdf_edition(conn, full_text=COL0, akn_xml=None)
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    # the store_articles write must roll back with a failing text write
+    orig_store = mod.parse_akn_stage.store_articles
+    def store_then_fail(c, v, arts):
+        orig_store(c, v, arts)
+        raise RuntimeError("crash")
+    monkeypatch.setattr(mod.parse_akn_stage, "store_articles", store_then_fail)
+    report = fedlex_pdf_text_stage.resplit(settings, everything=True)
+    assert report.failed == 1
+    row = _vrow(conn, vid)
+    assert row["full_text"] == COL0 and row["akn_xml"] is None
+    assert conn.execute("SELECT count(*) FROM ch_act_article WHERE version_id=%s",
+                        (vid,)).fetchone()[0] == 0
+
+
+def test_new_edition_stores_raw_in_akn_xml_and_clean_in_full_text(conn, settings):
+    vid = _row(conn)
+    _run(settings, Host())
+    row = _vrow(conn, vid)
+    assert row["akn_xml"] and "Gericht" in row["akn_xml"] and row["full_text"]
