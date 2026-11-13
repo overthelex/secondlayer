@@ -876,23 +876,25 @@ class _TextProduct:
                 return True
         return False
 
-    def _at_seam(self, index: int) -> bool:
-        """Next to a folio line or a run of two or more blank lines."""
+    def _beside_folio(self, index: int) -> bool:
+        """Right next to a folio line (a bare page number)."""
         for step in (-1, 1):
             k = index + step
             if 0 <= k < len(self.lines) and _BARE_NUMBER.match(self.lines[k].strip()):
-                return True
-            k2 = index + 2 * step
-            if (0 <= k < len(self.lines) and 0 <= k2 < len(self.lines)
-                    and not self.lines[k].strip() and not self.lines[k2].strip()):
                 return True
         return False
 
     def _is_header(self, index: int) -> bool:
         """A running header the page strip missed: the header shape AND one
-        of: its number is the learnt SR number, its title recurs, or it sits
-        at a page seam. A fee row ("Gebühr für eine Kopie      10") has the
-        shape but none of the corroboration and is kept."""
+        of: its number is the learnt SR number, its title recurs (on two
+        pages or more), or a folio stands right beside it. Nothing else
+        makes such a line furniture (ruling R28): a fee or table row
+        ("Gebühr für eine Kopie      10", "c. pour les autocars   650",
+        "Turquie   12 juin   1907   12 juin   1907") has the shape, and the
+        last row of a table sits at a page seam -- above the footnote block,
+        blank lines on either side -- exactly where a missed header would.
+        A seam of blank lines alone is therefore no evidence (the 2026-11
+        prod gate lost those rows to it: 560289, 560210)."""
         m = _HEADER_SHAPE.match(self.lines[index].strip())
         if not m:
             return False
@@ -901,7 +903,7 @@ class _TextProduct:
             return True
         if self.header_titles.get(_header_title(m), 0) >= 2:
             return True
-        return self._at_seam(index)
+        return self._beside_folio(index)
 
     def _split(self, index: int) -> tuple[str | None, str | None]:
         """(marginal fragment, body piece) of the line at ``index``; either

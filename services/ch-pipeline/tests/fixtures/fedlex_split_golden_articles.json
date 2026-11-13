@@ -533,5 +533,49 @@
    9,
    null
   ]
+ ],
+ "CST_FEE_ROWS": [
+  [
+   "art_19",
+   "19",
+   null,
+   "Durant les dix ans suivant l’acceptation par le peuple et les cantons de la présente disposition transitoire, aucune autorisation générale ni autorisation de construire, de mise en service ou d’exploiter au sens du droit fédéral ne sera accordée pour de nouvelles installations destinées à la production d’énergie atomique (centrales nucléaires ou réacteurs servant à la production de chaleur). Sont considérées comme nouvelles les installations de ce type pour lesquelles l’autorisation de construire prévue par le droit fédéral n’a pas été accordée avant le 30 septembre 1986.",
+   0,
+   null
+  ],
+  [
+   "art_20",
+   "20",
+   null,
+   "1 Le Conseil fédéral met l'article 116bis en vigueur dans les trois ans qui suivent son acceptation par le peuple et les cantons. 2 Jusqu'à l'entrée en vigueur de la modification de la législation fédérale, le Conseil fédéral règle les modalités de détail par voie d'ordonnance. 3 Le jour de la fête nationale n'est pas compté dans le nombre des jours fériés fixés à l'article 18, 2e alinéa, de la loi du 13 mars 1964 sur le travail.",
+   1,
+   null
+  ],
+  [
+   "art_21",
+   "21",
+   null,
+   "1 La Confédération perçoit pour l'utilisation des routes qui sont ouvertes au trafic général, une redevance annuelle sur les véhicules automobiles et les remorques immatriculés en Suisse ou à l'étranger d'un poids total supérieur à 3,5 tonnes. 2 Cette redevance s'élève à: a. pour les camions et les véhicules articulés Francs – de plus de 3,5 tonnes à 12 tonnes 650 – de plus de 12 tonnes à 16 tonnes 2000 – de plus de 16 tonnes à 22 tonnes 3000 – de plus de 22 tonnes 4000 b. pour les remorques – de plus de 3,5 tonnes à 8 tonnes 650 – de plus de 8 tonnes à 10 tonnes 1500 – de plus de 10 tonnes 2000 c. pour les autocars 650 3 Les taux de redevance peuvent être adaptés, dans la mesure où les coûts du trafic routier le justifient, au moyen d'un arrêté fédéral de portée générale sujet au référendum facultatif.",
+   2,
+   null
+  ]
+ ],
+ "TREATY_TABLE": [
+  [
+   "art_1",
+   "1",
+   null,
+   "Le territoire des Puissances neutres est inviolable. Champ d’application le 1er janvier 2020 Thaïlande 4 septembre 1900 4 septembre 1900 Turquie 12 juin 1907 12 juin 1907",
+   0,
+   null
+  ],
+  [
+   "art_2",
+   "2",
+   null,
+   "Il est interdit aux belligérants de faire passer à travers le territoire d’une Puissance neutre des troupes.",
+   1,
+   null
+  ]
  ]
 }

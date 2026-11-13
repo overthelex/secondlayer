@@ -7,7 +7,8 @@ version it recomputes split_fedlex_text on the stored RAW text
 the clean text against it:
 
   word_loss     share of the raw's word types of 6+ letters (wrap-hyphen
-                fragments excluded, see raw_word_types) that the clean text
+                fragments and running-header lines excluded, see
+                raw_word_types) that the clean text
                 does not contain, neither as a word nor as the end of a longer
                 one (the tail of a wrap the raw cannot see, "papiere" in
                 "Wertpapiere"). Footnotes are part of the clean text, so
@@ -73,14 +74,41 @@ _CLEAN_BREAK = re.compile(
 _GLUED_REF = re.compile(r"[a-zäöüéèàç]\.?\d{2,3}(?=\s)")
 
 
+def running_header_lines(raw: str) -> set[int]:
+    """Indices of the raw's running-header lines: the SR number learnt at
+    the head plus a title one wide gap away ("281.1   Poursuite pour dettes
+    et faillite", "Rheinschifffahrt   747.224.131"), or a "title   number"
+    line whose title recurs on two pages or more. The clean text drops them on
+    purpose, so words printed only there are no content loss."""
+    lines = raw.splitlines()
+    sysnr = fedlex_split._find_sysnr(lines[:8])
+    out: set[int] = set()
+    counts: dict[str, list[int]] = {}
+    for index, line in enumerate(lines):
+        if index and sysnr and fedlex_split._is_running_header(line, sysnr):
+            out.add(index)
+            continue
+        shape = fedlex_split._HEADER_SHAPE.match(line.strip())
+        if shape:
+            # keyed by the title: a header may carry the page number
+            counts.setdefault(fedlex_split._header_title(shape), []).append(index)
+    for indices in counts.values():
+        if len(indices) >= 2:
+            out.update(indices)
+    return out
+
+
 def raw_word_types(raw: str) -> set[str]:
-    """Word types of 6+ letters in the raw text, with wrap-hyphen fragments
-    taken out first ("Aufbewah-" / "rung", "Wert-" / "papiere"). A word only
-    ever printed across a break is therefore not counted at all: the raw
-    alone cannot tell "Wert-" + "papiere" from "Wert-" + the marginal
-    column's "rung" in the marginal layout, so a naive line-end join would
-    invent words the clean text rightly lacks."""
-    text = _RAW_BREAK.sub(" ", text_clean.normalise_chars(raw))
+    """Word types of 6+ letters in the raw text, running-header lines left
+    out (running_header_lines) and wrap-hyphen fragments taken out
+    ("Aufbewah-" / "rung", "Wert-" / "papiere"). A word only ever printed
+    across a break is therefore not counted at all: the raw alone cannot
+    tell "Wert-" + "papiere" from "Wert-" + the marginal column's "rung" in
+    the marginal layout, so a naive line-end join would invent words the
+    clean text rightly lacks."""
+    headers = running_header_lines(raw)
+    body = "\n".join(line for index, line in enumerate(raw.splitlines()) if index not in headers)
+    text = _RAW_BREAK.sub(" ", text_clean.normalise_chars(body))
     return {w for w in _WORD.findall(text) if len(w) >= 6}
 
 

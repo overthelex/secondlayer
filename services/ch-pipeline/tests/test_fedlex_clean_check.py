@@ -16,6 +16,7 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 EXCERPTS = {
     "de": FIXTURES / "pdftext_fedlex_schkg_281_1_de_margins.txt",
     "fr": FIXTURES / "pdftext_fedlex_schkg_281_1_fr_margins.txt",
+    "fr-cst": FIXTURES / "pdftext_fedlex_cst_101_fr_fee_rows.txt",
 }
 SAMPLES = pathlib.Path(os.environ.get(
     "FEDLEX_RAW_SAMPLES",
@@ -115,3 +116,17 @@ def test_summary_and_gate():
 def test_main_refuses_without_dsn(monkeypatch, capsys):
     monkeypatch.delenv("CHPIPE_DSN", raising=False)
     assert check.main([]) == 2
+
+
+def test_words_only_in_running_headers_are_not_counted():
+    raw = ("747.224.131\nVerordnung\nüber die Schifffahrt\n\nArt. 1\nDer Bund regelt Schiffe.\n\n"
+           "2\nRheinschifffahrt                                    747.224.131\n\n"
+           "Art. 2\nDie Kantone vollziehen Vorschriften.\n\n"
+           "Neutralität und Rheinschifffahrt                    12\n\n"
+           "Art. 3\nDie Kantone melden Vorschriften.\n\n"
+           "Neutralität und Rheinschifffahrt                    14\n")
+    types = check.raw_word_types(raw)
+    assert "Rheinschifffahrt" not in types and "Neutralität" not in types
+    assert {"Verordnung", "Schifffahrt", "Kantone", "vollziehen"} <= types
+    # a table row that occurs once is content, whatever its shape
+    assert "Turquie" in check.raw_word_types("1\nX\n\nTurquie         12 juin     1907\n")

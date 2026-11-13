@@ -377,6 +377,42 @@ SR220_MARGINAL = (_FIXTURES / "pdftext_fedlex_sr220_marginal.txt").read_text()
 SCHKG_DE = (_FIXTURES / "pdftext_fedlex_schkg_281_1_de_margins.txt").read_text()
 # LP RS 281.1 fr 1996-07-01 (version_id 560212): pages 1-3 (Art. 1-9).
 SCHKG_FR = (_FIXTURES / "pdftext_fedlex_schkg_281_1_fr_margins.txt").read_text()
+# Cst 1874 RS 101 fr (version_id 560210): the head and the page of the
+# transitional Art. 19-21, whose fee table ends right above the page's
+# footnote block ("c. pour les autocars      650"), then the next page's
+# running header.
+CST_FEE_ROWS = (_FIXTURES / "pdftext_fedlex_cst_101_fr_fee_rows.txt").read_text()
+# The shape of RS 0.515.102 fr (version_id 560289): a treaty's scope table
+# whose last row ("Turquie ... 1907") stands right above the page's footnote
+# block -- the shape of a missed running header ("title   number") at a
+# page seam, with no folio, no SR number and no repetition to back it.
+TREATY_TABLE = """\
+0.515.102
+Convention
+concernant les droits et les devoirs des Puissances neutrales
+
+Conclue le 18 octobre 1907
+
+Art. 1
+Le territoire des Puissances neutres est inviolable.
+
+Champ d’application le 1er janvier 20204
+Thaïlande                                 4 septembre     1900          4 septembre        1900
+Turquie                                  12 juin          1907         12 juin             1907
+
+
+
+
+4     Une version du champ d’application mise à jour est publiée sur le site web du DFAE
+
+                                                                                        3
+0.515.102                                                                       Neutralité
+
+
+Art. 2
+Il est interdit aux belligérants de faire passer à travers le territoire d’une Puissance
+neutre des troupes.
+"""
 
 # (e_id, article_number, marginal_note, text, ordinal) of COL0, captured from
 # the old splitter.
@@ -402,6 +438,7 @@ _GOLDEN_INPUTS = {
     "DECIMAL": DECIMAL, "MIDSTREAM": MIDSTREAM, "MARGINAL_MIDSTREAM": MARGINAL_MIDSTREAM,
     "NOTE": _NOTE, "CITATION": _CITATION, "SR220_MARGINAL": SR220_MARGINAL,
     "SCHKG_DE": SCHKG_DE, "SCHKG_FR": SCHKG_FR,
+    "CST_FEE_ROWS": CST_FEE_ROWS, "TREATY_TABLE": TREATY_TABLE,
 }
 
 
@@ -666,3 +703,32 @@ def test_column_zero_text_no_column_owns_is_kept():
     text = clean_fedlex_text(SCHKG_DE, "de")
     assert "Die Bundesversammlung der Schweizerischen Eidgenossenschaft," in text
     assert "gestützt auf Artikel 64 der Bundesverfassung (BV)," in text
+
+
+# --- R28 at page seams: a table row is not a running header ------------------
+
+def test_last_table_row_before_the_footnote_block_is_kept():
+    # 560289: the scope table's last row looks like "title   number" at a
+    # seam; only the SR number, a folio, a publication line or a repeat on
+    # two pages may make a line furniture
+    text = clean_fedlex_text(TREATY_TABLE, "fr")
+    assert "Turquie 12 juin 1907 12 juin 1907" in text
+    assert "Thaïlande 4 septembre 1900 4 septembre 1900" in text
+    assert "Neutralité" not in text                 # the real running header
+    assert "\n\n4 Une version du champ d’application mise à jour" in text
+
+
+def test_last_fee_row_before_the_footnote_block_is_kept():
+    # 560210: "c. pour les autocars   650" above footnote 179
+    text = clean_fedlex_text(CST_FEE_ROWS, "fr")
+    assert "c. pour les autocars 650" in text
+    assert "– de plus de 10 tonnes 2000" in text
+    assert "Constitution fédérale 101" not in text    # running header still dropped
+    assert "\n\n179 Accepté en votation populaire du 23 sept. 1990" in text
+
+
+def test_missed_header_next_to_a_folio_is_still_dropped():
+    # the SR220 excerpt (no SR number learnt) and FEES: the header shape
+    # beside a folio is a page seam, the folio is the corroboration
+    assert "Ergänzung des Schweizerischen" not in clean_fedlex_text(SR220_MARGINAL)
+    assert "Verordnung über die Gebühren" not in clean_fedlex_text(FEES)
