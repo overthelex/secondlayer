@@ -417,7 +417,10 @@ def test_text_marginal_layout_drops_margin_and_joins_hyphens():
     after = text.split("Art. 34", 1)[1]
     body = after.split("\n\n", 2)[1]            # the paragraph after the heading line
     assert "2. Auf Grund" not in body                   # marginal column not spliced in
-    assert "von Rechts" not in text and "a. Beschränkung" not in text
+    # ruling R15: every marginal title level is kept, one per heading line
+    assert "Art. 34 2. Auf Grund von Rechtsgeschäft\na. Beschränkung und Widerruf\n\n1 Eine" in text
+    assert "Art. 35 b. Einfluss von Tod, Handlungsunfähigkeit u.a.\n\n1 Die" in text
+    assert "1. Im Allgemeinen\na. Wirkung der Vertretung" in text
     assert "Ergänzung des Schweizerischen Zivilgesetzbuches. BG" not in text
     assert "izerischen Zivilgesetzbuches" not in text
     assert "mitgeteilt, so beurteilt" in text           # "mit-\ngeteilt" joined
@@ -441,15 +444,79 @@ def test_text_keeps_everything_after_the_tail_break():
            "Anhang 1\nListe der Ämter\n")
     articles, text = split_fedlex_text(raw)
     assert [a.text for a in articles] == ["Der Kanton regelt."]
-    assert text.endswith("Datum des Inkrafttretens: 1. Januar 2001\nAnhang 1\nListe der Ämter")
+    assert text.endswith("Datum des Inkrafttretens: 1. Januar 2001\n\nAnhang 1\nListe der Ämter")
 
 
 def test_text_hyphen_vocabulary_by_language():
-    # "arrondisse-" + "ments": not in the fr wordlist as two known words, joined
+    # "contre" and "partie" are both fr words, "contrepartie" is not in the
+    # wordlist: with the fr vocabulary the hyphen is real and kept
+    raw = "Loi\n\nArt. 1\nLa contre-\npartie est due.\n"
+    assert "La contrepartie est due." in clean_fedlex_text(raw)
+    assert "La contre-partie est due." in clean_fedlex_text(raw, "fr")
+    assert clean_fedlex_text(raw) != clean_fedlex_text(raw, "fr")
+    # a plain wrap is joined either way
     _, text = split_fedlex_text(MARGINAL, "fr")
     assert "arrondissements de poursuite" in text
-    assert clean_fedlex_text(MARGINAL, "fr") == text
     assert clean_fedlex_text(COL0) == split_fedlex_text(COL0)[1]
+
+
+def test_text_printed_heading_keeps_connectors_and_repeal_markers():
+    # ruling R16: the printed heading, number tokens footnote-stripped
+    text = clean_fedlex_text(REPEALS, "fr")
+    assert "Art. 9 ..." in text
+    assert "Art. 3 et 4" in text
+    assert "Art. 5 à 8" in text
+    assert "Art. 1bis Taux des cotisations" in text      # "Art. 1bis5": note 5 gone
+    assert "\n\nArt. 1\n\nDie durch" in clean_fedlex_text(COL0)   # "Art. 12" = 1 + note 2
+    assert "Art. 12" not in clean_fedlex_text(COL0)
+
+
+def test_text_marginal_sub_titles_are_heading_lines():
+    text = clean_fedlex_text(MARGINAL, "fr")
+    assert "Art. 1 A. Arrondissements de poursuite et de faillite\n\n1 Le territoire" in text
+    assert "Art. 2 B. Offices des poursuites et des faillites\n1. Organisation\n\n1 Chaque" in text
+
+
+# Marginal layout with fee rows (title, wide gap, amount) inside an article
+# and in an annex: the running-header shape, but neither at a page seam, nor
+# recurring, nor the SR number -- they must survive. The real missed header
+# sits at a seam (folio, blank run) and goes.
+FEES = """                  Art. 1
+A. Gebühren       1 Die Gebühren betragen:
+Grundgebühr für die Erteilung einer Bewilligung      300
+Zuschlag für jede weitere Bewilligung im Jahr        150
+                  2 Die Gebühr wird mit der Verfügung erhoben.
+
+                  Art. 2
+B. Fälligkeit     Die Gebühr ist innert 30 Tagen zu bezahlen.
+
+4
+Verordnung über die Gebühren                                              172.041
+
+
+                  Art. 3
+C. Inkrafttreten  Diese Verordnung tritt am 1. Januar 2001 in Kraft.
+
+Anhang
+Tarif
+Gebühr für eine Kopie          10
+Gebühr für eine Beglaubigung   20
+"""
+
+
+def test_text_fee_rows_kept_missed_header_dropped():
+    articles, text = split_fedlex_text(FEES)
+    assert [a.article_number for a in articles] == ["1", "2", "3"]
+    assert "Grundgebühr für die Erteilung einer Bewilligung 300" in text
+    assert "Zuschlag für jede weitere Bewilligung im Jahr 150" in text
+    assert "Verordnung über die Gebühren" not in text
+    assert "\n4\n" not in text
+
+
+def test_text_marginal_layout_tail_break_and_annex_rows_kept():
+    _, text = split_fedlex_text(FEES)
+    assert text.endswith("Anhang\nTarif\nGebühr für eine Kopie 10\nGebühr für eine Beglaubigung 20")
+    assert "Art. 3 C. Inkrafttreten\n\nDiese Verordnung tritt" in text
 
 
 def test_articles_unchanged_by_text_product():
