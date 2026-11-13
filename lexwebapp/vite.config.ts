@@ -4,98 +4,72 @@ import fs from 'fs'
 import path from 'path'
 import { execSync } from 'child_process'
 import { marked } from 'marked'
+import { articles as blogArticleData } from './src/pages/BlogPage/articles'
+import { enTranslations } from './src/pages/BlogPage/articles-en'
+import { ruTranslations } from './src/pages/BlogPage/articles-ru'
+import { writeSitemaps } from './scripts/seo/sitemap'
+import { prerenderPages } from './scripts/seo/prerender-pages'
+import { seoCheck } from './scripts/seo/seo-check'
+import { applyMeta } from './scripts/seo/html'
+
+/** Resolved build.outDir (dist, or dist-staging); set in seoFinalizePlugin.configResolved. */
+let BUILD_OUT_DIR = path.resolve(__dirname, 'dist')
+
+/** Languages a blog post really exists in (uk is the source language). */
+function blogLangsFor(id: string): Array<'uk' | 'en' | 'ru'> {
+  const langs: Array<'uk' | 'en' | 'ru'> = ['uk']
+  if (enTranslations[id]?.title) langs.push('en')
+  if (ruTranslations[id]?.title) langs.push('ru')
+  return langs
+}
+
+function blogPath(id: string, lang: 'uk' | 'en' | 'ru'): string {
+  return lang === 'en' ? `/blog/${id}` : `/blog/${lang}/${id}`
+}
 
 /**
- * Vite plugin that regenerates sitemap.xml at build time
- * by extracting article IDs/dates from articles.ts via regex.
+ * Final SEO step, after every other plugin has written its pages:
+ *   1. prerender the remaining public React pages (scripts/seo/prerender-pages.ts)
+ *   2. write the sitemap index + sections (scripts/seo/sitemap.ts)
+ *   3. fail the build if any sitemap URL lacks its own page (scripts/seo/seo-check.ts)
  */
-function sitemapPlugin(): Plugin {
+function seoFinalizePlugin(): Plugin {
   return {
-    name: 'generate-sitemap',
-    buildStart() {
-      try {
-        // Dynamic import won't work here for .ts, so we inline the minimal logic
-        const root = path.resolve(__dirname)
-        const articlesPath = path.resolve(root, 'src/pages/BlogPage/articles.ts')
-        const src = fs.readFileSync(articlesPath, 'utf-8')
+    name: 'seo-finalize',
+    apply: 'build',
+    configResolved(config) {
+      BUILD_OUT_DIR = path.resolve(config.root, config.build.outDir)
+    },
+    closeBundle: {
+      order: 'post',
+      sequential: true,
+      async handler() {
+        const outDir = BUILD_OUT_DIR
+        const pages = await prerenderPages(__dirname, outDir)
+        console.log(`[seo] prerendered ${pages} public pages`)
 
-        const BASE_URL = 'https://legal.org.ua'
+        const posts = blogArticleData.map(a => ({ id: a.id, publishedAt: a.publishedAt, langs: blogLangsFor(a.id) }))
+        const urls = writeSitemaps(outDir, posts)
+        console.log(`[seo] wrote sitemap index, ${urls} URLs`)
 
-        // Extract article ids and dates
-        const ids: string[] = []
-        const dates: string[] = []
-        let m: RegExpExecArray | null
-        const idRe = /id:\s*'([^']+)'/g
-        const dateRe = /publishedAt:\s*'([^']+)'/g
-        while ((m = idRe.exec(src)) !== null) ids.push(m[1])
-        while ((m = dateRe.exec(src)) !== null) dates.push(m[1])
-        const count = Math.min(ids.length, dates.length)
+        // Body for nginx error_page 404: the SPA shell (the app still boots),
+        // but with noindex and its own title.
+        const shell = fs.readFileSync(path.join(outDir, 'index.html'), 'utf-8')
+        fs.writeFileSync(path.join(outDir, '404.html'), applyMeta(shell, {
+          title: 'Сторінку не знайдено | LEX',
+          description: 'Сторінку не знайдено.',
+          canonical: 'https://legal.org.ua',
+          ogLocale: 'uk_UA',
+          htmlLang: 'uk',
+          robots: 'noindex',
+        }).replace(/\s*<link rel="canonical" href="[^"]*"\s*\/?>/, ''))
 
-        interface Entry { loc: string; changefreq: string; priority: string; lastmod?: string }
-
-        const staticPages: Entry[] = [
-          { loc: '/', changefreq: 'daily', priority: '1.0' },
-          { loc: '/product', changefreq: 'weekly', priority: '0.95' },
-          { loc: '/about', changefreq: 'monthly', priority: '0.85' },
-          { loc: '/about/team', changefreq: 'monthly', priority: '0.8' },
-          { loc: '/blog', changefreq: 'weekly', priority: '0.9' },
-          { loc: '/lex-news', changefreq: 'weekly', priority: '0.7' },
-          { loc: '/investor', changefreq: 'monthly', priority: '0.6' },
-          { loc: '/uk_investor', changefreq: 'monthly', priority: '0.6' },
-          { loc: '/uk_investor_simplified', changefreq: 'monthly', priority: '0.6' },
-          { loc: '/pitch-deck.html', changefreq: 'monthly', priority: '0.6' },
-          { loc: '/developer/docs', changefreq: 'weekly', priority: '0.9' },
-        ]
-
-        const blogArticles: Entry[] = []
-        for (let i = 0; i < count; i++) {
-          blogArticles.push({ loc: `/blog/${ids[i]}`, changefreq: 'monthly', priority: '0.8', lastmod: dates[i] })
-          blogArticles.push({ loc: `/blog/uk/${ids[i]}`, changefreq: 'monthly', priority: '0.7', lastmod: dates[i] })
-          blogArticles.push({ loc: `/blog/ru/${ids[i]}`, changefreq: 'monthly', priority: '0.7', lastmod: dates[i] })
+        const { checked, errors } = seoCheck(outDir)
+        if (errors.length) {
+          throw new Error(`[seo-check] ${errors.length} problem(s) in ${checked} sitemap URLs:\n  ${errors.join('\n  ')}`)
         }
-
-        const legalSlugs = ['offer', 'terms', 'privacy', 'dpa', 'ai-usage', 'ai-transparency', 'refund-policy', 'attorney-offer', 'developer-offer', 'marketplace-rules']
-        const legalLangs = ['en', 'ua']
-        const legalPages: Entry[] = []
-        for (const slug of legalSlugs) {
-          for (const lang of legalLangs) {
-            legalPages.push({ loc: `/${lang}/${slug}`, changefreq: 'monthly', priority: '0.5' })
-          }
-        }
-
-        const dataSourcePages: Entry[] = [
-          '/data-sources',
-          '/us/data-sources', '/uk/data-sources', '/de/data-sources',
-          '/fr/data-sources', '/nl/data-sources', '/ee/data-sources',
-          '/ua/data-sources', '/eu/comparison',
-        ].map(loc => ({ loc, changefreq: 'monthly', priority: '0.6' }))
-
-        const allEntries = [...staticPages, ...blogArticles, ...legalPages, ...dataSourcePages]
-
-        const urls = allEntries.map(e => {
-          const parts = [
-            `    <loc>${BASE_URL}${e.loc}</loc>`,
-            e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>` : null,
-            `    <changefreq>${e.changefreq}</changefreq>`,
-            `    <priority>${e.priority}</priority>`,
-          ].filter(Boolean)
-          return `  <url>\n${parts.join('\n')}\n  </url>`
-        }).join('\n')
-
-        const xml = [
-          '<?xml version="1.0" encoding="UTF-8"?>',
-          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-          urls,
-          '</urlset>',
-          '',
-        ].join('\n')
-
-        const outputPath = path.resolve(root, 'public/sitemap.xml')
-        fs.writeFileSync(outputPath, xml)
-        console.log(`[sitemap] Generated sitemap.xml with ${allEntries.length} URLs (${blogArticles.length} blog articles)`)
-      } catch (err) {
-        console.error('[sitemap] Failed to generate sitemap:', err)
-      }
+        console.log(`[seo-check] ${checked} sitemap URLs OK`)
+      },
     },
   }
 }
@@ -111,7 +85,7 @@ function prerenderDocsPlugin(): Plugin {
     closeBundle() {
       try {
         const root = path.resolve(__dirname)
-        const distDir = path.resolve(root, 'dist')
+        const distDir = BUILD_OUT_DIR
         const indexHtml = fs.readFileSync(path.resolve(distDir, 'index.html'), 'utf-8')
 
         // Extract tool groups from source to build semantic HTML
@@ -268,7 +242,7 @@ function prerenderBlogPlugin(): Plugin {
     closeBundle() {
       try {
         const root = path.resolve(__dirname)
-        const distDir = path.resolve(root, 'dist')
+        const distDir = BUILD_OUT_DIR
         const indexHtml = fs.readFileSync(path.resolve(distDir, 'index.html'), 'utf-8')
 
         const BASE_URL = 'https://legal.org.ua'
@@ -290,96 +264,17 @@ function prerenderBlogPlugin(): Plugin {
           content: string
         }
 
-        // --- Parse articles from a TS source file via regex ---
-        function parseArticlesFile(filePath: string, isTranslation: boolean): ParsedArticle[] | Record<string, Partial<ParsedArticle>> {
-          const src = fs.readFileSync(filePath, 'utf-8')
-
-          if (isTranslation) {
-            // Translation files: { 'slug': { title, punchline, content, readTime } }
-            const map: Record<string, Partial<ParsedArticle>> = {}
-            // Match each slug entry
-            const slugPattern = /['"]([a-z0-9-]+)['"]\s*:\s*\{/g
-            let match
-            while ((match = slugPattern.exec(src)) !== null) {
-              const slug = match[1]
-              const startIdx = match.index + match[0].length
-              // Find the content boundaries for this slug
-              const remaining = src.slice(startIdx)
-              const titleMatch = remaining.match(/title:\s*'((?:[^'\\]|\\.)*)'/)
-              const punchlineMatch = remaining.match(/punchline:\s*'((?:[^'\\]|\\.)*)'/)
-              const readTimeMatch = remaining.match(/readTime:\s*'((?:[^'\\]|\\.)*)'/)
-              const contentMatch = remaining.match(/content:\s*`((?:\\[\s\S]|[^`])*)`/)
-
-              if (titleMatch) {
-                map[slug] = {
-                  title: titleMatch[1].replace(/\\'/g, "'"),
-                  punchline: punchlineMatch ? punchlineMatch[1].replace(/\\'/g, "'") : '',
-                  readTime: readTimeMatch ? readTimeMatch[1] : '',
-                  content: contentMatch
-                    ? contentMatch[1].replace(/\\`/g, '`').replace(/\\\$/g, '$').replace(/\\\\/g, '\\')
-                    : '',
-                }
-              }
-            }
-            return map
-          }
-
-          // Main articles file
-          const articles: ParsedArticle[] = []
-          const articleBlocks = src.split(/\n  \{[\s]*\n/).slice(1)
-          for (const block of articleBlocks) {
-            const get = (key: string) => {
-              const m = block.match(new RegExp(`${key}:\\s*'([^']*)'`))
-              return m ? m[1] : ''
-            }
-            const id = get('id')
-            const title = get('title')
-            const punchline = get('punchline')
-            const category = get('category')
-            const readTime = get('readTime')
-            const publishedAt = get('publishedAt')
-
-            const tagsMatch = block.match(/tags:\s*\[([^\]]*)\]/)
-            const tags = tagsMatch
-              ? tagsMatch[1].match(/'([^']+)'/g)?.map(t => t.replace(/'/g, '')) || []
-              : []
-
-            const contentMatch = block.match(/content:\s*`((?:\\[\s\S]|[^`])*)`/)
-            const content = contentMatch
-              ? contentMatch[1]
-                  .replace(/\\`/g, '`')
-                  .replace(/\\\$/g, '$')
-                  .replace(/\\\\/g, '\\')
-              : ''
-
-            if (id && title) {
-              articles.push({ id, title, punchline, category, tags, readTime, publishedAt, content })
-            }
-          }
-          return articles
+        // Article data comes straight from the TS modules the SPA renders (Vite
+        // bundles this config with esbuild, so plain imports work). The old
+        // regex parser silently dropped or mangled posts.
+        const articles: ParsedArticle[] = blogArticleData as ParsedArticle[]
+        const translationMaps: Record<string, Record<string, Partial<ParsedArticle>>> = {
+          en: enTranslations as Record<string, Partial<ParsedArticle>>,
+          ru: ruTranslations as Record<string, Partial<ParsedArticle>>,
         }
-
-        // Parse all language versions
-        const articles = parseArticlesFile(
-          path.resolve(root, 'src/pages/BlogPage/articles.ts'), false
-        ) as ParsedArticle[]
-
-        const enMap = parseArticlesFile(
-          path.resolve(root, 'src/pages/BlogPage/articles-en.ts'), true
-        ) as Record<string, Partial<ParsedArticle>>
-
-        const ruMap = parseArticlesFile(
-          path.resolve(root, 'src/pages/BlogPage/articles-ru.ts'), true
-        ) as Record<string, Partial<ParsedArticle>>
 
         if (articles.length === 0) {
-          console.warn('[prerender-blog] No articles parsed, skipping')
-          return
-        }
-
-        const translationMaps: Record<string, Record<string, Partial<ParsedArticle>>> = {
-          en: enMap,
-          ru: ruMap,
+          throw new Error('[prerender-blog] no articles found')
         }
 
         // Helper to replace meta tags in the HTML shell
@@ -407,17 +302,13 @@ function prerenderBlogPlugin(): Plugin {
           return result
         }
 
-        // Helper to generate hreflang link tags for a given article slug
+        // hreflang only for languages the post actually exists in
         function hreflangTags(slug: string): string {
-          const enUrl = `${BASE_URL}/blog/${slug}`
-          const ukUrl = `${BASE_URL}/blog/uk/${slug}`
-          const ruUrl = `${BASE_URL}/blog/ru/${slug}`
-          return [
-            `<link rel="alternate" hreflang="en" href="${enUrl}" />`,
-            `<link rel="alternate" hreflang="uk" href="${ukUrl}" />`,
-            `<link rel="alternate" hreflang="ru" href="${ruUrl}" />`,
-            `<link rel="alternate" hreflang="x-default" href="${enUrl}" />`,
-          ].join('\n    ')
+          const langs = blogLangsFor(slug)
+          const tags = langs.map(l => `<link rel="alternate" hreflang="${l}" href="${BASE_URL}${blogPath(slug, l)}" />`)
+          const xDefault = langs.includes('en') ? 'en' : 'uk'
+          tags.push(`<link rel="alternate" hreflang="x-default" href="${BASE_URL}${blogPath(slug, xDefault)}" />`)
+          return tags.join('\n    ')
         }
 
         // --- Generate /blog/index.html (+ /blog/en/ and /blog/ru/) ---
@@ -447,27 +338,28 @@ function prerenderBlogPlugin(): Plugin {
         for (const lang of ['uk', 'en', 'ru'] as const) {
           const meta = blogListMeta[lang]
           const langMeta = LANG_META[lang]
-          const langPrefix = lang === 'en' ? '' : `${lang}/`
           const blogUrl = `${BASE_URL}/blog${lang === 'en' ? '' : `/${lang}`}`
 
           const listArticles = sortedArticles.map(a => {
             let title = a.title
             let punchline = a.punchline
             let readTime = a.readTime
+            let href = blogPath(a.id, 'uk')
             if (lang !== 'uk') {
               const tr = translationMaps[lang]?.[a.id]
               if (tr?.title) {
                 title = tr.title
                 punchline = tr.punchline || punchline
                 readTime = tr.readTime || readTime
+                href = blogPath(a.id, lang)
               }
             }
-            return { ...a, title, punchline, readTime }
+            return { ...a, title, punchline, readTime, href }
           })
 
           const articleListHtml = listArticles.map(a => `
         <article>
-          <h2><a href="/blog/${langPrefix}${a.id}">${a.title}</a></h2>
+          <h2><a href="${a.href}">${a.title}</a></h2>
           <p>${a.punchline}</p>
           <div>
             <span>${a.category === 'tech' ? 'TECH' : a.category === 'academic' ? 'ACADEMIC' : 'LEGAL'}</span>
@@ -489,7 +381,7 @@ function prerenderBlogPlugin(): Plugin {
               "@type": "BlogPosting",
               "headline": a.title,
               "description": a.punchline,
-              "url": `${BASE_URL}/blog/${langPrefix}${a.id}`,
+              "url": `${BASE_URL}${a.href}`,
               "datePublished": a.publishedAt,
               "keywords": a.tags.join(', '),
             }))
@@ -541,18 +433,27 @@ function prerenderBlogPlugin(): Plugin {
             let content = article.content
             let readTime = article.readTime
 
+            // The SPA routes /blog/<slug> and /blog/ru/<slug> even when that
+            // translation does not exist (it shows the Ukrainian text). Write
+            // that Ukrainian text there too, but canonical to /blog/uk/<slug>,
+            // so the URL is neither a homepage duplicate nor a new duplicate.
+            const urlLang = lang
+            let contentLang: 'uk' | 'en' | 'ru' = lang
             if (lang !== 'uk') {
               const translation = translationMaps[lang]?.[article.id]
-              if (!translation?.title) continue // skip if no translation exists
-              title = translation.title || title
-              punchline = translation.punchline || punchline
-              content = translation.content || content
-              readTime = translation.readTime || readTime
+              if (translation?.title) {
+                title = translation.title || title
+                punchline = translation.punchline || punchline
+                content = translation.content || content
+                readTime = translation.readTime || readTime
+              } else {
+                contentLang = 'uk'
+              }
             }
 
-            const langMeta = LANG_META[lang]
-            const slugPath = lang === 'en' ? article.id : `${lang}/${article.id}`
-            const articleUrl = `${BASE_URL}/blog/${slugPath}`
+            const langMeta = LANG_META[contentLang]
+            const slugPath = urlLang === 'en' ? article.id : `${urlLang}/${article.id}`
+            const articleUrl = `${BASE_URL}${blogPath(article.id, contentLang)}`
             const ogImage = `${BASE_URL}/blog-banners/${article.id}.png`
             const truncatedPunchline = punchline.length > 200
               ? punchline.slice(0, 197) + '...'
@@ -649,7 +550,7 @@ function prerenderInvestorAndNewsPlugin(): Plugin {
     closeBundle() {
       try {
         const root = path.resolve(__dirname)
-        const distDir = path.resolve(root, 'dist')
+        const distDir = BUILD_OUT_DIR
         const indexHtml = fs.readFileSync(path.resolve(distDir, 'index.html'), 'utf-8')
         const BASE_URL = 'https://legal.org.ua'
 
@@ -1035,7 +936,7 @@ function prerenderAboutAndProductPlugin(): Plugin {
     closeBundle() {
       try {
         const root = path.resolve(__dirname)
-        const distDir = path.resolve(root, 'dist')
+        const distDir = BUILD_OUT_DIR
         const indexHtml = fs.readFileSync(path.resolve(distDir, 'index.html'), 'utf-8')
         const BASE_URL = 'https://legal.org.ua'
 
@@ -1069,15 +970,6 @@ function prerenderAboutAndProductPlugin(): Plugin {
             '<div id="root"></div>',
             `${seoBlockHtml}\n    <div id="root"></div>\n    <script>document.getElementById('${seoId}')?.remove()</script>`
           )
-        }
-
-        function injectHreflang(html: string, route: string): string {
-          const links = [
-            `<link rel="alternate" hreflang="en" href="${BASE_URL}${route}?lang=en" />`,
-            `<link rel="alternate" hreflang="uk" href="${BASE_URL}${route}?lang=uk" />`,
-            `<link rel="alternate" hreflang="x-default" href="${BASE_URL}${route}" />`,
-          ].join('\n    ')
-          return html.replace('</head>', `${links}\n  </head>`)
         }
 
         function injectJsonLd(html: string, jsonLd: object | object[]): string {
@@ -1169,7 +1061,6 @@ function prerenderAboutAndProductPlugin(): Plugin {
           ogUrl: `${BASE_URL}/about`,
           canonical: `${BASE_URL}/about`,
         })
-        aboutPage = injectHreflang(aboutPage, '/about')
         aboutPage = injectJsonLd(aboutPage, [organizationJsonLd, aboutJsonLd])
         aboutPage = injectSeoBlock(aboutPage, aboutSeo, 'about-seo')
         writePage('/about', aboutPage)
@@ -1243,7 +1134,6 @@ function prerenderAboutAndProductPlugin(): Plugin {
           canonical: `${BASE_URL}/about/team`,
           ogImage: `${BASE_URL}/team/volodymyr.jpg`,
         })
-        teamPage = injectHreflang(teamPage, '/about/team')
         teamPage = injectJsonLd(teamPage, [organizationJsonLd, teamJsonLd])
         teamPage = injectSeoBlock(teamPage, teamSeo, 'team-seo')
         writePage('/about/team', teamPage)
@@ -1342,7 +1232,6 @@ function prerenderAboutAndProductPlugin(): Plugin {
           canonical: `${BASE_URL}/product`,
           ogImage: productHeroImage,
         })
-        productPage = injectHreflang(productPage, '/product')
         productPage = injectJsonLd(productPage, [organizationJsonLd, productJsonLd])
         productPage = injectSeoBlock(productPage, productSeo, 'product-seo')
         writePage('/product', productPage)
@@ -1361,7 +1250,7 @@ function prerenderCISOAcademyPlugin(): Plugin {
     closeBundle() {
       try {
         const root = path.resolve(__dirname)
-        const distDir = path.resolve(root, 'dist')
+        const distDir = BUILD_OUT_DIR
         const indexHtml = fs.readFileSync(path.resolve(distDir, 'index.html'), 'utf-8')
         const BASE_URL = 'https://legal.org.ua'
 
@@ -1388,15 +1277,6 @@ function prerenderCISOAcademyPlugin(): Plugin {
           const outDir = path.resolve(distDir, route.replace(/^\//, ''))
           fs.mkdirSync(outDir, { recursive: true })
           fs.writeFileSync(path.resolve(outDir, 'index.html'), html)
-        }
-
-        function injectHreflang(html: string, route: string): string {
-          const links = [
-            `<link rel="alternate" hreflang="en" href="${BASE_URL}${route}?lang=en" />`,
-            `<link rel="alternate" hreflang="uk" href="${BASE_URL}${route}?lang=uk" />`,
-            `<link rel="alternate" hreflang="x-default" href="${BASE_URL}${route}" />`,
-          ].join('\n    ')
-          return html.replace('</head>', `${links}\n  </head>`)
         }
 
         function injectJsonLd(html: string, jsonLd: object | object[]): string {
@@ -1490,7 +1370,6 @@ function prerenderCISOAcademyPlugin(): Plugin {
           ogUrl: `${BASE_URL}/cisoacademy`,
           canonical: `${BASE_URL}/cisoacademy`,
         })
-        page = injectHreflang(page, '/cisoacademy')
         page = injectJsonLd(page, jsonLd)
         page = injectSeoBlock(page, seoHtml, 'cisoacademy-seo')
         writePage('/cisoacademy', page)
@@ -1512,7 +1391,7 @@ export default defineConfig(({ mode }) => {
   const hasLocalCerts = !isDocker && fs.existsSync(certFile) && fs.existsSync(keyFile)
 
   return {
-    plugins: [react(), sitemapPlugin(), prerenderDocsPlugin(), prerenderBlogPlugin(), prerenderInvestorAndNewsPlugin(), prerenderAboutAndProductPlugin(), prerenderCISOAcademyPlugin()],
+    plugins: [react(), prerenderDocsPlugin(), prerenderBlogPlugin(), prerenderInvestorAndNewsPlugin(), prerenderAboutAndProductPlugin(), prerenderCISOAcademyPlugin(), seoFinalizePlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),

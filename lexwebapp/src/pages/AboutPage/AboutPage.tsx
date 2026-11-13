@@ -2,7 +2,6 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Users } from 'lucide-react';
 import { useDocumentMeta } from '../../hooks/useDocumentMeta';
-import { useHreflang } from '../../hooks/useHreflang';
 import { useLocaleStore } from '../../stores/localeStore';
 import { getAboutCopy } from './copy';
 import { LangToggle } from './LangToggle';
@@ -19,10 +18,6 @@ export function AboutPage() {
     ogDescription: c.metaDescription,
   });
 
-  useHreflang([
-    { lang: 'en', href: 'https://legal.org.ua/about?lang=en' },
-    { lang: 'uk', href: 'https://legal.org.ua/about?lang=uk' },
-  ]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-claude-bg via-white to-claude-sidebar">

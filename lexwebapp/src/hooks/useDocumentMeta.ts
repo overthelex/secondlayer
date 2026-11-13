@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useLocaleStore } from '../stores/localeStore';
+import { ssrMeta } from '../seo/ssrMeta';
 
 interface DocumentMeta {
   title: string;
@@ -47,8 +48,12 @@ function getOrCreateLink(rel: string): HTMLLinkElement {
 export function useDocumentMeta(meta: DocumentMeta) {
   const location = useLocation();
   const language = useLocaleStore((s) => s.language);
-  const originalTitle = useRef(document.title);
+  const originalTitle = useRef(typeof document === 'undefined' ? '' : document.title);
   const originalValues = useRef<Map<string, string | null>>(new Map());
+
+  if (import.meta.env.SSR) {
+    ssrMeta.meta = meta;
+  }
 
   useEffect(() => {
     originalTitle.current = document.title;

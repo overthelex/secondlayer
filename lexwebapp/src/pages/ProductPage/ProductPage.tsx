@@ -2,7 +2,6 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { useDocumentMeta } from '../../hooks/useDocumentMeta';
-import { useHreflang } from '../../hooks/useHreflang';
 import { useLocaleStore } from '../../stores/localeStore';
 import { LangToggle } from '../AboutPage/LangToggle';
 import { getProductCopy } from './copy';
@@ -20,10 +19,6 @@ export function ProductPage() {
     ogImage: 'https://legal.org.ua/product-screenshots/01-hero-workflow-plan.png',
   });
 
-  useHreflang([
-    { lang: 'en', href: 'https://legal.org.ua/product?lang=en' },
-    { lang: 'uk', href: 'https://legal.org.ua/product?lang=uk' },
-  ]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-claude-bg via-white to-claude-sidebar">
