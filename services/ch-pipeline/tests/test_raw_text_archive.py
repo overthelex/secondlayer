@@ -1,4 +1,7 @@
 import gzip
+import os
+import stat
+import zlib
 import pathlib
 
 import pytest
@@ -56,3 +59,30 @@ def test_content_is_gzip(tmp_path):
     save(tmp_path / "raw", "S", "d", "hello")
     with gzip.open(path_for(tmp_path / "raw", "S", "d"), "rt", encoding="utf-8") as f:
         assert f.read() == "hello"
+
+
+def test_corrupt_existing_archive_raises_and_is_untouched(tmp_path):
+    save(tmp_path / "raw", "S", "d", "hello world " * 100)
+    p = path_for(tmp_path / "raw", "S", "d")
+    truncated = p.read_bytes()[:-10]
+    p.write_bytes(truncated)
+    with pytest.raises((EOFError, OSError, zlib.error, UnicodeDecodeError)):
+        save(tmp_path / "raw", "S", "d", "hello world " * 100)
+    assert p.read_bytes() == truncated
+    assert [f.name for f in p.parent.iterdir()] == ["d.txt.gz"]
+
+
+def test_failure_mid_write_leaves_nothing(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise OSError("disk gone")
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError):
+        save(tmp_path / "raw", "S", "d", "x")
+    d = tmp_path / "raw-text" / "S"
+    assert not path_for(tmp_path / "raw", "S", "d").exists()
+    assert list(d.iterdir()) == []
+
+
+def test_archive_mode_is_0644(tmp_path):
+    save(tmp_path / "raw", "S", "d", "x")
+    assert stat.S_IMODE(path_for(tmp_path / "raw", "S", "d").stat().st_mode) == 0o644

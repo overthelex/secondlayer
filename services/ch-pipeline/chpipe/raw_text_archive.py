@@ -36,7 +36,13 @@ def load(raw_dir: pathlib.Path, spider: str, doc_id: str) -> str:
 def save(raw_dir: pathlib.Path, spider: str, doc_id: str, text: str) -> str:
     """Archive text crash-safely; return its sha256. An existing identical
     archive is left untouched; a different one raises FileExistsError (the
-    first raw text is the only true one, never overwrite it)."""
+    first raw text is the only true one, never overwrite it).
+
+    An existing archive that cannot be read raises EOFError (truncated
+    gzip), gzip.BadGzipFile / OSError (not gzip), zlib.error (corrupt
+    stream) or UnicodeDecodeError. All of these mean "existing archive
+    unreadable": a hard failure, do not retry; the file is left untouched
+    for an operator. ValueError means an unsafe spider/doc_id."""
     path = path_for(raw_dir, spider, doc_id)
     sha = sha256_of(text)
     if path.exists():
@@ -51,7 +57,13 @@ def save(raw_dir: pathlib.Path, spider: str, doc_id: str, text: str) -> str:
                 gz.write(text.encode("utf-8"))
             raw.flush()
             os.fsync(raw.fileno())
+        os.chmod(tmp, 0o644)  # mkstemp makes 0600; backup/app uid must read
         os.replace(tmp, path)
+        dfd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dfd)  # make the rename itself durable
+        finally:
+            os.close(dfd)
     except BaseException:
         try:
             os.unlink(tmp)
