@@ -114,11 +114,14 @@ export function LegalPageLayout({
   const content = currentLang === 'ua' ? contentUk : contentEn;
   const switchTo = currentLang === 'ua' ? 'en' : 'ua';
 
-  useHreflang([
+  // Only /ua and /en are routed (anything else falls back to ua), and a page
+  // without its own English text (e.g. aup) must not advertise an en variant.
+  const hasEn = contentEn !== contentUk;
+  const hreflangEntries = useMemo(() => [
     { lang: 'uk', href: `https://legal.org.ua/ua/${routePath}` },
-    { lang: 'en', href: `https://legal.org.ua/en/${routePath}` },
-    { lang: 'es', href: `https://legal.org.ua/es/${routePath}` },
-  ]);
+    ...(hasEn ? [{ lang: 'en', href: `https://legal.org.ua/en/${routePath}` }] : []),
+  ], [routePath, hasEn]);
+  useHreflang(hreflangEntries);
 
   const { toc, title, subtitle, meta } = useMemo(() => extractToc(content), [content]);
   const strippedContent = useMemo(() => stripTitleFromContent(content), [content]);
@@ -137,6 +140,8 @@ export function LegalPageLayout({
     ogDescription: currentLang === 'ua'
       ? `${pageLabel} — правовий документ LEX AI`
       : `${pageLabel} — LEX AI legal document`,
+    ogLocale: currentLang === 'ua' ? 'uk_UA' : 'en_US',
+    canonical: `https://legal.org.ua/${hasEn ? currentLang : 'ua'}/${routePath}`,
   });
 
   const [mobileTocOpen, setMobileTocOpen] = useState(false);

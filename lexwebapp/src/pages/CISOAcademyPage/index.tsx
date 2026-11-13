@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useDocumentMeta } from '../../hooks/useDocumentMeta';
-import { useHreflang } from '../../hooks/useHreflang';
 import { useLocaleStore } from '../../stores/localeStore';
 import { LangToggle } from '../AboutPage/LangToggle';
 import { getCISOAcademyCopy } from './copy';
@@ -285,10 +284,6 @@ export function CISOAcademyPage() {
     canonical: 'https://legal.org.ua/cisoacademy',
   });
 
-  useHreflang([
-    { lang: 'en', href: 'https://legal.org.ua/cisoacademy?lang=en' },
-    { lang: 'uk', href: 'https://legal.org.ua/cisoacademy?lang=uk' },
-  ], 'en');
 
   const phase = c.phases[activePhase];
   const style = PHASE_STYLES[activePhase];

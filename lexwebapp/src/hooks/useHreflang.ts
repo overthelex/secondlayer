@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ssrMeta } from '../seo/ssrMeta';
 
 interface HreflangEntry {
   lang: string;   // e.g., 'uk', 'en', 'es', 'ru'
@@ -6,6 +7,11 @@ interface HreflangEntry {
 }
 
 export function useHreflang(entries: HreflangEntry[], defaultLang: string = 'uk') {
+  if (import.meta.env.SSR) {
+    ssrMeta.hreflang = entries;
+    ssrMeta.hreflangDefault = defaultLang;
+  }
+
   useEffect(() => {
     // Remove any existing hreflang links
     document.querySelectorAll('link[hreflang]').forEach(el => el.remove());

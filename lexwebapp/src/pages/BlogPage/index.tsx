@@ -44,8 +44,8 @@ export function BlogPage() {
 
   useHreflang([
     { lang: 'en', href: 'https://legal.org.ua/blog' },
-    { lang: 'uk', href: 'https://legal.org.ua/blog?lang=uk' },
-    { lang: 'ru', href: 'https://legal.org.ua/blog?lang=ru' },
+    { lang: 'uk', href: 'https://legal.org.ua/blog/uk' },
+    { lang: 'ru', href: 'https://legal.org.ua/blog/ru' },
   ]);
 
   // Auto-open article from ?article= query param (used after login redirect)
