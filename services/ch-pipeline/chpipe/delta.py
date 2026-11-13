@@ -72,6 +72,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import db
+from . import reports
 from .config import Settings
 from .http import Fetcher, FetchError
 from .portals import OFF_LISTING_SPIDERS
@@ -392,6 +393,42 @@ def court_code_spider_map(conn) -> dict[str, tuple[str, ...]]:
     return mapping
 
 
+def _damage_thresholds() -> tuple[float, float]:
+    try:
+        hyph = float(os.environ.get("CHPIPE_DAMAGE_MAX_HYPH", "0.02"))
+    except ValueError:
+        hyph = 0.02
+    return hyph, 0.01
+
+
+def _log_text_damage(settings: Settings) -> None:
+    """One `text damage` INFO line per table/group from reports.text_damage;
+    WARNING when hyphen_share > CHPIPE_DAMAGE_MAX_HYPH (0.02) or glued_share >
+    0.01. Any failure (60 s statement timeout, missing table, no database)
+    logs one WARNING and returns: metrics must never fail the nightly run."""
+    try:
+        max_hyph, max_glued = _damage_thresholds()
+        conn = db.connect(settings)
+        try:
+            rows = reports.text_damage(conn)
+        finally:
+            conn.close()
+        for r in rows:
+            line = ("text damage %s/%s n=%d hyphen_share=%.3f glued_share=%.3f "
+                    "page_number_share=%.3f mean_line_len=%.1f"
+                    % (r["table"], r["group"], r["n"], r["hyphen_share"],
+                       r["glued_share"], r["page_number_share"],
+                       r["mean_line_len"]))
+            if r["hyphen_share"] > max_hyph or r["glued_share"] > max_glued:
+                log.warning("%s (above threshold: hyphen>%.2f or glued>%.2f)",
+                            line, max_hyph, max_glued)
+            else:
+                log.info("%s", line)
+    except Exception as exc:  # noqa: BLE001 - observability must not fail the run
+        log.warning("text damage metrics unavailable: %s: %s",
+                    type(exc).__name__, exc)
+
+
 def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
     snapshot, day = _fetch_latest_snapshot(fetcher_factory)
     if snapshot is None:
@@ -504,6 +541,10 @@ def run_decisions(settings: Settings, fetcher_factory=None) -> DeltaReport:
             extract_stage.run(settings, spider=spider)
             load_stage.run(settings, spider=spider)
             citations_stage.run(settings, spider=spider)
+
+    # Nightly text-damage metrics, once per run after every spider's extract.
+    # Observability only: never allowed to fail the delta.
+    _log_text_damage(settings)
 
     # index_stage.run() swallows a per-spider listing failure into
     # `failed_spiders` rather than raising -- deliberately, so one flaky

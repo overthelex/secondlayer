@@ -10,6 +10,8 @@ so the caller must hand in a connection whose row_factory is dict_row.
 from __future__ import annotations
 
 from .portals import OFF_LISTING_SPIDERS
+from .text_clean import OWN_REFLOW_SPIDERS
+from .text_damage import markers
 from .stages.index_stage import ALL_SPIDERS
 
 
@@ -197,3 +199,59 @@ def completeness(conn, snapshot: dict[str, int], total_alle: int) -> dict:
     }
 
     return {"corpus": corpus, "per_spider": per_spider, "uncovered": uncovered}
+
+
+# Editions whose full_text is raw pdftotext output (the cleaned sources).
+DAMAGE_EDITION_SOURCES = ("fedlex_pdf", "lexwork_pdf", "lexfind", "zhlex")
+DAMAGE_STATEMENT_TIMEOUT = "60s"
+
+
+def _damage_row(table: str, group: str, texts: list[str]) -> dict:
+    """`*_share` = share of sampled documents whose marker is > 0, the same
+    definition scripts/text_damage_probe.py uses (share_nonzero), so a night's
+    numbers compare with /data/ch-corpus/logs/text-damage-baseline.json."""
+    ms = [markers(t) for t in texts]
+    n = len(ms)
+
+    def share(key: str) -> float:
+        return sum(1 for m in ms if m[key] > 0) / n
+
+    return {"table": table, "group": group, "n": n,
+            "hyphen_share": share("hyphen_breaks"),
+            "glued_share": share("glued_refs"),
+            "page_number_share": share("page_number_lines"),
+            "mean_line_len": sum(m["mean_line_len"] for m in ms) / n}
+
+
+def text_damage(conn, sample_pct: float = 0.2) -> list[dict]:
+    """Damage markers on a block sample of the PDF-derived texts.
+
+    TABLESAMPLE SYSTEM keeps this cheap on the 33 GB decisions table; the
+    sample is blocks, not rows, so a small group may be absent on a given
+    night. Runs in one transaction with a 60 s statement_timeout; a timeout
+    raises -- the caller (delta) turns that into one WARNING.
+    """
+    out: list[dict] = []
+    with conn.transaction():
+        conn.execute(f"SET LOCAL statement_timeout = '{DAMAGE_STATEMENT_TIMEOUT}'")
+        groups: dict[str, list[str]] = {}
+        for r in conn.execute(
+                "SELECT spider, full_text FROM ch_court_decisions "
+                "TABLESAMPLE SYSTEM (%s) "
+                "WHERE text_source IN ('pdf','ocr') AND full_text IS NOT NULL "
+                "AND full_text <> '' AND NOT (spider = ANY(%s))",
+                (sample_pct, sorted(OWN_REFLOW_SPIDERS))):
+            groups.setdefault(r["spider"], []).append(r["full_text"])
+        out += [_damage_row("ch_court_decisions", g, t)
+                for g, t in sorted(groups.items())]
+        groups = {}
+        for r in conn.execute(
+                "SELECT source, full_text FROM ch_act_version "
+                "TABLESAMPLE SYSTEM (%s) "
+                "WHERE source = ANY(%s) AND full_text IS NOT NULL "
+                "AND full_text <> ''",
+                (sample_pct, list(DAMAGE_EDITION_SOURCES))):
+            groups.setdefault(r["source"], []).append(r["full_text"])
+        out += [_damage_row("ch_act_version", g, t)
+                for g, t in sorted(groups.items())]
+    return out
