@@ -223,6 +223,7 @@ export async function ceidgCandidates(pool: Queryable, maxAgeDays: number, limit
      WHERE profession = 'radca' AND status = 'active' AND phone IS NULL AND email IS NULL
        AND surname <> '' AND given_names <> ''
        AND ((raw->'ceidg'->>'checkedAt') IS NULL OR (raw->'ceidg'->>'checkedAt')::timestamptz < NOW() - ($1::int * INTERVAL '1 day'))
+       AND ((raw->'ceidg'->>'timeoutAt') IS NULL OR (raw->'ceidg'->>'timeoutAt')::timestamptz < NOW() - INTERVAL '7 days')
      ORDER BY (raw->'ceidg'->>'checkedAt') ASC NULLS FIRST, lawyer_id
      LIMIT $2`,
     [maxAgeDays, limit],

@@ -6,6 +6,23 @@ import { fetch as undiciFetch, ProxyAgent } from 'undici';
 export const defaultFetch = undiciFetch as unknown as typeof fetch;
 
 export class CollectorStopped extends Error {}
+/** A request that ran past its own timeout, for a caller that treats a slow answer as an answer (no retry). */
+export class RequestTimeout extends Error {
+  constructor(public readonly url: string, public readonly timeoutMs: number) {
+    super(`no answer within ${timeoutMs} ms for ${url}`);
+  }
+}
+
+export interface RequestOptions {
+  /** per-request timeout, default 60 s */
+  timeoutMs?: number;
+  /**
+   * The timeout belongs to this query, not to the site (CEIDG takes minutes on a common surname): throw
+   * RequestTimeout after one attempt and leave the consecutive-failure count alone.
+   */
+  timeoutIsAnswer?: boolean;
+}
+
 export class HttpStatusError extends Error {
   constructor(public readonly status: number, public readonly url: string) {
     super(`HTTP ${status} for ${url}`);
@@ -43,8 +60,8 @@ export class Collector {
     this.dispatcher = o.proxyUrl ? new ProxyAgent(o.proxyUrl) : undefined;
   }
 
-  get(url: string, headers?: Record<string, string>): Promise<string> {
-    return this.request(url, { method: 'GET', headers });
+  get(url: string, headers?: Record<string, string>, opts?: RequestOptions): Promise<string> {
+    return this.request(url, { method: 'GET', headers }, opts);
   }
 
   /** One attempt, no retry, no failure accounting: the health probe. */
@@ -77,14 +94,15 @@ export class Collector {
    * Serialised per host: the next request to a host waits for the previous one to that host, so
    * the spacing is exact, and a slow register (10 s between requests) never holds up another site.
    */
-  private request(url: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<string> {
+  private request(url: string, init: { method: string; headers?: Record<string, string>; body?: string }, opts: RequestOptions = {}): Promise<string> {
     const host = new URL(url).host.replace(/^www\./, '');
-    const run = (this.chains.get(host) ?? Promise.resolve()).then(() => this.doRequest(url, init));
+    const run = (this.chains.get(host) ?? Promise.resolve()).then(() => this.doRequest(url, init, opts));
     this.chains.set(host, run.catch(() => undefined));
     return run;
   }
 
-  private async doRequest(url: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<string> {
+  private async doRequest(url: string, init: { method: string; headers?: Record<string, string>; body?: string }, opts: RequestOptions): Promise<string> {
+    const timeoutMs = opts.timeoutMs ?? 60_000;
     const host = new URL(url).host.replace(/^www\./, '');
     const minDelay = this.o.minDelayMs[host] ?? 2000;
     for (let attempt = 0; ; attempt++) {
@@ -102,9 +120,10 @@ export class Collector {
           headers: { 'user-agent': this.o.userAgent, accept: 'text/html,*/*', 'accept-language': 'pl,en;q=0.5', ...(init.headers ?? {}) },
           dispatcher: this.dispatcher,
           redirect: 'follow',
-          signal: AbortSignal.timeout(60_000),
+          signal: AbortSignal.timeout(timeoutMs),
         } as RequestInit);
       } catch (e) {
+        if (opts.timeoutIsAnswer && (e as Error)?.name === 'TimeoutError') throw new RequestTimeout(url, timeoutMs);
         await this.failed(`${init.method} ${url}: ${(e as Error).message}`, attempt);
         continue;
       }
