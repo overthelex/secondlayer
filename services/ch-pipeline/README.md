@@ -1141,10 +1141,263 @@ migration 129's `ch_zefix_companies` / `ch_shab_publications`):
   nobody has claimed and only falls back to retrying claimed-but-unstamped
   rows once there are none left.
 
+## Text cleanup (2026-11)
+
+Design: `docs/superpowers/specs/2026-11-13-ch-text-cleanup-design.md`. Fedlex
+PDF editions, PDF/OCR decisions and cantonal PDF editions carried raw
+`pdftotext -layout` text (glued footnote refs, wrap hyphens, page numbers,
+running headers, marginal columns). The code now cleans on the way in; this
+is the ordered runbook for backfilling what is already in prod. Run it from
+`~/lawrider/repo/services/ch-pipeline` on cthulhu, only AFTER the PR is
+merged and deployed. Every write step goes through `./run-stage.sh`; heavy
+runs go in tmux with `nice -n 10 ionice -c3`. Shorthand used below:
+`PSQL="docker exec -i pg-lawrider psql -U secondlayer -d secondlayer_prod"`.
+
+### 1. Migration 260 is applied
+
+```bash
+$PSQL -Atc "SELECT 1 FROM schema_migrations WHERE filename='260_ch_text_clean_state.sql'"
+```
+
+Pass: prints `1`. If it prints nothing, the nightly extract/ocr
+stages run with cleaning disabled (a `to_regclass` preflight) and every
+step below that touches `ch_text_clean_state` fails.
+
+### 2. Fedlex PDF editions: pilot (phase A)
+
+```bash
+mkdir -p /data/ch-corpus/logs
+$PSQL -Atc "SELECT count(*), md5(string_agg(c::text, '|' ORDER BY c::text))
+  FROM ch_act_change c JOIN ch_act_version v ON v.version_id = c.from_version_id
+  WHERE v.source='fedlex_pdf'" > /data/ch-corpus/logs/phaseA-change-before.txt
+$PSQL -Atc "SELECT count(*), sum(article_count) FROM ch_act_version
+  WHERE source='fedlex_pdf' AND stage='parsed'" > /data/ch-corpus/logs/phaseA-articles-before.txt
+CHPIPE_RESPLIT=all CHPIPE_LIMIT=200 nice -n 10 ionice -c3 ./run-stage.sh fedlex-pdf-text
+python scripts/text_damage_probe.py --dsn "$CHPIPE_DSN" \
+  --sample /data/ch-corpus/bench/text-damage-sample.json \
+  --out /data/ch-corpus/logs/text-damage-phaseA-pilot.json
+```
+
+Re-run the two fingerprint queries into `phaseA-*-after.txt` and `diff` them.
+Pass: the article count and `sum(article_count)` are identical, and on the
+touched editions `glued_refs` share < 0.5 % and `hyphen_breaks` share < 1 %.
+If the article fingerprint differs, stop: do not run `rediff.py`, investigate
+the splitter diff. (`=all` also re-stores articles for rows whose `akn_xml`
+is NULL, which is why the fingerprint gate is mandatory.)
+
+### 3. Fedlex PDF editions: full run
+
+```bash
+tmux new -s chclean-a
+CHPIPE_RESPLIT=all nice -n 10 ionice -c3 ./run-stage.sh fedlex-pdf-text     # about 2 h
+```
+
+Re-run both fingerprints and the probe (`text-damage-phaseA.json`). Pass:
+both fingerprints identical, probe within the step 2 limits. Then check
+serving: `ch_get_act_text` for SR 220 de as_of 2009-06-01 has no
+`werden.322`-style refs.
+
+### 4. Decisions: seed the clean-text state
+
+Only after the nightly extract/ocr code (which stamps new rows) is
+deployed, otherwise rows extracted in between are unstamped; re-seed if in doubt.
+
+```bash
+CHPIPE_SEED=1 ./run-stage.sh clean-text      # enrols about 499K PDF/OCR rows, excludes CH_WEKO*
+$PSQL -c "EXPLAIN SELECT s.doc_id FROM ch_text_clean_state s
+  WHERE s.cleaned_at IS NULL AND s.attempts < 3 ORDER BY s.spider, s.doc_id LIMIT 100"
+```
+
+Pass: the EXPLAIN uses an index scan on the state table (no Seq Scan, no
+Sort of the whole table).
+
+### 5. Decisions: 1,000-row pilot (measure first)
+
+```bash
+time CHPIPE_LIMIT=1000 nice -n 10 ionice -c3 ./run-stage.sh clean-text CH_BVGer
+$PSQL -Atc "select pg_size_pretty(pg_relation_size('idx_ch_court_fts'))"
+```
+
+Pass: no `failed` rows beyond a few `archive conflict`. Record the numbers,
+then fill the decision table (fill in after the 1,000-row pilot):
+
+| measured | value |
+|---|---|
+| seconds / row | _TBD_ |
+| `idx_ch_court_fts` size before / after 1,000 rows | _TBD_ |
+| `CHPIPE_BATCH` | _TBD_ |
+| nightly window (outside 10:15 Kyiv) | _TBD_ |
+
+If > 50 ms/row keep `fastupdate = on` (default) and plan the REINDEX; if the
+GIN grows > 1 GB over the full run the REINDEX is mandatory.
+
+### 6. Decisions: backfill, REINDEX, citations re-extract
+
+```bash
+tmux new -s chclean-b
+nice -n 10 ionice -c3 ./run-stage.sh clean-text      # repeat until the next query is 0
+$PSQL -Atc "SELECT count(*) FROM ch_text_clean_state WHERE cleaned_at IS NULL AND attempts < 3"
+```
+
+Then, OUTSIDE 10:15 Kyiv (about 3.5 h):
+
+```bash
+$PSQL -c "SET statement_timeout=0" -c "REINDEX INDEX CONCURRENTLY idx_ch_court_fts"
+$PSQL -c "UPDATE ch_citation_state s SET extracted_at = NULL, attempts = 0
+  FROM ch_court_decisions d JOIN ch_text_clean_state c USING (doc_id)
+  WHERE d.ecli = s.ecli AND c.cleaned_at IS NOT NULL"
+~/ch-citations-reextract.sh        # about 3.5 h at 6 workers; then citations-resolve + reports_cit
+python scripts/text_damage_probe.py --dsn "$CHPIPE_DSN" \
+  --sample /data/ch-corpus/bench/text-damage-sample.json \
+  --out /data/ch-corpus/logs/text-damage-phaseB.json
+```
+
+Pass: pending count 0; probe within the step 2 limits; `citations-report`
+totals >= `citations-report-3.json` (cases 8,954,474; legislation
+article-resolved 6,390,217); 20 PDF decisions read by eye;
+`ch_get_court_decision` for `ECLI:CH:GR_Gerichte:GR_KG_001_PKG-2001-13_0000-00-00`
+returns paragraphs.
+
+### 7. Cantonal PDF editions (phase C)
+
+Gate first (the dataset is already at `/data/ch-corpus/bench/pdf-gate-1113`):
+
+```bash
+cd ~/lawrider/repo/services/ch-pipeline && ~/lawrider/ch-pipeline-venv/bin/python scripts/pdf_gate.py compare /data/ch-corpus/bench/pdf-gate-1113/html.jsonl /data/ch-corpus/bench/pdf-gate-1113/pdfs
+```
+
+Pass: the last line is `ALL 60 60/60 1.000 1.000 1.00 1.00`. Pre-merge, the
+controller measured this on base and on the branch, and the per-version output
+was identical to base: save the output and `diff` it against
+`/data/ch-corpus/bench/pdf-gate-1113/base.full`; the diff must be empty. The
+gate does not cover ZH (notes.zh.ch) or AR, hence the reading below.
+
+Read 10 `zhlex` rows, including AR, BEFORE (full_text) and after. Fingerprint
+`ch_act_change` for these sources as in step 2 (`v.source IN
+('lexwork_pdf','lexfind','zhlex')`) before and after.
+
+```bash
+CHPIPE_SOURCE=lexwork_pdf CHPIPE_RESPLIT=all nice -n 10 ionice -c3 ./run-stage.sh pdf-text
+CHPIPE_SOURCE=lexfind     CHPIPE_RESPLIT=all nice -n 10 ionice -c3 ./run-stage.sh pdf-text
+CHPIPE_SOURCE=zhlex       CHPIPE_RESPLIT=all nice -n 10 ionice -c3 ./run-stage.sh pdf-text
+python scripts/text_damage_probe.py --dsn "$CHPIPE_DSN" \
+  --sample /data/ch-corpus/bench/text-damage-sample.json \
+  --out /data/ch-corpus/logs/text-damage-phaseC.json
+```
+
+Pass: change-log fingerprints differ only where article text changed (count
+them, read 10); the 10 zhlex/AR rows read clean (marginal titles out of the
+body, no `Betreibungs-ist`); a row the new split would leave article-less is
+counted `kept` and untouched.
+
+### 8. Rollback, per phase
+
+Stop the writers first: `tmux kill-session -t chclean-b` (and any running
+`fedlex-pdf-text` / `pdf-text` tmux) before rolling back.
+
+**Order for decisions** (the nightly keeps writing cleaned text and stamps
+until it is switched off, so reverting code first would leave stamped rows the
+old release no longer understands):
+
+1. stop the clean-text backfill (`tmux kill-session -t chclean-b`);
+2. switch the nightly off: set `CHPIPE_CLEAN_NEW_TEXT=0` for the delta and the
+   weekly `ocr` cron. With it off, nightly extract and OCR behave exactly as
+   when `ch_text_clean_state` is missing: raw text, no archive, no stamp. One
+   difference: a stamped row rewritten with raw text is un-stamped, so a later
+   cleaner-version requeue cannot re-clean its old archive over the new text.
+   It is read from the environment of the process: add
+   `export CHPIPE_CLEAN_NEW_TEXT=0` next to the other `export`s in
+   `services/ch-pipeline/run-delta.sh` (the `CHPIPE_RAW_DIR` block), and
+   `CHPIPE_CLEAN_NEW_TEXT=0` to the variable lines at the top of
+   `deployment/lawrider-cthulhu/cron/crontab.fragment` (cron applies those to
+   every job, `ocr` included; they also reach `run-delta.sh`, which does not
+   override it);
+3. run `scripts/restore_raw_text.py` from the release that cleaned (below);
+4. only then revert the code, if wanted, and remove the switch.
+
+- **Fedlex PDF editions.** `akn_xml` holds the raw pdftotext text.
+  ```sql
+  UPDATE ch_act_version SET full_text = akn_xml
+   WHERE source='fedlex_pdf' AND stage='parsed' AND akn_xml IS NOT NULL;
+  ```
+  Complete: phase A leaves the articles unchanged (step 2/3 fingerprints are
+  identical), so only `full_text` ever differed.
+- **Decisions.** The raw text is in the gzip archive
+  `<raw_dir.parent>/raw-text/<spider>/<doc_id>.txt.gz`. Use the script, dry run
+  first:
+  ```bash
+  python scripts/restore_raw_text.py --dsn "$CHPIPE_DSN" --dry-run
+  python scripts/restore_raw_text.py --dsn "$CHPIPE_DSN" [--spider CH_BVGer] [--limit N]
+  ```
+  `--raw-dir` defaults to `$CHPIPE_RAW_DIR`. Per row it checks the archive sha
+  against `raw_sha256`, restores only rows whose text is still exactly the
+  cleaner's output (compare-and-set; others are counted `changed`), and marks the
+  state row `cleaned_at = NULL, attempts = max_attempts, last_error = 'rolled
+  back <date>'` so clean-text never re-claims it. Run it from the release that
+  cleaned (same cleaner code). Pass: `restored` = stamped count, `sha_mismatch`,
+  `archive_error`, `changed` all 0 or explained. Afterwards REINDEX
+  `idx_ch_court_fts` and re-run the citations re-extract (step 6).
+- **Cantonal PDF editions.** Only rows whose `akn_xml` is raw pdftotext text
+  (not a Lexwork JSON payload or a WebRT HTML page):
+  ```sql
+  UPDATE ch_act_version SET full_text = akn_xml
+   WHERE source IN ('lexwork_pdf','lexfind') AND stage='parsed'
+     AND akn_xml IS NOT NULL AND akn_xml NOT LIKE '{%' AND akn_xml NOT LIKE '<%';
+  UPDATE ch_act_version SET full_text = akn_xml
+   WHERE source='zhlex' AND stage='parsed' AND akn_xml IS NOT NULL
+     AND xml_url LIKE 'https://www.notes.zh.ch/appl/zhlex_r.nsf/WebView/%';
+  ```
+  Check the row counts against `SELECT source, count(*) ... WHERE akn_xml LIKE '{%' OR akn_xml LIKE '<%'`
+  first. NOT complete: this restores `full_text` only. The re-split articles and
+  the `ch_act_change` entries produced by step 7 stay in place; restoring the old
+  split means running the previous release with `CHPIPE_RESPLIT=all` (per source,
+  as in step 7).
+
+### 9. Known buckets (not bugs)
+
+- `archive conflict` (in `ch_text_clean_state.last_error`): a re-extracted raw
+  text differs from the archived one. The new raw is stored uncleaned and the
+  row stays unstamped. The bucket grows with re-OCR/re-extraction; a versioned
+  archive is a follow-up.
+- `archive write failed (...)`: the archive write itself failed (disk,
+  permissions) and no archive exists. Nightly: the new raw text is stored
+  uncleaned and unstamped, `last_error` records the reason. Backfill: the row
+  is untouched, one attempt is spent (3 attempts, then it is parked). Both
+  paths use the same `archive write failed (` prefix; the backfill fixes itself
+  once the disk is fixed, the nightly row is picked up by the next backfill run.
+  Count the buckets:
+  ```sql
+  SELECT count(*) FROM ch_text_clean_state WHERE last_error LIKE 'archive conflict%';
+  SELECT count(*) FROM ch_text_clean_state WHERE last_error LIKE 'archive write failed%';
+  ```
+- About 23K two-column PDF decisions (CH_UNIBE about 94 %, CH_VB about 29 %)
+  are only approximately ordered by the column splitter: they need a re-fetch
+  of the PDFs in raw mode. Follow-up, not in this runbook.
+
+### 10. Nightly `text damage` log line
+
+After the decision loop, `delta` logs one line per group from
+`reports.text_damage` (block sample, `TABLESAMPLE SYSTEM (0.2)`, 60 s
+statement timeout; decisions with `text_source IN ('pdf','ocr')` excluding
+`OWN_REFLOW_SPIDERS`, editions with `source IN ('fedlex_pdf','lexwork_pdf','lexfind','zhlex')`):
+
+```
+text damage ch_court_decisions/CH_BVGer n=40 hyphen_share=0.000 glued_share=0.000 page_number_share=0.000 mean_line_len=...
+```
+
+`*_share` = share of sampled documents whose marker is > 0, the same
+definition as `text_damage_probe.py`, so it compares with
+`/data/ch-corpus/logs/text-damage-baseline.json`. The line is a WARNING when
+`hyphen_share > CHPIPE_DAMAGE_MAX_HYPH` (default 0.02) or `glued_share > 0.01`.
+A group can be missing on a night (block sample). Any failure of the metric
+(timeout, missing table) logs one `text damage metrics unavailable` WARNING and
+never fails the delta.
+
 ## Env vars
 
 | var | stage(s) | meaning |
 |-----|----------|---------|
+| `CHPIPE_CLEAN_NEW_TEXT` | `extract`, `ocr` (nightly) | `0` = kill switch for text cleanup of new PDF/OCR text: raw text, no archive, no state write (as with a missing `ch_text_clean_state`); default on. See the rollback order in step 8 of the text cleanup runbook |
 | `CHPIPE_SHAB_FROM` | `shab-list` | first month to walk, `"YYYY-MM"` (default `2000-01`) — the backfill's starting point, irrelevant once every month before it has a `done_at` progress row |
 | `CHPIPE_SHAB_RPS` | `shab-list`, `shab-detail` | requests/second ceiling against amtsblattportal.ch (default `10`) — one rate limiter shared by both stages, since they hit the same host |
 | `CHPIPE_SHAB_CONCURRENCY` | `shab-list`, `shab-detail` | in-flight requests each stage's `Fetcher` runs (default `4`, must be an integer 1-32); `Settings.shab_concurrency`, see `_shab_concurrency()` in `chpipe/config.py`. Through the SOCKS tunnel to prod (~0.4-0.7 s RTT per hop), throughput is roughly concurrency / RTT regardless of `CHPIPE_SHAB_RPS` — 4 in flight caps a run at ~5-10 req/s no matter how high the rate limiter is set — so raise this together with `CHPIPE_SHAB_RPS` to actually get more throughput |

@@ -4,10 +4,11 @@ import pathlib
 import psycopg
 from psycopg.rows import dict_row
 import pytest
+from chpipe import raw_text_archive, text_clean
 from chpipe.config import Settings
 from chpipe.stages import ocr_stage
 
-from conftest import apply_migration_200
+from conftest import apply_migration_200, apply_migration_260
 
 
 def test_pauses_at_or_above_the_ceiling():
@@ -65,6 +66,8 @@ def conn():
         # to on every 'extracted' and 'loaded' transition.
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
         apply_migration_200(c)
+        c.execute("DROP TABLE IF EXISTS ch_text_clean_state")
+        apply_migration_260(c)
         yield c
 
 
@@ -192,3 +195,96 @@ def test_an_unreadable_scan_keeps_its_diagnosis_and_its_origin(
     assert row["last_error"] and "quality" in row["last_error"]
     assert row["text_source"] == "ocr"
     assert report.still_bad == 1
+
+
+# --- Task 7: recovered OCR text is stored cleaned, archived and stamped ---
+
+# The raw-text archive lives at <raw_dir.parent>/raw-text, and pytest's
+# tmp_path.parent is shared by every test in a session: give each test a
+# raw_dir of its own one level down so archives cannot leak between tests.
+@pytest.fixture
+def raw_dir(tmp_path):
+    d = tmp_path / "raw"
+    d.mkdir()
+    return d
+
+
+OCR_RAW = ("Das Bundesgericht hat die Beschwerde des Beschwerdefüh-\n"
+           "rers gegen das Urteil des Obergerichts abgewiesen, soweit darauf "
+           "einzutreten ist.\n") * 12
+
+
+def _state(conn, doc_id):
+    return conn.execute("SELECT * FROM ch_text_clean_state WHERE doc_id=%s",
+                        (doc_id,)).fetchone()
+
+
+def _run_ocr(conn, raw_dir, monkeypatch, spider, raw=OCR_RAW):
+    (raw_dir / spider).mkdir(exist_ok=True)
+    (raw_dir / spider / "d.pdf").write_bytes(b"%PDF-1.4 fake")
+    _seed_ocr_pending(conn, "d", spider)
+    monkeypatch.setattr(ocr_stage.ocr, "ocr_pdf", lambda *a, **k: raw)
+    return ocr_stage.run(_settings(os.environ["CHPIPE_TEST_DSN"], raw_dir),
+                         spider=spider, limit=1)
+
+
+def test_ocr_text_is_stored_cleaned_archived_and_stamped(conn, raw_dir, monkeypatch):
+    report = _run_ocr(conn, raw_dir, monkeypatch, "CH_ZG")
+    assert report.recovered == 1
+    row = conn.execute("SELECT full_text, stage, text_source FROM ch_court_decisions "
+                       "WHERE doc_id='d'").fetchone()
+    assert row["stage"] == "extracted" and row["text_source"] == "ocr"
+    assert row["full_text"] == text_clean.clean_pdf_text(OCR_RAW, ["de"])
+    assert "Beschwerdeführers" in row["full_text"]
+    assert raw_text_archive.load(raw_dir, "CH_ZG", "d") == OCR_RAW
+    st = _state(conn, "d")
+    assert st["cleaned_at"] is not None
+    assert st["raw_sha256"] == raw_text_archive.sha256_of(OCR_RAW)
+    assert st["cleaner_version"] == text_clean.CLEANER_VERSION
+
+
+@pytest.mark.parametrize("spider", ["CH_WEKO_RPW", "CH_WEKO"])
+def test_ocr_leaves_own_reflow_spiders_untouched(conn, raw_dir, monkeypatch, spider):
+    report = _run_ocr(conn, raw_dir, monkeypatch, spider)
+    assert report.recovered == 1
+    assert conn.execute("SELECT full_text FROM ch_court_decisions WHERE doc_id='d'"
+                        ).fetchone()["full_text"] == OCR_RAW
+    assert not raw_text_archive.path_for(raw_dir, spider, "d").exists()
+    assert _state(conn, "d") is None
+
+
+def test_ocr_archive_conflict_stores_raw_uncleaned_and_does_not_stamp(
+        conn, raw_dir, monkeypatch):
+    raw_text_archive.save(raw_dir, "CH_ZG", "d", "some earlier raw text " * 30)
+    arch = raw_text_archive.path_for(raw_dir, "CH_ZG", "d")
+    before = arch.read_bytes()
+    report = _run_ocr(conn, raw_dir, monkeypatch, "CH_ZG")
+    assert report.recovered == 1
+    assert report.archive_conflict == 1
+    assert conn.execute("SELECT full_text FROM ch_court_decisions WHERE doc_id='d'"
+                        ).fetchone()["full_text"] == OCR_RAW
+    st = _state(conn, "d")
+    assert st["cleaned_at"] is None   # not stamped
+    assert st["raw_sha256"] is None
+    assert arch.read_bytes() == before
+
+
+def test_ocr_text_write_and_stamp_are_one_transaction(conn, raw_dir, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("simulated stamp failure")
+    monkeypatch.setattr(ocr_stage.db, "ensure_clean_state_stamped", boom)
+    report = _run_ocr(conn, raw_dir, monkeypatch, "CH_ZG")
+    row = conn.execute("SELECT stage, full_text FROM ch_court_decisions "
+                       "WHERE doc_id='d'").fetchone()
+    assert row["stage"] == "ocr_pending" and row["full_text"] is None
+    assert report.failed == 1
+    assert _state(conn, "d") is None
+
+
+def test_ocr_runs_raw_when_the_state_table_is_missing(conn, raw_dir, monkeypatch):
+    conn.execute("DROP TABLE ch_text_clean_state")
+    report = _run_ocr(conn, raw_dir, monkeypatch, "CH_ZG")
+    assert report.recovered == 1 and report.cleaning_disabled is True
+    assert conn.execute("SELECT full_text FROM ch_court_decisions WHERE doc_id='d'"
+                        ).fetchone()["full_text"] == OCR_RAW
+    assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "d").exists()

@@ -1604,3 +1604,58 @@ def test_cantonal_state_lives_in_its_own_file(tmp_path):
     delta._save_state(settings, {"BE": "2026-08-25"}, delta.CANTONAL_STATE_FILE)
     assert delta._load_state(settings) == {"ZH_HG": 12}
     assert delta._load_state(settings, delta.CANTONAL_STATE_FILE) == {"BE": "2026-08-25"}
+
+
+# --- nightly text damage log line -------------------------------------------
+
+def _damage_row(hyphen=0.5, glued=0.0):
+    return {"table": "ch_court_decisions", "group": "CH_BVGer", "n": 40,
+            "hyphen_share": hyphen, "glued_share": glued,
+            "page_number_share": 0.1, "mean_line_len": 70.0}
+
+
+def test_text_damage_above_threshold_logs_a_warning(monkeypatch, caplog, tmp_path):
+    from chpipe import reports
+    monkeypatch.setattr(delta.db, "connect", lambda s: _NoCloseConn())
+    monkeypatch.setattr(reports, "text_damage", lambda conn, **kw: [_damage_row()])
+    with caplog.at_level(logging.INFO):
+        delta._log_text_damage(_settings(tmp_path))
+    warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warns) == 1 and "text damage" in warns[0].getMessage()
+
+
+def test_text_damage_below_threshold_logs_info_only(monkeypatch, caplog, tmp_path):
+    from chpipe import reports
+    monkeypatch.setattr(delta.db, "connect", lambda s: _NoCloseConn())
+    monkeypatch.setattr(reports, "text_damage",
+                        lambda conn, **kw: [_damage_row(0.0, 0.0)])
+    with caplog.at_level(logging.INFO):
+        delta._log_text_damage(_settings(tmp_path))
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert "text damage" in caplog.text
+
+
+def test_text_damage_failure_never_fails_the_delta(monkeypatch, caplog, tmp_path):
+    from chpipe import reports
+
+    def boom(conn, **kw):
+        raise psycopg.errors.QueryCanceled("statement timeout")
+
+    monkeypatch.setattr(delta.db, "connect", lambda s: _NoCloseConn())
+    monkeypatch.setattr(reports, "text_damage", boom)
+    with caplog.at_level(logging.INFO):
+        delta._log_text_damage(_settings(tmp_path))      # must not raise
+    warns = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warns) == 1 and "text damage" in warns[0].getMessage()
+
+
+def test_text_damage_connect_failure_never_fails_the_delta(monkeypatch, tmp_path):
+    def nope(settings):
+        raise OSError("db down")
+    monkeypatch.setattr(delta.db, "connect", nope)
+    delta._log_text_damage(_settings(tmp_path))
+
+
+class _NoCloseConn:
+    def close(self):
+        pass

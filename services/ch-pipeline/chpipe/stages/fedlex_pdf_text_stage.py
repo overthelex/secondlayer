@@ -13,9 +13,10 @@ document verbatim; this stage runs it through text_extract.from_pdf() and
 text_quality.score() and stores the resulting plain text, the same gate
 extract_stage applies to the decisions corpus's own PDFs.
 
-No article split happens on the fetch path -- article_count stays NULL on
-every row this stage completes, PDF-era prose has no e_id structure to split
-on, and the plan's Task 2 scope was full text only. A pdf-a row that later
+The fetch path splits the extracted text with fedlex_split.split_fedlex_text
+and stores the articles (parse_akn_stage.store_articles, which sets
+article_count) in the same transaction as the text columns; a row whose text
+splits to no articles keeps article_count NULL. A pdf-a row that later
 gains a real XML manifestation is reclaimed by versions_stage's xml pass
 (source flips to 'fedlex', stage resets to 'discovered', full_text/
 article_count are cleared) and is walked by fetch_xml_stage/parse_akn_stage
@@ -32,12 +33,24 @@ gate (scripts/fedlex_pdf_gate.py) measured it sufficient: article-number
 overlap vs the AKN parse of the same acts median 1.000 / mean 0.962 over 63
 pairs, 98% of a 203-row random sample splitting into articles. Rows that
 gain articles get them via parse_akn_stage.store_articles (which also sets
-article_count, taking the row out of the selection); full_text is NOT
-rewritten -- the split's text product is a byproduct, the stored text stays
-exactly what the backfill wrote. Rows that still split to nothing are left
-untouched and selected again next run, the same contract as
+article_count, taking the row out of the selection); full_text IS rewritten
+with the split's clean text product and the raw text moves to akn_xml (see
+TEXT COLUMNS below), unless the clean text is degenerate (empty or under
+0.3x the raw length), in which case the row is skipped and counted. Rows
+that still split to no articles get the clean text but stay selected by =1
+next run, the same contract as
 pdf_text_stage's cantonal resplit. Batched by version_id keyset, CHPIPE_LIMIT
 honoured, mirroring that mode.
+
+TEXT COLUMNS (text cleanup, 2026-11): akn_xml holds the RAW pdftotext text
+(the re-splittable source of truth; no XML despite the column name) and
+full_text holds the clean text product of split_fedlex_text. Both resplit
+modes read COALESCE(akn_xml, full_text), so reruns are idempotent; =1 also
+selects rows with akn_xml IS NULL. A new edition whose clean text is
+degenerate (empty or under 0.3x the raw length) stores the raw text in
+full_text too (akn_xml = raw) and is counted as `degenerate`, not `cleaned`.
+The sentences above about leaving full_text untouched describe the
+pre-cleanup behaviour.
 
 SEQUENTIAL, NOT FANNED OUT (this is the one place this stage's structure
 differs from fetch_xml_stage's asyncio.gather-per-batch): text_extract.from_pdf()
@@ -69,6 +82,14 @@ from ..text_extract import PdfToolMissing, from_pdf
 from . import parse_akn_stage
 
 log = logging.getLogger(__name__)
+
+MIN_CLEAN_RATIO = 0.3
+
+
+def _degenerate(raw: str, clean: str) -> bool:
+    c = clean.strip()
+    return not c or len(c) < MIN_CLEAN_RATIO * len(raw.strip())
+
 
 BATCH_SIZE = 50
 PROGRESS_EVERY = 200
@@ -112,6 +133,10 @@ class FedlexPdfTextReport:
     resplit: int = 0
     recovered: int = 0
     articles: int = 0
+    # rows whose clean text was written to full_text (raw kept in akn_xml)
+    cleaned: int = 0
+    # clean text empty or < MIN_CLEAN_RATIO of raw: full_text not overwritten
+    degenerate: int = 0
 
 
 async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
@@ -161,8 +186,23 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
             report.low_quality += 1
             return
 
-        db.complete_version(conn, version_id, "parsed", full_text=text,
-                            fetched_at=datetime.now(timezone.utc))
+        # raw pdftotext text -> akn_xml (the re-splittable source of truth),
+        # clean text product -> full_text (what is served); articles and
+        # both columns land in one transaction
+        articles, clean = fedlex_split.split_fedlex_text(text, row["lang"])
+        if _degenerate(text, clean):
+            log.warning("version %s: degenerate clean text (%d of %d chars); "
+                        "storing raw as full_text", version_id, len(clean), len(text))
+            clean = text
+            report.degenerate += 1
+        else:
+            report.cleaned += 1
+        with conn.transaction():
+            db.complete_version(conn, version_id, "parsed", akn_xml=text,
+                                full_text=clean,
+                                fetched_at=datetime.now(timezone.utc))
+            if articles:
+                parse_akn_stage.store_articles(conn, version_id, articles)
         report.parsed += 1
     except PdfToolMissing:
         raise
@@ -229,17 +269,21 @@ def run(settings: Settings, limit: int | None = None, transport=None) -> FedlexP
 # batch. COALESCE covers both shapes of "no articles": NULL (everything the
 # 2026-08 backfill wrote) and 0 (a future run that stored an empty split).
 _RESPLIT_ROWS = (
-    "SELECT version_id, full_text FROM ch_act_version "
+    "SELECT version_id, lang, COALESCE(akn_xml, full_text) AS raw_text "
+    "FROM ch_act_version "
     "WHERE source = 'fedlex_pdf' AND stage = 'parsed' "
-    "AND COALESCE(article_count, 0) = 0 AND full_text IS NOT NULL "
+    "AND (COALESCE(article_count, 0) = 0 OR akn_xml IS NULL) "
+    "AND COALESCE(akn_xml, full_text) IS NOT NULL "
     "AND version_id > %s ORDER BY version_id LIMIT %s")
 
 # CHPIPE_RESPLIT=all: every parsed fedlex_pdf edition with a text, articles
 # or not -- the re-walk after a splitter fix (LEXAI-2046), when the rows
 # that already have articles are exactly the ones to redo.
 _RESPLIT_ROWS_ALL = (
-    "SELECT version_id, full_text FROM ch_act_version "
-    "WHERE source = 'fedlex_pdf' AND stage = 'parsed' AND full_text IS NOT NULL "
+    "SELECT version_id, lang, COALESCE(akn_xml, full_text) AS raw_text "
+    "FROM ch_act_version "
+    "WHERE source = 'fedlex_pdf' AND stage = 'parsed' "
+    "AND COALESCE(akn_xml, full_text) IS NOT NULL "
     "AND version_id > %s ORDER BY version_id LIMIT %s")
 
 RESPLIT_BATCH = 200
@@ -248,10 +292,11 @@ RESPLIT_BATCH = 200
 def resplit(settings: Settings, limit: int | None = None,
             everything: bool = False) -> FedlexPdfTextReport:
     """CHPIPE_RESPLIT=1: articles for the parsed fedlex_pdf editions, from
-    their stored full_text alone. See the module docstring. full_text is
-    left untouched; store_articles() writes the rows and article_count in
-    one transaction, which is the whole idempotency story -- a recovered
-    row leaves the selection, an unrecovered one is re-walked next run."""
+    their stored text alone (COALESCE(akn_xml, full_text)). See the module
+    docstring. Writes the clean text to full_text and keeps the raw text in
+    akn_xml; the article rewrite and the text write share one transaction.
+    A degenerate clean text (empty or < 0.3x raw) skips the row and counts
+    it as `degenerate`."""
     report = FedlexPdfTextReport()
     conn = db.connect(settings)
     last_id = 0
@@ -267,26 +312,44 @@ def resplit(settings: Settings, limit: int | None = None,
             if not rows:
                 break
             for row in rows:
-                version_id, full_text = row["version_id"], row["full_text"]
+                version_id, raw = row["version_id"], row["raw_text"]
                 last_id = version_id
                 report.resplit += 1
                 try:
-                    articles, _ = fedlex_split.split_fedlex_text(full_text)
+                    articles, clean = fedlex_split.split_fedlex_text(raw, row["lang"])
+                    if _degenerate(raw, clean):
+                        log.warning("version %s: degenerate clean text; skipped",
+                                    version_id)
+                        report.degenerate += 1
+                        continue
+                    # one transaction: a crash between the article rewrite
+                    # and the text write must not leave new articles next
+                    # to the old full_text (store_articles' own transaction
+                    # nests as a savepoint)
+                    with conn.transaction():
+                        if articles:
+                            parse_akn_stage.store_articles(conn, version_id, articles)
+                        conn.execute(
+                            "UPDATE ch_act_version SET "
+                            "akn_xml = COALESCE(akn_xml, full_text), full_text = %s, "
+                            "updated_at = now() WHERE version_id = %s",
+                            (clean, version_id))
                 except Exception as exc:                        # noqa: BLE001
                     log.error("version %s: resplit failed: %s", version_id, exc)
                     report.failed += 1
                     continue
+                report.cleaned += 1
                 if not articles:
                     report.empty += 1
                     continue
-                parse_akn_stage.store_articles(conn, version_id, articles)
                 report.recovered += 1
                 report.articles += len(articles)
             if remaining is not None:
                 remaining -= len(rows)
             log.info("fedlex-resplit resplit=%d recovered=%d articles=%d "
-                     "empty=%d failed=%d", report.resplit, report.recovered,
-                     report.articles, report.empty, report.failed)
+                     "empty=%d failed=%d cleaned=%d degenerate=%d", report.resplit,
+                     report.recovered, report.articles, report.empty,
+                     report.failed, report.cleaned, report.degenerate)
     finally:
         conn.close()
     return report
@@ -306,9 +369,10 @@ def main() -> FedlexPdfTextReport:
         # offline CPU walk, not a download: renice already applied above
         result = resplit(Settings.from_env(), limit=limit,
                          everything=os.environ.get("CHPIPE_RESPLIT") == "all")
-        log.info("RESPLIT resplit=%d recovered=%d articles=%d empty=%d failed=%d",
-                 result.resplit, result.recovered, result.articles,
-                 result.empty, result.failed)
+        log.info("RESPLIT resplit=%d recovered=%d articles=%d empty=%d failed=%d "
+                 "cleaned=%d degenerate=%d", result.resplit, result.recovered,
+                 result.articles, result.empty, result.failed, result.cleaned,
+                 result.degenerate)
         return result
     result = run(Settings.from_env(), limit=limit)
     log.info("parsed=%d failed=%d (of which empty=%d low_quality=%d) bytes=%d",

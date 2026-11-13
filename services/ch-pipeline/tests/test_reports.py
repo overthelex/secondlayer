@@ -212,3 +212,68 @@ def test_a_usable_snapshot_still_reports_a_numeric_gap(conn):
     result = reports.completeness(conn, {"GE_Gerichte": 1}, total_alle=1)
     assert result["corpus"]["snapshot_unusable"] is False
     assert result["corpus"]["gap_pct"] == 0.0
+
+
+# --- text_damage: nightly sampled damage metrics ---------------------------
+
+WRAPPED = "Der Beschwerdefüh-\nrer macht geltend, dass\ndie Vorinstanz fehlerhaft\nentschieden habe.\n"
+CLEAN = "Der Beschwerdeführer macht geltend, dass die Vorinstanz fehlerhaft entschieden habe."
+
+
+def _text_row(conn, doc_id, spider, source, text):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, text_source, "
+        "full_text) VALUES (%s,%s,%s,%s,%s)",
+        (f"e:{doc_id}", spider, doc_id, source, text))
+
+
+def _act_schema(conn):
+    from conftest import reset_legislation_schema
+    reset_legislation_schema(conn)
+    conn.execute("INSERT INTO ch_act (act_id, eli_work_uri, jurisdiction, sr_number) "
+                 "VALUES (1, 'https://x/act', 'CH', '1')")
+
+
+def _version(conn, vid, source, text):
+    conn.execute(
+        "INSERT INTO ch_act_version (version_id, act_id, eli_consolidation_uri, "
+        "lang, date_applicability, source, full_text) "
+        "VALUES (%s, 1, %s, 'de', '2024-01-01', %s, %s)",
+        (vid, f"eli/{vid}", source, text))
+
+
+def test_text_damage_share_is_documents_with_marker_above_zero(conn):
+    _act_schema(conn)
+    _text_row(conn, "a", "CH_BVGer", "pdf", WRAPPED)
+    _text_row(conn, "b", "CH_BVGer", "pdf", CLEAN)
+    _text_row(conn, "c", "CH_BVGer", "ocr", CLEAN)
+    rows = reports.text_damage(conn, sample_pct=100)
+    r = next(x for x in rows if x["table"] == "ch_court_decisions"
+             and x["group"] == "CH_BVGer")
+    assert r["n"] == 3
+    assert r["hyphen_share"] == pytest.approx(1 / 3)
+    assert r["glued_share"] == 0.0
+    assert r["mean_line_len"] > 0
+
+
+def test_text_damage_skips_html_and_own_reflow_spiders(conn):
+    _act_schema(conn)
+    _text_row(conn, "a", "CH_BVGer", "html", WRAPPED)
+    _text_row(conn, "b", "CH_WEKO_RPW", "pdf", WRAPPED)
+    _text_row(conn, "c", "CH_BVGer", "pdf", CLEAN)
+    rows = reports.text_damage(conn, sample_pct=100)
+    groups = {(x["table"], x["group"]): x for x in rows}
+    assert set(groups) == {("ch_court_decisions", "CH_BVGer")}
+    assert groups[("ch_court_decisions", "CH_BVGer")]["n"] == 1
+
+
+def test_text_damage_covers_pdf_edition_sources_only(conn):
+    _act_schema(conn)
+    _version(conn, 1, "fedlex_pdf", WRAPPED)
+    _version(conn, 2, "fedlex_pdf", CLEAN)
+    _version(conn, 3, "fedlex", WRAPPED)
+    rows = reports.text_damage(conn, sample_pct=100)
+    r = next(x for x in rows if x["table"] == "ch_act_version")
+    assert r["group"] == "fedlex_pdf" and r["n"] == 2
+    assert r["hyphen_share"] == 0.5
+    assert not [x for x in rows if x["group"] == "fedlex"]

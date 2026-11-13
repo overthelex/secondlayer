@@ -2,6 +2,8 @@
 # One stage, under supervision, with a log. Usage:
 #
 #   decisions:    ./run-stage.sh index|fetch|extract|ocr|load|citations [spider]
+#                 ./run-stage.sh clean-text [spider]   (rewrite PDF/OCR texts with the cleaner, raw archived first;
+#                 CHPIPE_SEED=1 enrols the backlog and exits; CHPIPE_LIMIT, CHPIPE_BATCH -- chpipe/stages/clean_text_stage.py)
 #   citations:    ./run-stage.sh aliases|citations-resolve|decision-index   (no argument)
 #   legislation:  ./run-stage.sh acts|versions|fetch-xml|fedlex-pdf-text|fedlex-pdf-ocr|parse-akn|diff|project-legacy|provenance|as-bbl|basic-act [lang]
 #   cantonal:     ./run-stage.sh lexfind-registry|cantonal-acts|cantonal-fetch|cantonal-parse|cantonal-relink|reports-cantonal [canton]
@@ -64,7 +66,7 @@ export CHPIPE_RAW_DIR=/data/ch-corpus/raw
 MODULE="chpipe.stages.${STAGE//-/_}_stage"
 
 case "$STAGE" in
-  index|fetch|extract|ocr|load|citations|portals-discover)
+  index|fetch|extract|ocr|load|citations|clean-text|portals-discover)
     ARG="${POS:-${CHPIPE_SPIDER:-}}"
     export CHPIPE_SPIDER="$ARG"
     ;;

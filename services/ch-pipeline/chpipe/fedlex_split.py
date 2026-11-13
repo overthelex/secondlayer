@@ -33,16 +33,18 @@ pages, a right-aligned one on odd), and the footnote block above the folio
 What pdf_text.py knows that still applies is imported, not copied: the
 hyphen-rejoining line join, the Article shape, the number normaliser.
 
-split_fedlex_text() returns (articles, text) like pdf_text.split_text();
-the caller (fedlex_pdf_text_stage's resplit mode) stores only the articles
-and leaves the row's full_text exactly as the 2026-08 backfill wrote it.
+split_fedlex_text() returns (articles, text) like pdf_text.split_text().
+The text is the whole clean document (preamble, headings, bodies, sections,
+annexes; see _TextProduct); clean_fedlex_text() returns it alone. It is built
+beside the article split and never feeds back into it: the articles are
+byte-identical to what the splitter produced before the text product existed.
 """
 from __future__ import annotations
 
 import re
 
-from . import akn
-from .pdf_text import _join
+from . import akn, text_clean
+from .pdf_text import _join_legacy as _join      # ruling R27: byte-identical output
 
 _WS = re.compile(r"\s+")
 
@@ -451,11 +453,16 @@ def _margin_continues(last_fragment: str) -> bool:
     return word.islower() and len(word) <= 4
 
 
-def split_fedlex_text(raw: str) -> tuple[list[akn.Article], str]:
-    """Stored fedlex_pdf full_text -> (articles, text). The text return is
-    the article run re-joined (headings + prose); the caller keeps the
-    stored full_text and discards it -- it exists so tests and the gate can
-    see what the splitter read."""
+def split_fedlex_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], str]:
+    """Stored fedlex_pdf full_text -> (articles, text).
+
+    ``text`` is the whole clean document in reading order (see _TextProduct):
+    title and preamble lines, each article as an "Art. N <marginal note>"
+    heading paragraph followed by its body paragraphs, section lines, and
+    everything after the tail break (in-force date, annexes, signatures).
+    ``lang`` picks the hyphen vocabulary (text_clean.hyphen_vocabulary; no
+    language, or German, means no vocabulary). The articles do not depend
+    on ``lang`` or on anything the text product does."""
     lines = _strip_footnote_runs(_strip_page_furniture(raw.splitlines()))
 
     # layout: where do the headings sit? Column 0, or one indented body
@@ -466,9 +473,12 @@ def split_fedlex_text(raw: str) -> tuple[list[akn.Article], str]:
                        and min(heading_indents) >= 8)
     body_col = min(heading_indents) if marginal_layout else 0
 
+    vocabulary = text_clean.hyphen_vocabulary([lang]) if lang else frozenset()
+    product = _TextProduct(lines, marginal_layout, body_col, vocabulary,
+                           _find_sysnr(raw.splitlines()[:8]))
+
     articles: list[akn.Article] = []
     seen: dict[str, int] = {}
-    text_lines: list[str] = []
     current: dict | None = None
     last_number = 0
     pending_blank = False
@@ -499,13 +509,14 @@ def split_fedlex_text(raw: str) -> tuple[list[akn.Article], str]:
                 text=body,
                 ordinal=len(articles),
                 parent_e_id=None))
-        if body:
-            text_lines.append(body)
+        product.end_article()
         current = None
 
-    for line in lines:
+    for index, line in enumerate(lines):
         if not line.strip():
             pending_blank = True
+            if current is None:
+                product.blank()
             continue
         if marginal_layout:
             left, body_part = line[:body_col].rstrip(), line[body_col - 1:]
@@ -530,22 +541,22 @@ def split_fedlex_text(raw: str) -> tuple[list[akn.Article], str]:
                     margin.append(heading.group(3))
                 current = {"number": number, "margin": margin, "body": [],
                            "margin_open": marginal_layout}
-                label = (body_part if marginal_layout else line).strip().split()[0]
-                title_margin = _tidy(_join(margin))
-                text_lines.append(f"{label} {number}"
-                                  + (f" {title_margin}" if title_margin else ""))
+                product.start_article(index, heading,
+                                      body_part if marginal_layout else line, number)
                 pending_blank = False
                 continue
         if current is not None:
             if _TAIL_BREAK.match(line):
                 close()
+                product.tail(index)
                 pending_blank = False
                 continue
             if pending_blank and _is_section(line) and not left_only:
                 close()
-                text_lines.append(_tidy(line))
+                product.section(line)
                 pending_blank = False
                 continue
+            product.article_line(index)
             if marginal_layout:
                 fragment = line.strip() if left_only else left
                 if fragment and current["margin_open"]:
@@ -566,8 +577,300 @@ def split_fedlex_text(raw: str) -> tuple[list[akn.Article], str]:
                 current["body"].append(body_part)
             else:
                 current["body"].append(line)
-        elif _is_section(line):
-            text_lines.append(_tidy(line))
+        else:
+            product.outside(index)
         pending_blank = False
     close()
-    return articles, "\n".join(text_lines)
+    return articles, product.text()
+
+
+def clean_fedlex_text(raw: str, lang: str | None = None) -> str:
+    """The text product alone: split_fedlex_text(raw, lang)[1]."""
+    return split_fedlex_text(raw, lang)[1]
+
+
+# --- the text product -------------------------------------------------------
+
+# A running header the page strip missed (no SR number learnt at the head):
+# the act title and the SR number one wide gap apart. The same shape is a fee
+# or table row ("Grundgebühr für ...      300"), so a line of this shape is
+# dropped only with corroboration (see _TextProduct._is_header).
+_HEADER_SHAPE = re.compile(
+    r"^(?P<a>\S.{0,110}?)\s{6,}(?P<an>\d{1,4}(?:\.\d{1,3})*[a-z]?)$"
+    r"|^(?P<bn>\d{1,4}(?:\.\d{1,3})*[a-z]?)\s{6,}(?P<b>\S.{0,110})$")
+# A bare folio. Fedlex prints paragraph numbers inline, so outside an
+# article body a line holding only a 1-3 digit number is a page number.
+_BARE_NUMBER = re.compile(r"^\d{1,3}$")
+# The translation flag at the head of page 1 ("Übersetzung1", "Traduction2"):
+# it only points at a footnote, which the furniture strip removed.
+_TRANSLATION_FLAG = re.compile(r"^(?:Übersetzung|Traduction|Traduzione|Translation)\d{0,3}$")
+# A paragraph number opening a body line: "2 Ist die ...", "3bis Les ...".
+_PARAGRAPH_START = re.compile(
+    r"^\d{1,2}(?:bis|ter|quater|quinquies|sexies|septies|octies|novies|decies|[a-z])?\s+\S")
+_SENTENCE_END = (".", ":", ";", "…", "!", "?")
+# A marginal fragment that opens a new title level: "2. Auf Grund",
+# "a. Beschränkung", "B. Offices", "IV. Titel", "a) ...", "2 Rémunération".
+_TITLE_START = re.compile(
+    r"^(?:(?:[A-Z]{1,2}|[a-z]{1,2}|\d{1,2}|[IVXLC]+)\.\s|[a-z]\)\s|\d{1,2}[a-z]{0,10}\s+[A-ZÄÖÜÉÈÀ])")
+_PAIR_CONNECTOR = re.compile(r"\s(?:et|und|e|and)\s")
+_RANGE_CONNECTOR = re.compile(r"\s?[-–—]\s?|\s[àa]\s")
+
+
+def _header_title(match: re.Match) -> str:
+    return _WS.sub(" ", match.group("a") or match.group("b")).strip()
+
+
+class _TextProduct:
+    """Builds the whole-document text beside the article split.
+
+    Kept apart from the article state on purpose: nothing here feeds back
+    into an Article, so the articles stay what they were before the text
+    product existed (tests/test_fedlex_split.py holds golden captures).
+
+    Outside article bodies, lines stay separate (each through _tidy, a
+    trailing-hyphen wrap joined with text_clean.join_hyphen) and a blank line
+    in the source starts a new paragraph. In the marginal layout a line keeps
+    its body-column part, and its marginal-column part is collected as a
+    title (ruling R15: no marginal title is lost). An article is a heading
+    paragraph -- the printed heading ("Art. 9 ...", "Art. 3 et 4", ruling
+    R16) with glued footnotes stripped, then every marginal title from the
+    heading to the next heading, one title level per line -- and body
+    paragraphs, one per numbered paragraph. From a tail break on (annexes,
+    in-force date, signatures) lines are read whole, not column-sliced."""
+
+    def __init__(self, lines: list[str], marginal_layout: bool, body_col: int,
+                 vocabulary: frozenset[str], sysnr: str | None) -> None:
+        self.lines = lines
+        self.marginal = marginal_layout
+        self.body_col = body_col
+        self.vocabulary = vocabulary
+        self.sysnr = sysnr
+        self.paragraphs: list[str] = []
+        self.open: list[str] = []          # lines of the outside paragraph being built
+        self.open_fragments: list[str] = []  # marginal fragments met outside articles
+        self.head = True                   # nothing emitted yet
+        self.after_tail = False
+        self.art: dict | None = None
+        titles: dict[str, int] = {}
+        for line in lines:
+            m = _HEADER_SHAPE.match(line.strip())
+            if m:
+                key = _header_title(m)
+                titles[key] = titles.get(key, 0) + 1
+        self.header_titles = titles
+
+    # -- line shapes --
+
+    def _kind(self, line: str) -> str:
+        """'body', 'two' (marginal + body), 'full' (one run across the
+        column boundary, or any line outside the marginal layout) or 'left'
+        (marginal column only)."""
+        if not self.marginal or self.after_tail:
+            return "full"
+        left = line[:self.body_col].rstrip()
+        body = line[self.body_col - 1:]
+        if not body.strip():
+            return "left"
+        if not left.strip():
+            return "body"
+        if len(left) >= self.body_col - 1:
+            return "full"
+        return "two"
+
+    def _has_body_neighbour(self, index: int) -> bool:
+        for step in (-1, 1):
+            k = index + step
+            while 0 <= k < len(self.lines) and not self.lines[k].strip():
+                k += step
+            if 0 <= k < len(self.lines) and self._kind(self.lines[k]) in ("body", "two"):
+                return True
+        return False
+
+    def _at_seam(self, index: int) -> bool:
+        """Next to a folio line or a run of two or more blank lines."""
+        for step in (-1, 1):
+            k = index + step
+            if 0 <= k < len(self.lines) and _BARE_NUMBER.match(self.lines[k].strip()):
+                return True
+            k2 = index + 2 * step
+            if (0 <= k < len(self.lines) and 0 <= k2 < len(self.lines)
+                    and not self.lines[k].strip() and not self.lines[k2].strip()):
+                return True
+        return False
+
+    def _is_header(self, index: int) -> bool:
+        """A running header the page strip missed: the header shape AND one
+        of: its number is the learnt SR number, its title recurs, or it sits
+        at a page seam. A fee row ("Gebühr für eine Kopie      10") has the
+        shape but none of the corroboration and is kept."""
+        m = _HEADER_SHAPE.match(self.lines[index].strip())
+        if not m:
+            return False
+        number = m.group("an") or m.group("bn")
+        if self.sysnr and number == self.sysnr:
+            return True
+        if self.header_titles.get(_header_title(m), 0) >= 2:
+            return True
+        return self._at_seam(index)
+
+    def _split(self, index: int) -> tuple[str | None, str | None]:
+        """(marginal fragment, body piece) of the line at ``index``; either
+        is None when absent. A missed running header yields neither."""
+        line = self.lines[index]
+        kind = self._kind(line)
+        if kind == "left":
+            return line.strip(), None
+        if kind == "body":
+            return None, line[self.body_col - 1:].strip()
+        if kind == "two":
+            return line[:self.body_col].strip(), line[self.body_col - 1:].strip()
+        if self._is_header(index):
+            return None, None
+        return None, line.strip()
+
+    # -- joining --
+
+    def _append(self, out: str, piece: str) -> str:
+        if not out:
+            return piece
+        if out.endswith("-") and out[-2:-1].isalpha():
+            return text_clean.join_hyphen(out, piece, self.vocabulary)
+        return out + " " + piece
+
+    def _titles(self, fragments: list[str]) -> list[str]:
+        """Marginal fragments -> titles, one per level: a fragment that
+        opens with a level marker starts a title, any other continues it."""
+        out: list[str] = []
+        for fragment in fragments:
+            fragment = fragment.strip()
+            if not fragment or _BARE_NUMBER.match(fragment):
+                continue
+            if out and not _TITLE_START.match(fragment):
+                out[-1] = self._append(out[-1], fragment)
+            else:
+                out.append(fragment)
+        return [t for t in (_tidy(t) for t in out) if t]
+
+    def _flush(self) -> None:
+        titles = self._titles(self.open_fragments)
+        self.open_fragments = []
+        if titles:
+            self.paragraphs.append("\n".join(titles))
+        if self.open:
+            self.paragraphs.append("\n".join(self.open))
+            self.open = []
+
+    def _emit_line(self, piece: str) -> None:
+        tidy = _tidy(piece)
+        if not tidy or _BARE_NUMBER.match(tidy):
+            return
+        if self.head and _TRANSLATION_FLAG.match(piece):
+            return
+        self.head = False
+        # a wrap hyphen joins into the open line; anything else is a new line
+        if self.open and self.open[-1].endswith("-") and self.open[-1][-2:-1].isalpha():
+            self.open[-1] = _tidy(text_clean.join_hyphen(self.open[-1], piece, self.vocabulary))
+        else:
+            self.open.append(tidy if not piece.endswith("-") else _tidy(piece[:-1]) + "-")
+
+    # -- events from the splitter --
+
+    def blank(self) -> None:
+        self._flush()
+
+    def outside(self, index: int) -> None:
+        if _TAIL_BREAK.match(self.lines[index]):
+            self.tail(index)
+            return
+        line = self.lines[index]
+        fragment, piece = self._split(index)
+        if fragment is not None and piece is None and not self._has_body_neighbour(index):
+            piece, fragment = fragment, None     # a title line of the act, not a margin
+        if fragment is not None:
+            self.open_fragments.append(fragment)
+        if piece is not None:
+            self._emit_line(piece if self._kind(line) != "full" else line.strip())
+
+    def tail(self, index: int) -> None:
+        """The tail-break line ("Anhang", "Datum des Inkrafttretens", ...),
+        emitted whole whatever its column; lines after it are read whole."""
+        self._flush()
+        self.after_tail = True
+        self._emit_line(self.lines[index].strip())
+
+    def section(self, line: str) -> None:
+        self._flush()
+        tidy = _tidy(line)
+        if tidy:
+            self.paragraphs.append(tidy)
+            self.head = False
+
+    def start_article(self, index: int, heading: re.Match, text: str, number: str) -> None:
+        self._flush()
+        self.head = False
+        self.after_tail = False
+        fragments: list[str] = []
+        if self.marginal:
+            left = self.lines[index][:self.body_col].strip()
+            if left:
+                fragments.append(left)
+        if heading.group(3):
+            fragments.append(heading.group(3))
+        self.art = {"heading": self._printed_heading(heading, text, number),
+                    "fragments": fragments, "body": []}
+
+    def article_line(self, index: int) -> None:
+        if self.art is None:
+            return
+        fragment, piece = self._split(index)
+        if fragment is not None:
+            self.art["fragments"].append(fragment)
+        if piece is not None:
+            self.art["body"].append(piece)
+
+    def end_article(self) -> None:
+        art, self.art = self.art, None
+        if art is None:
+            return
+        titles = self._titles(art["fragments"])
+        heading = art["heading"] + (f" {titles[0]}" if titles else "")
+        self.paragraphs.append("\n".join([heading] + titles[1:]))
+        paragraph = ""
+        for piece in art["body"]:
+            if paragraph and _PARAGRAPH_START.match(piece) and _tidy(paragraph).endswith(_SENTENCE_END):
+                self.paragraphs.append(_tidy(paragraph))
+                paragraph = ""
+            paragraph = self._append(paragraph, piece)
+        if _tidy(paragraph):
+            self.paragraphs.append(_tidy(paragraph))
+
+    @staticmethod
+    def _printed_heading(heading: re.Match, text: str, number: str) -> str:
+        """The heading as printed, its number token swapped for the
+        resolved (footnote-free) number: "Art. 3 et 4", "Art. 5 à 8",
+        "Art. 2–3", "Art. 9 ...", "Art. 2" for a printed "Art. 25"."""
+        label = text.strip().split()[0]
+        token = heading.group(2)
+        shown = number
+        if "+" in number:
+            conn = _PAIR_CONNECTOR.search(token)
+            if conn:
+                left, right = number.split("+", 1)
+                shown = left + conn.group(0) + right
+        elif "-" in number:
+            conn = _RANGE_CONNECTOR.search(token)
+            if conn:
+                left, right = number.split("-", 1)
+                shown = left + conn.group(0) + right
+        rest = text[heading.end(2):heading.start(3) if heading.group(3) else len(text)]
+        for marker in ("...", "…"):
+            if marker in rest:
+                shown += " " + marker
+                break
+        return f"{label} {shown}"
+
+    def text(self) -> str:
+        if self.art is not None:
+            self.end_article()
+        self._flush()
+        return text_clean.normalise_chars("\n\n".join(p for p in self.paragraphs if p))

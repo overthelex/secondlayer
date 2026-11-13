@@ -170,6 +170,8 @@ ON CONFLICT (eli_consolidation_uri, lang) DO UPDATE SET
                                   THEN NULL ELSE ch_act_version.full_text END,
     article_count          = CASE WHEN ch_act_version.source = 'fedlex_pdf'
                                   THEN NULL ELSE ch_act_version.article_count END,
+    akn_xml                = CASE WHEN ch_act_version.source = 'fedlex_pdf'
+                                  THEN NULL ELSE ch_act_version.akn_xml END,
     updated_at             = now()
 RETURNING version_id, (xmax = 0) AS inserted
 """

@@ -300,3 +300,189 @@ def test_wide_gap_heading_of_the_gr_lexfind_pdfs():
     articles, _ = pdf_text.split_text(doc)
     assert [(a.article_number, a.marginal_note) for a in articles] == [
         ("1", "Condizione di ammissione"), ("2", "Iscrizione")]
+
+
+# --- phase C (text cleanup): ligatures, hyphens, the marginal column ------
+# ZH: the whole akn_xml of version 1449180 (EG SchKG 281, a notes.zh.ch
+# PDF). Its marginal titles alternate sides by page: LEFT on even pages
+# ("Zusätzlicher         § 6 a.24 1 Wird ein ..."), RIGHT on odd ones ("§ 1.
+# 1 Ein ... mehre- Im Allgemeinen"); the footnote number is glued to the
+# heading's dot ("§ 3.14 In jedem ..." = § 3, footnote 14). TI: version
+# 342144, an Italian edition with U+FB01 ligatures in its text layer.
+ZH_FIXTURE = (FIXTURES / "pdftext_zh_marginal_splice.txt").read_text()
+TI_FIXTURE = (FIXTURES / "pdftext_ti_ligatures.txt").read_text()
+
+
+def test_zh_left_marginal_column_is_not_spliced_into_the_article():
+    articles, _ = pdf_text.split_text(ZH_FIXTURE, "de")
+    art = next(a for a in articles if a.article_number == "6a")
+    assert "gemeldet ist oder" in art.text
+    for spliced in ("Betreibungs-ist", "Betreibungsist", "Zusätzlicher", "Inhalt des"):
+        assert spliced not in art.text, spliced
+    assert art.text.startswith("1 Wird ein Betreibungsauszug")
+
+
+def test_zh_paragraph_headings_with_glued_footnote_numbers_all_split():
+    articles, _ = pdf_text.split_text(ZH_FIXTURE, "de")
+    numbers = [a.article_number for a in articles]
+    assert len(numbers) >= 25, numbers
+    assert numbers[:7] == ["1", "2", "3", "4", "5", "6", "6a"]
+    # the glued footnote number is not part of the text
+    three = next(a for a in articles if a.article_number == "3")
+    assert three.text.startswith("In jedem Betreibungskreis besteht ein Betreibungsamt")
+
+
+def test_zh_right_marginal_column_is_not_spliced_into_the_article():
+    articles, _ = pdf_text.split_text(ZH_FIXTURE, "de")
+    two = next(a for a in articles if a.article_number == "2")
+    for spliced in ("Zusammen-", "arbeit unter", "Gemeinden a."):
+        assert spliced not in two.text, spliced
+    assert "vereinbaren diese a. den Sitz" in two.text
+
+
+def test_zh_full_text_has_no_hyphen_breaks():
+    from chpipe.text_damage import markers
+    _, text = pdf_text.split_text(ZH_FIXTURE, "de")
+    assert markers(text)["hyphen_breaks"] == 0
+    assert "Betreibungskreise fest" in text           # "Be-" / blank / "treibungskreise"
+
+
+def test_ligatures_are_normalised_in_text_and_articles():
+    articles, text = pdf_text.split_text(TI_FIXTURE, "it")
+    assert "ﬁ" not in text and "finanziaria" in text
+    assert articles and all("ﬁ" not in a.text for a in articles)
+
+
+def test_raw_text_normalises_ligatures(monkeypatch, tmp_path):
+    import subprocess
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout="speciﬁca e­lenco".encode(),
+                                           stderr=b"")
+    monkeypatch.setattr(pdf_text.subprocess, "run", fake_run)
+    assert pdf_text.raw_text(tmp_path / "x.pdf") == "specifica elenco"
+
+
+def test_hyphen_vocabulary_of_the_edition_language_keeps_a_real_hyphen():
+    doc = _doc("Art. 1       Siège\n1\n  Le chef-\n  lieu du canton est Fribourg.\n")
+    fr_articles, _ = pdf_text.split_text(doc, "fr")
+    assert "chef-lieu" in fr_articles[0].text
+    plain, _ = pdf_text.split_text(doc)
+    assert "cheflieu" in plain[0].text
+
+
+def test_a_hyphen_wrap_across_the_superscript_blank_line_is_joined():
+    # pdftotext puts a blank line under a paragraph's first line when the
+    # line carries the paragraph superscript (AR / ZH layout)
+    doc = _doc("Art. 1       Zweck\n    1 Die Gebühren werden nach Massgabe unter-\n\n"
+               "schieden und erhoben.\n")
+    articles, text = pdf_text.split_text(doc)
+    assert "unterschieden und erhoben." in articles[0].text
+    assert "unter-\n" not in text
+
+
+GOLDEN = FIXTURES / "pdf_text_golden_articles.json"
+
+
+@needs_poppler
+def test_articles_of_the_existing_fixtures_are_pinned():
+    """(number, marginal, text, e_id) of every pre-phase-C fixture, as the
+    phase-C split leaves them. Captured before the change and diffed: the
+    only article that moved is AR's art. 2, whose "unter- schieden" (a wrap
+    hyphen across the superscript's blank line) is now "unterschieden".
+    A change here must remove damage, never add it."""
+    import json
+    golden = json.loads(GOLDEN.read_text())
+    for name, expected in golden.items():
+        if name.endswith(".pdf"):
+            articles = pdf_text.extract(FIXTURES / name).articles
+        else:
+            articles, _ = pdf_text.split_text((FIXTURES / name).read_text())
+        got = [[a.article_number, a.marginal_note, a.text, a.e_id] for a in articles]
+        assert got == expected, name
+        # German has no hyphen vocabulary: the edition language changes nothing
+        if name.endswith(".pdf"):
+            articles = pdf_text.extract(FIXTURES / name, "de").articles
+        else:
+            articles, _ = pdf_text.split_text((FIXTURES / name).read_text(), "de")
+        assert [[a.article_number, a.marginal_note, a.text, a.e_id] for a in articles] == expected, name
+
+
+@needs_poppler
+def test_a_table_page_is_not_read_as_a_marginal_column():
+    # BS's annex (a list of nursing homes): "Adullam Stiftung Basel   Mittlere
+    # Strasse 15   221" has a short first cell and the rest after 3+ spaces
+    _, text = pdf_text.split_text(pdf_text.raw_text(FIXTURES / "lexwork_bs_annex_834_420_v2939.pdf"))
+    assert "Adullam Stiftung Basel" in text and "Pflegeheim Riehen" in text
+
+
+# --- review round 1: false positives of the footer and column rules -------
+_LONG = "Dies ist ein langer Satz des Gesetzes, der die Seite füllt und weiter geht."
+
+
+@pytest.mark.parametrize("label", ["Artikel", "Article"])
+@pytest.mark.parametrize("at_bottom", [False, True])
+def test_a_heading_at_a_page_edge_is_not_a_stepping_footer(label, at_bottom):
+    # "Artikel 1" / "Artikel 2" / "Artikel 3" opening (or closing) pages 1-3
+    # steps with the page index like a page number -- it is still a heading
+    body = "1\n" + (_LONG + "\n") * 6
+    marginals = ["Zweck", "Geltung", "Vollzug"]
+    if at_bottom:
+        pages = [f"{label} 1\n{marginals[0]}\n\n" + body + f"\n{label} 2\n{marginals[1]}",
+                 body + f"\n{label} 3\n{marginals[2]}", body]
+    else:
+        pages = [f"{label} {n}\n{m}\n\n" + body for n, m in enumerate(marginals, start=1)]
+    articles, _ = pdf_text.split_text("\f".join(pages))
+    assert [a.article_number for a in articles] == ["1", "2", "3"]
+
+
+def test_a_right_aligned_signature_block_is_not_a_marginal_column():
+    body = ("die Gemeinde erhebt nach Massgabe dieses Gesetzes eine Gebühr und regelt"
+            " die Einzelheiten")
+    lines = (["Art. 1 Zweck", "1", "Die Gemeinde " + body] + [body] * 6 + ["Ende des Artikels.", "",
+             "Art. 2 Inkrafttreten", "1", "Die Gemeinde " + body] + [body] * 5 + ["Ende.", "",
+             " " * 55 + "Der Präsident:", " " * 55 + "Hans Muster", "",
+             " " * 55 + "Der Staatsschreiber:", " " * 55 + "Peter Beispiel"])
+    raw = "\n".join(lines)
+    assert not any(l.startswith(pdf_text._MARGIN) for p in pdf_text._clean_pages(raw) for l in p)
+    articles, text = pdf_text.split_text(raw, "de")
+    assert [a.article_number for a in articles] == ["1", "2"]
+    assert sorted(text.split()) == sorted(" ".join(lines).split())    # every word kept
+    assert "Hans Muster" in text and "Peter Beispiel" in text
+
+
+def _definition_list_document() -> str:
+    p1 = "\n".join(["Gebührentarif", "", "Art. 1 Zweck", "", "1 " + _LONG, _LONG, _LONG, _LONG, ""])
+    rows = []
+    for term, txt in [("Gebühr", "Die Abgabe für eine Amtshandlung der Behörde nach"),
+                      ("Auslagen", "Die Kosten, die der Behörde für Porto und Kopien"),
+                      ("Pauschale", "Der feste Betrag für eine Bewilligung des Amtes")]:
+        rows.append(f"{term:<16}{txt}")
+        rows.append(" " * 16 + "diesem Reglement und dem kantonalen Recht.")
+    return p1 + "\f" + "\n".join(["Anhang", ""] + rows + ["", _LONG, _LONG])
+
+
+def test_a_definition_list_page_keeps_its_terms():
+    articles, text = pdf_text.split_text(_definition_list_document())
+    assert [a.article_number for a in articles] == ["1"]
+    for term in ("Gebühr ", "Auslagen", "Pauschale"):
+        assert term in text
+    assert not any(l.startswith(pdf_text._MARGIN)
+                   for p in pdf_text._clean_pages(_definition_list_document()) for l in p)
+
+
+def test_column_text_no_article_owns_is_put_back_into_the_text():
+    # ruling R28: even where the column IS believed (two pages of it), a
+    # fragment beside the preamble or a signature belongs to the text
+    def page(n):
+        return (f"               Seite {n} des Beschlusses über die Gebühren der Gemeinde\n\n"
+                f"Titel{n}         Die Gemeinde erhebt nach Massgabe dieses Gesetzes eine Gebühr\n"
+                f"Unterzeile{n}    und regelt die Einzelheiten der Erhebung in einer Verordnung\n"
+                "               des Gemeinderates, die der Genehmigung durch den Kanton bedarf\n"
+                f"               und im Amtsblatt veröffentlicht wird, bevor sie in Kraft tritt {n}.\n"
+                "\n               Die Gemeinde stellt die Räume zur Verfügung, die sie braucht.\n")
+    raw = page(1) + "\f" + page(2)
+    assert any(l.startswith(pdf_text._MARGIN) for p in pdf_text._clean_pages(raw) for l in p)
+    _, text = pdf_text.split_text(raw)
+    # (the digits go with _tidy's footnote-reference rule, as in the body)
+    assert text.count("Titel Unterzeile") == 2

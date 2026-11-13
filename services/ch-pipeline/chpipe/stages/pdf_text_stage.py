@@ -38,6 +38,17 @@ pdf_text.split_text over their akn_xml and rewrites articles + full_text
 for the ones that now split. Rows that still yield no article are left
 as they are (their text is right; they have no articles).
 
+CHPIPE_RESPLIT=all (phase C of the text cleanup) re-splits EVERY parsed
+row of the selected sources from its akn_xml -- the re-walk after a
+splitter fix (ligatures, wrap hyphens, the ZH/AR marginal column), when the
+rows that already have articles are exactly the ones to redo -- and
+rewrites full_text and articles in one transaction per row. A row the new
+split would leave article-less while it has articles today is not touched
+(counted `kept`): a regression is never written. zhlex is selected by the
+notes.zh.ch attachment prefix like the claim, so its HTML editions (akn_xml
+= the WebRT page) are never read as pdftotext output. Keyset pagination:
+the ~55K lexfind rows' akn_xml is too much to hold at once.
+
 CHPIPE_ANNEX=1 is the third mode (LEXAI gap K7): the BS editions whose
 whole body is "siehe Anhang" plus a PDF annex (empty_reason 'annex_only',
 82 editions on 2026-08-26, 85 on 2026-08-31 -- BS only). Their payload is
@@ -119,6 +130,7 @@ class PdfTextReport:
     # resplit mode: rows re-read from akn_xml, and how many now have articles
     resplit: int = 0
     recovered: int = 0
+    kept: int = 0            # resplit=all: rows whose new split lost every article
     # annex mode (CHPIPE_ANNEX=1): article-less parsed lexwork rows read,
     # split by outcome; annex_skipped = no annex in the payload (the row is
     # empty for another reason), annex_failed = fetch/extract trouble, row
@@ -240,7 +252,7 @@ async def _process(row: dict, conn, fetcher: Fetcher, pacer: HostPacer, cpu: asy
         report.bytes_written += len(body)
         try:
             async with cpu:
-                extraction = await asyncio.to_thread(pdf_text.extract, path)
+                extraction = await asyncio.to_thread(pdf_text.extract, path, row["lang"])
         except pdf_text.PdfTextError as exc:
             fail(f"pdftotext: {exc}")
             return
@@ -270,7 +282,7 @@ async def _process(row: dict, conn, fetcher: Fetcher, pacer: HostPacer, cpu: asy
 
 
 _ANNEX_ROWS = (
-    "SELECT version_id, akn_xml, full_text FROM ch_act_version "
+    "SELECT version_id, lang, akn_xml, full_text FROM ch_act_version "
     "WHERE source = 'lexwork' AND stage = 'parsed' AND article_count = 0 "
     "AND akn_xml IS NOT NULL AND (full_text IS NULL OR strpos(full_text, %s) = 0)")
 
@@ -315,7 +327,7 @@ async def _annex_one(row: dict, conn, fetcher: Fetcher, pacer: HostPacer,
     path.write_bytes(body)
     report.bytes_written += len(body)
     try:
-        extraction = await asyncio.to_thread(pdf_text.extract, path)
+        extraction = await asyncio.to_thread(pdf_text.extract, path, row["lang"])
     except pdf_text.PdfTextError as exc:
         failed(f"pdftotext: {exc}")
         return
@@ -374,50 +386,80 @@ def annex_text(settings: Settings, canton_code: str | None = None,
 
 
 _RESPLIT_ROWS = (
-    "SELECT version_id, akn_xml FROM ch_act_version "
-    "WHERE source = ANY(%s) AND stage = 'parsed' AND article_count = 0 AND akn_xml IS NOT NULL")
+    "SELECT version_id, lang, akn_xml, article_count FROM ch_act_version "
+    "WHERE source = ANY(%s) AND stage = 'parsed' AND article_count = 0 AND akn_xml IS NOT NULL "
+    "AND version_id > %s")
+# CHPIPE_RESPLIT=all: every parsed row of the sources, articles or not
+_RESPLIT_ROWS_ALL = (
+    "SELECT version_id, lang, akn_xml, article_count FROM ch_act_version "
+    "WHERE source = ANY(%s) AND stage = 'parsed' AND akn_xml IS NOT NULL "
+    "AND version_id > %s")
+RESPLIT_BATCH = 200
 
 
 def resplit(settings: Settings, canton_code: str | None = None,
-            sources: tuple[str, ...] = SOURCES, limit: int | None = None) -> PdfTextReport:
-    """Re-split the article-less parsed editions from their stored
-    pdftotext output. Reads one row at a time (a 147 KB tariff is the
-    largest seen; no need to hold the set) and writes only the rows that
-    gained articles, in the same transaction shape as the fetch path."""
+            sources: tuple[str, ...] = SOURCES, limit: int | None = None,
+            everything: bool = False) -> PdfTextReport:
+    """Re-split parsed editions from their stored pdftotext output: the
+    article-less ones (CHPIPE_RESPLIT=1, writing only the rows that gained
+    articles) or, with `everything`, all of them (CHPIPE_RESPLIT=all,
+    rewriting full_text and articles). Batches of RESPLIT_BATCH by keyset;
+    each row's article rewrite and text write share one transaction."""
     report = PdfTextReport()
-    prefix = cantonal_fetch_stage.url_prefix(canton_code)
+    prefix = claim_prefix(sources, canton_code)
     conn = db.connect(settings)
+    last_id = 0
+    remaining = limit
     try:
-        sql, params = _RESPLIT_ROWS, [list(sources)]
+        sql = _RESPLIT_ROWS_ALL if everything else _RESPLIT_ROWS
         if prefix:
             sql += " AND xml_url LIKE %s"
-            params.append(prefix.replace("%", "\\%").replace("_", "\\_") + "%")
-        sql += " ORDER BY version_id"
-        if limit is not None:
-            sql += " LIMIT %s"
-            params.append(limit)
-        # db.connect() hands out dict rows; a bare tuple unpack over those
-        # yields the column NAMES and split_text("akn_xml") splits nothing
-        with conn.cursor(row_factory=tuple_row) as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-        for version_id, raw in rows:
-            report.resplit += 1
-            try:
-                articles, full_text = pdf_text.split_text(raw)
-            except Exception as exc:                            # noqa: BLE001
-                log.error("version %s: resplit failed: %s", version_id, exc)
-                report.failed += 1
-                continue
-            if not articles:
-                continue
-            with conn.transaction():
-                parse_akn_stage.store_articles(conn, version_id, articles)
-            db.complete_version(conn, version_id, "parsed", full_text=full_text)
-            report.recovered += 1
-            report.articles += len(articles)
-        log.info("resplit=%d recovered=%d articles=%d failed=%d",
-                 report.resplit, report.recovered, report.articles, report.failed)
+        sql += " ORDER BY version_id LIMIT %s"
+        like = prefix.replace("%", "\\%").replace("_", "\\_") + "%" if prefix else None
+        while True:
+            size = RESPLIT_BATCH if remaining is None else min(RESPLIT_BATCH, remaining)
+            if size <= 0:
+                break
+            params: list = [list(sources), last_id] + ([like] if like else []) + [size]
+            # db.connect() hands out dict rows; a bare tuple unpack over those
+            # yields the column NAMES and split_text("akn_xml") splits nothing
+            with conn.cursor(row_factory=tuple_row) as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+            if not rows:
+                break
+            for version_id, lang, raw, article_count in rows:
+                last_id = version_id
+                report.resplit += 1
+                try:
+                    articles, full_text = pdf_text.split_text(raw, lang)
+                    if not articles and (article_count or 0) > 0:
+                        log.warning("version %s: resplit found no articles (has %s); kept",
+                                    version_id, article_count)
+                        report.kept += 1
+                        continue
+                    if not articles and not everything:
+                        continue
+                    # one transaction: new articles never sit next to the
+                    # old full_text (store_articles' own block nests)
+                    with conn.transaction():
+                        if articles:
+                            parse_akn_stage.store_articles(conn, version_id, articles)
+                        db.complete_version(conn, version_id, "parsed", full_text=full_text)
+                except Exception as exc:                            # noqa: BLE001
+                    log.error("version %s: resplit failed: %s", version_id, exc)
+                    report.failed += 1
+                    continue
+                if articles:
+                    report.recovered += 1
+                    report.articles += len(articles)
+                else:
+                    report.empty += 1
+            if remaining is not None:
+                remaining -= len(rows)
+            log.info("resplit=%d recovered=%d articles=%d empty=%d kept=%d failed=%d",
+                     report.resplit, report.recovered, report.articles, report.empty,
+                     report.kept, report.failed)
     finally:
         conn.close()
     return report
@@ -485,9 +527,11 @@ def main() -> PdfTextReport:
     if os.environ.get("CHPIPE_RESPLIT", "") not in ("", "0"):
         result = resplit(Settings.from_env(),
                          canton_code=os.environ.get("CHPIPE_CANTON") or None,
-                         sources=sources_from_env(os.environ.get("CHPIPE_SOURCE")), limit=limit)
-        log.info("RESPLIT resplit=%d recovered=%d articles=%d failed=%d",
-                 result.resplit, result.recovered, result.articles, result.failed)
+                         sources=sources_from_env(os.environ.get("CHPIPE_SOURCE")), limit=limit,
+                         everything=os.environ.get("CHPIPE_RESPLIT") == "all")
+        log.info("RESPLIT resplit=%d recovered=%d articles=%d empty=%d kept=%d failed=%d",
+                 result.resplit, result.recovered, result.articles, result.empty,
+                 result.kept, result.failed)
         return result
     result = run(Settings.from_env(),
                  canton_code=os.environ.get("CHPIPE_CANTON") or None,

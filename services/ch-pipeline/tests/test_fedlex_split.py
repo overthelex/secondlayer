@@ -347,3 +347,200 @@ def test_marginal_layout_footnote_block_does_not_leak_into_the_body():
     assert "gemäss" not in articles[0].text and "BBl" not in articles[0].text
     assert "würdigen." in articles[0].text
     assert articles[1].text.startswith("Das Kind erhält")
+
+
+# --- the text product (Task 2 of the CH text cleanup) ------------------------
+# The splitter's second return value is the whole clean document; the
+# articles must not move by one byte. Golden captures below were taken from
+# the splitter at 03ae9520, BEFORE the text product existed.
+
+import json
+from pathlib import Path
+
+from chpipe.fedlex_split import clean_fedlex_text
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+# chars 19,000-22,000 of the SR 220 de 2020-04-01 edition (version_id 610366):
+# marginal-column layout, a running header ("Ergänzung des Schweizerischen
+# Zivilgesetzbuches. BG   220") and a folio ("8") at a page seam that the
+# furniture strip does not catch (the cut has no SR number at its head).
+SR220_MARGINAL = (_FIXTURES / "pdftext_fedlex_sr220_marginal.txt").read_text()
+
+# (e_id, article_number, marginal_note, text, ordinal) of COL0, captured from
+# the old splitter.
+EXPECTED_COL0_ARTICLES = [
+    ("art_1", "1", None, "Die durch gegenwärtigen Bund vereinigten Völkerschaften bilden in "
+     "ihrer Gesamtheit die Schweizerische Eidgenossenschaft.", 0),
+    ("art_2", "2", None, "Der Bund hat zum Zweck: Behauptung der Unabhängigkeit des Vaterlandes "
+     "gegen aussen, Handhabung von Ruhe und Ordnung im Innern.", 1),
+    ("art_3", "3", None, "1 Alle Schweizer sind vor dem Gesetze gleich. Es gibt in der Schweiz "
+     "keine Untertanenverhältnisse, keine Vorrechte des Orts, der Geburt, der Familien oder "
+     "Personen. 2 Mann und Frau sind gleichberechtigt.", 2),
+    ("art_4", "4", "Grundsatz", "Die Kantone sind souverän, soweit ihre Souveränität nicht "
+     "durch die Bundesverfassung beschränkt ist.", 3),
+]
+
+_NOTE = ("412.101.220.77\nOrdinanza\nsulla formazione professionale\n\n"
+         "del 12 dicembre 2007\n\nEntrata in vigore: 1° febbraio 2008\n")
+_CITATION = ("101\nGesetz\nüber etwas\n\nArt. 1\nDer Kanton regelt die "
+             "Aufsicht. Die Einzelheiten richten sich nach\n"
+             "Art. 45 Abs. 2  der Verordnung vom 1. Januar.\n")
+_GOLDEN_INPUTS = {
+    "COL0": COL0, "MARGINAL": MARGINAL, "ROMAN": ROMAN, "REPEALS": REPEALS,
+    "DECIMAL": DECIMAL, "MIDSTREAM": MIDSTREAM, "MARGINAL_MIDSTREAM": MARGINAL_MIDSTREAM,
+    "NOTE": _NOTE, "CITATION": _CITATION, "SR220_MARGINAL": SR220_MARGINAL,
+}
+
+
+def _rows(articles):
+    return [[a.e_id, a.article_number, a.marginal_note, a.text, a.ordinal, a.parent_e_id]
+            for a in articles]
+
+
+def test_text_keeps_preamble_and_tail():
+    _, text = split_fedlex_text(COL0)
+    assert text.startswith("Bundesverfassung\nder Schweizerischen Eidgenossenschaft")
+    assert "Angenommen in der Volksabstimmung vom 19. April 1874" in text
+    assert "Erster Abschnitt: Allgemeine Bestimmungen" in text
+    assert "AS 1 1; BS 1 3" not in text                 # footnote block gone
+    assert "Übersetzung1" not in text and "\n1\n" not in text
+    # headings and bodies in reading order, paragraphs one blank line apart
+    assert "Art. 4 Grundsatz\n\nDie Kantone sind souverän" in text
+    assert "Untertanenverhältnisse" in text
+    assert "\n\n\n" not in text
+
+
+def test_text_marginal_layout_drops_margin_and_joins_hyphens():
+    _, text = split_fedlex_text(SR220_MARGINAL)
+    assert "Art. 34" in text
+    after = text.split("Art. 34", 1)[1]
+    body = after.split("\n\n", 2)[1]            # the paragraph after the heading line
+    assert "2. Auf Grund" not in body                   # marginal column not spliced in
+    # ruling R15: every marginal title level is kept, one per heading line
+    assert "Art. 34 2. Auf Grund von Rechtsgeschäft\na. Beschränkung und Widerruf\n\n1 Eine" in text
+    assert "Art. 35 b. Einfluss von Tod, Handlungsunfähigkeit u.a.\n\n1 Die" in text
+    assert "1. Im Allgemeinen\na. Wirkung der Vertretung" in text
+    assert "Ergänzung des Schweizerischen Zivilgesetzbuches. BG" not in text
+    assert "izerischen Zivilgesetzbuches" not in text
+    assert "mitgeteilt, so beurteilt" in text           # "mit-\ngeteilt" joined
+    assert "\n8\n" not in text and not text.startswith("8\n")
+
+
+def test_text_paragraph_numbers_start_paragraphs():
+    _, text = split_fedlex_text(SR220_MARGINAL)
+    assert "\n\n2 Ist die Ermächtigung durch Rechtsgeschäft eingeräumt" in text
+    assert "\n\n3 Wird die Ermächtigung" in text
+
+
+def test_text_drops_bare_number_lines_outside_articles_without_sysnr():
+    raw = "Gesetz\nüber etwas\n\n12\n\nEinleitung des Gesetzes\n"
+    text = clean_fedlex_text(raw)
+    assert text == "Gesetz\nüber etwas\n\nEinleitung des Gesetzes"
+
+
+def test_text_keeps_everything_after_the_tail_break():
+    raw = ("Gesetz\n\nArt. 1\nDer Kanton regelt.\n\nDatum des Inkrafttretens: 1. Januar 2001\n"
+           "Anhang 1\nListe der Ämter\n")
+    articles, text = split_fedlex_text(raw)
+    assert [a.text for a in articles] == ["Der Kanton regelt."]
+    assert text.endswith("Datum des Inkrafttretens: 1. Januar 2001\n\nAnhang 1\nListe der Ämter")
+
+
+def test_text_hyphen_vocabulary_by_language():
+    # "contre" and "partie" are both fr words, "contrepartie" is not in the
+    # wordlist: with the fr vocabulary the hyphen is real and kept
+    raw = "Loi\n\nArt. 1\nLa contre-\npartie est due.\n"
+    assert "La contrepartie est due." in clean_fedlex_text(raw)
+    assert "La contre-partie est due." in clean_fedlex_text(raw, "fr")
+    assert clean_fedlex_text(raw) != clean_fedlex_text(raw, "fr")
+    # a plain wrap is joined either way
+    _, text = split_fedlex_text(MARGINAL, "fr")
+    assert "arrondissements de poursuite" in text
+    assert clean_fedlex_text(COL0) == split_fedlex_text(COL0)[1]
+
+
+def test_text_printed_heading_keeps_connectors_and_repeal_markers():
+    # ruling R16: the printed heading, number tokens footnote-stripped
+    text = clean_fedlex_text(REPEALS, "fr")
+    assert "Art. 9 ..." in text
+    assert "Art. 3 et 4" in text
+    assert "Art. 5 à 8" in text
+    assert "Art. 1bis Taux des cotisations" in text      # "Art. 1bis5": note 5 gone
+    assert "\n\nArt. 1\n\nDie durch" in clean_fedlex_text(COL0)   # "Art. 12" = 1 + note 2
+    assert "Art. 12" not in clean_fedlex_text(COL0)
+
+
+def test_text_marginal_sub_titles_are_heading_lines():
+    text = clean_fedlex_text(MARGINAL, "fr")
+    assert "Art. 1 A. Arrondissements de poursuite et de faillite\n\n1 Le territoire" in text
+    assert "Art. 2 B. Offices des poursuites et des faillites\n1. Organisation\n\n1 Chaque" in text
+
+
+# Marginal layout with fee rows (title, wide gap, amount) inside an article
+# and in an annex: the running-header shape, but neither at a page seam, nor
+# recurring, nor the SR number -- they must survive. The real missed header
+# sits at a seam (folio, blank run) and goes.
+FEES = """                  Art. 1
+A. Gebühren       1 Die Gebühren betragen:
+Grundgebühr für die Erteilung einer Bewilligung      300
+Zuschlag für jede weitere Bewilligung im Jahr        150
+                  2 Die Gebühr wird mit der Verfügung erhoben.
+
+                  Art. 2
+B. Fälligkeit     Die Gebühr ist innert 30 Tagen zu bezahlen.
+
+4
+Verordnung über die Gebühren                                              172.041
+
+
+                  Art. 3
+C. Inkrafttreten  Diese Verordnung tritt am 1. Januar 2001 in Kraft.
+
+Anhang
+Tarif
+Gebühr für eine Kopie          10
+Gebühr für eine Beglaubigung   20
+"""
+
+
+def test_text_fee_rows_kept_missed_header_dropped():
+    articles, text = split_fedlex_text(FEES)
+    assert [a.article_number for a in articles] == ["1", "2", "3"]
+    assert "Grundgebühr für die Erteilung einer Bewilligung 300" in text
+    assert "Zuschlag für jede weitere Bewilligung im Jahr 150" in text
+    assert "Verordnung über die Gebühren" not in text
+    assert "\n4\n" not in text
+
+
+def test_text_marginal_layout_tail_break_and_annex_rows_kept():
+    _, text = split_fedlex_text(FEES)
+    assert text.endswith("Anhang\nTarif\nGebühr für eine Kopie 10\nGebühr für eine Beglaubigung 20")
+    assert "Art. 3 C. Inkrafttreten\n\nDiese Verordnung tritt" in text
+
+
+def test_articles_unchanged_by_text_product():
+    rows = [(a.e_id, a.article_number, a.marginal_note, a.text, a.ordinal)
+            for a in split_fedlex_text(COL0)[0]]
+    assert rows == EXPECTED_COL0_ARTICLES
+
+
+def test_articles_equal_golden_capture_on_every_fixture():
+    golden = json.loads((_FIXTURES / "fedlex_split_golden_articles.json").read_text())
+    assert set(golden) == set(_GOLDEN_INPUTS)
+    for name, raw in _GOLDEN_INPUTS.items():
+        assert _rows(split_fedlex_text(raw)[0]) == golden[name], name
+        for lang in ("de", "fr", "it"):
+            assert _rows(split_fedlex_text(raw, lang)[0]) == golden[name], (name, lang)
+
+
+def test_text_product_equals_the_375d1595_capture_on_every_fixture():
+    # ruling R27: the text product (second return value) stays byte-identical
+    # to commit 375d1595 for every fixture x lang -- the Task 3 resplit of the
+    # 51K fedlex_pdf editions is gated on it
+    golden = json.loads((_FIXTURES / "fedlex_split_golden_text.json").read_text())
+    assert set(golden) == set(_GOLDEN_INPUTS)
+    for name, raw in _GOLDEN_INPUTS.items():
+        assert split_fedlex_text(raw)[1] == golden[name][""], name
+        for lang in ("de", "fr", "it"):
+            assert split_fedlex_text(raw, lang)[1] == golden[name][lang], (name, lang)
