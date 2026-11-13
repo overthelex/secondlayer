@@ -300,3 +300,111 @@ def test_wide_gap_heading_of_the_gr_lexfind_pdfs():
     articles, _ = pdf_text.split_text(doc)
     assert [(a.article_number, a.marginal_note) for a in articles] == [
         ("1", "Condizione di ammissione"), ("2", "Iscrizione")]
+
+
+# --- phase C (text cleanup): ligatures, hyphens, the marginal column ------
+# ZH: the whole akn_xml of version 1449180 (EG SchKG 281, a notes.zh.ch
+# PDF). Its marginal titles alternate sides by page: LEFT on even pages
+# ("Zusätzlicher         § 6 a.24 1 Wird ein ..."), RIGHT on odd ones ("§ 1.
+# 1 Ein ... mehre- Im Allgemeinen"); the footnote number is glued to the
+# heading's dot ("§ 3.14 In jedem ..." = § 3, footnote 14). TI: version
+# 342144, an Italian edition with U+FB01 ligatures in its text layer.
+ZH_FIXTURE = (FIXTURES / "pdftext_zh_marginal_splice.txt").read_text()
+TI_FIXTURE = (FIXTURES / "pdftext_ti_ligatures.txt").read_text()
+
+
+def test_zh_left_marginal_column_is_not_spliced_into_the_article():
+    articles, _ = pdf_text.split_text(ZH_FIXTURE, "de")
+    art = next(a for a in articles if a.article_number == "6a")
+    assert "gemeldet ist oder" in art.text
+    for spliced in ("Betreibungs-ist", "Betreibungsist", "Zusätzlicher", "Inhalt des"):
+        assert spliced not in art.text, spliced
+    assert art.text.startswith("1 Wird ein Betreibungsauszug")
+
+
+def test_zh_paragraph_headings_with_glued_footnote_numbers_all_split():
+    articles, _ = pdf_text.split_text(ZH_FIXTURE, "de")
+    numbers = [a.article_number for a in articles]
+    assert len(numbers) >= 25, numbers
+    assert numbers[:7] == ["1", "2", "3", "4", "5", "6", "6a"]
+    # the glued footnote number is not part of the text
+    three = next(a for a in articles if a.article_number == "3")
+    assert three.text.startswith("In jedem Betreibungskreis besteht ein Betreibungsamt")
+
+
+def test_zh_right_marginal_column_is_not_spliced_into_the_article():
+    articles, _ = pdf_text.split_text(ZH_FIXTURE, "de")
+    two = next(a for a in articles if a.article_number == "2")
+    for spliced in ("Zusammen-", "arbeit unter", "Gemeinden a."):
+        assert spliced not in two.text, spliced
+    assert "vereinbaren diese a. den Sitz" in two.text
+
+
+def test_zh_full_text_has_no_hyphen_breaks():
+    from chpipe.text_damage import markers
+    _, text = pdf_text.split_text(ZH_FIXTURE, "de")
+    assert markers(text)["hyphen_breaks"] == 0
+    assert "Betreibungskreise fest" in text           # "Be-" / blank / "treibungskreise"
+
+
+def test_ligatures_are_normalised_in_text_and_articles():
+    articles, text = pdf_text.split_text(TI_FIXTURE, "it")
+    assert "ﬁ" not in text and "finanziaria" in text
+    assert articles and all("ﬁ" not in a.text for a in articles)
+
+
+def test_raw_text_normalises_ligatures(monkeypatch, tmp_path):
+    import subprocess
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout="speciﬁca e­lenco".encode(),
+                                           stderr=b"")
+    monkeypatch.setattr(pdf_text.subprocess, "run", fake_run)
+    assert pdf_text.raw_text(tmp_path / "x.pdf") == "specifica elenco"
+
+
+def test_hyphen_vocabulary_of_the_edition_language_keeps_a_real_hyphen():
+    doc = _doc("Art. 1       Siège\n1\n  Le chef-\n  lieu du canton est Fribourg.\n")
+    fr_articles, _ = pdf_text.split_text(doc, "fr")
+    assert "chef-lieu" in fr_articles[0].text
+    plain, _ = pdf_text.split_text(doc)
+    assert "cheflieu" in plain[0].text
+
+
+def test_a_hyphen_wrap_across_the_superscript_blank_line_is_joined():
+    # pdftotext puts a blank line under a paragraph's first line when the
+    # line carries the paragraph superscript (AR / ZH layout)
+    doc = _doc("Art. 1       Zweck\n    1 Die Gebühren werden nach Massgabe unter-\n\n"
+               "schieden und erhoben.\n")
+    articles, text = pdf_text.split_text(doc)
+    assert "unterschieden und erhoben." in articles[0].text
+    assert "unter-\n" not in text
+
+
+GOLDEN = FIXTURES / "pdf_text_golden_articles.json"
+
+
+@needs_poppler
+def test_articles_of_the_existing_fixtures_are_pinned():
+    """(number, marginal, text, e_id) of every pre-phase-C fixture, as the
+    phase-C split leaves them. Captured before the change and diffed: the
+    only article that moved is AR's art. 2, whose "unter- schieden" (a wrap
+    hyphen across the superscript's blank line) is now "unterschieden".
+    A change here must remove damage, never add it."""
+    import json
+    golden = json.loads(GOLDEN.read_text())
+    for name, expected in golden.items():
+        if name.endswith(".pdf"):
+            articles = pdf_text.extract(FIXTURES / name).articles
+        else:
+            articles, _ = pdf_text.split_text((FIXTURES / name).read_text())
+        got = [[a.article_number, a.marginal_note, a.text, a.e_id] for a in articles]
+        assert got == expected, name
+
+
+@needs_poppler
+def test_a_table_page_is_not_read_as_a_marginal_column():
+    # BS's annex (a list of nursing homes): "Adullam Stiftung Basel   Mittlere
+    # Strasse 15   221" has a short first cell and the rest after 3+ spaces
+    _, text = pdf_text.split_text(pdf_text.raw_text(FIXTURES / "lexwork_bs_annex_834_420_v2939.pdf"))
+    assert "Adullam Stiftung Basel" in text and "Pflegeheim Riehen" in text

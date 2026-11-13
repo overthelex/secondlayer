@@ -343,3 +343,81 @@ def test_a_failed_annex_download_leaves_the_row_untouched(conn, settings):
                         (vid,)).fetchone()[0]
     assert text == HEADER_TEXT                                # no marker: still selectable
     assert _annex(settings, Host({ANNEX_URL: ANNEX_PDF})).annex_no_articles == 1
+
+
+# --- phase C: CHPIPE_RESPLIT=all, the edition language -------------------
+
+ZH_RAW = (FIXTURES / "pdftext_zh_marginal_splice.txt").read_text()
+TI_RAW = (FIXTURES / "pdftext_ti_ligatures.txt").read_text()
+ZH_PDF_URL = pdf_text_stage.ZHLEX_PDF_PREFIX + "ABC/$File/281.pdf"
+ZH_HTML_URL = "https://www.notes.zh.ch/appl/zhlex_r.nsf/WebRT/281"
+
+
+def _parsed(conn, vid, raw, count, full_text="old"):
+    conn.execute("UPDATE ch_act_version SET stage='parsed', akn_xml=%s, article_count=%s, "
+                 "full_text=%s WHERE version_id=%s", (raw, count, full_text, vid))
+
+
+def _text(conn, vid):
+    return conn.execute("SELECT full_text FROM ch_act_version WHERE version_id=%s",
+                        (vid,)).fetchone()[0]
+
+
+def test_resplit_all_rewrites_full_text_and_articles_of_rows_that_already_split(conn, settings):
+    ti = _row(conn, url=LEXFIND_URL, source="lexfind", lang="it")
+    lost = _row(conn, url=LEXFIND_URL + "?r", source="lexfind")
+    _parsed(conn, ti, TI_RAW, 3)
+    _parsed(conn, lost, "Alphabetisches Register\n\nAbgaben, siehe 641.1\n", 4)
+    report = pdf_text_stage.resplit(settings, everything=True)
+    assert report.resplit == 2 and report.recovered == 1 and report.kept == 1
+    text = _text(conn, ti)
+    assert text != "old" and "ﬁ" not in text and "finanziaria" in text
+    assert _state(conn, ti)[2] > 0
+    # a row the new split would leave article-less is not degraded
+    assert _state(conn, lost)[2] == 4 and _text(conn, lost) == "old"
+
+
+def test_resplit_all_of_zhlex_takes_the_pdf_rows_only(conn, settings):
+    pdf_row = _row(conn, url=ZH_PDF_URL, source="zhlex")
+    html_row = _row(conn, url=ZH_HTML_URL, source="zhlex")
+    _parsed(conn, pdf_row, ZH_RAW, 2)
+    _parsed(conn, html_row, "<html><body>Art. 1 Zweck</body></html>", 0)
+    report = pdf_text_stage.resplit(settings, sources=("zhlex",), everything=True)
+    assert report.resplit == 1
+    assert _state(conn, pdf_row)[2] >= 25
+    assert "Betreibungs-ist" not in _text(conn, pdf_row)
+    assert _text(conn, html_row) == "old"
+    # the default mode leaves rows that already have articles alone
+    _parsed(conn, pdf_row, ZH_RAW, 2)
+    assert pdf_text_stage.resplit(settings, sources=("zhlex",)).resplit == 0
+
+
+def test_resplit_all_comes_from_the_environment(monkeypatch):
+    seen = {}
+
+    def fake(settings, **kw):
+        seen.update(kw)
+        return pdf_text_stage.PdfTextReport()
+    monkeypatch.setattr(pdf_text_stage, "resplit", fake)
+    monkeypatch.setattr(pdf_text_stage.Settings, "from_env", classmethod(lambda cls: None))
+    monkeypatch.setattr(pdf_text_stage.throttle, "renice", lambda *_: None)
+    monkeypatch.setenv("CHPIPE_RESPLIT", "all")
+    pdf_text_stage.main()
+    assert seen["everything"] is True
+    monkeypatch.setenv("CHPIPE_RESPLIT", "1")
+    pdf_text_stage.main()
+    assert seen["everything"] is False
+
+
+def test_the_edition_language_reaches_the_splitter(conn, settings, monkeypatch):
+    from chpipe import pdf_text
+    langs = []
+    real = pdf_text.extract
+
+    def spy(path, lang=None):
+        langs.append(lang)
+        return real(path, lang)
+    monkeypatch.setattr(pdf_text_stage.pdf_text, "extract", spy)
+    _row(conn, lang="fr")
+    assert _run(settings, Host()).parsed == 1
+    assert langs == ["fr"]
