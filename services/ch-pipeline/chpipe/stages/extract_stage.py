@@ -30,6 +30,7 @@ from dataclasses import dataclass
 
 from .. import db, text_extract, text_quality, throttle
 from ..config import Settings
+from . import clean_text_stage
 from .fetch_stage import raw_path
 
 log = logging.getLogger(__name__)
@@ -43,6 +44,10 @@ class ExtractReport:
     # not retired. See db.requeue_for_pdf().
     requeued_for_pdf: int = 0
     failed: int = 0
+    # Re-extraction whose raw text differs from (or cannot be compared with)
+    # the existing raw-text archive: stored raw and unstamped. See
+    # clean_text_stage.clean_new_text().
+    archive_conflict: int = 0
 
 
 def extract_one(settings: Settings, row) -> tuple[str, float, str, list[str] | None]:
@@ -59,7 +64,10 @@ def extract_one(settings: Settings, row) -> tuple[str, float, str, list[str] | N
         text = text_extract.from_pdf(path)
 
     languages = list(row.get("languages") or [])
-    quality, relabel = text_quality.score_with_relabel(text, languages)
+    # PDF text is cleaned and archived here; quality is scored on the cleaned
+    # text (HTML and the own-reflow spiders pass through unchanged).
+    text, quality, relabel = clean_text_stage.clean_new_text(
+        settings, row, text, source)
 
     if quality >= text_quality.ACCEPT_THRESHOLD:
         return text, quality, "extracted", relabel
@@ -170,7 +178,8 @@ def run(settings: Settings, limit: int | None = None,
                                 log.info("%s/%s: reads as %s, labelled %s; relabelled",
                                          row["spider"], row["doc_id"], relabel, row.get("languages"))
                                 fields["languages"] = relabel
-                            db.complete(conn, row["doc_id"], next_stage, **fields)
+                            clean_text_stage.complete_with_clean_state(
+                                conn, row, next_stage, **fields)
                             if next_stage == "extracted":
                                 # After the write, never before: a failed
                                 # write must not cost us the source file.
@@ -188,6 +197,8 @@ def run(settings: Settings, limit: int | None = None,
                         continue
                     if next_stage == "extracted":
                         report.extracted += 1
+                        if row.get("archive_conflict"):
+                            report.archive_conflict += 1
                     elif next_stage == "ocr_pending":
                         report.queued_for_ocr += 1
                     else:

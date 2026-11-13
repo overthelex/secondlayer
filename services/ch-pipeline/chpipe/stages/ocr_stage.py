@@ -22,6 +22,7 @@ from ..config import Settings
 # before the throttling moved to chpipe.throttle, and it is part of the
 # surface the stage's tests address.
 from ..throttle import should_pause  # noqa: F401
+from . import clean_text_stage
 from .fetch_stage import raw_path
 
 log = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class OcrReport:
     recovered: int = 0
     still_bad: int = 0
     failed: int = 0
+    archive_conflict: int = 0   # see clean_text_stage.clean_new_text()
     seconds: float = 0.0
 
 
@@ -50,8 +52,7 @@ def _ocr_one(settings: Settings, row) -> tuple[str, float, list[str] | None]:
     languages = list(row.get("languages") or [])
     text = ocr.ocr_pdf(path, languages,
                        tmp_root=settings.raw_dir / OCR_TMP_DIRNAME)
-    quality, relabel = text_quality.score_with_relabel(text, languages)
-    return text, quality, relabel
+    return clean_text_stage.clean_new_text(settings, row, text, "pdf")
 
 
 def run(settings: Settings, limit: int | None = None,
@@ -99,11 +100,14 @@ def run(settings: Settings, limit: int | None = None,
                             if relabel:
                                 log.info("%s/%s: reads as %s, labelled %s; relabelled",
                                          row["spider"], row["doc_id"], relabel, row.get("languages"))
-                            db.complete(conn, row["doc_id"], "extracted",
-                                        full_text=text, text_quality=quality,
-                                        text_source="ocr",
-                                        **({"languages": relabel} if relabel else {}))
+                            clean_text_stage.complete_with_clean_state(
+                                conn, row, "extracted",
+                                full_text=text, text_quality=quality,
+                                text_source="ocr",
+                                **({"languages": relabel} if relabel else {}))
                             report.recovered += 1
+                            if row.get("archive_conflict"):
+                                report.archive_conflict += 1
                         else:
                             # OCR had its turn and the result is still
                             # unusable. Keep the score so the corpus can be

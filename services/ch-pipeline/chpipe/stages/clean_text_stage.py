@@ -34,11 +34,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import zlib
 from dataclasses import dataclass
 
 import psycopg
 
-from .. import db, raw_text_archive, text_clean, throttle
+from .. import db, raw_text_archive, text_clean, text_quality, throttle
 from ..config import Settings
 from ..portals.common import LANGS, lang_from_name
 
@@ -92,6 +93,70 @@ def languages_for(row) -> list[str]:
         if codes:
             return codes
     return list(row.get("languages") or [])
+
+
+def cleans_new_text(row, source: str) -> bool:
+    """True for a PDF/OCR decision whose new text the nightly path cleans.
+    HTML rows and the spiders that reflow their own text are untouched."""
+    return source != "html" and row["spider"] not in text_clean.OWN_REFLOW_SPIDERS
+
+
+def clean_new_text(settings: Settings, row, raw: str,
+                   source: str = "pdf") -> tuple[str, float, list[str] | None]:
+    """The nightly extract/OCR path: (text to store, its quality, relabel)
+    for freshly extracted `raw`.
+
+    For a row cleans_new_text() leaves alone this is just the raw text and its
+    score. Otherwise the text is cleaned and quality is scored on the CLEANED
+    text. Only text that is about to be stored (accepted quality, non-empty)
+    is archived -- raw_text_archive.save() first -- so a PDF queued for OCR
+    never occupies the archive slot its OCR text will need. After a
+    successful save the row dict gets `clean_sha256`, the marker
+    complete_with_clean_state() uses to stamp the state row in the same
+    transaction as the full_text write.
+
+    When the archive cannot take this raw text (FileExistsError: a different
+    archive exists; or the existing archive is unreadable) it is never
+    overwritten and the new text is never lost: the raw text is returned
+    uncleaned (and rescored as such), no marker is set so nothing is stamped,
+    and the row dict gets `archive_conflict` = True for the caller to count.
+    """
+    languages = list(row.get("languages") or [])
+    if not cleans_new_text(row, source):
+        quality, relabel = text_quality.score_with_relabel(raw, languages)
+        return raw, quality, relabel
+    clean = text_clean.clean_pdf_text(raw, languages_for(row))
+    quality, relabel = text_quality.score_with_relabel(clean, languages)
+    if quality < text_quality.ACCEPT_THRESHOLD or not raw.strip():
+        return clean, quality, relabel
+    try:
+        sha = raw_text_archive.save(settings.raw_dir, row["spider"], row["doc_id"], raw)
+    except (FileExistsError, EOFError, OSError, zlib.error, UnicodeDecodeError) as exc:
+        # OSError covers gzip.BadGzipFile. ValueError (unsafe doc_id) is not
+        # caught: that is a hard failure for the row.
+        log.warning("%s/%s: archive conflict (%s: %s); storing the new raw text "
+                    "uncleaned and unstamped", row["spider"], row["doc_id"],
+                    type(exc).__name__, exc)
+        row["archive_conflict"] = True
+        quality, relabel = text_quality.score_with_relabel(raw, languages)
+        return raw, quality, relabel
+    row["clean_sha256"] = sha
+    return clean, quality, relabel
+
+
+def complete_with_clean_state(conn, row, next_stage: str, **fields) -> None:
+    """db.complete(), plus -- when clean_new_text() archived this row's raw
+    text -- the stamped ch_text_clean_state row, in ONE transaction: a crash
+    cannot leave a stamp over an old full_text or the reverse. (complete()
+    alone commits per statement on the autocommit connection.)"""
+    sha = row.get("clean_sha256")
+    if not sha:
+        db.complete(conn, row["doc_id"], next_stage, **fields)
+        return
+    with conn.transaction():
+        db.complete(conn, row["doc_id"], next_stage, **fields)
+        db.ensure_clean_state_stamped(conn, row["doc_id"], row["spider"], sha,
+                                      text_clean.CLEANER_VERSION)
 
 
 class _Pending(Exception):

@@ -8,7 +8,7 @@ from chpipe import text_quality
 from chpipe.config import Settings
 from chpipe.stages import extract_stage
 
-from conftest import apply_migration_200
+from conftest import apply_migration_200, apply_migration_259
 
 
 def _settings(tmp_path) -> Settings:
@@ -117,6 +117,8 @@ def conn():
         # to on every 'extracted' and 'loaded' transition.
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
         apply_migration_200(c)
+        c.execute("DROP TABLE IF EXISTS ch_text_clean_state")
+        apply_migration_259(c)
         yield c
 
 
@@ -378,3 +380,200 @@ def test_requeue_for_pdf_refuses_a_row_with_no_pdf_and_leaves_it_untouched(conn)
     assert row["html_url"] == "https://x/nopdf.html"
     assert row["text_source"] == "html"
     assert row["last_error"] is None
+
+
+# --- Task 7: new PDF decisions are stored cleaned, raw archived, state stamped ---
+
+# The raw-text archive lives at <raw_dir.parent>/raw-text, and pytest's
+# tmp_path.parent is shared by every test in a session: give each test a
+# raw_dir of its own one level down so archives cannot leak between tests.
+@pytest.fixture
+def raw_dir(tmp_path):
+    d = tmp_path / "raw"
+    d.mkdir()
+    return d
+
+
+
+import gzip
+import logging
+import shutil
+
+from chpipe import raw_text_archive, text_clean, text_damage
+
+# The same real PDF the clean-text tests use: it has hyphen line-wraps.
+ZG_PDF = pathlib.Path(__file__).parent / "fixtures" / "decision_zg.pdf"
+
+
+def _put_zg_pdf(raw_dir, spider, doc_id):
+    (raw_dir / spider).mkdir(exist_ok=True)
+    shutil.copy(ZG_PDF, raw_dir / spider / f"{doc_id}.pdf")
+
+
+def _seed_zg_row(conn, doc_id, spider="CH_ZG"):
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage, text_source, "
+        "languages) VALUES (%s,%s,%s,'fetched','pdf',%s)",
+        (f"ECLI:CH:{spider}:{doc_id}", spider, doc_id, ["de"]))
+
+
+def _state(conn, doc_id):
+    return conn.execute("SELECT * FROM ch_text_clean_state WHERE doc_id=%s",
+                        (doc_id,)).fetchone()
+
+
+def _full_text(conn, doc_id):
+    return conn.execute("SELECT full_text, stage FROM ch_court_decisions "
+                        "WHERE doc_id=%s", (doc_id,)).fetchone()
+
+
+def test_a_new_pdf_is_stored_cleaned_archived_and_stamped(conn, raw_dir):
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    raw = extract_stage.text_extract.from_pdf(raw_dir / "CH_ZG" / "z1.pdf")
+    assert text_damage.markers(raw)["hyphen_breaks"] > 0   # the fixture is damaged
+
+    report = extract_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG", limit=1)
+
+    assert report.extracted == 1
+    row = _full_text(conn, "z1")
+    assert row["stage"] == "extracted"
+    assert text_damage.markers(row["full_text"])["hyphen_breaks"] == 0
+    assert row["full_text"] == text_clean.clean_pdf_text(raw, ["de"])
+    arch = raw_text_archive.path_for(raw_dir, "CH_ZG", "z1")
+    assert arch.exists()
+    assert raw_text_archive.load(raw_dir, "CH_ZG", "z1") == raw
+    st = _state(conn, "z1")
+    assert st["cleaned_at"] is not None
+    assert st["raw_sha256"] == raw_text_archive.sha256_of(raw)
+    assert st["cleaner_version"] == text_clean.CLEANER_VERSION
+
+
+def test_text_quality_is_scored_on_the_cleaned_text(conn, raw_dir, monkeypatch):
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    seen = []
+    real = extract_stage.text_quality.score_with_relabel
+    monkeypatch.setattr(extract_stage.text_quality, "score_with_relabel",
+                        lambda t, l: seen.append(t) or real(t, l))
+    extract_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG", limit=1)
+    assert seen and all(text_damage.markers(t)["hyphen_breaks"] == 0 for t in seen)
+
+
+@pytest.mark.parametrize("spider", ["CH_WEKO_RPW", "CH_WEKO"])
+def test_own_reflow_spiders_are_left_untouched(conn, raw_dir, monkeypatch, spider):
+    (raw_dir / spider).mkdir()
+    (raw_dir / spider / "d.pdf").write_bytes(b"%PDF-1.4")
+    _seed_zg_row(conn, "d", spider)
+    raw = GOOD_DE_TEXT + "\nhyphen-\nated line\n"
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf", lambda p: raw)
+    extract_stage.run(_pdf_settings(raw_dir), spider=spider, limit=1)
+    assert _full_text(conn, "d")["full_text"] == raw
+    assert not raw_text_archive.path_for(raw_dir, spider, "d").exists()
+    assert _state(conn, "d") is None
+
+
+def test_an_html_row_is_not_archived_cleaned_or_stamped(conn, raw_dir):
+    (raw_dir / "CH_ZG").mkdir()
+    (raw_dir / "CH_ZG" / "h.html").write_text(GOOD_DE_HTML)
+    _seed_fetched(conn, "h", "CH_ZG", "html")
+    extract_stage.run(_pdf_settings(raw_dir), spider="CH_ZG", limit=1)
+    assert _full_text(conn, "h")["stage"] == "extracted"
+    assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "h").exists()
+    assert _state(conn, "h") is None
+
+
+def test_an_empty_pdf_text_gets_no_archive_and_no_state(conn, raw_dir, monkeypatch):
+    (raw_dir / "CH_ZG").mkdir()
+    (raw_dir / "CH_ZG" / "e.pdf").write_bytes(b"%PDF-1.4")
+    _seed_zg_row(conn, "e")
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf", lambda p: "")
+    report = extract_stage.run(_pdf_settings(raw_dir), spider="CH_ZG", limit=1)
+    assert report.queued_for_ocr == 1
+    assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "e").exists()
+    assert _state(conn, "e") is None
+
+
+def test_a_pdf_queued_for_ocr_is_not_archived(conn, raw_dir, monkeypatch):
+    """Junk text is not stored, so it must not occupy the archive slot the
+    OCR text will need later."""
+    (raw_dir / "CH_ZG").mkdir()
+    (raw_dir / "CH_ZG" / "j.pdf").write_bytes(b"%PDF-1.4")
+    _seed_zg_row(conn, "j")
+    monkeypatch.setattr(extract_stage.text_extract, "from_pdf",
+                        lambda p: "B u n d e s g e r i c h t " * 40)
+    extract_stage.run(_pdf_settings(raw_dir), spider="CH_ZG", limit=1)
+    assert not raw_text_archive.path_for(raw_dir, "CH_ZG", "j").exists()
+    assert _state(conn, "j") is None
+
+
+def test_re_extraction_with_different_raw_stores_raw_uncleaned_and_does_not_stamp(
+        conn, raw_dir, monkeypatch, caplog):
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    old_raw = "old archived raw text that differs entirely. " * 20
+    raw_text_archive.save(raw_dir, "CH_ZG", "z1", old_raw)
+    new_raw = extract_stage.text_extract.from_pdf(raw_dir / "CH_ZG" / "z1.pdf")
+    arch = raw_text_archive.path_for(raw_dir, "CH_ZG", "z1")
+    before = arch.read_bytes()
+
+    with caplog.at_level(logging.WARNING):
+        report = extract_stage.run(_pdf_settings(raw_dir, keep=True),
+                                   spider="CH_ZG", limit=1)
+
+    assert report.extracted == 1
+    assert report.archive_conflict == 1
+    assert _full_text(conn, "z1")["full_text"] == new_raw   # raw, uncleaned
+    assert arch.read_bytes() == before                       # never overwritten
+    assert _state(conn, "z1") is None
+    assert any("archive" in r.message for r in caplog.records)
+
+
+def test_an_unreadable_existing_archive_stores_raw_uncleaned_and_counts_it(
+        conn, raw_dir):
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    arch = raw_text_archive.path_for(raw_dir, "CH_ZG", "z1")
+    arch.parent.mkdir(parents=True, exist_ok=True)
+    arch.write_bytes(b"not gzip at all")
+    new_raw = extract_stage.text_extract.from_pdf(raw_dir / "CH_ZG" / "z1.pdf")
+
+    report = extract_stage.run(_pdf_settings(raw_dir, keep=True),
+                               spider="CH_ZG", limit=1)
+
+    assert report.extracted == 1
+    assert report.archive_conflict == 1
+    assert _full_text(conn, "z1")["full_text"] == new_raw
+    assert arch.read_bytes() == b"not gzip at all"
+    assert _state(conn, "z1") is None
+
+
+def test_the_text_write_and_the_stamp_are_one_transaction(conn, raw_dir, monkeypatch):
+    """A failure stamping must roll back the full_text write (and vice versa)."""
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+
+    def boom(*a, **k):
+        raise RuntimeError("simulated stamp failure")
+    monkeypatch.setattr(extract_stage.db, "ensure_clean_state_stamped", boom)
+
+    report = extract_stage.run(_pdf_settings(raw_dir, keep=True),
+                               spider="CH_ZG", limit=1)
+
+    row = conn.execute("SELECT stage, full_text, attempts FROM ch_court_decisions "
+                       "WHERE doc_id='z1'").fetchone()
+    assert row["stage"] == "fetched"
+    assert row["full_text"] is None
+    assert row["attempts"] == 1
+    assert report.failed == 1
+    assert _state(conn, "z1") is None
+
+
+def test_claim_carries_the_sprache_the_cleaner_needs(conn):
+    from chpipe import db
+    conn.execute(
+        "INSERT INTO ch_court_decisions (ecli, spider, doc_id, stage, text_source, "
+        "languages, metadata_json) VALUES ('e','CH_ZG','s1','fetched','pdf','{de}', "
+        "'{\"Sprache\": \"Français\"}')")
+    rows = db.claim(conn, "fetched", limit=5, spider="CH_ZG")
+    assert rows[0]["sprache"] == "Français"

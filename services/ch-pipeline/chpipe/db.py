@@ -20,7 +20,9 @@ from .config import Settings
 # Columns a stage runner needs to do its work.
 _CLAIM_COLUMNS = (
     "doc_id, ecli, spider, canton, decision_date, html_url, pdf_url, json_url, "
-    "languages, text_source, text_quality, pdf_sha256, attempts"
+    "languages, text_source, text_quality, pdf_sha256, attempts, "
+    # clean_text_stage.languages_for() prefers the decision's own Sprache.
+    "metadata_json->>'Sprache' AS sprache"
 )
 
 # Columns that complete() is allowed to write through **fields.
