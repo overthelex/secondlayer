@@ -127,8 +127,18 @@ def test_ocr_still_waits_for_capacity_before_claiming(monkeypatch):
 
 
 class _NullConn:
+    """No database: the stages' preflight (clean_text_stage.state_table_present,
+    a to_regclass query) sees the table present, every claim is empty."""
+    def execute(self, *args, **kwargs):
+        return _OneRow()
+
     def close(self):
         pass
+
+
+class _OneRow:
+    def fetchone(self):
+        return {"t": "ch_text_clean_state"}
 
 
 def _fake(load_ceiling: float = 0.0, dsn: str = "postgresql://unused@127.0.0.1:1/unused") -> Settings:

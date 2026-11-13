@@ -135,9 +135,6 @@ _SECTION_WORD = re.compile(
 # federal, cantonal and decision pipelines). BS sets the wrap hyphen a space
 # away from the word ("Dele -" / "gierten"): the space goes first.
 _SPACED_HYPHEN_END = re.compile(r"(?<=[^\W\d_])\s-$")
-# "so-" / "wie" is the word "sowie", not a suspended "so- wie" (SO 111.53)
-_SOWIE = re.compile(r"(?:^|\s)[Ss]o-$")
-_SOWIE_TAIL = re.compile(r"^wie\b")
 
 # --- the marginal column (phase C) ------------------------------------------
 # notes.zh.ch and AR's ATIOZ print the marginal title in a column of its own
@@ -624,8 +621,6 @@ def _join(lines: list[str], vocabulary: frozenset[str] = frozenset()) -> str:
             continue
         if not out:
             out = piece
-        elif _SOWIE.search(out) and _SOWIE_TAIL.match(piece):
-            out = out[:-1] + piece      # "so-" / "wie": text_clean reads "wie" as a conjunction
         elif out.endswith("-"):
             out = text_clean.join_hyphen(_SPACED_HYPHEN_END.sub("-", out), piece, vocabulary)
         else:

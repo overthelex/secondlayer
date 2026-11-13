@@ -258,3 +258,15 @@ def test_strip_page_furniture_unpunctuated_midpage_recurrence_is_dropped():
     line = "Beschwerdeführerin"
     lines = [*_page(1), line, *_page(2), line, *_page(3), line, *_page(4)]
     assert line not in strip_page_furniture(lines)
+
+
+def test_short_lowercase_heads_are_word_wraps_not_suspended_compounds():
+    assert join_hyphen("Es gilt so-", "wie bisher", V) == "Es gilt sowie bisher"
+    assert join_hyphen("da-", "mit", V) == "damit"
+    assert join_hyphen("so-", "mit", V) == "somit"
+
+
+def test_plausible_heads_keep_the_suspended_hyphen():
+    assert join_hyphen("Bundes-", "wie Kantonsrecht", V) == "Bundes- wie Kantonsrecht"
+    assert join_hyphen("Bundes-", "und Kantonsrecht", V) == "Bundes- und Kantonsrecht"
+    assert join_hyphen("An-", "und Verkauf", V) == "An- und Verkauf"

@@ -228,15 +228,40 @@ def hyphen_vocabulary(languages: list[str]) -> frozenset[str]:
     return vocabulary
 
 
+SUSPENDED_HEAD_MIN = 4
+# The German conjunctions whose short lowercase heads are words ("so-" / "wie"
+# = "sowie", "wo-" / "bis"). The fr/it ones keep ruling R12 as is: "pré- à
+# post-" has a three-letter lowercase head and is a real suspended hyphen.
+_GERMAN_CONJUNCTIONS = frozenset({"und/oder", "und", "oder", "bzw.", "beziehungsweise",
+                                  "resp.", "respektive", "bis", "wie", "sowie"})
+
+
+def _suspended_head(head: str) -> bool:
+    """Can the fragment before the hyphen open a suspended compound ("Bundes-
+    und Kantonsrecht", "An- und Verkauf")? Yes when it is capitalised or at
+    least SUSPENDED_HEAD_MIN letters; the short lowercase heads "so-", "wo-",
+    "da-", "in-" are word wraps ("so-" / "wie" = "sowie"). A head with no
+    letters ("2- und 3-") keeps the conjunction reading."""
+    m = _HEAD_WORD.search(head)
+    if not m:
+        return True
+    word = m.group(1)
+    return word[:1].isupper() or len(word) >= SUSPENDED_HEAD_MIN
+
+
 def join_hyphen(head: str, tail: str, vocabulary: frozenset[str]) -> str:
     """Join ``head`` (ending in "-") with the next line ``tail``.
 
-    - tail starts with a conjunction ("Kantons- und ..."): keep the hyphen, add a space;
+    - tail starts with a conjunction ("Kantons- und ..."): keep the hyphen, add a space --
+      for a German conjunction only when head is a plausible compound head
+      (``_suspended_head``): "so-" / "wie" is "sowie";
     - tail starts uppercase or with a digit, or head ends "<digit>-": keep the hyphen;
     - both word parts are in ``vocabulary`` but the joined word is not: keep the hyphen;
     - otherwise it is a line-wrap hyphen: drop it and join.
     """
-    if _CONJUNCTION.match(tail):
+    conjunction = _CONJUNCTION.match(tail)
+    if conjunction and (conjunction.group(1) not in _GERMAN_CONJUNCTIONS
+                        or _suspended_head(head)):
         return head + " " + tail
     if tail[:1].isupper() or tail[:1].isdigit() or head[-2:-1].isdigit():
         return head + tail
