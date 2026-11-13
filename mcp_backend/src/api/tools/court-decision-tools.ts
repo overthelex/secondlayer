@@ -1226,9 +1226,12 @@ total_resolved_links=0 означає відсутність даних граф
         (sortMode === 'balanced'
           ? ' — найдавніші та найновіші. Проміжні документи не увійшли у вибірку.'
           : ` (sort=${sortMode}, offset=${offset}).`) +
-        ' Не роби висновку про результат розгляду лише з цієї вибірки:' +
-        ` для решти документів виклич цей інструмент ще раз з offset=${offset + mappedDocs.length} та sort=asc/desc,` +
-        ' або звузь вибірку через document_types=["Рішення","Постанова"].';
+        ' Результат розгляду справи за цією вибіркою може бути неповним.' +
+        (sortMode === 'balanced'
+          // balanced = oldest ceil(maxDocs/2) + newest; the gap starts right after the head.
+          ? ` Проміжні документи: sort=asc з offset=${Math.ceil(maxDocs / 2)};`
+          : ` Решта документів: sort=${sortMode} з offset=${offset + mappedDocs.length};`) +
+        ' вибірку звужує document_types, напр. ["Рішення","Постанова"].';
     }
 
     // Best-effort precedent enrichment from the decision↔case graph (Neo4j, LEXAI-1777).

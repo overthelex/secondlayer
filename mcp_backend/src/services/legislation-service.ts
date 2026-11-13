@@ -15,6 +15,7 @@ import {
   MIN_VECTOR_SCORE_HYBRID,
 } from './legislation-search-utils';
 import { ActStatusResolver, ActStatus } from './legislation-act-status.js';
+import { withRecoveredHierarchy } from './legislation-heading-recovery.js';
 import {
   ActTimeline,
   ArticleMissFacts,
@@ -1257,7 +1258,10 @@ export class LegislationService {
              'chapter_title', la.chapter_title,
              'byte_size', la.byte_size,
              'metadata', la.metadata
-           ) ORDER BY (regexp_match(la.article_number, '^\\d+'))[1]::integer NULLS LAST, la.article_number
+           ) ORDER BY (regexp_match(la.article_number, '^\\d+'))[1]::integer NULLS LAST,
+             -- numeric suffix: 350-8 before 350-12 (text order put 350-12 first)
+             (regexp_match(la.article_number, '^\\d+-(\\d+)'))[1]::integer NULLS FIRST,
+             la.article_number
          ) as articles
        FROM legislation l
        LEFT JOIN legislation_articles la ON l.id = la.legislation_id AND la.is_current = true
@@ -1279,7 +1283,7 @@ export class LegislationService {
       total_articles: data.total_articles,
       structure: data.structure_metadata || {},
       articles: data.articles || [],
-      table_of_contents: this.buildTableOfContents(data.articles || [], tocIncludeArticles),
+      table_of_contents: this.buildTableOfContents(withRecoveredHierarchy(data.articles || []), tocIncludeArticles),
     };
   }
 
