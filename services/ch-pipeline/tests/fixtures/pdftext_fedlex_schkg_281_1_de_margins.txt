@@ -1,0 +1,417 @@
+281.1
+Bundesgesetz
+über Schuldbetreibung und Konkurs
+(SchKG)1
+
+
+vom 11. April 1889 (Stand am 1. Januar 2020)
+
+
+Die Bundesversammlung der Schweizerischen Eidgenossenschaft,
+gestützt auf Artikel 64 der Bundesverfassung2 (BV),3
+beschliesst:
+
+
+                  Erster Titel: Allgemeine Bestimmungen
+                  I. Organisation
+
+                  Art. 1
+A. Betreibungs-   1 Das Gebiet jedes Kantons bildet für die Durchführung der Schuld-
+und Konkurs-
+kreise4           betreibungen und der Konkurse einen oder mehrere Kreise.
+                  2 Die Kantone bestimmen die Zahl und die Grösse dieser Kreise.
+
+                  3 Ein Konkurskreis kann mehrere Betreibungskreise umfassen.
+
+
+
+                  Art. 25
+B. Betreibungs-   1 In jedem Betreibungskreis besteht ein Betreibungsamt, das vom
+und Konkurs-
+ämter             Betreibungsbeamten geleitet wird.
+1. Organisation   2 In jedem Konkurskreis besteht ein Konkursamt, das vom Konkurs-
+                  beamten geleitet wird.
+                  3 Jeder Betreibungs- und Konkursbeamte hat einen Stellvertreter, der
+                  ihn ersetzt, wenn er in Ausstand tritt oder an der Leitung des Amtes
+                  verhindert ist.
+                  4 Das Betreibungs- und das Konkursamt können zusammengelegt und
+                  vom gleichen Beamten geleitet werden.
+
+
+
+AS 11 529 und BS 3 3
+1   Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+    (AS 1995 1227; BBl 1991 III 1).
+2   [BS 1 3]. Der genannten Bestimmung entspricht heute Art. 122 Abs. 1 der BV vom
+    18. April 1999 (SR 101).
+3   Fassung gemäss Ziff. I des BG vom 24. März 2000, in Kraft seit 1. Jan. 2001
+    (AS 2000 2531; BBl 1999 9126 9547).
+4   Durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997 wurden sämtliche Art.
+    mit Randtiteln versehen (AS 1995 1227; BBl 1991 III 1).
+5   Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+    (AS 1995 1227; BBl 1991 III 1).
+
+                                                                                           1
+281.1                                Ordentliches Verfahren bei Schuldbetreibung und Konkurs
+
+
+                  5 Die Kantone bestimmen im Übrigen die Organisation der Betrei-
+                  bungs- und der Konkursämter.
+
+                  Art. 36
+2. Besoldung      Die Besoldung der Betreibungs- und der Konkursbeamten sowie ihrer
+                  Stellvertreter ist Sache der Kantone.
+
+                  Art. 47
+C. Rechtshilfe    1 Die Betreibungs- und die Konkursämter nehmen auf Verlangen von
+                  Ämtern, ausseramtlichen Konkursverwaltungen, Sachwaltern und
+                  Liquidatoren eines andern Kreises Amtshandlungen vor.
+                  2 Mit  Zustimmung des örtlich zuständigen Amtes können Betrei-
+                  bungs- und Konkursämter, ausseramtliche Konkursverwaltungen,
+                  Sachwalter und Liquidatoren auch ausserhalb ihres Kreises Amts-
+                  handlungen vornehmen. Für die Zustellung von Betreibungsurkunden
+                  anders als durch die Post sowie für die Pfändung, die öffentliche Ver-
+                  steigerung und den Beizug der Polizei ist jedoch allein das Amt am
+                  Ort zuständig, wo die Handlung vorzunehmen ist.
+
+                  Art. 4a8
+Cbis. Verfahren   1 Bei Konkursen und Nachlassverfahren, die in einem sachlichen
+in einem
+sachlichen        Zusammenhang stehen, koordinieren die beteiligten Zwangsvoll-
+Zusammenhang      streckungsorgane, Aufsichtsbehörden und Gerichte ihre Handlungen
+                  soweit als möglich.
+                  2 Die beteiligten Konkurs- und Nachlassgerichte sowie die Aufsichts-
+                  behörden können im gegenseitigen Einvernehmen eine einheitliche
+                  Zuständigkeit für alle Verfahren bezeichnen.
+
+                  Art. 59
+D. Haftung        1 Der Kanton haftet für den Schaden, den die Beamten und Angestell-
+1. Grundsatz      ten, ihre Hilfspersonen, die ausseramtlichen Konkursverwaltungen,
+                  die Sachwalter, die Liquidatoren, die Aufsichts- und Gerichtsbehörden
+                  sowie die Polizei bei der Erfüllung der Aufgaben, die ihnen dieses
+                  Gesetz zuweist, widerrechtlich verursachen.
+                  2 Der Geschädigte hat gegenüber dem Fehlbaren keinen Anspruch.
+
+
+
+6     Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+7     Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+8     Eingefügt durch Ziff. I des BG vom 21. Juni 2013, in Kraft seit 1. Jan. 2014
+      (AS 2013 4111; BBl 2010 6455).
+9     Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+
+2
+Schuldbetreibung und Konkurs. BG                                                    281.1
+
+
+                   3 Für den Rückgriff des Kantons auf die Personen, die den Schaden
+                   verursacht haben, ist das kantonale Recht massgebend.
+                   4 Wo die Schwere der Verletzung es rechtfertigt, besteht zudem An-
+                   spruch auf Genugtuung.
+
+                   Art. 610
+2. Verjährung      1 Der Anspruch auf Schadenersatz verjährt mit Ablauf von drei Jahren
+                   von dem Tage an gerechnet, an welchem der Geschädigte von der
+                   Schädigung Kenntnis erlangt hat, jedenfalls aber mit Ablauf von zehn
+                   Jahren, vom Tage an gerechnet, an welchem das schädigende Verhal-
+                   ten erfolgte oder aufhörte.
+                   2 Hat die Person, die den Schaden verursacht hat, durch ihr Verhalten
+                   eine strafbare Handlung begangen, so verjährt der Anspruch auf
+                   Schadenersatz frühestens mit Eintritt der strafrechtlichen Verfol-
+                   gungsverjährung. Tritt diese infolge eines erstinstanzlichen Strafur-
+                   teils nicht mehr ein, so verjährt der Anspruch frühestens mit Ablauf
+                   von drei Jahren seit Eröffnung des Urteils.
+
+                   Art. 711
+3. Zuständigkeit   Wird eine Schadenersatzklage mit widerrechtlichem Verhalten der
+des Bundes-
+gerichts           oberen kantonalen Aufsichtsbehörden oder des oberen kantonalen
+                   Nachlassgerichts begründet, so ist das Bundesgericht als einzige
+                   Instanz zuständig.
+
+                   Art. 812
+E. Protokolle    1 Die Betreibungs- und die Konkursämter führen über ihre Amtstätig-
+und Register
+1. Führung,
+                 keiten sowie die bei ihnen eingehenden Begehren und Erklärungen
+Beweiskraft      Protokoll; sie führen die Register.
+und Berichtigung
+                 2 Die Protokolle und Register sind bis zum Beweis des Gegenteils für
+                   ihren Inhalt beweiskräftig.
+                   3 Das Betreibungsamt berichtigt einen fehlerhaften Eintrag von Amtes
+                   wegen oder auf Antrag einer betroffenen Person.
+
+
+
+
+10    Fassung gemäss Anhang Ziff. 4 des BG vom 15. Juni 2018 (Revision des Verjährungs-
+      rechts), in Kraft seit 1. Jan. 2020 (AS 2018 5343; BBl 2014 235).
+11    Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+12    Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+
+                                                                                          3
+281.1                                   Ordentliches Verfahren bei Schuldbetreibung und Konkurs
+
+
+                    Art. 8a13
+2. Einsichtsrecht   1 Jede Person, die ein Interesse glaubhaft macht, kann die Protokolle
+                    und Register der Betreibungs- und der Konkursämter einsehen und
+                    sich Auszüge daraus geben lassen.
+                    2 Ein solches Interesse ist insbesondere dann glaubhaft gemacht, wenn
+                    das Auskunftsgesuch in unmittelbarem Zusammenhang mit dem
+                    Abschluss oder der Abwicklung eines Vertrages erfolgt.
+                    3 Die    Ämter geben Dritten von einer Betreibung keine Kenntnis,
+                    wenn:
+                      a.      die Betreibung nichtig ist oder aufgrund einer Beschwerde o-
+                              der eines gerichtlichen Entscheids14 aufgehoben worden ist;
+                      b.      der Schuldner mit einer Rückforderungsklage obsiegt hat;
+                      c.      der Gläubiger die Betreibung zurückgezogen hat;
+                      d.15 der Schuldner nach Ablauf einer Frist von drei Monaten seit
+                           der Zustellung des Zahlungsbefehls ein entsprechendes Ge-
+                           such gestellt hat, sofern der Gläubiger nach Ablauf einer vom
+                           Betreibungsamt angesetzten Frist von 20 Tagen den Nachweis
+                           nicht erbringt, dass rechtzeitig ein Verfahren zur Beseitigung
+                           des Rechtsvorschlages (Art. 79-84) eingeleitet wurde; wird
+                           dieser Nachweis nachträglich erbracht oder wird die Betrei-
+                           bung fortgesetzt, wird sie Dritten wieder zur Kenntnis ge-
+                           bracht.
+                    4 Das Einsichtsrecht Dritter erlischt fünf Jahre nach Abschluss des
+                    Verfahrens. Gerichts- und Verwaltungsbehörden können im Interesse
+                    eines Verfahrens, das bei ihnen hängig ist, weiterhin Auszüge verlan-
+                    gen.
+
+                    Art. 9
+F. Aufbewah-        Die Betreibungs- und die Konkursämter haben Geldsummen, Wert-
+rung von Geld
+oder Wertsachen     papiere und Wertsachen, über welche nicht binnen drei Tagen nach
+                    dem Eingange verfügt wird, der Depositenanstalt zu übergeben.
+
+
+
+
+13    Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+14    Ausdruck gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, in
+      Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+15    Eingefügt durch Ziff. I des BG vom 16. Dez. 2016, in Kraft seit 1. Jan. 2019
+      (AS 2018 4583; BBl 2015 3209 5785).
+
+4
+Schuldbetreibung und Konkurs. BG                                                     281.1
+
+
+                  Art. 1016
+G. Ausstands-     1 Die Beamten und Angestellten der Betreibungs- und der Konkurs-
+pflicht
+                  ämter sowie die Mitglieder der Aufsichtsbehörden dürfen keine Amts-
+                  handlungen vornehmen:
+                    1.      in eigener Sache;
+                    2.17 in Sachen ihrer Ehegatten, eingetragenen Partnerinnen oder
+                         Partner oder von Personen, mit denen sie eine faktische Le-
+                         bensgemeinschaft führen;
+                    2bis.18 in Sachen von Verwandten und Verschwägerten in gerader
+                          Linie oder bis zum dritten Grade in der Seitenlinie;
+                    3.      in Sachen einer Person, deren gesetzliche Vertreter, Bevoll-
+                            mächtigte oder Angestellte sie sind;
+                    4.      in Sachen, in denen sie aus anderen Gründen befangen sein
+                            könnten.
+                  2 Der Betreibungs- oder der Konkursbeamte, der in Ausstand treten
+                  muss, übermittelt ein an ihn gerichtetes Begehren sofort seinem Stell-
+                  vertreter und benachrichtigt davon den Gläubiger durch uneinge-
+                  schriebenen Brief.
+
+                  Art. 1119
+H. Verbotene      Die Beamten und Angestellten der Betreibungs- und der Konkurs-
+Rechtsgeschäfte
+                  ämter dürfen über die vom Amt einzutreibenden Forderungen oder die
+                  von ihm zu verwertenden Gegenstände keine Rechtsgeschäfte auf
+                  eigene Rechnung abschliessen. Rechtshandlungen, die gegen diese
+                  Vorschrift verstossen, sind nichtig.
+
+                  Art. 12
+I. Zahlungen      1 Das Betreibungsamt hat Zahlungen für Rechnung des betreibenden
+an das
+Betreibungsamt    Gläubigers entgegenzunehmen.
+                  2 Die Schuld erlischt durch die Zahlung an das Betreibungsamt.
+
+
+
+
+16   Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+     (AS 1995 1227; BBl 1991 III 1).
+17   Fassung gemäss Anhang Ziff. 16 des Partnerschaftsgesetzes vom 18. Juni 2004,
+     in Kraft seit 1. Jan. 2007 (AS 2005 5685; BBl 2003 1288).
+18   Eingefügt durch Anhang Ziff. 16 des Partnerschaftsgesetzes vom 18. Juni 2004,
+     in Kraft seit 1. Jan. 2007 (AS 2005 5685; BBl 2003 1288).
+19   Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+     (AS 1995 1227; BBl 1991 III 1).
+
+                                                                                        5
+281.1                                  Ordentliches Verfahren bei Schuldbetreibung und Konkurs
+
+
+                   Art. 3762
+D. Begriffe        1 Der Ausdruck «Grundpfandrecht» im Sinne dieses Gesetzes umfasst:
+                   die Grundpfandverschreibung, den Schuldbrief, die Grundpfandrechte
+                   des bisherigen Rechtes, die Grundlast und jedes Vorzugsrecht auf
+                   bestimmte Grundstücke sowie das Pfandrecht an der Zugehör eines
+                   Grundstücks.63
+                   2 Der Ausdruck «Faustpfand» begreift auch die Viehverpfändung, das
+                   Retentionsrecht und das Pfandrecht an Forderungen und anderen
+                   Rechten.
+                   3 Der Ausdruck «Pfand» umfasst sowohl das Grundpfand als das
+                   Fahrnispfand.
+
+
+                   Zweiter Titel: Schuldbetreibung
+                   I. Arten der Schuldbetreibung
+
+                   Art. 38
+A. Gegenstand      1 Auf dem Wege der Schuldbetreibung werden die Zwangsvollstre-
+der Schuld-
+betreibung und     ckungen durchgeführt, welche auf eine Geldzahlung oder eine Sicher-
+Betreibungsarten   heitsleistung gerichtet sind.
+                   2 Die Schuldbetreibung beginnt mit der Zustellung des Zahlungs-
+                   befehles und wird entweder auf dem Wege der Pfändung oder der
+                   Pfandverwertung oder des Konkurses fortgesetzt.
+                   3 Der Betreibungsbeamte bestimmt, welche Betreibungsart anwendbar
+                   ist.
+
+                   Art. 39
+B. Konkurs-        1 Die Betreibung wird auf dem Weg des Konkurses, und zwar als
+betreibung
+1. Anwendungs-
+                   «Ordentliche Konkursbetreibung» (Art. 159–176) oder als «Wechsel-
+bereich            betreibung» (Art. 177–189), fortgesetzt, wenn der Schuldner in einer
+                   der folgenden Eigenschaften im Handelsregister eingetragen ist:
+                      1.     als Inhaber einer Einzelfirma (Art. 934 und 935 OR64);
+                      2.     als Mitglied einer Kollektivgesellschaft (Art. 554 OR);
+                      3.     als unbeschränkt haftendes Mitglied einer Kommanditgesell-
+                             schaft (Art. 596 OR);
+
+
+
+62    Fassung gemäss Art. 58 SchlT ZGB, in Kraft seit 1. Jan. 1912 (AS 24 233
+      Art. 60 SchlT ZGB; BBl 1904 IV 1, 1907 VI 367).
+63    Fassung gemäss Ziff. II 4 des BG vom 11. Dez. 2009 (Register-Schuldbrief und weitere
+      Änderungen im Sachenrecht), in Kraft seit 1. Jan. 2012 (AS 2011 4637; BBl 2007 5283).
+64    SR 220
+
+14
+Schuldbetreibung und Konkurs. BG                                                     281.1
+
+
+                  5 Das Betreibungsamt zeigt dem Schuldner jeden Gläubigerwechsel
+                  an.146
+
+                  Art. 78
+5. Wirkungen      1 Der Rechtsvorschlag bewirkt die Einstellung der Betreibung.
+
+                  2 Bestreitet der Schuldner nur einen Teil der Forderung, so kann die
+                  Betreibung für den unbestrittenen Betrag fortgesetzt werden.
+
+                  Art. 79147
+D. Beseitigung    Ein Gläubiger, gegen dessen Betreibung Rechtsvorschlag erhoben
+des Rechtsvor-
+schlages          worden ist, hat seinen Anspruch im Zivilprozess oder im Verwal-
+1. Im Zivilpro-   tungsverfahren geltend zu machen. Er kann die Fortsetzung der Be-
+zess oder im
+Verwal-           treibung nur aufgrund eines vollstreckbaren Entscheids erwirken, der
+tungsverfahren    den Rechtsvorschlag ausdrücklich beseitigt.
+
+                  Art. 80148
+2. Durch          1 Beruht die Forderung auf einem vollstreckbaren gerichtlichen Ent-
+definitive
+Rechtsöffnung     scheid, so kann der Gläubiger beim Richter die Aufhebung des
+a. Rechts-        Rechtsvorschlags (definitive Rechtsöffnung) verlangen.149
+öffnungstitel
+                  2 Gerichtlichen Entscheiden gleichgestellt sind:150
+
+                     1.     gerichtliche Vergleiche und gerichtliche Schuldanerkennun-
+                            gen;
+                     1bis.151 vollstreckbare öffentliche Urkunden nach den Artikeln 347–
+                           352 ZPO152;
+                     2.153 Verfügungen schweizerischer Verwaltungsbehörden;
+                     3.154 …
+
+
+
+146   Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+147   Fassung gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, in
+      Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+148   Fassung gemäss Ziff. I des BG vom 16. Dez. 1994, in Kraft seit 1. Jan. 1997
+      (AS 1995 1227; BBl 1991 III 1).
+149   Fassung gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, in
+      Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+150   Fassung gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, in
+      Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+151   Eingefügt durch Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, in
+      Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+152   SR 272
+153   Fassung gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, in
+      Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+154   Aufgehoben durch Anhang 1 Ziff. II 17 der Zivilprozessordnung vom 19. Dez. 2008, mit
+      Wirkung seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221).
+
+                                                                                        31
+Schuldbetreibung und Konkurs. BG                                                     281.1
+
+
+               mitgeteilt und ihnen die Abtretung seiner Forderung gegen Zahlung
+               angeboten hat (Art. 114, 147, 501 OR538).
+               3 Der Gläubiger kann auch, unbeschadet seiner Rechte, Mitschuldner,
+               Bürgen und Gewährspflichtige ermächtigen, an seiner Stelle über den
+               Beitritt zum Nachlassvertrag zu entscheiden.
+
+               Art. 304
+H. Sachwalterbe- 1 Vor Ablauf der Stundung unterbreitet der Sachwalter dem Nachlass-
+richt; öffentliche
+Bekannt-           gericht alle Aktenstücke. Er orientiert in seinem Bericht über bereits
+machung der
+Verhandlung vor
+                   erfolgte Zustimmungen und empfiehlt die Bestätigung oder Ableh-
+dem Nach-          nung des Nachlassvertrages.
+lassgericht539
+                   2 Das Nachlassgericht trifft beförderlich seinen Entscheid.
+
+               3 Ort und Zeit der Verhandlung werden öffentlich bekanntgemacht.
+               Den Gläubigern ist dabei anzuzeigen, dass sie ihre Einwendungen
+               gegen den Nachlassvertrag in der Verhandlung anbringen können.
+
+
+               II. Allgemeine Bestimmungen über den Nachlassvertrag
+
+               Art. 305
+A. Annahme     1 Der Nachlassvertrag ist angenommen, wenn ihm bis zum Bestäti-
+durch die
+Gläubiger      gungsentscheid zugestimmt hat:
+                  a.   die Mehrheit der Gläubiger, die zugleich mindestens zwei
+                       Drittel des Gesamtbetrages der Forderungen vertreten; oder
+                  b.   ein Viertel der Gläubiger, die mindestens drei Viertel des Ge-
+                       samtbetrages der Forderungen vertreten.540
+               2 Die privilegierten Gläubiger, der Ehegatte, die eingetragene Partne-
+               rin oder der eingetragene Partner des Schuldners werden weder für
+               ihre Person noch für ihre Forderung mitgerechnet. Pfandgesicherte
+               Forderungen zählen nur zu dem Betrag mit, der nach der Schätzung
+               des Sachwalters ungedeckt ist.541
+               3 Das Nachlassgericht entscheidet, ob und zu welchem Betrage be-
+               dingte Forderungen und solche mit ungewisser Verfallzeit sowie
+               bestrittene Forderungen mitzuzählen sind. Dem gerichtlichen Ent-
+
+
+
+538 SR 220
+539 Fassung gemäss Ziff. I des BG vom 21. Juni 2013, in Kraft seit 1. Jan. 2014
+    (AS 2013 4111; BBl 2010 6455).
+540 Fassung gemäss Ziff. I des BG vom 21. Juni 2013, in Kraft seit 1. Jan. 2014
+    (AS 2013 4111; BBl 2010 6455).
+541 Fassung gemäss Anhang Ziff. 16 des Partnerschaftsgesetzes vom 18. Juni 2004, in Kraft
+    seit 1. Jan. 2007 (AS 2005 5685; BBl 2003 1288).
+
+                                                                                       117

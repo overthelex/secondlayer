@@ -355,6 +355,7 @@ def test_marginal_layout_footnote_block_does_not_leak_into_the_body():
 # the splitter at 03ae9520, BEFORE the text product existed.
 
 import json
+import re
 from pathlib import Path
 
 from chpipe.fedlex_split import clean_fedlex_text
@@ -366,6 +367,16 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 # Zivilgesetzbuches. BG   220") and a folio ("8") at a page seam that the
 # furniture strip does not catch (the cut has no SR number at its head).
 SR220_MARGINAL = (_FIXTURES / "pdftext_fedlex_sr220_marginal.txt").read_text()
+
+# SchKG SR 281.1 de 2020-01-01 (version_id 560275): pages 1-5 (Art. 1-12),
+# the page holding Art. 37-39 and the one holding Art. 78-80, cut from the
+# stored full_text. Marginal-column layout whose body column drifts from
+# column 15 to 22 between pages and inside a page (pdftotext -layout), and
+# whose marginal titles wrap over up to five lines -- the 2026-11 pilot spliced
+# "rung von Geld" / "oder Wertsachen" into the Art. 9 body here.
+SCHKG_DE = (_FIXTURES / "pdftext_fedlex_schkg_281_1_de_margins.txt").read_text()
+# LP RS 281.1 fr 1996-07-01 (version_id 560212): pages 1-3 (Art. 1-9).
+SCHKG_FR = (_FIXTURES / "pdftext_fedlex_schkg_281_1_fr_margins.txt").read_text()
 
 # (e_id, article_number, marginal_note, text, ordinal) of COL0, captured from
 # the old splitter.
@@ -390,6 +401,7 @@ _GOLDEN_INPUTS = {
     "COL0": COL0, "MARGINAL": MARGINAL, "ROMAN": ROMAN, "REPEALS": REPEALS,
     "DECIMAL": DECIMAL, "MIDSTREAM": MIDSTREAM, "MARGINAL_MIDSTREAM": MARGINAL_MIDSTREAM,
     "NOTE": _NOTE, "CITATION": _CITATION, "SR220_MARGINAL": SR220_MARGINAL,
+    "SCHKG_DE": SCHKG_DE, "SCHKG_FR": SCHKG_FR,
 }
 
 
@@ -403,7 +415,7 @@ def test_text_keeps_preamble_and_tail():
     assert text.startswith("Bundesverfassung\nder Schweizerischen Eidgenossenschaft")
     assert "Angenommen in der Volksabstimmung vom 19. April 1874" in text
     assert "Erster Abschnitt: Allgemeine Bestimmungen" in text
-    assert "AS 1 1; BS 1 3" not in text                 # footnote block gone
+    assert "AS 1 1; BS 1 3" not in text                 # the publication line is furniture
     assert "Übersetzung1" not in text and "\n1\n" not in text
     # headings and bodies in reading order, paragraphs one blank line apart
     assert "Art. 4 Grundsatz\n\nDie Kantone sind souverän" in text
@@ -534,13 +546,123 @@ def test_articles_equal_golden_capture_on_every_fixture():
             assert _rows(split_fedlex_text(raw, lang)[0]) == golden[name], (name, lang)
 
 
-def test_text_product_equals_the_375d1595_capture_on_every_fixture():
-    # ruling R27: the text product (second return value) stays byte-identical
-    # to commit 375d1595 for every fixture x lang -- the Task 3 resplit of the
-    # 51K fedlex_pdf editions is gated on it
+def test_text_product_equals_the_golden_capture_on_every_fixture():
+    # the text product (second return value) for every fixture x lang, a
+    # regression net for the full resplit. Captured at 375d1595 (ruling
+    # R27) and re-captured by the 2026-11 margins/footnotes fix, which
+    # changed the text product on purpose (the articles did not move: see
+    # the golden test above)
     golden = json.loads((_FIXTURES / "fedlex_split_golden_text.json").read_text())
     assert set(golden) == set(_GOLDEN_INPUTS)
     for name, raw in _GOLDEN_INPUTS.items():
         assert split_fedlex_text(raw)[1] == golden[name][""], name
         for lang in ("de", "fr", "it"):
             assert split_fedlex_text(raw, lang)[1] == golden[name][lang], (name, lang)
+
+
+# --- the marginal column and the footnotes (2026-11 pilot defects) -----------
+
+def _lines(text):
+    return text.split("\n")
+
+
+def test_marginal_column_of_art_9_is_not_spliced_into_the_body():
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    assert ("Art. 9 F. Aufbewahrung von Geld oder Wertsachen\n\n"
+            "Die Betreibungs- und die Konkursämter haben Geldsummen, Wertpapiere "
+            "und Wertsachen, über welche nicht binnen drei Tagen nach dem Eingange "
+            "verfügt wird, der Depositenanstalt zu übergeben.") in text
+    for line in _lines(text):
+        assert "Wert- oder" not in line and "Wertsachen papiere" not in line
+        assert "rung von Geld" not in line or line.startswith("Art. 9 F.")
+
+
+def test_marginal_titles_wrapping_over_several_lines_stay_whole():
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    assert ("Art. 38 A. Gegenstand der Schuldbetreibung und Betreibungsarten\n\n"
+            "1 Auf dem Wege der Schuldbetreibung werden die Zwangsvollstreckungen "
+            "durchgeführt, welche auf eine Geldzahlung oder eine Sicherheitsleistung "
+            "gerichtet sind.") in text
+    assert ("Art. 79 D. Beseitigung des Rechtsvorschlages\n"
+            "1. Im Zivilprozess oder im Verwaltungsverfahren\n\n"
+            "Ein Gläubiger, gegen dessen Betreibung Rechtsvorschlag erhoben worden ist, "
+            "hat seinen Anspruch im Zivilprozess oder im Verwaltungsverfahren geltend "
+            "zu machen. Er kann die Fortsetzung der Betreibung nur aufgrund eines "
+            "vollstreckbaren Entscheids erwirken, der den Rechtsvorschlag ausdrücklich "
+            "beseitigt.") in text
+    # the body column at 17 on two lines and 19 on the next (one page)
+    assert ("Art. 8 E. Protokolle und Register\n1. Führung, Beweiskraft und Berichtigung"
+            "\n\n1 Die Betreibungs- und die Konkursämter führen über ihre Amtstätigkeiten "
+            "sowie die bei ihnen eingehenden Begehren und Erklärungen Protokoll; "
+            "sie führen die Register.") in text
+    # a marginal fragment glued to the body by ONE space ("Sachwalterbe- 1 Vor"),
+    # the body at column 15 on the heading's line and 19 below it
+    assert ("Art. 304 H. Sachwalterbericht; öffentliche Bekanntmachung der Verhandlung "
+            "vor dem Nachlassgericht\n\n1 Vor Ablauf der Stundung unterbreitet der "
+            "Sachwalter dem Nachlassgericht alle Aktenstücke. Er orientiert in seinem "
+            "Bericht über bereits erfolgte Zustimmungen und empfiehlt die Bestätigung "
+            "oder Ablehnung des Nachlassvertrages.") in text
+    assert "Art. 10 G. Ausstandspflicht\n\n1 Die Beamten" in text
+
+
+def test_marginal_column_fr():
+    text = clean_fedlex_text(SCHKG_FR, "fr")
+    assert ("Art. 9 F. Dépôt d'espèces et d'objets de prix\n\n"
+            "Les offices de poursuites et de faillites sont tenus de consigner à la "
+            "caisse des dépôts et consignations les sommes, valeurs et objets de prix "
+            "dont ils n'ont pas emploi dans les trois jours.") in text
+    assert "Art. 1 A. Arrondissements de poursuite et de faillite\n\n" in text
+
+
+def test_footnotes_are_kept_one_per_paragraph_after_the_article():
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    # page 4's notes follow Art. 9, the article the page ended in
+    assert ("der Depositenanstalt zu übergeben.\n\n"
+            "13 Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit "
+            "1. Jan. 1997 (AS 1995 1227; BBl 1991 III 1).\n\n"
+            "14 Ausdruck gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom "
+            "19. Dez. 2008, in Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221)."
+            "\n\n15 Eingefügt durch Ziff. I des BG vom 16. Dez. 2016") in text
+    # a wrap hyphen inside a footnote is joined
+    assert ("10 Fassung gemäss Anhang Ziff. 4 des BG vom 15. Juni 2018 (Revision des "
+            "Verjährungsrechts), in Kraft seit 1. Jan. 2020") in text
+    # every footnote of the excerpt is there, each opening its own paragraph
+    heads = re.findall(r"^(\d{1,3}) +(\S+ \S+)", SCHKG_DE, re.MULTILINE)
+    assert len(heads) == 35
+    for number, words in heads:
+        assert f"\n\n{number} {words}" in text, number
+    # the publication line and the running headers are still furniture
+    assert "AS 11 529 und BS 3 3" not in text
+    assert "Ordentliches Verfahren bei Schuldbetreibung und Konkurs" not in text
+
+
+def test_footnotes_fr():
+    text = clean_fedlex_text(SCHKG_FR, "fr")
+    assert ("\n\n12 Introduit par le ch. I de la LF du 16 déc. 1994, en vigueur depuis "
+            "le 1er janv. 1997 (RO 1995 1227 1309; FF 1991 III 1).") in text
+    assert "\n\n2 RS 101" in text
+
+
+def test_footnotes_kept_in_the_col0_layout():
+    text = clean_fedlex_text(COL0)
+    assert ("\n\n2 Angenommen in der Volksabstimmung vom 24. Sept. 1978, in Kraft seit "
+            "1. Jan. 1979 (AS 1978 1579).") in text
+    assert "\n\n3 Angenommen in der Volksabstimmung vom 14. Juni 1981 (AS 1981 1243)." in text
+    assert "AS 1 1; BS 1 3" not in text
+
+
+def test_footnotes_found_mid_stream_are_kept_too():
+    _, text = split_fedlex_text(MIDSTREAM)
+    assert "Fassung gemäss" in text and "Eingefügt durch" in text
+    _, text = split_fedlex_text(MARGINAL_MIDSTREAM)
+    assert ("61 Fassung gemäss Ziff. I 1 des BG vom 25. Juni 1976, in Kraft seit "
+            "1. Jan. 1978 (AS 1977 237 264; BBl 1974 II 1).") in text
+
+
+def test_column_zero_text_no_column_owns_is_kept():
+    # ruling R28: a full-width line in the marginal layout (the preamble,
+    # a line pdftotext set from column 0 across the column boundary) is kept
+    # whole, never cut into a margin and a body
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    assert "Die Bundesversammlung der Schweizerischen Eidgenossenschaft," in text
+    assert "gestützt auf Artikel 64 der Bundesverfassung (BV)," in text
