@@ -962,7 +962,7 @@ export class LegislationTools extends BaseToolHandler {
       return {
         ...base,
         note:
-          'Зміст (розділи/глави/статті-лічильники) без повного переліку статей. Для переліку статей передайте include_articles:true з offset/limit, або скористайтесь get_legislation_articles для конкретних статей.',
+          'Зміст (розділи/глави з кількістю та діапазоном статей) без повного переліку статей. Повний перелік статей повертається з include_articles:true, з пагінацією через offset/limit.',
       };
     }
 
