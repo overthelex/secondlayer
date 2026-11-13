@@ -72,3 +72,15 @@ describe('parseTrailingHeadings: dotted sentence-case style (ЦПК)', () => {
     ]);
   });
 });
+
+describe('review follow-ups', () => {
+  it('reads a heading followed by an amendment note', () => {
+    expect(parseTrailingHeadings('… законом. Глава 2 НАЗВА ГЛАВИ {Із змінами, внесеними згідно із Законом № 1-IX від 01.01.2020}'))
+      .toEqual([{ level: 'chapter', number: '2', title: 'НАЗВА ГЛАВИ' }]);
+  });
+
+  it('treats stored subsection metadata as an existing hierarchy', () => {
+    const stored = [{ article_number: '1', full_text: 'Текст. Глава 2 ІНШЕ', metadata: { subsection_number: '1' } }];
+    expect(withRecoveredHierarchy(stored)).toBe(stored);
+  });
+});

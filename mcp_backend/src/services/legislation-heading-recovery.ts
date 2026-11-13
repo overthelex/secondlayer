@@ -46,7 +46,9 @@ function levelOf(m: RegExpExecArray): { level: HeadingLevel; number: string; dot
  */
 export function parseTrailingHeadings(text: string | null | undefined): Heading[] {
   if (!text) return [];
-  const tail = text.length > 1500 ? text.slice(-1500) : text;
+  // Amendment notes may follow a glued heading: "Глава 2 НАЗВА {Із змінами, внесеними …}".
+  const stripped = text.replace(/(\s*\{[^{}]*\})+\s*$/, '');
+  const tail = stripped.length > 1500 ? stripped.slice(-1500) : stripped;
   const matches: RegExpExecArray[] = [];
   KEYWORD.lastIndex = 0;
   for (let m = KEYWORD.exec(tail); m; m = KEYWORD.exec(tail)) matches.push(m);
@@ -87,7 +89,9 @@ const DEPTH: Record<HeadingLevel, number> = { book: 0, section: 1, subsection: 2
  */
 export function withRecoveredHierarchy<T extends Record<string, any>>(articles: T[]): T[] {
   const hasStored = articles.some(
-    (a) => a.section_number || a.chapter_number || a.metadata?.book_number || a.metadata?.paragraph_number
+    (a) =>
+      a.section_number || a.chapter_number ||
+      a.metadata?.book_number || a.metadata?.subsection_number || a.metadata?.paragraph_number
   );
   if (hasStored || articles.length === 0) return articles;
 

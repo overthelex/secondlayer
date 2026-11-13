@@ -1227,7 +1227,10 @@ total_resolved_links=0 означає відсутність даних граф
           ? ' — найдавніші та найновіші. Проміжні документи не увійшли у вибірку.'
           : ` (sort=${sortMode}, offset=${offset}).`) +
         ' Результат розгляду справи за цією вибіркою може бути неповним.' +
-        ` Решта документів: offset=${offset + mappedDocs.length} з sort=asc або desc;` +
+        (sortMode === 'balanced'
+          // balanced = oldest ceil(maxDocs/2) + newest; the gap starts right after the head.
+          ? ` Проміжні документи: sort=asc з offset=${Math.ceil(maxDocs / 2)};`
+          : ` Решта документів: sort=${sortMode} з offset=${offset + mappedDocs.length};`) +
         ' вибірку звужує document_types, напр. ["Рішення","Постанова"].';
     }
 
