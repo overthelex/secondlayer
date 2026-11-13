@@ -28,8 +28,8 @@ function registry(overrides: Record<string, (args: any) => any> = {}) {
       ]);
       if (a.supplier_phone) return ok([
         { supplier_edrpou: '41633007', supplier_name: 'МАСШТАБ' },
-        { supplier_edrpou: '30287372', supplier_name: 'ДЕЛЬТА-98' },
-        { supplier_edrpou: '30287372', supplier_name: 'ДЕЛЬТА-98' },
+        { supplier_edrpou: '30287372', supplier_name: 'ДЕЛЬТА-98', buyer_edrpou: '04053915', buyer_name: 'Овруцька міська рада' },
+        { supplier_edrpou: '30287372', supplier_name: 'ДЕЛЬТА-98', buyer_edrpou: '04053915', buyer_name: 'Овруцька міська рада' },
       ]);
       if (a.supplier_email) return ok([{ supplier_edrpou: '41633007' }]);
       return ok([{ found: false, message: 'Тендерів не знайдено' }]);
@@ -101,6 +101,10 @@ describe('get_company_dossier (LEXAI-2227)', () => {
     expect(d.markers[0]).toMatchObject({ marker: 'shared_phone', other_suppliers: [{ edrpou: '30287372', name: 'ДЕЛЬТА-98' }] });
     expect(d.markers[0].fact).toMatch(/380977009263.*1 іншого постачальника/);
     expect(d.markers[0].fact).not.toMatch(/фіктив/i);
+    // all matches come from one buyer: say so, and warn that the buyer may have typed its own contact
+    expect(d.markers[0].fact).toMatch(/один замовник: Овруцька міська рада \(04053915\)/);
+    expect(d.markers[0].distinct_buyers).toBe(1);
+    expect(d.markers[0].caveat).toMatch(/вносить замовник/);
     // one probe per distinct phone and email
     expect(reg.calls.filter((c) => c.name === 'openreyestr_search_prozorro' && c.args.supplier_phone)).toHaveLength(1);
     expect(reg.calls.filter((c) => c.name === 'openreyestr_search_prozorro' && c.args.supplier_email)).toHaveLength(1);

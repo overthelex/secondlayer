@@ -353,13 +353,24 @@ export class CompanyDossierTool extends BaseToolHandler {
     probes.forEach((p, i) => {
       if (results[i].status !== 'ok') return;
       const others = new Map<string, string>();
+      const buyers = new Map<string, string>();
       for (const r of toRows(results[i].data).rows) {
-        if (r.supplier_edrpou && r.supplier_edrpou !== edrpou) others.set(r.supplier_edrpou, r.supplier_name || '');
+        if (!r.supplier_edrpou || r.supplier_edrpou === edrpou) continue;
+        others.set(r.supplier_edrpou, r.supplier_name || '');
+        if (r.buyer_edrpou) buyers.set(r.buyer_edrpou, r.buyer_name || '');
       }
       if (others.size === 0) return;
+      const what = p.kind === 'phone' ? 'Телефон' : 'Email';
+      const n = others.size;
+      const oneBuyer = buyers.size === 1 ? [...buyers][0] : null;
       markers.push({
         marker: p.kind === 'phone' ? 'shared_phone' : 'shared_email',
-        fact: `${p.kind === 'phone' ? 'Телефон' : 'Email'} ${p.value} у договорах ProZorro вказаний також для ${others.size} інш${others.size === 1 ? 'ого постачальника' : 'их постачальників'}.`,
+        fact: `${what} ${p.value} у договорах ProZorro вказаний також для ${n} інш${n === 1 ? 'ого постачальника' : 'их постачальників'}` +
+          (oneBuyer ? `; усі ці договори укладав один замовник: ${oneBuyer[1] || oneBuyer[0]} (${oneBuyer[0]}).` : `, у договорах ${buyers.size} різних замовників.`),
+        caveat: 'Контакти постачальника в договорі ProZorro часто вносить замовник, тому збіг може бути контактом замовника, а не спільним контактом постачальників. ' +
+          'Збіг у договорах одного замовника слабша ознака, ніж у договорах різних замовників.',
+        distinct_buyers: buyers.size,
+        buyers: [...buyers].slice(0, 10).map(([code, name]) => ({ edrpou: code, name })),
         other_suppliers: [...others].slice(0, 20).map(([code, name]) => ({ edrpou: code, name })),
         source: { name: 'ProZorro: контактні дані постачальника в договорах', tool: 'openreyestr_search_prozorro' },
       });
