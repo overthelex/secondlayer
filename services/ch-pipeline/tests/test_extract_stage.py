@@ -400,6 +400,7 @@ import logging
 import shutil
 
 from chpipe import raw_text_archive, text_clean, text_damage
+from chpipe.stages import clean_text_stage
 
 # The same real PDF the clean-text tests use: it has hyphen line-wraps.
 ZG_PDF = pathlib.Path(__file__).parent / "fixtures" / "decision_zg.pdf"
@@ -525,7 +526,7 @@ def test_re_extraction_with_different_raw_stores_raw_uncleaned_and_does_not_stam
     assert report.archive_conflict == 1
     assert _full_text(conn, "z1")["full_text"] == new_raw   # raw, uncleaned
     assert arch.read_bytes() == before                       # never overwritten
-    assert _state(conn, "z1") is None
+    assert _state(conn, "z1")["cleaned_at"] is None   # not stamped
     assert any("archive" in r.message for r in caplog.records)
 
 
@@ -545,7 +546,7 @@ def test_an_unreadable_existing_archive_stores_raw_uncleaned_and_counts_it(
     assert report.archive_conflict == 1
     assert _full_text(conn, "z1")["full_text"] == new_raw
     assert arch.read_bytes() == b"not gzip at all"
-    assert _state(conn, "z1") is None
+    assert _state(conn, "z1")["cleaned_at"] is None   # not stamped
 
 
 def test_the_text_write_and_the_stamp_are_one_transaction(conn, raw_dir, monkeypatch):
@@ -577,3 +578,57 @@ def test_claim_carries_the_sprache_the_cleaner_needs(conn):
         "'{\"Sprache\": \"Français\"}')")
     rows = db.claim(conn, "fetched", limit=5, spider="CH_ZG")
     assert rows[0]["sprache"] == "Français"
+
+
+# --- archive conflict un-stamps the old state row (data-loss guard) ---
+
+def _stamp_old(conn, doc_id, old_raw):
+    conn.execute(
+        "INSERT INTO ch_text_clean_state (doc_id, spider, raw_sha256, cleaner_version, "
+        "cleaned_at, attempts) VALUES (%s,'CH_ZG',%s,1,now(),1)",
+        (doc_id, raw_text_archive.sha256_of(old_raw)))
+
+
+def _conflict_then_backfill(conn, raw_dir, archive_setup, unreadable=False):
+    _put_zg_pdf(raw_dir, "CH_ZG", "z1")
+    _seed_zg_row(conn, "z1")
+    old_raw = "old archived raw text that differs entirely. " * 20
+    archive_setup(old_raw)
+    _stamp_old(conn, "z1", old_raw)
+    new_raw = extract_stage.text_extract.from_pdf(raw_dir / "CH_ZG" / "z1.pdf")
+    arch = raw_text_archive.path_for(raw_dir, "CH_ZG", "z1")
+    before = arch.read_bytes()
+    report = extract_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG", limit=1)
+    assert report.archive_conflict == 1
+    assert _full_text(conn, "z1")["full_text"] == new_raw
+    st = _state(conn, "z1")
+    assert st["cleaned_at"] is None and st["raw_sha256"] is None
+    assert st["last_error"].startswith("archive conflict")
+    assert st["attempts"] == 1
+    # The backfill (after a cleaner-version requeue it would see exactly this).
+    conn.execute("UPDATE ch_court_decisions SET stage='loaded' WHERE doc_id='z1'")
+    r = clean_text_stage.run(_pdf_settings(raw_dir, keep=True), spider="CH_ZG")
+    # A readable differing archive is parked as an archive conflict; an
+    # unreadable one is the stage's hard failure. Either way: not cleaned,
+    # nothing overwritten, one attempt spent.
+    if unreadable:
+        assert r.failed == 1 and r.archive_conflict == 0 and r.cleaned == 0
+    else:
+        assert r.archive_conflict == 1 and r.failed == 0 and r.cleaned == 0
+    assert _full_text(conn, "z1")["full_text"] == new_raw
+    assert arch.read_bytes() == before
+    return st
+
+
+def test_conflict_unstamps_the_old_state_and_backfill_leaves_new_raw_alone(conn, raw_dir):
+    st = _conflict_then_backfill(
+        conn, raw_dir, lambda old: raw_text_archive.save(raw_dir, "CH_ZG", "z1", old))
+    assert "sha=" in st["last_error"]
+
+
+def test_unreadable_archive_unstamps_the_old_state_too(conn, raw_dir):
+    def bad(_old):
+        a = raw_text_archive.path_for(raw_dir, "CH_ZG", "z1")
+        a.parent.mkdir(parents=True, exist_ok=True)
+        a.write_bytes(b"not gzip at all")
+    _conflict_then_backfill(conn, raw_dir, bad, unreadable=True)

@@ -119,7 +119,8 @@ def clean_new_text(settings: Settings, row, raw: str,
     archive exists; or the existing archive is unreadable) it is never
     overwritten and the new text is never lost: the raw text is returned
     uncleaned (and rescored as such), no marker is set so nothing is stamped,
-    and the row dict gets `archive_conflict` = True for the caller to count.
+    and the row dict gets `archive_conflict` = the reason (a string) for the caller to count and
+    for complete_with_clean_state() to un-stamp the state row.
     """
     languages = list(row.get("languages") or [])
     if not cleans_new_text(row, source):
@@ -137,7 +138,17 @@ def clean_new_text(settings: Settings, row, raw: str,
         log.warning("%s/%s: archive conflict (%s: %s); storing the new raw text "
                     "uncleaned and unstamped", row["spider"], row["doc_id"],
                     type(exc).__name__, exc)
-        row["archive_conflict"] = True
+        reason = "re-extracted raw differs from archive"
+        if isinstance(exc, FileExistsError):
+            try:
+                reason += " sha=" + raw_text_archive.sha256_of(
+                    raw_text_archive.load(settings.raw_dir, row["spider"],
+                                          row["doc_id"]))[:12]
+            except Exception:                                   # noqa: BLE001
+                pass
+        else:
+            reason = f"existing archive unreadable ({type(exc).__name__})"
+        row["archive_conflict"] = "archive conflict: " + reason
         quality, relabel = text_quality.score_with_relabel(raw, languages)
         return raw, quality, relabel
     row["clean_sha256"] = sha
@@ -150,6 +161,14 @@ def complete_with_clean_state(conn, row, next_stage: str, **fields) -> None:
     cannot leave a stamp over an old full_text or the reverse. (complete()
     alone commits per statement on the autocommit connection.)"""
     sha = row.get("clean_sha256")
+    conflict = row.get("archive_conflict")
+    if conflict:
+        # New raw text is stored uncleaned; the old stamp (and its raw_sha256,
+        # which points at the OLD archive) must go in the same transaction.
+        with conn.transaction():
+            db.complete(conn, row["doc_id"], next_stage, **fields)
+            db.mark_clean_conflict(conn, row["doc_id"], row["spider"], conflict)
+        return
     if not sha:
         db.complete(conn, row["doc_id"], next_stage, **fields)
         return

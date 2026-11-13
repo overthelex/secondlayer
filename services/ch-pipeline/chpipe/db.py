@@ -630,6 +630,20 @@ def stamp_clean(conn, doc_id: str, raw_sha256: str, cleaner_version: int) -> Non
         (raw_sha256, cleaner_version, doc_id))
 
 
+def mark_clean_conflict(conn, doc_id: str, spider: str, error: str) -> None:
+    """Upsert the state row to UNSTAMPED after a re-extraction whose raw text
+    differs from the existing archive: cleaned_at and raw_sha256 NULL (so a
+    requeue can never trust the old archive and re-clean it over the new raw
+    text), last_error = the reason, attempts unchanged. The clean-text stage
+    then claims it and parks it with fail_clean("archive conflict")."""
+    conn.execute(
+        "INSERT INTO ch_text_clean_state (doc_id, spider, raw_sha256, "
+        "cleaner_version, cleaned_at, last_error) VALUES (%s, %s, NULL, NULL, NULL, %s) "
+        "ON CONFLICT (doc_id) DO UPDATE SET cleaned_at = NULL, raw_sha256 = NULL, "
+        "last_error = EXCLUDED.last_error",
+        (doc_id, spider, error[:2000]))
+
+
 def fail_clean(conn, doc_id: str, error: str) -> None:
     """One attempt spent, the reason kept, no stamp. claim_for_clean stops
     offering the row once attempts reaches max_attempts."""

@@ -263,7 +263,7 @@ def test_ocr_archive_conflict_stores_raw_uncleaned_and_does_not_stamp(
     assert report.archive_conflict == 1
     assert conn.execute("SELECT full_text FROM ch_court_decisions WHERE doc_id='d'"
                         ).fetchone()["full_text"] == OCR_RAW
-    assert _state(conn, "d") is None
+    assert _state(conn, "d")["cleaned_at"] is None   # not stamped
 
 
 def test_ocr_text_write_and_stamp_are_one_transaction(conn, raw_dir, monkeypatch):
