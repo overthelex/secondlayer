@@ -373,6 +373,33 @@ export function formatStreetRow(row: any): Record<string, unknown> {
   return nullSyntheticKeys(row, ['street_type', 'street_name']);
 }
 
+export interface Freshness { as_of: string | null; basis: string; note?: string }
+
+/** Registries whose date comes from their own rows (not written to import_log). */
+export const FRESHNESS_PROBES: Array<{ key: string; sql: string; basis: string; note?: string }> = [
+  { key: 'legal_entities', sql: 'SELECT max(updated_at) AS v FROM legal_entities', basis: 'остання зміна запису при імпорті ЄДР' },
+  { key: 'beneficiaries', sql: 'SELECT max(created_at) AS v FROM beneficiaries', basis: 'останній імпорт ЄДР' },
+  { key: 'esv_debt', sql: 'SELECT max(updated_at) AS v FROM esv_debt', basis: 'останній імпорт' },
+  { key: 'tax_debt', sql: 'SELECT max(report_date) AS v FROM tax_debt', basis: 'дата звіту ДПС',
+    note: 'Джерело ДПС не оновлюється: зріз станом на 22.02.2022. Відсутність боргу тут не означає відсутності боргу сьогодні.' },
+  { key: 'termination_started', sql: 'SELECT max(created_at) AS v FROM termination_started', basis: 'останній імпорт' },
+  { key: 'rnbo_sanctions', sql: 'SELECT max(updated_at) AS v FROM rnbo_sanctions', basis: 'знімок реєстру РНБО' },
+  { key: 'arma_assets', sql: 'SELECT max(updated_at) AS v FROM arma_assets', basis: 'останній імпорт',
+    note: 'Власник арештованого майна у відкритих даних АРМА не публікується, тому пошук за ЄДРПОУ неможливий.' },
+  { key: 'dssu_financial_reports', sql: 'SELECT max(created_at) AS v FROM dssu_financial_reports', basis: 'останній імпорт' },
+  { key: 'prozorro_tenders', sql: `SELECT max(updated_at) AS v FROM prozorro_sync_state WHERE feed = 'tenders'`, basis: 'остання синхронізація з ProZorro' },
+  { key: 'prozorro_contracts', sql: `SELECT max(updated_at) AS v FROM prozorro_sync_state WHERE feed = 'tenders'`, basis: 'остання синхронізація з ProZorro',
+    note: 'Переможці за історію до листопада 2026 дозавантажуються поступово (спершу будівельні закупівлі CPV 45 з 2021 року), тож відсутність договору ще не означає, що компанія нічого не вигравала.' },
+];
+
+/** Registries dated by their last completed import_log run, with an upstream caveat where one applies. */
+export const FRESHNESS_FROM_IMPORT_LOG: Array<[string, string?]> = [
+  ['debtors'],
+  ['enforcement_proceedings'],
+  ['bankruptcy_cases', 'Джерело (реєстр справ про банкрутство) не оновлюється з 31.05.2024; новіші справи дивіться в оголошеннях про банкрутство.'],
+  ['single_tax_payers', 'Останній опублікований ДПС набір платників єдиного податку датований 23.02.2022.'],
+];
+
 export class OpenReyestrTools {
   private static readonly STATS_CACHE_TTL_MS = 60 * 60 * 1000;
   private statsCache: { value: any; at: number } | null = null;
@@ -1530,6 +1557,47 @@ export class OpenReyestrTools {
       return [{ found: false, query: query || tin || '', message: 'Боргу зі сплати ЄСВ не знайдено' }];
     }
     return result.rows;
+  }
+
+  private freshnessCache: { value: Record<string, Freshness>; at: number } | null = null;
+
+  /**
+   * Per-registry "дані станом на" for the company dossier (LEXAI-2227). Prefers the
+   * last completed import_log run; registries loaded outside import_log (ЄДР,
+   * sanctions, ARMA, ProZorro) fall back to the newest row timestamp. Sources frozen
+   * upstream carry a note, so "nothing found" is not read as "no debt".
+   * Cached for an hour: the max() scans touch multi-million-row tables.
+   */
+  async getDataFreshness(): Promise<Record<string, Freshness>> {
+    if (this.freshnessCache && Date.now() - this.freshnessCache.at < 3_600_000) return this.freshnessCache.value;
+
+    const imports: Record<string, string | null> = {};
+    try {
+      const r = await this.pool.query(
+        `SELECT registry_name, max(import_completed_at) AS at FROM import_log
+         WHERE status IN ('completed', 'success') GROUP BY registry_name`);
+      for (const row of r.rows) imports[row.registry_name] = isoDay(row.at);
+    } catch { /* import_log missing on a fresh DB */ }
+
+    const out: Record<string, Freshness> = {};
+    await Promise.all(FRESHNESS_PROBES.map(async (p) => {
+      let asOf: string | null = null;
+      let basis = p.basis;
+      try {
+        asOf = isoDay((await this.pool.query(p.sql)).rows[0]?.v);
+      } catch {
+        basis = 'невідомо';
+      }
+      out[p.key] = { as_of: asOf, basis, ...(p.note ? { note: p.note } : {}) };
+    }));
+    out.founders = { ...out.beneficiaries };
+    out.signers = { ...out.beneficiaries };
+    for (const [key, note] of FRESHNESS_FROM_IMPORT_LOG) {
+      out[key] = { as_of: imports[key] ?? null, basis: 'останній успішний імпорт', ...(note ? { note } : {}) };
+    }
+
+    this.freshnessCache = { value: out, at: Date.now() };
+    return out;
   }
 
   /**

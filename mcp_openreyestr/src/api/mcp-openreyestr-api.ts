@@ -144,6 +144,13 @@ export class MCPOpenReyestrAPI {
         },
       },
       {
+        name: 'get_data_freshness',
+        description: `Дата актуальності («дані станом на») кожного реєстру OpenReyestr: ЄДР, бенефіціари, боржники, виконавчі провадження, банкрутство, податковий борг, ЄСВ, єдиний податок, санкції РНБО, АРМА, ProZorro. Для джерел, які не оновлюються, повертає примітку.
+
+💰 Примерная стоимость: $0.0001 USD`,
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
         name: 'search_notaries',
         description: `Пошук нотаріусів у Єдиному реєстрі нотаріусів
 
@@ -612,6 +619,9 @@ status — стан заходу АРМА (null, якщо заходу не бу
           break;
         case 'get_statistics':
           result = await this.tools.getStatistics();
+          break;
+        case 'get_data_freshness':
+          result = await this.tools.getDataFreshness();
           break;
         case 'search_notaries':
           result = await this.tools.searchNotaries(args);
