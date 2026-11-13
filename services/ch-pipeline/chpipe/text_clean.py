@@ -108,6 +108,55 @@ def _page_spaced(positions: list[int]) -> bool:
     return bool(gaps) and median(gaps) >= PAGE_GAP_MIN
 
 
+def _is_folio_line(line: str) -> bool:
+    return bool(_FOLIO.match(line) or _PAGE_LABEL.match(line) or _DASH_FOLIO.match(line))
+
+
+def _sentence_final(stripped: str) -> bool:
+    """True when the line ends like the end of a sentence or clause ("AsylG).")."""
+    return stripped[-1] in ".;:!?,)"
+
+
+def _seam_lines(lines: list[str]) -> set[int]:
+    """Indices of non-blank lines that sit at a page seam.
+
+    A seam is: within 2 non-blank lines of a run of 2+ blank lines; next to a
+    folio / "Seite N" line (blank lines between do not count as distance); in
+    the first or last 2 non-blank lines; or next to a form feed.
+    """
+    nonblank = [i for i, ln in enumerate(lines) if ln.strip()]
+    pos = {i: k for k, i in enumerate(nonblank)}
+    seams: set[int] = set()
+    for k in (0, 1, len(nonblank) - 2, len(nonblank) - 1):
+        if 0 <= k < len(nonblank):
+            seams.add(nonblank[k])
+    # blank runs of 2+: mark the 2 non-blank lines on either side
+    i, n = 0, len(lines)
+    while i < n:
+        if lines[i].strip():
+            i += 1
+            continue
+        j = i
+        while j < n and not lines[j].strip():
+            j += 1
+        if j - i >= 2:
+            before = [x for x in nonblank if x < i][-2:]
+            after = [x for x in nonblank if x >= j][:2]
+            seams.update(before + after)
+        i = j
+    for i in nonblank:
+        k = pos[i]
+        for d in (-1, 1):
+            if 0 <= k + d < len(nonblank) and _is_folio_line(lines[nonblank[k + d]]):
+                seams.add(i)
+        if "\f" in lines[i]:
+            seams.add(i)
+    for i, ln in enumerate(lines):
+        if "\f" in ln:  # form feed, possibly on a blank line: neighbours are seams
+            seams.update(x for x in nonblank if abs(x - i) <= 1)
+    return seams
+
+
 def strip_page_furniture(lines: list[str]) -> list[str]:
     """Drop folios, page labels and running headers.
 
@@ -121,6 +170,13 @@ def strip_page_furniture(lines: list[str]) -> list[str]:
       least 3 times, the folios strictly increase in document order and the
       median gap is at least 15 lines.
 
+    A recurring line is dropped only when no occurrence is content: an
+    occurrence off every page seam (see _seam_lines) that ends in sentence or
+    clause punctuation is real text ("AsylG)." closing a citation), and then
+    all occurrences stay. Running headers do not end that way; a header-shaped
+    line with no seam signal at all is still dropped (synthetic page-per-line
+    layouts with no blank lines).
+
     Amount rows ("Total     620", "Gerichtsgebühr   500") and margin-number
     paragraphs ("13     Text") fail these tests and are kept.
     """
@@ -133,7 +189,12 @@ def strip_page_furniture(lines: list[str]) -> list[str]:
         header = _folio_header(s) if s else None
         if header:
             titles.setdefault(header[0], []).append((i, header[1]))
-    repeated = {s for s, pos in seen.items() if len(pos) >= REPEAT_MIN and _page_spaced(pos)}
+    seams = _seam_lines(lines)
+    # A recurring line that sits mid-page even once is content ("AsylG)." closing
+    # a citation): keep every occurrence. Only all-seam recurrences are headers.
+    repeated = {s for s, pos in seen.items()
+                if len(pos) >= REPEAT_MIN and _page_spaced(pos)
+                and all(i in seams or not _sentence_final(s) for i in pos)}
     header_lines: set[int] = set()
     for occ in titles.values():
         folios = [f for _, f in occ]

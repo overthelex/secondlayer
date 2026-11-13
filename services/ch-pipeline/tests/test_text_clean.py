@@ -206,3 +206,17 @@ def test_clean_pdf_text_twocolumn_unibe():
 def test_normalise_chars():
     assert normalise_chars("ﬁnanz x­y") == "finanz xy"
     assert normalise_chars("a b c ﬂ ﬀ ﬃ ﬄ �") == "a b c fl ff ffi ffl �"
+
+
+def test_clean_keeps_recurring_content_lines_and_drops_seam_headers():
+    raw = (FIXTURES / "pdftext_decision_bvge_repeated_content.txt").read_text()
+    lines = [ln.strip() for ln in raw.split("\n")]
+    assert lines.count("AsylG).") >= 2
+    assert sum(ln.startswith("Seite ") for ln in lines) >= 2
+    assert lines.count("D-3387/2012") >= 2
+    clean = clean_pdf_text(raw, ["de"])
+    # every real sentence end survives (unwrap may join it onto the line above)
+    assert clean.count("AsylG).") == raw.count("AsylG).")
+    clean_lines = [ln.strip() for ln in clean.split("\n")]
+    assert "D-3387/2012" not in clean
+    assert not any(ln.startswith("Seite ") for ln in clean_lines)
