@@ -4,15 +4,19 @@
 // The firm record carries e-mail, phone and website only where the entrepreneur consented to publish them.
 // Limit: 1,000 requests per 60 minutes per token; we space requests 4.5 s apart (800/h) and the Collector
 // backs off on 429. Each candidate is marked raw.ceidg.checkedAt so it is asked about again only after
-// CEIDG_RECHECK_DAYS. Token: CEIDG_TOKEN (a JWT issued to a team member's Profil Zaufany account).
+// CEIDG_RECHECK_DAYS. A list query by a common surname (KOWALCZYK JOANNA, NOWAK ANNA) can take minutes on
+// CEIDG's side: it gets one attempt of LIST_TIMEOUT_MS, the candidate is marked raw.ceidg.timeoutAt and asked
+// again after a week; three timeouts in a row are taken as an outage and stop the batch. Token: CEIDG_TOKEN (a JWT issued to a team member's Profil Zaufany account).
 import type { JobDeps } from './jobs';
-import { HttpStatusError } from './http';
+import { CollectorStopped, HttpStatusError, RequestTimeout } from './http';
 import { normalisePhone } from './normalise';
 import { ceidgCandidates, markRaw, upsertLawyers } from './store';
 
 export const CEIDG_HOST = 'https://dane.biznes.gov.pl';
 export const CEIDG_MIN_DELAY_MS: Record<string, number> = { 'dane.biznes.gov.pl': 4_500 };
 const PKD_LEGAL = '6910Z';
+const LIST_TIMEOUT_MS = 120_000;
+const TIMEOUTS_IN_A_ROW_IS_OUTAGE = 3;
 
 export interface CeidgFirm {
   id: string;
@@ -51,10 +55,11 @@ function address(a: CeidgFirm['adresDzialalnosci']): string | null {
   return v || null;
 }
 
-export interface CeidgStats { candidates: number; found: number; withContact: number }
+export interface CeidgStats { candidates: number; found: number; withContact: number; timedOut: number }
 
 export async function ceidg(d: JobDeps, o: { token: string | null; limit: number; recheckDays?: number }): Promise<CeidgStats> {
-  const stats: CeidgStats = { candidates: 0, found: 0, withContact: 0 };
+  const stats: CeidgStats = { candidates: 0, found: 0, withContact: 0, timedOut: 0 };
+  let timeoutsInARow = 0;
   if (!o.token) return stats;
   const headers = { authorization: `Bearer ${o.token}`, accept: 'application/json' };
   const todo = await ceidgCandidates(d.pool, o.recheckDays ?? 180, o.limit);
@@ -65,10 +70,20 @@ export async function ceidg(d: JobDeps, o: { token: string | null; limit: number
     const q = new URLSearchParams({ nazwisko: c.surname.trim(), imie: first, pkd: PKD_LEGAL, status: 'AKTYWNY', limit: '10' });
     let firms: CeidgFirm[] = [];
     try {
-      const body = await d.http.get(`${CEIDG_HOST}/api/ceidg/v3/firmy?${q}`, headers);
+      const body = await d.http.get(`${CEIDG_HOST}/api/ceidg/v3/firmy?${q}`, headers, { timeoutMs: LIST_TIMEOUT_MS, timeoutIsAnswer: true });
       firms = body ? ((JSON.parse(body) as { firmy?: CeidgFirm[] }).firmy ?? []) : [];
+      timeoutsInARow = 0;
     } catch (e) {
+      if (e instanceof RequestTimeout) {
+        stats.timedOut++;
+        timeoutsInARow++;
+        await markRaw(d.pool, c.lawyerId, { ceidg: { timeoutAt: now() } });
+        d.log(`[ceidg] ${c.lawyerId}: list query timed out after ${LIST_TIMEOUT_MS / 1000} s, asked again in a week`);
+        if (timeoutsInARow >= TIMEOUTS_IN_A_ROW_IS_OUTAGE) throw new CollectorStopped(`CEIDG: ${timeoutsInARow} list queries in a row timed out`);
+        continue;
+      }
       if (!(e instanceof HttpStatusError)) throw e;
+      timeoutsInARow = 0;
       d.log(`[ceidg] ${c.lawyerId}: HTTP ${e.status} on the list query`);
     }
     const pick = pickFirm(firms, c.surname, c.givenNames, c.city);
@@ -117,6 +132,6 @@ export async function ceidg(d: JobDeps, o: { token: string | null; limit: number
       await markRaw(d.pool, c.lawyerId, { ceidg: { checkedAt: now(), found: true, id: firm.id, nip: firm.wlasciciel?.nip ?? null, noContact: true } });
     }
   }
-  if (stats.candidates) d.log(`[ceidg] ${stats.candidates} asked, ${stats.found} found in CEIDG, ${stats.withContact} with a published contact`);
+  if (stats.candidates) d.log(`[ceidg] ${stats.candidates} asked, ${stats.found} found in CEIDG, ${stats.withContact} with a published contact, ${stats.timedOut} timed out`);
   return stats;
 }

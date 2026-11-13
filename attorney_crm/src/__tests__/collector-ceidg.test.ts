@@ -1,12 +1,13 @@
 import { Collector } from '../collector/http';
 import { ceidg, pickFirm, CEIDG_HOST } from '../collector/jobs-ceidg';
 
-type Route = (url: string, init: any) => { status: number; body?: string } | undefined;
+type Route = (url: string, init: any) => { status: number; body?: string; timeout?: boolean } | undefined;
 function fakeHttp(route: Route) {
   const calls: { url: string; headers: Record<string, string> }[] = [];
   const impl = (async (url: any, init: any) => {
     calls.push({ url: String(url), headers: init?.headers ?? {} });
     const r = route(String(url), init) ?? { status: 404 };
+    if (r.timeout) throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
     return new Response(r.status === 204 ? null : r.body ?? '', { status: r.status });
   }) as unknown as typeof fetch;
   return { http: new Collector({ userAgent: 'test', minDelayMs: {}, maxConsecutiveFailures: 5, fetchImpl: impl, sleep: async () => {}, now: () => 0 }), calls };
@@ -55,7 +56,7 @@ test('ceidg: list by name with the bearer token, one firm page per match, e-mail
     return [];
   });
   const r = await ceidg({ pool: pool as any, http, log: () => {} }, { token: 'tok', limit: 50 });
-  expect(r).toEqual({ candidates: 2, found: 1, withContact: 1 });
+  expect(r).toEqual({ candidates: 2, found: 1, withContact: 1, timedOut: 0 });
   expect(calls.map((c) => c.url)).toEqual([
     `${CEIDG_HOST}/api/ceidg/v3/firmy?nazwisko=RY%C5%81KO&imie=LUCYNA&pkd=6910Z&status=AKTYWNY&limit=10`,
     `${CEIDG_HOST}/api/ceidg/v3/firma/f1`,
@@ -78,6 +79,43 @@ test('ceidg: a second given name is dropped for the query; no token means no req
   expect(calls[0].url).toContain('nazwisko=CYWI%C5%83SKA&imie=BEATA&');
   const none = fakeHttp(() => ({ status: 204 }));
   const r = await ceidg({ pool: fakePool() as any, http: none.http, log: () => {} }, { token: null, limit: 10 });
-  expect(r).toEqual({ candidates: 0, found: 0, withContact: 0 });
+  expect(r).toEqual({ candidates: 0, found: 0, withContact: 0, timedOut: 0 });
   expect(none.calls).toHaveLength(0);
+});
+
+test('ceidg: a list query that times out (a common surname) is marked timeoutAt and skipped, not retried for ever', async () => {
+  const { http, calls } = fakeHttp((url) => (url.includes('nazwisko=KOWALCZYK') ? { status: 0, timeout: true } : { status: 204 }));
+  const pool = fakePool((text) =>
+    text.includes('ceidg') && text.includes('FROM public.pl_lawyers')
+      ? [
+          { lawyer_id: 'radca:WA-1', surname: 'KOWALCZYK', given_names: 'JOANNA', city: 'WARSZAWA' },
+          { lawyer_id: 'radca:WA-2', surname: 'WILK', given_names: 'PIOTR', city: 'WARSZAWA' },
+        ]
+      : [],
+  );
+  const r = await ceidg({ pool: pool as any, http, log: () => {} }, { token: 'tok', limit: 10 });
+  expect(r).toEqual({ candidates: 2, found: 0, withContact: 0, timedOut: 1 });
+  // one attempt for the slow query, then the next candidate
+  expect(calls.filter((c) => c.url.includes('KOWALCZYK'))).toHaveLength(1);
+  expect(calls.some((c) => c.url.includes('nazwisko=WILK'))).toBe(true);
+  expect(http.failures).toBe(0);
+  const marks = pool.calls.filter((c) => c.text.startsWith('UPDATE public.pl_lawyers SET raw = raw ||'));
+  const slow = marks.find((m) => m.values?.[0] === 'radca:WA-1');
+  expect(String(slow?.values?.[1])).toContain('"timeoutAt"');
+  expect(String(slow?.values?.[1])).not.toContain('"checkedAt"');
+});
+
+test('ceidg: three timeouts in a row is an outage, the batch stops so the daemon backs off', async () => {
+  const { http, calls } = fakeHttp(() => ({ status: 0, timeout: true }));
+  const rows = ['A', 'B', 'C', 'D', 'E'].map((x) => ({ lawyer_id: `radca:WA-${x}`, surname: `NAZ${x}`, given_names: 'ANNA', city: null }));
+  const pool = fakePool((text) => (text.includes('ceidg') && text.includes('FROM public.pl_lawyers') ? rows : []));
+  await expect(ceidg({ pool: pool as any, http, log: () => {} }, { token: 'tok', limit: 10 })).rejects.toThrow(/timed out/);
+  expect(calls).toHaveLength(3);
+});
+
+test('ceidgCandidates leaves out candidates whose query timed out in the last week', async () => {
+  const { ceidgCandidates } = await import('../collector/store');
+  const pool = fakePool();
+  await ceidgCandidates(pool as any, 180, 10);
+  expect(pool.calls[0].text).toMatch(/timeoutAt[\s\S]*7 days/);
 });
