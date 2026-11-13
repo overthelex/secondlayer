@@ -1220,7 +1220,7 @@ $PSQL -Atc "select pg_size_pretty(pg_relation_size('idx_ch_court_fts'))"
 ```
 
 Pass: no `failed` rows beyond a few `archive conflict`. Record the numbers,
-then fill the decision table (left blank until measured):
+then fill the decision table (fill in after the 1,000-row pilot):
 
 | measured | value |
 |---|---|
@@ -1261,11 +1261,17 @@ returns paragraphs.
 
 ### 7. Cantonal PDF editions (phase C)
 
-Gate first. The dataset is already at `/data/ch-corpus/bench/pdf-gate-1113`
-(baseline: 60/60, median 1.000); re-run `scripts/pdf_gate.py compare` on it
-against the deployed code.
-Pass: identical to the baseline (60/60, median 1.000). The gate does not
-cover ZH (notes.zh.ch) or AR, hence the reading below.
+Gate first (the dataset is already at `/data/ch-corpus/bench/pdf-gate-1113`):
+
+```bash
+cd ~/lawrider/repo/services/ch-pipeline && ~/lawrider/ch-pipeline-venv/bin/python scripts/pdf_gate.py compare /data/ch-corpus/bench/pdf-gate-1113/html.jsonl /data/ch-corpus/bench/pdf-gate-1113/pdfs
+```
+
+Pass: the last line is `ALL 60 60/60 1.000 1.000 1.00 1.00`. Pre-merge, the
+controller measured this on base and on the branch, and the per-version output
+was identical to base: save the output and `diff` it against
+`/data/ch-corpus/bench/pdf-gate-1113/base.full`; the diff must be empty. The
+gate does not cover ZH (notes.zh.ch) or AR, hence the reading below.
 
 Read 10 `zhlex` rows, including AR, BEFORE (full_text) and after. Fingerprint
 `ch_act_change` for these sources as in step 2 (`v.source IN
@@ -1287,15 +1293,46 @@ counted `kept` and untouched.
 
 ### 8. Rollback, per phase
 
-- Fedlex PDF editions: `akn_xml` holds the raw pdftotext text.
-  `UPDATE ch_act_version SET full_text = akn_xml WHERE source='fedlex_pdf' AND akn_xml IS NOT NULL AND stage='parsed'`;
-  articles are restored by re-running `CHPIPE_RESPLIT=all` from the previous release.
-- Decisions: the raw text is in the gzip archive `<raw_dir.parent>/raw-text/<spider>/<doc_id>.txt.gz`.
-  Per row: `raw_text_archive.load(raw_dir, spider, doc_id)`, `UPDATE ch_court_decisions SET full_text = <raw> WHERE doc_id = ...`,
-  then `UPDATE ch_text_clean_state SET cleaned_at = NULL, attempts = 0 WHERE doc_id = ...`
-  (or delete the state row). Re-run step 6's FTS REINDEX and the citations re-extract afterwards.
-- Cantonal: same as fedlex, `UPDATE ch_act_version SET full_text = akn_xml WHERE source IN ('lexwork_pdf','lexfind','zhlex') AND akn_xml IS NOT NULL AND stage='parsed'`
-  (zhlex: only rows with the notes.zh.ch URL prefix, their HTML editions keep the WebRT page in `akn_xml`).
+Stop the writers first: `tmux kill-session -t chclean-b` (and any running
+`fedlex-pdf-text` / `pdf-text` tmux) before rolling back.
+
+- **Fedlex PDF editions.** `akn_xml` holds the raw pdftotext text.
+  ```sql
+  UPDATE ch_act_version SET full_text = akn_xml
+   WHERE source='fedlex_pdf' AND stage='parsed' AND akn_xml IS NOT NULL;
+  ```
+  Complete: phase A leaves the articles unchanged (step 2/3 fingerprints are
+  identical), so only `full_text` ever differed.
+- **Decisions.** The raw text is in the gzip archive
+  `<raw_dir.parent>/raw-text/<spider>/<doc_id>.txt.gz`. Use the script, dry run
+  first:
+  ```bash
+  python scripts/restore_raw_text.py --dsn "$CHPIPE_DSN" --dry-run
+  python scripts/restore_raw_text.py --dsn "$CHPIPE_DSN" [--spider CH_BVGer] [--limit N]
+  ```
+  `--raw-dir` defaults to `$CHPIPE_RAW_DIR`. Per row it checks the archive sha
+  against `raw_sha256`, restores only rows whose text is still exactly the
+  cleaner's output (compare-and-set; others are counted `changed`), and marks the
+  state row `cleaned_at = NULL, attempts = max_attempts, last_error = 'rolled
+  back <date>'` so clean-text never re-claims it. Run it from the release that
+  cleaned (same cleaner code). Pass: `restored` = stamped count, `sha_mismatch`,
+  `archive_error`, `changed` all 0 or explained. Afterwards REINDEX
+  `idx_ch_court_fts` and re-run the citations re-extract (step 6).
+- **Cantonal PDF editions.** Only rows whose `akn_xml` is raw pdftotext text
+  (not a Lexwork JSON payload or a WebRT HTML page):
+  ```sql
+  UPDATE ch_act_version SET full_text = akn_xml
+   WHERE source IN ('lexwork_pdf','lexfind') AND stage='parsed'
+     AND akn_xml IS NOT NULL AND akn_xml NOT LIKE '{%' AND akn_xml NOT LIKE '<%';
+  UPDATE ch_act_version SET full_text = akn_xml
+   WHERE source='zhlex' AND stage='parsed' AND akn_xml IS NOT NULL
+     AND xml_url LIKE 'https://www.notes.zh.ch/appl/zhlex_r.nsf/WebView/%';
+  ```
+  Check the row counts against `SELECT source, count(*) ... WHERE akn_xml LIKE '{%' OR akn_xml LIKE '<%'`
+  first. NOT complete: this restores `full_text` only. The re-split articles and
+  the `ch_act_change` entries produced by step 7 stay in place; restoring the old
+  split means running the previous release with `CHPIPE_RESPLIT=all` (per source,
+  as in step 7).
 
 ### 9. Known buckets (not bugs)
 
@@ -1305,6 +1342,11 @@ counted `kept` and untouched.
   archive is a follow-up.
 - `archive write failed`: the archive write itself failed (disk, permissions);
   the row is untouched and retried on the next run (3 attempts).
+  Count the buckets:
+  ```sql
+  SELECT count(*) FROM ch_text_clean_state WHERE last_error LIKE 'archive conflict%';
+  SELECT count(*) FROM ch_text_clean_state WHERE last_error LIKE 'archive write failed%';
+  ```
 - About 23K two-column PDF decisions (CH_UNIBE about 94 %, CH_VB about 29 %)
   are only approximately ordered by the column splitter: they need a re-fetch
   of the PDFs in raw mode. Follow-up, not in this runbook.

@@ -231,27 +231,24 @@ def text_damage(conn, sample_pct: float = 0.2) -> list[dict]:
     night. Runs in one transaction with a 60 s statement_timeout; a timeout
     raises -- the caller (delta) turns that into one WARNING.
     """
-    out: list[dict] = []
+    dec: dict[str, list[str]] = {}
+    ed: dict[str, list[str]] = {}
     with conn.transaction():
         conn.execute(f"SET LOCAL statement_timeout = '{DAMAGE_STATEMENT_TIMEOUT}'")
-        groups: dict[str, list[str]] = {}
         for r in conn.execute(
                 "SELECT spider, full_text FROM ch_court_decisions "
                 "TABLESAMPLE SYSTEM (%s) "
                 "WHERE text_source IN ('pdf','ocr') AND full_text IS NOT NULL "
                 "AND full_text <> '' AND NOT (spider = ANY(%s))",
                 (sample_pct, sorted(OWN_REFLOW_SPIDERS))):
-            groups.setdefault(r["spider"], []).append(r["full_text"])
-        out += [_damage_row("ch_court_decisions", g, t)
-                for g, t in sorted(groups.items())]
-        groups = {}
+            dec.setdefault(r["spider"], []).append(r["full_text"])
         for r in conn.execute(
                 "SELECT source, full_text FROM ch_act_version "
                 "TABLESAMPLE SYSTEM (%s) "
                 "WHERE source = ANY(%s) AND full_text IS NOT NULL "
                 "AND full_text <> ''",
                 (sample_pct, list(DAMAGE_EDITION_SOURCES))):
-            groups.setdefault(r["source"], []).append(r["full_text"])
-        out += [_damage_row("ch_act_version", g, t)
-                for g, t in sorted(groups.items())]
-    return out
+            ed.setdefault(r["source"], []).append(r["full_text"])
+    # markers are CPU work: computed after the transaction has closed
+    return ([_damage_row("ch_court_decisions", g, t) for g, t in sorted(dec.items())]
+            + [_damage_row("ch_act_version", g, t) for g, t in sorted(ed.items())])
