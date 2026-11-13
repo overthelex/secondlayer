@@ -121,3 +121,16 @@ def test_limit_and_spider_filter(conn, raw_dir):
     _cleaned(conn, raw_dir, "b")
     assert rr.restore(conn, raw_dir, limit=1)["restored"] == 1
     assert rr.restore(conn, raw_dir, spider="OTHER")["restored"] == 0
+
+
+def test_corrupt_archive_is_skipped_and_batch_survives(conn, raw_dir):
+    _cleaned(conn, raw_dir, "a")
+    _cleaned(conn, raw_dir, "b")
+    p = raw_text_archive.path_for(raw_dir, "CH_BVGer", "a")
+    data = bytearray(p.read_bytes())
+    for i in range(12, len(data) - 8):          # corrupt the deflate stream
+        data[i] ^= 0xFF
+    p.write_bytes(bytes(data))
+    c = rr.restore(conn, raw_dir)
+    assert c["archive_error"] == 1 and c["restored"] == 1
+    assert _text(conn, "a") == CLEAN and _text(conn, "b") == RAW

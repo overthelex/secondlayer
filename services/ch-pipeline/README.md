@@ -1161,8 +1161,7 @@ $PSQL -Atc "SELECT 1 FROM schema_migrations WHERE filename='260_ch_text_clean_st
 
 Pass: prints `1`. If it prints nothing, the nightly extract/ocr
 stages run with cleaning disabled (a `to_regclass` preflight) and every
-step below that touches `ch_text_clean_state` fails. Renumber at PR time if
-main moved past 258.
+step below that touches `ch_text_clean_state` fails.
 
 ### 2. Fedlex PDF editions: pilot (phase A)
 
@@ -1243,7 +1242,7 @@ $PSQL -Atc "SELECT count(*) FROM ch_text_clean_state WHERE cleaned_at IS NULL AN
 Then, OUTSIDE 10:15 Kyiv (about 3.5 h):
 
 ```bash
-$PSQL -c "SET statement_timeout=0; REINDEX INDEX CONCURRENTLY idx_ch_court_fts;"
+$PSQL -c "SET statement_timeout=0" -c "REINDEX INDEX CONCURRENTLY idx_ch_court_fts"
 $PSQL -c "UPDATE ch_citation_state s SET extracted_at = NULL, attempts = 0
   FROM ch_court_decisions d JOIN ch_text_clean_state c USING (doc_id)
   WHERE d.ecli = s.ecli AND c.cleaned_at IS NOT NULL"
@@ -1296,6 +1295,24 @@ counted `kept` and untouched.
 Stop the writers first: `tmux kill-session -t chclean-b` (and any running
 `fedlex-pdf-text` / `pdf-text` tmux) before rolling back.
 
+**Order for decisions** (the nightly keeps writing cleaned text and stamps
+until it is switched off, so reverting code first would leave stamped rows the
+old release no longer understands):
+
+1. stop the clean-text backfill (`tmux kill-session -t chclean-b`);
+2. switch the nightly off: set `CHPIPE_CLEAN_NEW_TEXT=0` for the delta and the
+   weekly `ocr` cron. With it off, nightly extract and OCR behave exactly as
+   when `ch_text_clean_state` is missing: raw text, no archive, no state write.
+   It is read from the environment of the process: add
+   `export CHPIPE_CLEAN_NEW_TEXT=0` next to the other `export`s in
+   `services/ch-pipeline/run-delta.sh` (the `CHPIPE_RAW_DIR` block), and
+   `CHPIPE_CLEAN_NEW_TEXT=0` to the variable lines at the top of
+   `deployment/lawrider-cthulhu/cron/crontab.fragment` (cron applies those to
+   every job, `ocr` included; they also reach `run-delta.sh`, which does not
+   override it);
+3. run `scripts/restore_raw_text.py` from the release that cleaned (below);
+4. only then revert the code, if wanted, and remove the switch.
+
 - **Fedlex PDF editions.** `akn_xml` holds the raw pdftotext text.
   ```sql
   UPDATE ch_act_version SET full_text = akn_xml
@@ -1340,8 +1357,12 @@ Stop the writers first: `tmux kill-session -t chclean-b` (and any running
   text differs from the archived one. The new raw is stored uncleaned and the
   row stays unstamped. The bucket grows with re-OCR/re-extraction; a versioned
   archive is a follow-up.
-- `archive write failed`: the archive write itself failed (disk, permissions);
-  the row is untouched and retried on the next run (3 attempts).
+- `archive write failed (...)`: the archive write itself failed (disk,
+  permissions) and no archive exists. Nightly: the new raw text is stored
+  uncleaned and unstamped, `last_error` records the reason. Backfill: the row
+  is untouched, one attempt is spent (3 attempts, then it is parked). Both
+  paths use the same `archive write failed (` prefix; the backfill fixes itself
+  once the disk is fixed, the nightly row is picked up by the next backfill run.
   Count the buckets:
   ```sql
   SELECT count(*) FROM ch_text_clean_state WHERE last_error LIKE 'archive conflict%';
@@ -1374,6 +1395,7 @@ never fails the delta.
 
 | var | stage(s) | meaning |
 |-----|----------|---------|
+| `CHPIPE_CLEAN_NEW_TEXT` | `extract`, `ocr` (nightly) | `0` = kill switch for text cleanup of new PDF/OCR text: raw text, no archive, no state write (as with a missing `ch_text_clean_state`); default on. See the rollback order in step 8 of the text cleanup runbook |
 | `CHPIPE_SHAB_FROM` | `shab-list` | first month to walk, `"YYYY-MM"` (default `2000-01`) — the backfill's starting point, irrelevant once every month before it has a `done_at` progress row |
 | `CHPIPE_SHAB_RPS` | `shab-list`, `shab-detail` | requests/second ceiling against amtsblattportal.ch (default `10`) — one rate limiter shared by both stages, since they hit the same host |
 | `CHPIPE_SHAB_CONCURRENCY` | `shab-list`, `shab-detail` | in-flight requests each stage's `Fetcher` runs (default `4`, must be an integer 1-32); `Settings.shab_concurrency`, see `_shab_concurrency()` in `chpipe/config.py`. Through the SOCKS tunnel to prod (~0.4-0.7 s RTT per hop), throughput is roughly concurrency / RTT regardless of `CHPIPE_SHAB_RPS` — 4 in flight caps a run at ~5-10 req/s no matter how high the rate limiter is set — so raise this together with `CHPIPE_SHAB_RPS` to actually get more throughput |

@@ -95,10 +95,19 @@ def languages_for(row) -> list[str]:
     return list(row.get("languages") or [])
 
 
+def clean_new_text_enabled() -> bool:
+    """Kill switch for the nightly path: CHPIPE_CLEAN_NEW_TEXT=0 turns it off
+    (default on). Off behaves exactly like a missing state table: raw text,
+    no archive, no state write."""
+    return (os.environ.get("CHPIPE_CLEAN_NEW_TEXT") or "1").strip() != "0"
+
+
 def cleans_new_text(row, source: str) -> bool:
     """True for a PDF/OCR decision whose new text the nightly path cleans.
-    HTML rows and the spiders that reflow their own text are untouched."""
-    return (source != "html" and not row.get("cleaning_disabled")
+    HTML rows and the spiders that reflow their own text are untouched, and
+    so is everything while the CHPIPE_CLEAN_NEW_TEXT=0 kill switch is set."""
+    return (clean_new_text_enabled()
+            and source != "html" and not row.get("cleaning_disabled")
             and row["spider"] not in text_clean.OWN_REFLOW_SPIDERS)
 
 
@@ -207,6 +216,20 @@ def complete_with_clean_state(conn, row, next_stage: str, **fields) -> None:
             db.mark_clean_conflict(conn, row["doc_id"], row["spider"], conflict)
         return
     if not sha:
+        if ("full_text" in fields and not row.get("cleaning_disabled")
+                and clean_new_text_enabled()):
+            # New full_text stored WITHOUT cleaning (HTML re-extract,
+            # own-reflow spider): a stamp left behind would claim the old
+            # archive describes this text. Un-stamp in the same transaction.
+            if row["spider"] in text_clean.OWN_REFLOW_SPIDERS:
+                why = "own-reflow spider"
+            else:
+                why = "non-pdf source"
+            with conn.transaction():
+                db.complete(conn, row["doc_id"], next_stage, **fields)
+                db.unstamp_clean_state(conn, row["doc_id"],
+                                       f"rewritten without cleaning ({why})")
+            return
         db.complete(conn, row["doc_id"], next_stage, **fields)
         return
     with conn.transaction():
@@ -282,41 +305,50 @@ def run(settings: Settings, limit: int | None = None, spider: str | None = None,
     report = CleanTextReport()
     conn = db.connect(settings)
     remaining = limit
-    # Rows left pending in THIS run (failed, conflicting, skipped, transient)
-    # are unstamped and would come straight back from the claim; skip them
-    # so the run moves on.
-    seen_bad: set[str] = set()
+    # Keyset cursor (spider, doc_id): rows left pending in THIS run (failed,
+    # conflicting, skipped, transient) are unstamped and would come straight
+    # back from the claim; the cursor moves past every claimed row, so none is
+    # read twice and each claim is an index range scan from where the last
+    # one ended. A later run starts from the beginning again.
+    cursor: tuple[str, str] | None = None
     try:
         while True:
             throttle.wait_for_capacity(settings.load_ceiling, STAGE)
             size = batch if remaining is None else min(batch, remaining)
             if size <= 0:
                 break
-            rows = db.claim_for_clean(conn, size + len(seen_bad), spider=spider,
-                                      max_attempts=settings.max_attempts)
-            rows = [r for r in rows if r["doc_id"] not in seen_bad][:size]
+            rows = db.claim_for_clean(conn, size, spider=spider,
+                                      max_attempts=settings.max_attempts,
+                                      after=cursor)
             if not rows:
                 break
+            cursor = (rows[-1]["spider"], rows[-1]["doc_id"])
             for row in rows:
                 try:
                     _process(conn, settings, row, report)
                 except _Pending:
-                    seen_bad.add(row["doc_id"])
+                    pass
                 except psycopg.OperationalError as exc:
                     # Lock or statement timeout: not the row's fault, so no
                     # attempt is spent. Left unstamped for a later run.
                     log.warning("%s/%s: transient: %s", row["spider"], row["doc_id"], exc)
                     report.transient += 1
-                    seen_bad.add(row["doc_id"])
                 except Exception as exc:                        # noqa: BLE001
                     # An existing archive that cannot be read (EOFError,
                     # BadGzipFile/OSError, zlib.error, UnicodeDecodeError),
                     # an unsafe doc_id (ValueError) or a cleaner bug: one
                     # attempt spent, the decision row and archive untouched.
                     log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)
-                    db.fail_clean(conn, row["doc_id"], f"{type(exc).__name__}: {exc}")
+                    msg = f"{type(exc).__name__}: {exc}"
+                    if (isinstance(exc, OSError)
+                            and not raw_text_archive.path_for(
+                                settings.raw_dir, row["spider"],
+                                row["doc_id"]).exists()):
+                        # No archive on disk: writing it failed (ENOSPC,
+                        # EACCES, ...). Same wording as the nightly path.
+                        msg = f"archive write failed ({msg})"
+                    db.fail_clean(conn, row["doc_id"], msg)
                     report.failed += 1
-                    seen_bad.add(row["doc_id"])
             if remaining is not None:
                 remaining -= len(rows)
             log.info("%s", report)

@@ -12,7 +12,10 @@ this script. For every stamped row (ch_text_clean_state.cleaned_at IS NOT NULL):
        UPDATE ch_court_decisions SET full_text = <archive>
         WHERE doc_id = ... AND full_text = clean_pdf_text(<archive>, langs)
      so a row whose text changed after cleaning (re-extracted, re-OCRed) is
-     left alone and counted `changed`;
+     left alone and counted `changed` (this includes a row whose languages
+     were relabelled in the same nightly write: the cleaner then no longer
+     reproduces the stored text, which is fail-safe -- it is skipped, never
+     overwritten);
   3. mark the state row rolled back: cleaned_at = NULL, attempts =
      max_attempts (CHPIPE_MAX_ATTEMPTS, default 3), last_error = 'rolled back
      <date>', so clean-text's claim (attempts < max_attempts) never takes it again.
@@ -27,6 +30,7 @@ import argparse
 import datetime
 import os
 import sys
+import zlib
 from pathlib import Path
 
 import psycopg
@@ -74,7 +78,7 @@ def restore(conn, raw_dir, *, spider=None, limit=None, dry_run=False,
             for r in rows:
                 try:
                     archived = raw_text_archive.load(raw_dir, r["spider"], r["doc_id"])
-                except (OSError, EOFError, ValueError) as exc:  # incl. BadGzipFile
+                except (OSError, EOFError, ValueError, zlib.error) as exc:  # incl. BadGzipFile
                     print(f"archive error {r['doc_id']}: {type(exc).__name__}", file=sys.stderr)
                     counts["archive_error"] += 1
                     continue

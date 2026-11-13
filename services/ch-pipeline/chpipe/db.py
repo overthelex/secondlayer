@@ -591,7 +591,8 @@ def seed_clean_state(conn) -> int:
 
 
 def claim_for_clean(conn, limit: int, spider: str | None = None,
-                    max_attempts: int = 3) -> list[dict]:
+                    max_attempts: int = 3,
+                    after: tuple[str, str] | None = None) -> list[dict]:
     """Pending clean-text rows: unstamped, attempts left, decision at `loaded`.
 
     Same shape as claim_for_citations, for the same reasons: FOR UPDATE OF s
@@ -601,12 +602,21 @@ def claim_for_clean(conn, limit: int, spider: str | None = None,
     IS NULL, so both the unfiltered and the per-spider claim are an index scan
     over the backlog only (ordering by the primary key alone measured 9.1 s
     per claim as a merge join on prod against 0.2 s on the partial index). Under autocommit the lock is
-    released when the SELECT completes, so one process per stage."""
+    released when the SELECT completes, so one process per stage.
+
+    `after` is a keyset cursor (spider, doc_id): only rows strictly after it
+    are returned. The stage carries the last claimed key across batches so a
+    row left pending in this run is never read again. d.text_source is
+    restricted to pdf/ocr like the seed: an HTML-derived text must never be
+    archived as "raw" and re-cleaned."""
     sql = ("SELECT " + _CLAIM_CLEAN_COLUMNS + " FROM ch_text_clean_state s "
            "JOIN ch_court_decisions d USING (doc_id) "
            "WHERE s.cleaned_at IS NULL AND s.attempts < %s "
-           "AND d.stage = 'loaded'")
+           "AND d.stage = 'loaded' AND d.text_source IN ('pdf', 'ocr')")
     params: list = [max_attempts]
+    if after is not None:
+        sql += " AND (s.spider, s.doc_id) > (%s, %s)"
+        params.extend(after)
     if spider:
         sql += " AND s.spider = %s"
         params.append(spider)
@@ -663,8 +673,24 @@ def ensure_clean_state_stamped(conn, doc_id: str, spider: str, raw_sha256: str,
         "VALUES (%s, %s, %s, %s, now()) "
         "ON CONFLICT (doc_id) DO UPDATE SET cleaned_at = now(), "
         "raw_sha256 = EXCLUDED.raw_sha256, cleaner_version = EXCLUDED.cleaner_version, "
-        "last_error = NULL",
+        "last_error = NULL "
+        # A row restore_raw_text.py rolled back is left untouched: stamping it
+        # would hand a restored (raw) row back to the cleaner's bookkeeping.
+        "WHERE COALESCE(ch_text_clean_state.last_error, '') NOT LIKE 'rolled back%%'",
         (doc_id, spider, raw_sha256, cleaner_version))
+
+
+def unstamp_clean_state(conn, doc_id: str, reason: str) -> None:
+    """A writer stored new full_text WITHOUT cleaning it: drop the stamp and
+    the archive trust (cleaned_at, raw_sha256 NULL) and say why. Only touches
+    a row that is stamped or still carries a raw_sha256, and never a row
+    restore_raw_text.py rolled back."""
+    conn.execute(
+        "UPDATE ch_text_clean_state SET cleaned_at = NULL, raw_sha256 = NULL, "
+        "last_error = %s WHERE doc_id = %s "
+        "AND (cleaned_at IS NOT NULL OR raw_sha256 IS NOT NULL) "
+        "AND COALESCE(last_error, '') NOT LIKE 'rolled back%%'",
+        (reason[:2000], doc_id))
 
 
 def enqueue_for_citations(conn, eclis: list[str]) -> None:

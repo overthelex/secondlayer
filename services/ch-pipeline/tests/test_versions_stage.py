@@ -622,3 +622,20 @@ def test_run_reports_a_rewalk_as_rewalked_not_discovered(conn, settings,
     assert second.pdf_rewalked == 1
     # The re-walk wrote no new rows.
     assert conn.execute("SELECT count(*) FROM ch_act_version").fetchone()[0] == 3
+
+
+def test_xml_upsert_reclaim_also_clears_akn_xml(conn):
+    """The reclaim must drop the raw pdftotext text the pdf pass kept in
+    akn_xml: the XML pipeline rewrites akn_xml at fetch, and nothing may
+    read the old text as if it were the new edition's XML."""
+    pdf_row = _pdf_row()
+    versions_stage.upsert_pdf_version(conn, pdf_row)
+    conn.execute(
+        "UPDATE ch_act_version SET stage = 'parsed', full_text = 'clean', "
+        "akn_xml = 'raw pdftotext' WHERE eli_consolidation_uri = %s AND lang = 'de'",
+        (pdf_row["consolidation"],))
+    xml_row = _row(date="2026-01-01")
+    versions_stage.upsert_version(conn, xml_row)
+    assert conn.execute(
+        "SELECT akn_xml FROM ch_act_version WHERE eli_consolidation_uri = %s "
+        "AND lang = 'de'", (xml_row["consolidation"],)).fetchone()[0] is None

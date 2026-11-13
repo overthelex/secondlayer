@@ -464,3 +464,127 @@ def test_main_seed_mode_seeds_and_exits(conn, settings, monkeypatch):
     assert clean_text_stage.main() == 1
     assert _state(conn, "a")["cleaned_at"] is None
     assert _full_text(conn, "a") == GR_FIXTURE
+
+
+# --- final-review fixes ---------------------------------------------------
+
+def test_kill_switch_makes_nightly_store_raw_without_archive(conn, settings, monkeypatch):
+    monkeypatch.setenv("CHPIPE_CLEAN_NEW_TEXT", "0")
+    row = {"doc_id": "k", "spider": "CH_BVGer", "languages": ["de"]}
+    assert clean_text_stage.cleans_new_text(row, "pdf") is False
+    text, _q, _r = clean_text_stage.clean_new_text(settings, row, GR_FIXTURE, "pdf")
+    assert text == GR_FIXTURE
+    assert "clean_sha256" not in row
+    assert not raw_text_archive.path_for(settings.raw_dir, "CH_BVGer", "k").exists()
+    monkeypatch.setenv("CHPIPE_CLEAN_NEW_TEXT", "1")
+    assert clean_text_stage.cleans_new_text(row, "pdf") is True
+    monkeypatch.delenv("CHPIPE_CLEAN_NEW_TEXT")
+    assert clean_text_stage.cleans_new_text(row, "pdf") is True
+
+
+def test_kill_switch_off_skips_state_writes(conn, monkeypatch):
+    monkeypatch.setenv("CHPIPE_CLEAN_NEW_TEXT", "0")
+    _insert_decision(conn, "k", "CH_BVGer", "pdf", "t")
+    db.seed_clean_state(conn)
+    db.stamp_clean(conn, "k", "sha", 1)
+    monkeypatch.setattr(clean_text_stage.db, "complete", lambda c, d, s, **f: c.execute(
+        "UPDATE ch_court_decisions SET full_text=%s WHERE doc_id=%s", (f["full_text"], d)))
+    clean_text_stage.complete_with_clean_state(
+        conn, {"doc_id": "k", "spider": "CH_BVGer"}, "extracted", full_text="raw2")
+    assert _state(conn, "k")["cleaned_at"] is not None     # no state write
+
+
+def test_ensure_clean_state_stamped_leaves_rolled_back_row_alone(conn):
+    _insert_decision(conn, "r", "CH_BVGer", "pdf", "t")
+    db.seed_clean_state(conn)
+    conn.execute("UPDATE ch_text_clean_state SET attempts=3, "
+                 "last_error='rolled back 2026-11-13' WHERE doc_id='r'")
+    db.ensure_clean_state_stamped(conn, "r", "CH_BVGer", "s9", 5)
+    st = _state(conn, "r")
+    assert st["cleaned_at"] is None and st["raw_sha256"] is None
+    assert st["last_error"] == "rolled back 2026-11-13" and st["attempts"] == 3
+
+
+def test_run_does_not_refetch_bad_rows(conn, settings, monkeypatch):
+    for i in range(5):
+        _insert_decision(conn, f"b{i}", "CH_BVGer", "pdf", "x")
+    for i in range(3):
+        _insert_decision(conn, f"g{i}", "CH_BVGer", "pdf", GR_FIXTURE)
+    db.seed_clean_state(conn)
+    conn.execute("UPDATE ch_court_decisions SET full_text='' WHERE doc_id LIKE 'b%'")
+    fetched = []
+    real = db.claim_for_clean
+
+    def counting(*a, **kw):
+        rows = real(*a, **kw)
+        fetched.extend(r["doc_id"] for r in rows)
+        return rows
+
+    monkeypatch.setattr(clean_text_stage.db, "claim_for_clean", counting)
+    report = clean_text_stage.run(settings, batch=2)
+    assert report.failed == 5 and report.cleaned == 3
+    assert len(fetched) == 8 and len(set(fetched)) == 8
+
+
+def test_claim_keyset_cursor_skips_earlier_keys(conn):
+    for d in ("a", "b", "c"):
+        _insert_decision(conn, d, "CH_BVGer", "pdf", "t")
+    db.seed_clean_state(conn)
+    rows = db.claim_for_clean(conn, 10, after=("CH_BVGer", "a"))
+    assert [r["doc_id"] for r in rows] == ["b", "c"]
+
+
+def test_claim_requires_pdf_or_ocr_text_source(conn):
+    _insert_decision(conn, "a", "CH_BVGer", "pdf", "t")
+    _insert_decision(conn, "b", "CH_BVGer", "ocr", "t")
+    db.seed_clean_state(conn)
+    conn.execute("UPDATE ch_court_decisions SET text_source='html' WHERE doc_id='a'")
+    assert [r["doc_id"] for r in db.claim_for_clean(conn, 10)] == ["b"]
+
+
+def _stub_complete(monkeypatch):
+    monkeypatch.setattr(clean_text_stage.db, "complete", lambda c, d, s, **f: c.execute(
+        "UPDATE ch_court_decisions SET full_text=%s, stage=%s WHERE doc_id=%s",
+        (f["full_text"], s, d)))
+
+
+def test_uncleaned_rewrite_unstamps_and_backfill_leaves_html_alone(conn, settings, monkeypatch):
+    _insert_decision(conn, "h", "CH_BVGer", "pdf", GR_FIXTURE)
+    db.seed_clean_state(conn)
+    assert clean_text_stage.run(settings).cleaned == 1
+    assert _state(conn, "h")["raw_sha256"]
+    _stub_complete(monkeypatch)
+    conn.execute("UPDATE ch_court_decisions SET text_source='html' WHERE doc_id='h'")
+    clean_text_stage.complete_with_clean_state(
+        conn, {"doc_id": "h", "spider": "CH_BVGer"}, "extracted", full_text=HTML_FIXTURE)
+    st = _state(conn, "h")
+    assert st["cleaned_at"] is None and st["raw_sha256"] is None
+    assert st["last_error"].startswith("rewritten without cleaning (")
+    conn.execute("UPDATE ch_court_decisions SET stage='loaded' WHERE doc_id='h'")
+    clean_text_stage.run(settings)
+    assert _full_text(conn, "h") == HTML_FIXTURE
+
+
+def test_uncleaned_rewrite_with_cleaning_disabled_keeps_stamp(conn, settings, monkeypatch):
+    _insert_decision(conn, "h", "CH_BVGer", "pdf", "t")
+    db.seed_clean_state(conn)
+    db.stamp_clean(conn, "h", "sha", 1)
+    _stub_complete(monkeypatch)
+    clean_text_stage.complete_with_clean_state(
+        conn, {"doc_id": "h", "spider": "CH_BVGer", "cleaning_disabled": True},
+        "extracted", full_text="new")
+    assert _state(conn, "h")["cleaned_at"] is not None
+
+
+def test_backfill_archive_write_failure_is_recorded_with_prefix(conn, settings, monkeypatch):
+    _insert_decision(conn, "w", "CH_BVGer", "pdf", GR_FIXTURE)
+    db.seed_clean_state(conn)
+
+    def boom(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(clean_text_stage.raw_text_archive, "save", boom)
+    report = clean_text_stage.run(settings)
+    assert report.failed == 1
+    assert _state(conn, "w")["last_error"].startswith("archive write failed (OSError")
+    assert _full_text(conn, "w") == GR_FIXTURE
