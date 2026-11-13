@@ -165,14 +165,29 @@ export function trimRow(row: any): any {
   return out;
 }
 
-/** Company name for a court-party search: short name, legal form and quotes removed. */
+/**
+ * Company name for a court-party search: legal form and quotes removed.
+ * A one-word quoted name («ВОДОКАНАЛ», «ГАРНЕ МІСТО» is two) matches every
+ * namesake in the country, so the words after the quotes (the owning council,
+ * the city) are kept with it: «ВОДОКАНАЛ» ОВРУЦЬКОЇ МІСЬКОЇ РАДИ → ВОДОКАНАЛ
+ * ОВРУЦЬКОЇ МІСЬКОЇ РАДИ. Prefers the full name, which carries that tail.
+ */
 export function partyNameFor(entity: any): string | null {
-  const raw = String(entity?.short_name || entity?.name || '').trim();
+  const full = String(entity?.name || '').trim();
+  const short = String(entity?.short_name || '').trim();
+  const raw = full || short;
   if (!raw) return null;
-  const quoted = raw.match(/[«"“]([^»"”]+)[»"”]/);
-  const core = (quoted ? quoted[1] : raw)
-    .replace(/^(ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ|ПРИВАТНЕ ПІДПРИЄМСТВО|ТОВ|ПП|ПРАТ|ПАТ|АТ|ДП|КП)\s+/i, '')
-    .trim();
+  const m = raw.match(/[«"“]([^»"”]+)[»"”](.*)$/);
+  let core: string;
+  if (m) {
+    core = m[1].trim();
+    const tail = m[2].replace(/^[\s,.;:-]+/, '').split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
+    if (!/\s/.test(core) && tail.split(' ').length >= 2) core = `${core} ${tail}`;
+  } else {
+    core = (short || full)
+      .replace(/^(ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ|ПРИВАТНЕ ПІДПРИЄМСТВО|ТОВ|ПП|ПРАТ|ПАТ|АТ|ДП|КП)\s+/i, '')
+      .trim();
+  }
   return core.length >= 3 ? core : null;
 }
 

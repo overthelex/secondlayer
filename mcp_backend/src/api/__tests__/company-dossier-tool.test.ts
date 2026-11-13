@@ -148,6 +148,10 @@ describe('dossier helpers', () => {
 
   it('partyNameFor and registrationDate', () => {
     expect(partyNameFor({ short_name: 'ПП «АЛЬФА»' })).toBe('АЛЬФА');
+    // one quoted word plus the owner after the quotes, not every namesake in the country
+    expect(partyNameFor({ name: 'КОМУНАЛЬНЕ ПІДПРИЄМСТВО "ВОДОКАНАЛ" ОВРУЦЬКОЇ МІСЬКОЇ РАДИ ЖИТОМИРСЬКОЇ ОБЛАСТІ', short_name: 'КП "ВОДОКАНАЛ"' }))
+      .toBe('ВОДОКАНАЛ ОВРУЦЬКОЇ МІСЬКОЇ РАДИ');
+    expect(partyNameFor({ name: 'ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "КОМПАНІЯ МАСШТАБ БУД"' })).toBe('КОМПАНІЯ МАСШТАБ БУД');
     expect(partyNameFor({ name: 'ТОВ ОМЕГА ПЛЮС' })).toBe('ОМЕГА ПЛЮС');
     expect(partyNameFor({ short_name: 'ТОВ "АБ"' })).toBeNull();
     expect(partyNameFor(null)).toBeNull();
