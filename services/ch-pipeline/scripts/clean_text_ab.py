@@ -98,7 +98,7 @@ def worst_losses(docs, k=10):
 
 def fetch(conn, sample, raw_dir=None):
     """Read-only fetch: [(doc_id, raw_text, languages)] for the sample decisions."""
-    conn.execute("SET default_transaction_read_only = on")
+    conn.execute("SET TRANSACTION READ ONLY")  # first statement of the txn
     ids = sample.get("decisions", [])
     cur = conn.execute(
         "SELECT doc_id, spider, full_text, languages, metadata_json->>'Sprache' AS sprache"
