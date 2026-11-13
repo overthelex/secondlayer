@@ -562,7 +562,7 @@ def claim_for_citations(conn, limit: int, spider: str | None = None,
 
 # --- clean-text queue (migration 259, ch_text_clean_state) ---------------
 
-_CLAIM_CLEAN_COLUMNS = ("s.doc_id, s.spider, d.languages, d.full_text, "
+_CLAIM_CLEAN_COLUMNS = ("s.doc_id, s.spider, s.raw_sha256, d.languages, d.full_text, "
                         "d.text_quality, d.metadata_json->>'Sprache' AS sprache")
 
 
@@ -573,14 +573,19 @@ def seed_clean_state(conn) -> int:
     text_clean.OWN_REFLOW_SPIDERS cut and reflow their own text and are left
     out. Reads ch_court_decisions, never writes it."""
     from .text_clean import OWN_REFLOW_SPIDERS
-    cur = conn.execute(
-        "INSERT INTO ch_text_clean_state (doc_id, spider) "
-        "SELECT doc_id, spider FROM ch_court_decisions "
-        "WHERE stage = 'loaded' AND text_source IN ('pdf', 'ocr') "
-        "AND spider <> ALL(%s) AND doc_id IS NOT NULL "
-        "ON CONFLICT DO NOTHING",
-        (sorted(OWN_REFLOW_SPIDERS),))
-    return cur.rowcount
+    # The INSERT ... SELECT scans the whole 33 GB heap: no statement timeout
+    # for this one statement (SET LOCAL needs the explicit transaction).
+    with conn.transaction():
+        conn.execute("SET LOCAL statement_timeout = 0")
+        cur = conn.execute(
+            "INSERT INTO ch_text_clean_state (doc_id, spider) "
+            "SELECT doc_id, spider FROM ch_court_decisions "
+            "WHERE stage = 'loaded' AND text_source IN ('pdf', 'ocr') "
+            "AND spider <> ALL(%s) AND doc_id IS NOT NULL "
+            "AND full_text IS NOT NULL AND full_text <> '' "
+            "ON CONFLICT DO NOTHING",
+            (sorted(OWN_REFLOW_SPIDERS),))
+        return cur.rowcount
 
 
 def claim_for_clean(conn, limit: int, spider: str | None = None,
@@ -589,9 +594,11 @@ def claim_for_clean(conn, limit: int, spider: str | None = None,
 
     Same shape as claim_for_citations, for the same reasons: FOR UPDATE OF s
     locks the narrow state row only, never the 33 GB decision row the other
-    stages write; ORDER BY s.doc_id is the state table's own key (a stable
-    order an index scan can feed); the spider predicate is on s.spider, the
-    leading column of idx_ch_text_clean_pending. Under autocommit the lock is
+    stages write; ORDER BY s.spider, s.doc_id is exactly the key of the
+    partial index idx_ch_text_clean_pending (spider, doc_id) WHERE cleaned_at
+    IS NULL, so both the unfiltered and the per-spider claim are an index scan
+    over the backlog only (ordering by the primary key alone measured 9.1 s
+    per claim as a merge join on prod against 0.2 s on the partial index). Under autocommit the lock is
     released when the SELECT completes, so one process per stage."""
     sql = ("SELECT " + _CLAIM_CLEAN_COLUMNS + " FROM ch_text_clean_state s "
            "JOIN ch_court_decisions d USING (doc_id) "
@@ -601,7 +608,7 @@ def claim_for_clean(conn, limit: int, spider: str | None = None,
     if spider:
         sql += " AND s.spider = %s"
         params.append(spider)
-    sql += " ORDER BY s.doc_id LIMIT %s FOR UPDATE OF s SKIP LOCKED"
+    sql += " ORDER BY s.spider, s.doc_id LIMIT %s FOR UPDATE OF s SKIP LOCKED"
     params.append(limit)
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(sql, params)
@@ -610,7 +617,11 @@ def claim_for_clean(conn, limit: int, spider: str | None = None,
 
 def stamp_clean(conn, doc_id: str, raw_sha256: str, cleaner_version: int) -> None:
     """Mark a decision cleaned: the cleaner version that produced its
-    full_text and the sha256 of the archived raw text. Clears last_error."""
+    full_text and the sha256 of the archived raw text. Clears last_error.
+
+    raw_sha256 is what lets a later run trust the archive (clean_text_stage):
+    a requeue for a new cleaner version must clear cleaned_at ONLY and keep
+    raw_sha256."""
     conn.execute(
         "UPDATE ch_text_clean_state SET cleaned_at = now(), raw_sha256 = %s, "
         "cleaner_version = %s, last_error = NULL WHERE doc_id = %s",

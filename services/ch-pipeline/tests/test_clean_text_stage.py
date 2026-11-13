@@ -93,6 +93,21 @@ def test_seed_selects_pdf_and_ocr_not_rpw(conn):
     assert db.seed_clean_state(conn) == 0, "re-seeding is a no-op"
 
 
+def test_seed_skips_null_and_empty_full_text(conn):
+    _insert_decision(conn, "n", "CH_BVGer", "pdf", None)
+    _insert_decision(conn, "e", "CH_BVGer", "pdf", "")
+    _insert_decision(conn, "a", "CH_BVGer", "pdf", "t")
+    assert db.seed_clean_state(conn) == 1
+    assert _state(conn, "n") is None and _state(conn, "e") is None
+
+
+def test_claim_returns_raw_sha256(conn):
+    _insert_decision(conn, "a", "CH_BVGer", "pdf", "t")
+    db.seed_clean_state(conn)
+    conn.execute("UPDATE ch_text_clean_state SET raw_sha256='abc'")
+    assert db.claim_for_clean(conn, 10)[0]["raw_sha256"] == "abc"
+
+
 # --- claim / stamp / fail -----------------------------------------------
 
 def test_claim_returns_the_row_with_sprache(conn):
@@ -104,11 +119,12 @@ def test_claim_returns_the_row_with_sprache(conn):
     assert row["sprache"] == "fr" and row["text_quality"] == pytest.approx(0.9)
 
 
-def test_claim_filters_by_spider_and_orders_by_doc_id(conn):
+def test_claim_filters_by_spider_and_orders_by_spider_doc_id(conn):
     for d, s in (("c", "CH_BVGer"), ("a", "CH_BVGer"), ("b", "ZG_Obergericht")):
         _insert_decision(conn, d, s, "pdf", "t")
     db.seed_clean_state(conn)
-    assert [r["doc_id"] for r in db.claim_for_clean(conn, 10)] == ["a", "b", "c"]
+    # ORDER BY s.spider, s.doc_id: the key of idx_ch_text_clean_pending
+    assert [r["doc_id"] for r in db.claim_for_clean(conn, 10)] == ["a", "c", "b"]
     assert [r["doc_id"] for r in db.claim_for_clean(conn, 10, spider="CH_BVGer")] == ["a", "c"]
     assert [r["doc_id"] for r in db.claim_for_clean(conn, 1)] == ["a"]
 
@@ -241,15 +257,108 @@ def test_run_rerun_after_update_without_stamp_is_idempotent(conn, settings):
 
 
 def test_run_existing_archive_is_the_raw_that_gets_cleaned(conn, settings):
-    """FileExistsError: the archive is the true raw; the stored text (here a
-    stale, half-processed one) is replaced by clean(archive)."""
+    """Superseded rule: an archive that neither matches the stamped
+    raw_sha256 nor cleans to the stored text is a CONFLICT (the row got new
+    raw text since). Row and archive are both left untouched."""
     raw_text_archive.save(settings.raw_dir, "CH_BVGer", "a", GR_FIXTURE)
     _insert_decision(conn, "a", "CH_BVGer", "pdf", "something else entirely")
     db.seed_clean_state(conn)
     report = clean_text_stage.run(settings)
-    assert report.cleaned == 1
-    assert _full_text(conn, "a") == text_clean.clean_pdf_text(GR_FIXTURE, ["de"])
+    assert report.archive_conflict == 1 and report.cleaned == 0
+    assert _full_text(conn, "a") == "something else entirely"
     assert raw_text_archive.load(settings.raw_dir, "CH_BVGer", "a") == GR_FIXTURE
+    st = _state(conn, "a")
+    assert st["attempts"] == 1 and st["cleaned_at"] is None
+    sha = raw_text_archive.sha256_of(GR_FIXTURE)
+    assert st["last_error"] == ("archive conflict: stored text not derived "
+                                f"from archive sha={sha[:12]}")
+
+
+def test_rerun_after_already_cleaned_stamps(conn, settings):
+    """(i) The stored text is already clean(archive), state unstamped and no
+    raw_sha256: stamp only, nothing rewritten."""
+    clean = text_clean.clean_pdf_text(GR_FIXTURE, ["de"])
+    raw_text_archive.save(settings.raw_dir, "CH_BVGer", "a", GR_FIXTURE)
+    _insert_decision(conn, "a", "CH_BVGer", "pdf", clean)
+    db.seed_clean_state(conn)
+    report = clean_text_stage.run(settings)
+    assert report.unchanged == 1 and report.archive_conflict == 0
+    st = _state(conn, "a")
+    assert st["cleaned_at"] is not None
+    assert st["raw_sha256"] == raw_text_archive.sha256_of(GR_FIXTURE)
+    row = conn.execute("SELECT updated_at < now() - interval '1 hour' AS old "
+                       "FROM ch_court_decisions WHERE doc_id='a'").fetchone()
+    assert row["old"]
+
+
+def test_requeue_for_new_cleaner_recleans_from_archive(conn, settings, monkeypatch):
+    """(ii) Stamped by an earlier cleaner version, requeued (cleaned_at
+    cleared, raw_sha256 kept): the new cleaner runs on the ARCHIVE."""
+    _insert_decision(conn, "a", "CH_BVGer", "pdf", GR_FIXTURE)
+    db.seed_clean_state(conn)
+    assert clean_text_stage.run(settings).cleaned == 1
+    conn.execute("UPDATE ch_text_clean_state SET cleaned_at = NULL WHERE doc_id='a'")
+    real = text_clean.clean_pdf_text
+    seen = []
+
+    def v2(raw, langs):
+        seen.append(raw)
+        return real(raw, langs) + "\n[v2]"
+
+    monkeypatch.setattr(clean_text_stage.text_clean, "clean_pdf_text", v2)
+    monkeypatch.setattr(clean_text_stage.text_clean, "CLEANER_VERSION", 99)
+    report = clean_text_stage.run(settings)
+    assert report.cleaned == 1 and report.archive_conflict == 0
+    assert seen == [GR_FIXTURE]
+    assert _full_text(conn, "a") == real(GR_FIXTURE, ["de"]) + "\n[v2]"
+    st = _state(conn, "a")
+    assert st["cleaner_version"] == 99
+    assert st["raw_sha256"] == raw_text_archive.sha256_of(GR_FIXTURE)
+
+
+def test_new_raw_text_with_old_archive_is_a_conflict(conn, settings):
+    """(iii) Archive A exists, but the row now holds NEW raw text (re-extracted
+    by the pipeline) and its state names a different raw sha: neither the
+    sha rule nor clean(A) == stored holds, so it is a conflict."""
+    raw_text_archive.save(settings.raw_dir, "CH_BVGer", "a", GR_FIXTURE)
+    new_raw = "Neu extrahiert.\n" + GR_FIXTURE
+    assert new_raw != GR_FIXTURE
+    _insert_decision(conn, "a", "CH_BVGer", "pdf", new_raw)
+    db.seed_clean_state(conn)
+    conn.execute("UPDATE ch_text_clean_state SET raw_sha256=%s WHERE doc_id='a'",
+                 (raw_text_archive.sha256_of(new_raw),))
+    report = clean_text_stage.run(settings)
+    assert report.archive_conflict == 1 and report.cleaned == 0
+    assert _full_text(conn, "a") == new_raw
+    assert raw_text_archive.load(settings.raw_dir, "CH_BVGer", "a") == GR_FIXTURE
+    assert _state(conn, "a")["cleaned_at"] is None
+
+
+def test_run_empty_full_text_fails_without_archiving(conn, settings):
+    _insert_decision(conn, "n", "CH_BVGer", "pdf", None)
+    _insert_decision(conn, "e", "CH_BVGer", "pdf", "")
+    conn.execute("INSERT INTO ch_text_clean_state (doc_id, spider) "
+                 "VALUES ('n','CH_BVGer'), ('e','CH_BVGer')")
+    report = clean_text_stage.run(settings)
+    assert report.failed == 2 and report.cleaned == 0
+    for d in ("n", "e"):
+        st = _state(conn, d)
+        assert st["last_error"] == "empty full_text" and st["attempts"] == 1
+        assert not raw_text_archive.path_for(settings.raw_dir, "CH_BVGer", d).exists()
+
+
+def test_operational_error_is_transient_and_spends_no_attempt(conn, settings, monkeypatch):
+    _insert_decision(conn, "p", "CH_VB", "pdf", HTML_FIXTURE)
+    db.seed_clean_state(conn)
+
+    def timeout(*a, **k):
+        raise psycopg.errors.LockNotAvailable("lock timeout")
+
+    monkeypatch.setattr(clean_text_stage.db, "stamp_clean", timeout)
+    report = clean_text_stage.run(settings)
+    assert report.transient == 1 and report.failed == 0
+    st = _state(conn, "p")
+    assert st["attempts"] == 0 and st["cleaned_at"] is None and st["last_error"] is None
 
 
 def test_run_reflowed_text_is_unchanged(conn, settings):

@@ -4,17 +4,23 @@ chpipe.text_clean, archiving the raw text first.
 For these rows full_text is the ONLY copy of the raw pdftotext output (the
 PDFs were deleted after extraction), so the order per row is fixed:
 
+  0. NULL/empty full_text: fail_clean("empty full_text"), nothing archived.
   1. raw_text_archive.save() -- gzip, fsynced, never overwritten. If an
-     archive already exists and differs (FileExistsError), the archive is the
-     true raw text: it is load()ed, its sha256 is the raw sha, and THAT text
-     is what gets cleaned, not the stored full_text. An archive that cannot
-     be read is a hard failure: fail_clean(), the decision is not touched.
+     archive A already exists and differs (FileExistsError), A is trusted
+     only if the state row's raw_sha256 == sha256(A) (stamped from A before;
+     a requeue keeps raw_sha256) -- then A is re-cleaned -- or the stored
+     full_text == clean(A) (idempotent re-run: stamp). Otherwise the row got
+     NEW raw text since A was written: fail_clean("archive conflict ..."),
+     row and archive untouched, counted in `archive_conflict`. An archive
+     that cannot be read is a hard failure: fail_clean(), nothing touched.
   2. clean = text_clean.clean_pdf_text(raw, languages).
   3. clean == stored full_text: stamp only (`unchanged`). Otherwise ONE
      transaction: a compare-and-set UPDATE of ch_court_decisions
      (`... AND full_text = <the text this run read>`) and stamp_clean(). A
      row the pipeline rewrote in between matches nothing; it is left alone,
      not stamped, and counted in `skipped_concurrent`.
+  A psycopg.OperationalError (lock/statement timeout) spends no attempt: the
+  row stays pending, counted in `transient`.
 
 text_quality is not written here (measured separately). The queue is
 ch_text_clean_state (migration 259); `CHPIPE_SEED=1` enrols the backlog
@@ -25,12 +31,12 @@ for capacity before each batch and renices in main(), like extract_stage.
 """
 from __future__ import annotations
 
-import gzip
 import json
 import logging
 import os
-import zlib
 from dataclasses import dataclass
+
+import psycopg
 
 from .. import db, raw_text_archive, text_clean, throttle
 from ..config import Settings
@@ -41,10 +47,6 @@ log = logging.getLogger(__name__)
 STAGE = "clean-text"
 BATCH_SIZE = 200
 
-# What raw_text_archive.save()/load() raise for an archive that exists but
-# cannot be read. Hard failures: never retried within a run, never
-# overwritten.
-_UNREADABLE = (EOFError, gzip.BadGzipFile, zlib.error, UnicodeDecodeError, OSError)
 
 
 @dataclass
@@ -53,6 +55,8 @@ class CleanTextReport:
     unchanged: int = 0
     failed: int = 0
     skipped_concurrent: int = 0
+    archive_conflict: int = 0
+    transient: int = 0
     archived_bytes: int = 0
     with_replacement_chars: int = 0
 
@@ -90,24 +94,50 @@ def languages_for(row) -> list[str]:
     return list(row.get("languages") or [])
 
 
+class _Pending(Exception):
+    """The row was deliberately left pending (already recorded in the
+    report); the run skips it for the rest of this run."""
+
+
 def _process(conn, settings: Settings, row, report: CleanTextReport) -> None:
     doc_id, spider = row["doc_id"], row["spider"]
-    stored = row["full_text"] or ""
+    stored = row["full_text"]
+    if not stored:
+        # Nothing to archive and nothing to clean; never archive an empty raw.
+        db.fail_clean(conn, doc_id, "empty full_text")
+        report.failed += 1
+        raise _Pending
+    langs = languages_for(row)
     path = raw_text_archive.path_for(settings.raw_dir, spider, doc_id)
     existed = path.exists()
     raw = stored
+    clean = None
     try:
         sha = raw_text_archive.save(settings.raw_dir, spider, doc_id, stored)
         if not existed:
             report.archived_bytes += path.stat().st_size
     except FileExistsError:
-        # An earlier run archived the true raw text; clean that.
-        raw = raw_text_archive.load(settings.raw_dir, spider, doc_id)
-        sha = raw_text_archive.sha256_of(raw)
+        # An archive A from an earlier run differs from the stored text. A
+        # is the raw only if this row was stamped from it (raw_sha256 kept
+        # across a requeue) or the stored text is exactly clean(A). Anything
+        # else means the pipeline gave the row NEW raw text since A was
+        # written: cleaning A would overwrite it, so leave both alone.
+        archived = raw_text_archive.load(settings.raw_dir, spider, doc_id)
+        sha = raw_text_archive.sha256_of(archived)
+        if row.get("raw_sha256") != sha:
+            clean = text_clean.clean_pdf_text(archived, langs)
+            if clean != stored:
+                db.fail_clean(conn, doc_id, "archive conflict: stored text not "
+                              f"derived from archive sha={sha[:12]}")
+                report.archive_conflict += 1
+                log.error("%s/%s: archive conflict (sha=%s)", spider, doc_id, sha[:12])
+                raise _Pending
+        raw = archived
     if "\ufffd" in raw:   # U+FFFD: a lossy extraction; counted, cleaned anyway
         report.with_replacement_chars += 1
 
-    clean = text_clean.clean_pdf_text(raw, languages_for(row))
+    if clean is None:
+        clean = text_clean.clean_pdf_text(raw, langs)
     if clean == stored:
         db.stamp_clean(conn, doc_id, sha, text_clean.CLEANER_VERSION)
         report.unchanged += 1
@@ -121,7 +151,7 @@ def _process(conn, settings: Settings, row, report: CleanTextReport) -> None:
             report.skipped_concurrent += 1
             log.warning("%s/%s: full_text changed since the claim; left alone",
                         spider, doc_id)
-            return
+            raise _Pending
         db.stamp_clean(conn, doc_id, sha, text_clean.CLEANER_VERSION)
     report.cleaned += 1
 
@@ -131,8 +161,9 @@ def run(settings: Settings, limit: int | None = None, spider: str | None = None,
     report = CleanTextReport()
     conn = db.connect(settings)
     remaining = limit
-    # Rows that failed or were skipped in THIS run stay unstamped and would
-    # come straight back from the claim; skip them so the run moves on.
+    # Rows left pending in THIS run (failed, conflicting, skipped, transient)
+    # are unstamped and would come straight back from the claim; skip them
+    # so the run moves on.
     seen_bad: set[str] = set()
     try:
         while True:
@@ -146,27 +177,28 @@ def run(settings: Settings, limit: int | None = None, spider: str | None = None,
             if not rows:
                 break
             for row in rows:
-                before = report.skipped_concurrent
                 try:
                     _process(conn, settings, row, report)
+                except _Pending:
+                    seen_bad.add(row["doc_id"])
+                except psycopg.OperationalError as exc:
+                    # Lock or statement timeout: not the row's fault, so no
+                    # attempt is spent. Left unstamped for a later run.
+                    log.warning("%s/%s: transient: %s", row["spider"], row["doc_id"], exc)
+                    report.transient += 1
+                    seen_bad.add(row["doc_id"])
                 except Exception as exc:                        # noqa: BLE001
-                    # _UNREADABLE (an existing archive that cannot be read),
+                    # An existing archive that cannot be read (EOFError,
+                    # BadGzipFile/OSError, zlib.error, UnicodeDecodeError),
                     # an unsafe doc_id (ValueError) or a cleaner bug: one
-                    # attempt spent, the decision row untouched.
+                    # attempt spent, the decision row and archive untouched.
                     log.error("%s/%s: %s", row["spider"], row["doc_id"], exc)
                     db.fail_clean(conn, row["doc_id"], f"{type(exc).__name__}: {exc}")
                     report.failed += 1
                     seen_bad.add(row["doc_id"])
-                    continue
-                if report.skipped_concurrent != before:
-                    seen_bad.add(row["doc_id"])
             if remaining is not None:
                 remaining -= len(rows)
-            log.info("cleaned=%d unchanged=%d failed=%d skipped_concurrent=%d "
-                     "archived_bytes=%d with_replacement_chars=%d",
-                     report.cleaned, report.unchanged, report.failed,
-                     report.skipped_concurrent, report.archived_bytes,
-                     report.with_replacement_chars)
+            log.info("%s", report)
     finally:
         conn.close()
     return report
@@ -192,11 +224,7 @@ def main():
                  limit=int(os.environ["CHPIPE_LIMIT"]) if os.environ.get("CHPIPE_LIMIT") else None,
                  spider=os.environ.get("CHPIPE_SPIDER") or None,
                  batch=int(batch_env) if batch_env else BATCH_SIZE)
-    log.info("cleaned=%d unchanged=%d failed=%d skipped_concurrent=%d "
-             "archived_bytes=%d with_replacement_chars=%d",
-             result.cleaned, result.unchanged, result.failed,
-             result.skipped_concurrent, result.archived_bytes,
-             result.with_replacement_chars)
+    log.info("%s", result)
     return result
 
 
