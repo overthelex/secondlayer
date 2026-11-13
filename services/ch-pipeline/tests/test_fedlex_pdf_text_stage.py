@@ -434,8 +434,61 @@ def test_resplit_writes_are_one_transaction(conn, settings, monkeypatch):
                         (vid,)).fetchone()[0] == 0
 
 
-def test_new_edition_stores_raw_in_akn_xml_and_clean_in_full_text(conn, settings):
+def test_new_edition_stores_raw_in_akn_xml_and_clean_in_full_text(conn, settings, monkeypatch):
+    from chpipe import fedlex_split
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    raw = "101\nBundesgesetz\n\nvom 1. Januar 1950\n\n\nArt. 12\nDer Bund sorgt.\n\nArt. 2\nDie Kantone vollziehen.\n\nAS 1950 1\n1   Fassung gemäss AS 1950 1.\n"
+    monkeypatch.setattr(mod, "from_pdf", lambda path: raw)
+    monkeypatch.setattr(text_quality, "score", lambda *a, **k: 1.0)
+    vid = _row(conn)
+    _run(settings, Host())
+    arts, clean = fedlex_split.split_fedlex_text(raw, "de")
+    row = _vrow(conn, vid)
+    assert row["akn_xml"] == raw
+    assert row["full_text"] == clean and row["full_text"] != row["akn_xml"]
+    assert row["article_count"] == len(arts) == 2
+    got = conn.execute("SELECT e_id FROM ch_act_article WHERE version_id=%s ORDER BY ordinal",
+                       (vid,)).fetchall()
+    assert [g[0] for g in got] == [a.e_id for a in arts]
+
+
+def test_new_edition_write_is_one_transaction(conn, settings, monkeypatch):
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    monkeypatch.setattr(mod, "from_pdf", lambda path: RESPLIT_TEXT)
+    monkeypatch.setattr(text_quality, "score", lambda *a, **k: 1.0)
+    orig = mod.parse_akn_stage.store_articles
+    def store_then_fail(c, v, arts):
+        orig(c, v, arts)
+        raise RuntimeError("crash")
+    monkeypatch.setattr(mod.parse_akn_stage, "store_articles", store_then_fail)
     vid = _row(conn)
     _run(settings, Host())
     row = _vrow(conn, vid)
-    assert row["akn_xml"] and "Gericht" in row["akn_xml"] and row["full_text"]
+    assert row["full_text"] is None and row["akn_xml"] is None
+    assert conn.execute("SELECT count(*) FROM ch_act_article WHERE version_id=%s",
+                        (vid,)).fetchone()[0] == 0
+
+
+def test_resplit_skips_degenerate_clean_text(conn, settings, monkeypatch):
+    from chpipe import fedlex_split
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    monkeypatch.setattr(fedlex_split, "split_fedlex_text", lambda raw, lang=None: ([], ""))
+    vid = _insert_pdf_edition(conn, full_text=COL0, akn_xml=None)
+    report = mod.resplit(settings, everything=True)
+    assert report.degenerate == 1 and report.cleaned == 0
+    row = _vrow(conn, vid)
+    assert row["full_text"] == COL0 and row["akn_xml"] is None
+
+
+def test_new_edition_degenerate_clean_text_stores_raw(conn, settings, monkeypatch):
+    from chpipe import fedlex_split
+    from chpipe.stages import fedlex_pdf_text_stage as mod
+    raw = "Titel\nText ohne Artikel\n" * 10
+    monkeypatch.setattr(mod, "from_pdf", lambda path: raw)
+    monkeypatch.setattr(text_quality, "score", lambda *a, **k: 1.0)
+    monkeypatch.setattr(fedlex_split, "split_fedlex_text", lambda r, lang=None: ([], "x"))
+    vid = _row(conn)
+    report = _run(settings, Host())
+    assert report.degenerate == 1 and report.parsed == 1
+    row = _vrow(conn, vid)
+    assert row["akn_xml"] == raw and row["full_text"] == raw
