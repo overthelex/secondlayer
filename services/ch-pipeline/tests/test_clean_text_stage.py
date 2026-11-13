@@ -482,7 +482,11 @@ def test_kill_switch_makes_nightly_store_raw_without_archive(conn, settings, mon
     assert clean_text_stage.cleans_new_text(row, "pdf") is True
 
 
-def test_kill_switch_off_skips_state_writes(conn, monkeypatch):
+def test_kill_switch_off_unstamps_a_row_rewritten_raw(conn, monkeypatch):
+    """With the switch off nothing is archived or stamped, but a stamped row
+    rewritten with raw text must lose its stamp: its raw_sha256 points at the
+    OLD archive, and a later cleaner-version requeue would re-clean that
+    archive over the newer text."""
     monkeypatch.setenv("CHPIPE_CLEAN_NEW_TEXT", "0")
     _insert_decision(conn, "k", "CH_BVGer", "pdf", "t")
     db.seed_clean_state(conn)
@@ -491,7 +495,9 @@ def test_kill_switch_off_skips_state_writes(conn, monkeypatch):
         "UPDATE ch_court_decisions SET full_text=%s WHERE doc_id=%s", (f["full_text"], d)))
     clean_text_stage.complete_with_clean_state(
         conn, {"doc_id": "k", "spider": "CH_BVGer"}, "extracted", full_text="raw2")
-    assert _state(conn, "k")["cleaned_at"] is not None     # no state write
+    st = _state(conn, "k")
+    assert st["cleaned_at"] is None and st["raw_sha256"] is None
+    assert st["last_error"].startswith("rewritten without cleaning (kill switch)")
 
 
 def test_ensure_clean_state_stamped_leaves_rolled_back_row_alone(conn):

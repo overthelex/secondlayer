@@ -216,12 +216,17 @@ def complete_with_clean_state(conn, row, next_stage: str, **fields) -> None:
             db.mark_clean_conflict(conn, row["doc_id"], row["spider"], conflict)
         return
     if not sha:
-        if ("full_text" in fields and not row.get("cleaning_disabled")
-                and clean_new_text_enabled()):
+        if "full_text" in fields and not row.get("cleaning_disabled"):
             # New full_text stored WITHOUT cleaning (HTML re-extract,
-            # own-reflow spider): a stamp left behind would claim the old
-            # archive describes this text. Un-stamp in the same transaction.
-            if row["spider"] in text_clean.OWN_REFLOW_SPIDERS:
+            # own-reflow spider, CHPIPE_CLEAN_NEW_TEXT=0): a stamp left behind
+            # would claim the old archive describes this text, and a later
+            # cleaner-version requeue would re-clean that archive over it.
+            # Un-stamp in the same transaction. This is a safety write, not
+            # cleaning, so the kill switch does not skip it; only a missing
+            # state table (cleaning_disabled) does.
+            if not clean_new_text_enabled():
+                why = "kill switch"
+            elif row["spider"] in text_clean.OWN_REFLOW_SPIDERS:
                 why = "own-reflow spider"
             else:
                 why = "non-pdf source"

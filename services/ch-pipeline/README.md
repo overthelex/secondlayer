@@ -1302,7 +1302,9 @@ old release no longer understands):
 1. stop the clean-text backfill (`tmux kill-session -t chclean-b`);
 2. switch the nightly off: set `CHPIPE_CLEAN_NEW_TEXT=0` for the delta and the
    weekly `ocr` cron. With it off, nightly extract and OCR behave exactly as
-   when `ch_text_clean_state` is missing: raw text, no archive, no state write.
+   when `ch_text_clean_state` is missing: raw text, no archive, no stamp. One
+   difference: a stamped row rewritten with raw text is un-stamped, so a later
+   cleaner-version requeue cannot re-clean its old archive over the new text.
    It is read from the environment of the process: add
    `export CHPIPE_CLEAN_NEW_TEXT=0` next to the other `export`s in
    `services/ch-pipeline/run-delta.sh` (the `CHPIPE_RAW_DIR` block), and
