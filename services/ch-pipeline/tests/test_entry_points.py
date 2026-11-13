@@ -18,20 +18,22 @@ import pathlib
 import pytest
 
 from chpipe import config
-from chpipe.stages import (citations_stage, extract_stage, fetch_stage,
-                           index_stage, load_stage, ocr_stage)
+from chpipe.stages import (citations_stage, clean_text_stage, extract_stage,
+                           fetch_stage, index_stage, load_stage, ocr_stage)
 
 FAKE = config.Settings(dsn="postgresql://unused@127.0.0.1:1/unused",
                        raw_dir=pathlib.Path("/tmp"), http_concurrency=1,
                        cpu_workers=1, ocr_workers=1, load_ceiling=0.0,
                        max_attempts=3)
 
-CLAIMING_STAGES = [fetch_stage, extract_stage, ocr_stage, load_stage, citations_stage]
+CLAIMING_STAGES = [fetch_stage, extract_stage, ocr_stage, load_stage, citations_stage,
+                   clean_text_stage]
 
 
 @pytest.fixture(autouse=True)
 def no_env(monkeypatch):
-    for key in ("CHPIPE_SPIDER", "CHPIPE_LIMIT", "CHPIPE_LANG"):
+    for key in ("CHPIPE_SPIDER", "CHPIPE_LIMIT", "CHPIPE_LANG", "CHPIPE_SEED",
+                "CHPIPE_BATCH"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr(config.Settings, "from_env", classmethod(lambda cls: FAKE))
 
@@ -56,6 +58,7 @@ def _report(module):
         load_stage: load_stage.LoadReport,
         index_stage: index_stage.IndexReport,
         citations_stage: citations_stage.CitationsReport,
+        clean_text_stage: clean_text_stage.CleanTextReport,
     }[module]()
 
 
@@ -94,6 +97,31 @@ def test_a_stage_entry_point_honours_chpipe_limit(module, monkeypatch):
     monkeypatch.setenv("CHPIPE_LIMIT", "500")
     module.main()
     assert seen["kwargs"]["limit"] == 500
+
+
+def test_clean_text_honours_chpipe_batch_and_renices(monkeypatch):
+    seen = _capture(monkeypatch, clean_text_stage)
+    calls = []
+    monkeypatch.setattr(clean_text_stage.throttle, "renice", calls.append)
+    monkeypatch.setenv("CHPIPE_BATCH", "50")
+    clean_text_stage.main()
+    assert seen["kwargs"]["batch"] == 50
+    assert calls == [clean_text_stage.throttle.NICE_CPU]
+
+
+def test_clean_text_seed_mode_does_not_run_the_stage(monkeypatch):
+    seen = _capture(monkeypatch, clean_text_stage)
+    monkeypatch.setattr(clean_text_stage.throttle, "renice", lambda n: None)
+    monkeypatch.setattr(clean_text_stage.db, "connect", lambda s: _FakeConn())
+    monkeypatch.setattr(clean_text_stage.db, "seed_clean_state", lambda c: 7)
+    monkeypatch.setenv("CHPIPE_SEED", "1")
+    assert clean_text_stage.main() == 7
+    assert seen == {}
+
+
+class _FakeConn:
+    def close(self):
+        pass
 
 
 def test_index_honours_chpipe_spider_when_argv_is_empty(monkeypatch):
@@ -391,7 +419,7 @@ def _accepted_stage_names() -> set[str]:
 
 
 def test_run_stage_accepts_every_stage_this_package_has():
-    expected = {"index", "fetch", "extract", "ocr", "load",
+    expected = {"index", "fetch", "extract", "ocr", "load", "clean-text",
                 "aliases", "citations", "citations-resolve", "decision-index",
                 "acts", "versions", "fetch-xml", "fedlex-pdf-text", "fedlex-pdf-ocr",
                 "parse-akn", "diff",

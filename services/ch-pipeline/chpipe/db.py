@@ -560,6 +560,85 @@ def claim_for_citations(conn, limit: int, spider: str | None = None,
         return cur.fetchall()
 
 
+# --- clean-text queue (migration 259, ch_text_clean_state) ---------------
+
+_CLAIM_CLEAN_COLUMNS = ("s.doc_id, s.spider, d.languages, d.full_text, "
+                        "d.text_quality, d.metadata_json->>'Sprache' AS sprache")
+
+
+def seed_clean_state(conn) -> int:
+    """Enrol every loaded PDF/OCR decision in ch_text_clean_state; return the
+    number of rows added. Idempotent (ON CONFLICT DO NOTHING): a row already
+    there keeps its stamp, attempts and error. The spiders in
+    text_clean.OWN_REFLOW_SPIDERS cut and reflow their own text and are left
+    out. Reads ch_court_decisions, never writes it."""
+    from .text_clean import OWN_REFLOW_SPIDERS
+    cur = conn.execute(
+        "INSERT INTO ch_text_clean_state (doc_id, spider) "
+        "SELECT doc_id, spider FROM ch_court_decisions "
+        "WHERE stage = 'loaded' AND text_source IN ('pdf', 'ocr') "
+        "AND spider <> ALL(%s) AND doc_id IS NOT NULL "
+        "ON CONFLICT DO NOTHING",
+        (sorted(OWN_REFLOW_SPIDERS),))
+    return cur.rowcount
+
+
+def claim_for_clean(conn, limit: int, spider: str | None = None,
+                    max_attempts: int = 3) -> list[dict]:
+    """Pending clean-text rows: unstamped, attempts left, decision at `loaded`.
+
+    Same shape as claim_for_citations, for the same reasons: FOR UPDATE OF s
+    locks the narrow state row only, never the 33 GB decision row the other
+    stages write; ORDER BY s.doc_id is the state table's own key (a stable
+    order an index scan can feed); the spider predicate is on s.spider, the
+    leading column of idx_ch_text_clean_pending. Under autocommit the lock is
+    released when the SELECT completes, so one process per stage."""
+    sql = ("SELECT " + _CLAIM_CLEAN_COLUMNS + " FROM ch_text_clean_state s "
+           "JOIN ch_court_decisions d USING (doc_id) "
+           "WHERE s.cleaned_at IS NULL AND s.attempts < %s "
+           "AND d.stage = 'loaded'")
+    params: list = [max_attempts]
+    if spider:
+        sql += " AND s.spider = %s"
+        params.append(spider)
+    sql += " ORDER BY s.doc_id LIMIT %s FOR UPDATE OF s SKIP LOCKED"
+    params.append(limit)
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def stamp_clean(conn, doc_id: str, raw_sha256: str, cleaner_version: int) -> None:
+    """Mark a decision cleaned: the cleaner version that produced its
+    full_text and the sha256 of the archived raw text. Clears last_error."""
+    conn.execute(
+        "UPDATE ch_text_clean_state SET cleaned_at = now(), raw_sha256 = %s, "
+        "cleaner_version = %s, last_error = NULL WHERE doc_id = %s",
+        (raw_sha256, cleaner_version, doc_id))
+
+
+def fail_clean(conn, doc_id: str, error: str) -> None:
+    """One attempt spent, the reason kept, no stamp. claim_for_clean stops
+    offering the row once attempts reaches max_attempts."""
+    conn.execute(
+        "UPDATE ch_text_clean_state SET attempts = attempts + 1, last_error = %s "
+        "WHERE doc_id = %s",
+        (error[:2000], doc_id))
+
+
+def ensure_clean_state_stamped(conn, doc_id: str, spider: str, raw_sha256: str,
+                               cleaner_version: int) -> None:
+    """Upsert a stamped state row: for a writer that stores already-clean
+    text itself (the load path), so the clean-text stage never claims it."""
+    conn.execute(
+        "INSERT INTO ch_text_clean_state "
+        "(doc_id, spider, raw_sha256, cleaner_version, cleaned_at) "
+        "VALUES (%s, %s, %s, %s, now()) "
+        "ON CONFLICT (doc_id) DO UPDATE SET cleaned_at = now(), "
+        "raw_sha256 = EXCLUDED.raw_sha256, cleaner_version = EXCLUDED.cleaner_version",
+        (doc_id, spider, raw_sha256, cleaner_version))
+
+
 def enqueue_for_citations(conn, eclis: list[str]) -> None:
     """Queue these decisions for (re-)extraction: a state row with a NULL
     extracted_at, whether or not one already existed.
