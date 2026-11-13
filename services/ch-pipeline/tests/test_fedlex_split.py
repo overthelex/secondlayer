@@ -532,3 +532,15 @@ def test_articles_equal_golden_capture_on_every_fixture():
         assert _rows(split_fedlex_text(raw)[0]) == golden[name], name
         for lang in ("de", "fr", "it"):
             assert _rows(split_fedlex_text(raw, lang)[0]) == golden[name], (name, lang)
+
+
+def test_text_product_equals_the_375d1595_capture_on_every_fixture():
+    # ruling R27: the text product (second return value) stays byte-identical
+    # to commit 375d1595 for every fixture x lang -- the Task 3 resplit of the
+    # 51K fedlex_pdf editions is gated on it
+    golden = json.loads((_FIXTURES / "fedlex_split_golden_text.json").read_text())
+    assert set(golden) == set(_GOLDEN_INPUTS)
+    for name, raw in _GOLDEN_INPUTS.items():
+        assert split_fedlex_text(raw)[1] == golden[name][""], name
+        for lang in ("de", "fr", "it"):
+            assert split_fedlex_text(raw, lang)[1] == golden[name][lang], (name, lang)

@@ -260,13 +260,17 @@ def test_strip_page_furniture_unpunctuated_midpage_recurrence_is_dropped():
     assert line not in strip_page_furniture(lines)
 
 
-def test_short_lowercase_heads_are_word_wraps_not_suspended_compounds():
+def test_a_word_made_of_head_and_conjunction_joins():
+    # ruling R26: only head + conjunction words ("sowie") join
     assert join_hyphen("Es gilt so-", "wie bisher", V) == "Es gilt sowie bisher"
-    assert join_hyphen("da-", "mit", V) == "damit"
+    assert join_hyphen("da-", "mit", V) == "damit"           # "mit" is no conjunction
     assert join_hyphen("so-", "mit", V) == "somit"
 
 
-def test_plausible_heads_keep_the_suspended_hyphen():
-    assert join_hyphen("Bundes-", "wie Kantonsrecht", V) == "Bundes- wie Kantonsrecht"
-    assert join_hyphen("Bundes-", "und Kantonsrecht", V) == "Bundes- und Kantonsrecht"
-    assert join_hyphen("An-", "und Verkauf", V) == "An- und Verkauf"
+@pytest.mark.parametrize("head,tail", [
+    ("ein-", "und ausreisen"), ("an-", "und abmelden"), ("auf-", "oder abgerundet"),
+    ("ein-", "oder zweimal"), ("vor-", "und nachvertraglich"), ("Ein-", "und Ausreise"),
+    ("Bundes-", "und Kantonsrecht"), ("Bundes-", "wie Kantonsrecht"), ("pré-", "à post-"),
+])
+def test_suspended_compounds_stay_split_for_any_head(head, tail):
+    assert join_hyphen(head, tail, V) == head + " " + tail

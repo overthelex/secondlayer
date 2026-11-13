@@ -44,7 +44,7 @@ from __future__ import annotations
 import re
 
 from . import akn, text_clean
-from .pdf_text import _join
+from .pdf_text import _join_legacy as _join      # ruling R27: byte-identical output
 
 _WS = re.compile(r"\s+")
 

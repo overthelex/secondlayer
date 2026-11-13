@@ -400,6 +400,12 @@ def test_articles_of_the_existing_fixtures_are_pinned():
             articles, _ = pdf_text.split_text((FIXTURES / name).read_text())
         got = [[a.article_number, a.marginal_note, a.text, a.e_id] for a in articles]
         assert got == expected, name
+        # German has no hyphen vocabulary: the edition language changes nothing
+        if name.endswith(".pdf"):
+            articles = pdf_text.extract(FIXTURES / name, "de").articles
+        else:
+            articles, _ = pdf_text.split_text((FIXTURES / name).read_text(), "de")
+        assert [[a.article_number, a.marginal_note, a.text, a.e_id] for a in articles] == expected, name
 
 
 @needs_poppler
@@ -408,3 +414,75 @@ def test_a_table_page_is_not_read_as_a_marginal_column():
     # Strasse 15   221" has a short first cell and the rest after 3+ spaces
     _, text = pdf_text.split_text(pdf_text.raw_text(FIXTURES / "lexwork_bs_annex_834_420_v2939.pdf"))
     assert "Adullam Stiftung Basel" in text and "Pflegeheim Riehen" in text
+
+
+# --- review round 1: false positives of the footer and column rules -------
+_LONG = "Dies ist ein langer Satz des Gesetzes, der die Seite füllt und weiter geht."
+
+
+@pytest.mark.parametrize("label", ["Artikel", "Article"])
+@pytest.mark.parametrize("at_bottom", [False, True])
+def test_a_heading_at_a_page_edge_is_not_a_stepping_footer(label, at_bottom):
+    # "Artikel 1" / "Artikel 2" / "Artikel 3" opening (or closing) pages 1-3
+    # steps with the page index like a page number -- it is still a heading
+    body = "1\n" + (_LONG + "\n") * 6
+    marginals = ["Zweck", "Geltung", "Vollzug"]
+    if at_bottom:
+        pages = [f"{label} 1\n{marginals[0]}\n\n" + body + f"\n{label} 2\n{marginals[1]}",
+                 body + f"\n{label} 3\n{marginals[2]}", body]
+    else:
+        pages = [f"{label} {n}\n{m}\n\n" + body for n, m in enumerate(marginals, start=1)]
+    articles, _ = pdf_text.split_text("\f".join(pages))
+    assert [a.article_number for a in articles] == ["1", "2", "3"]
+
+
+def test_a_right_aligned_signature_block_is_not_a_marginal_column():
+    body = ("die Gemeinde erhebt nach Massgabe dieses Gesetzes eine Gebühr und regelt"
+            " die Einzelheiten")
+    lines = (["Art. 1 Zweck", "1", "Die Gemeinde " + body] + [body] * 6 + ["Ende des Artikels.", "",
+             "Art. 2 Inkrafttreten", "1", "Die Gemeinde " + body] + [body] * 5 + ["Ende.", "",
+             " " * 55 + "Der Präsident:", " " * 55 + "Hans Muster", "",
+             " " * 55 + "Der Staatsschreiber:", " " * 55 + "Peter Beispiel"])
+    raw = "\n".join(lines)
+    assert not any(l.startswith(pdf_text._MARGIN) for p in pdf_text._clean_pages(raw) for l in p)
+    articles, text = pdf_text.split_text(raw, "de")
+    assert [a.article_number for a in articles] == ["1", "2"]
+    assert sorted(text.split()) == sorted(" ".join(lines).split())    # every word kept
+    assert "Hans Muster" in text and "Peter Beispiel" in text
+
+
+def _definition_list_document() -> str:
+    p1 = "\n".join(["Gebührentarif", "", "Art. 1 Zweck", "", "1 " + _LONG, _LONG, _LONG, _LONG, ""])
+    rows = []
+    for term, txt in [("Gebühr", "Die Abgabe für eine Amtshandlung der Behörde nach"),
+                      ("Auslagen", "Die Kosten, die der Behörde für Porto und Kopien"),
+                      ("Pauschale", "Der feste Betrag für eine Bewilligung des Amtes")]:
+        rows.append(f"{term:<16}{txt}")
+        rows.append(" " * 16 + "diesem Reglement und dem kantonalen Recht.")
+    return p1 + "\f" + "\n".join(["Anhang", ""] + rows + ["", _LONG, _LONG])
+
+
+def test_a_definition_list_page_keeps_its_terms():
+    articles, text = pdf_text.split_text(_definition_list_document())
+    assert [a.article_number for a in articles] == ["1"]
+    for term in ("Gebühr ", "Auslagen", "Pauschale"):
+        assert term in text
+    assert not any(l.startswith(pdf_text._MARGIN)
+                   for p in pdf_text._clean_pages(_definition_list_document()) for l in p)
+
+
+def test_column_text_no_article_owns_is_put_back_into_the_text():
+    # ruling R28: even where the column IS believed (two pages of it), a
+    # fragment beside the preamble or a signature belongs to the text
+    def page(n):
+        return (f"               Seite {n} des Beschlusses über die Gebühren der Gemeinde\n\n"
+                f"Titel{n}         Die Gemeinde erhebt nach Massgabe dieses Gesetzes eine Gebühr\n"
+                f"Unterzeile{n}    und regelt die Einzelheiten der Erhebung in einer Verordnung\n"
+                "               des Gemeinderates, die der Genehmigung durch den Kanton bedarf\n"
+                f"               und im Amtsblatt veröffentlicht wird, bevor sie in Kraft tritt {n}.\n"
+                "\n               Die Gemeinde stellt die Räume zur Verfügung, die sie braucht.\n")
+    raw = page(1) + "\f" + page(2)
+    assert any(l.startswith(pdf_text._MARGIN) for p in pdf_text._clean_pages(raw) for l in p)
+    _, text = pdf_text.split_text(raw)
+    # (the digits go with _tidy's footnote-reference rule, as in the body)
+    assert text.count("Titel Unterzeile") == 2

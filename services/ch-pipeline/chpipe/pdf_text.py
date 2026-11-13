@@ -148,12 +148,14 @@ _SPACED_HYPHEN_END = re.compile(r"(?<=[^\W\d_])\s-$")
 _MARGIN = "\x0e"   # not whitespace: str.strip() keeps it
 _COLUMN_PAGE = _MARGIN * 2  # first line of a page that had the column
 _MARGIN_MAX = 25            # the column is narrow: no fragment is longer
+_COLUMN_MIN_PAGES = 2       # pages with the column's shape before it is believed
+_COLUMN_MIN_BESIDE = 2      # fragments on a body line, per page
 _LEFT_FRAGMENT = re.compile(r"^([^\s\d§*(][^\s]*(?: [^\s]+){0,3}?)\s{3,}(\S.*)$")
 _RIGHT_FRAGMENT = re.compile(r"^(.*\S)\s{3,}([^\W\d_][^\s]*(?: [^\s]+){0,2})$")
 # right column glued to a body line by ONE space: a hyphen-wrapped body
 # word can only END a body line, so whatever follows "mehre-" is the column
-_RIGHT_AFTER_HYPHEN = re.compile(
-    r"^(.*[^\W\d_]-) (?!(?:und|oder|bzw|sowie|resp|bis|et|ou|e|ed|o|od|u)\b)([^\W\d_]\S*(?: \S+){0,2})$")
+# (a conjunction after it is a suspended compound: text_clean decides)
+_RIGHT_AFTER_HYPHEN = re.compile(r"^(.*[^\W\d_]-) ([^\W\d_]\S*(?: \S+){0,2})$")
 _RIGHT_MIN_COLUMN = 50      # the right column never starts left of this
 _BODY_MIN_INDENT = 10       # the body beside a left column starts right of this
 # "§ 3.14 In jedem ...", "§ 6 a.24 1 Wird ...", "§ 27. 1 Betreibungs...":
@@ -292,7 +294,7 @@ def _left_column(page: list[str]) -> list[str] | None:
         m = _LEFT_FRAGMENT.match(line)
         if m and len(m.group(1)) <= _MARGIN_MAX and m.start(2) >= column - 2:
             fragments += 1
-    if fragments < 2 or fragments + len(body_indents) < 0.6 * len(nonblank):
+    if fragments < _COLUMN_MIN_BESIDE or fragments + len(body_indents) < 0.6 * len(nonblank):
         return None
     out: list[str] = []
     for line in page:
@@ -335,8 +337,11 @@ def _right_column(page: list[str]) -> list[str] | None:
     floor = column - 12
     for i, line in enumerate(page):
         m = None if i in found else _RIGHT_AFTER_HYPHEN.match(line)
-        if m and m.start(2) >= floor and len(m.group(2)) <= _MARGIN_MAX:
+        if (m and m.start(2) >= floor and len(m.group(2)) <= _MARGIN_MAX
+                and not text_clean.starts_with_conjunction(m.group(2))):
             found[i] = (m.group(1), m.start(2), m.group(2))
+    if sum(1 for body, _, _ in found.values() if body.strip()) < _COLUMN_MIN_BESIDE:
+        return None         # fragments alone on their lines: a signature block
     # the body width: justified lines vary by a few columns in -layout
     # output, so the 75th percentile of the fragment-free prose lines plus a
     # margin -- a quarter of the lines may still carry a glued fragment
@@ -412,11 +417,23 @@ def clean_pages(raw: str) -> list[list[str]]:
     return [[l for l in page if not l.startswith(_MARGIN)] for page in _clean_pages(raw)]
 
 
-def _bare(key: str) -> str:
-    """A head/foot line without its page number, "" when it carries none."""
-    bare = re.sub(r"^\d{1,3} ", "", key) if re.match(r"^\d{1,3} \D", key) else key
-    bare = re.sub(r" \d{1,3}$", "", bare)
-    return bare if bare != key and len(bare) >= 6 else ""
+def _bare(key: str) -> tuple[str, int] | None:
+    """(footer text, page number) for a head/foot line that carries a page
+    number at one end ("1. 10. 26 - 134    5"), None otherwise. Never a
+    heading, a paragraph mark or a section line: "Artikel 2" opening page 2
+    steps with the page index exactly like a page number does."""
+    section = _SECTION.match(key)
+    if (_HEADING.match(key) or _PARAGRAPH_MARK.match(key)
+            # a section line has words; "1. 10. 26 - 134 5" (ZH) has none
+            or (section and re.search(r"[^\W\d_]", section.group(2)))
+            or _SECTION_WORD.match(key) or _DOTTED_HEADING.match(key)
+            or _CENTRED_HEADING.match("  " + key)):
+        return None
+    m = re.match(r"^(\d{1,3}) (\D.*)$", key) or re.match(r"^(.*\S) (\d{1,3})$", key)
+    if not m:
+        return None
+    text, number = (m.group(2), m.group(1)) if m.group(1).isdigit() else (m.group(1), m.group(2))
+    return (text, int(number)) if len(text) >= 6 else None
 
 
 def _clean_pages(raw: str) -> list[list[str]]:
@@ -439,15 +456,18 @@ def _clean_pages(raw: str) -> list[list[str]]:
         sysnr = first
     # lines seen in the head/foot zone of more than one page
     seen: dict[str, set[int]] = {}
-    seen_bare: dict[str, set[int]] = {}
+    # footer text -> {page index: number - page index}: a page number steps
+    # with the page, so the offset is one value over every page it is on
+    seen_bare: dict[str, dict[int, int]] = {}
     for index, page in enumerate(pages):
         nonblank = [l for l in page if l.strip()]
         for line in nonblank[:2] + nonblank[-2:]:
             seen.setdefault(_key(line), set()).add(index)
             if bare := _bare(_key(line)):
-                seen_bare.setdefault(bare, set()).add(index)
+                seen_bare.setdefault(bare[0], {})[index] = bare[1] - index
     repeated = {k for k, where in seen.items() if len(where) > 1}
-    repeated_bare = {k for k, where in seen_bare.items() if len(where) > 1}
+    repeated_bare = {k for k, where in seen_bare.items()
+                     if len(where) > 1 and len(set(where.values())) == 1}
     next_bare = 1 if sysnr and sysnr.startswith("Nr.") else None
 
     def is_furniture(line: str, zone: bool) -> bool:
@@ -464,8 +484,8 @@ def _clean_pages(raw: str) -> list[list[str]]:
             # that happens to close two pages does
             return True
         bare = _bare(key)
-        if bare in repeated_bare and bare[-1:] not in ".;:,…":
-            return True     # the same footer with the page number changing
+        if bare and bare[0] in repeated_bare and bare[0][-1:] not in ".;:,…":
+            return True     # the same footer, its page number stepping with the page
         if sysnr:
             # "3   Nr. 185", "Nr. 185   3", "101.2   6", "Titel   101.2"
             for bare in (re.sub(r"^\d{1,3} ", "", key), re.sub(r" \d{1,3}$", "", key)):
@@ -477,7 +497,7 @@ def _clean_pages(raw: str) -> list[list[str]]:
             return True     # "-2-" at the top of a page (VS 2008 conversions)
         return bool(_SYSNR.match(key) and "." in key)
 
-    cleaned: list[list[str]] = []
+    furnished: list[list[str]] = []
     for page in pages:
         nonblank_idx = [i for i, l in enumerate(page) if l.strip()]
         zone = set(nonblank_idx[:2] + nonblank_idx[-2:])
@@ -487,9 +507,17 @@ def _clean_pages(raw: str) -> list[list[str]]:
         if kept and _PAGE_NUMBER.match(kept[-1].strip()):
             # AI prints the page number ABOVE its table note
             kept.pop()
+        furnished.append(kept)
+    # the marginal column is a property of the document's layout, not of a
+    # page: a right-aligned signature block or a definition list on one
+    # page is not it. Two pages or more with the column's shape, or none.
+    columns = [_left_column(kept) or _right_column(kept) for kept in furnished]
+    if sum(1 for c in columns if c) < _COLUMN_MIN_PAGES:
+        columns = [None] * len(furnished)
+    cleaned: list[list[str]] = []
+    for kept, column in zip(furnished, columns):
         # the marginal column off first: it sits left of the body on even
         # pages and would hold the dedent at column 0
-        column = _left_column(kept) or _right_column(kept)
         if column:
             kept = column
         # dedent first: ZG indents a whole page (153.2 page 2, eight spaces)
@@ -609,6 +637,33 @@ def _line_ends_block(line: str) -> bool:
     text = re.sub(r"(?<=[.:;])\s?\d{1,2}(?:,\s?\d{1,2})*$", "", line.strip())
     return (text[-1:] in ".:;…!?)*" or len(text) < 45
             or _SECTION.match(text) is not None or _HEADING.match(text) is not None)
+
+
+_LEGACY_CONJUNCTION = re.compile(r"^(?:und|oder|bzw\.|sowie|et|ou|e|ed|o|od|u|ni)\b", re.IGNORECASE)
+_LEGACY_HYPHEN_END = re.compile(r"\s?-$")
+
+
+def _join_legacy(lines: list[str]) -> str:
+    """The pre-phase-C _join, byte for byte. fedlex_split imports this one
+    (ruling R27): its output must stay identical to 375d1595 for the Task 3
+    resplit of the 51K fedlex_pdf editions, whose gate assumes it."""
+    out = ""
+    for line in lines:
+        piece = line.strip()
+        if not out:
+            out = piece
+            continue
+        if _LEGACY_HYPHEN_END.search(out):
+            head = _LEGACY_HYPHEN_END.sub("", out)
+            if _LEGACY_CONJUNCTION.match(piece):
+                out = head + "- " + piece
+            elif piece[:1].isupper():
+                out = head + "-" + piece
+            else:
+                out = head + piece
+        else:
+            out = out + " " + piece
+    return _WS.sub(" ", out).strip()
 
 
 def _join(lines: list[str], vocabulary: frozenset[str] = frozenset()) -> str:
@@ -785,7 +840,7 @@ def _clause_articles(blocks: list[_Block], vocabulary: frozenset[str] = frozense
         clauses: list[list[str]] = []
         for block in blocks:
             preamble.append([])
-            for line in block.lines:
+            for line in block.lines + block.marginals:   # R28: the column is text too
                 if _HEADING.match(line) or _LEFT_COLUMN_HEADING.match(line) \
                         or _CLAUSE_PARAGRAPH_SIGN.match(line):
                     return None
@@ -864,11 +919,21 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
             parent_e_id=current["parent"]))
         current = None
 
+    def put_back(block: _Block) -> None:
+        """Ruling R28: column text no article owns is text -- never dropped."""
+        if block.marginals:
+            lines.append(_tidy(_join(block.marginals, vocabulary)))
+
     last_number = 0
     left_column = False
     for index, block in enumerate(blocks):
         if not block.lines:
-            continue        # a marginal title consumed by the heading before it
+            # a marginal title consumed by the heading before it
+            if current is not None:
+                current["marginal"].extend(block.marginals)
+            else:
+                put_back(block)
+            continue
         first = block.lines[0]
         heading = _HEADING.match(first)
         shape = "plain"
@@ -961,6 +1026,7 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
             close()
             sections.push(section[0])
             lines.append(_tidy(section[1]))
+            put_back(block)
             continue
         if current is not None and block.gap >= 1 and not _continues_article(block) \
                 and not any(_HEADING.match(b.lines[0])
@@ -973,6 +1039,8 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
         if current is not None:
             current["paragraphs"].extend(paragraphs)
             current["marginal"].extend(block.marginals)    # the column ran on
+        else:
+            put_back(block)
         lines.extend(paragraphs)
     close()
     if not articles:
