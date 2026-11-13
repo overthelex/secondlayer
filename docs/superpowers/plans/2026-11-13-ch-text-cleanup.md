@@ -140,7 +140,8 @@ def test_split_columns_passes_single_column_through():
     assert split_columns(GR_FIXTURE.splitlines()) == GR_FIXTURE.splitlines()
 def test_clean_pdf_text_twocolumn_unibe():
     out = clean_pdf_text(UNIBE_TWOCOL, ["fr"])
-    assert "nn decret     mune" not in out and "convoquer" in out or "eonvoquer" in out
+    assert "nn decret     mune" not in out
+    assert "chargeant eette derniere autorite de eonvoquer de nouveau" in out   # OCR spelling, left page contiguous
 def test_normalise_chars(): assert normalise_chars("ﬁnanz x­y") == "finanz xy"
 ```
 
