@@ -462,7 +462,8 @@ def test_new_edition_write_is_one_transaction(conn, settings, monkeypatch):
         raise RuntimeError("crash")
     monkeypatch.setattr(mod.parse_akn_stage, "store_articles", store_then_fail)
     vid = _row(conn)
-    _run(settings, Host())
+    report = _run(settings, Host())
+    assert report.failed == 1
     row = _vrow(conn, vid)
     assert row["full_text"] is None and row["akn_xml"] is None
     assert conn.execute("SELECT count(*) FROM ch_act_article WHERE version_id=%s",
@@ -489,6 +490,6 @@ def test_new_edition_degenerate_clean_text_stores_raw(conn, settings, monkeypatc
     monkeypatch.setattr(fedlex_split, "split_fedlex_text", lambda r, lang=None: ([], "x"))
     vid = _row(conn)
     report = _run(settings, Host())
-    assert report.degenerate == 1 and report.parsed == 1
+    assert report.degenerate == 1 and report.parsed == 1 and report.cleaned == 0
     row = _vrow(conn, vid)
     assert row["akn_xml"] == raw and row["full_text"] == raw

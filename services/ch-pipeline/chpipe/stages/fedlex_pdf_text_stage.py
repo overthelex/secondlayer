@@ -13,9 +13,10 @@ document verbatim; this stage runs it through text_extract.from_pdf() and
 text_quality.score() and stores the resulting plain text, the same gate
 extract_stage applies to the decisions corpus's own PDFs.
 
-No article split happens on the fetch path -- article_count stays NULL on
-every row this stage completes, PDF-era prose has no e_id structure to split
-on, and the plan's Task 2 scope was full text only. A pdf-a row that later
+The fetch path splits the extracted text with fedlex_split.split_fedlex_text
+and stores the articles (parse_akn_stage.store_articles, which sets
+article_count) in the same transaction as the text columns; a row whose text
+splits to no articles keeps article_count NULL. A pdf-a row that later
 gains a real XML manifestation is reclaimed by versions_stage's xml pass
 (source flips to 'fedlex', stage resets to 'discovered', full_text/
 article_count are cleared) and is walked by fetch_xml_stage/parse_akn_stage
@@ -45,8 +46,11 @@ TEXT COLUMNS (text cleanup, 2026-11): akn_xml holds the RAW pdftotext text
 (the re-splittable source of truth; no XML despite the column name) and
 full_text holds the clean text product of split_fedlex_text. Both resplit
 modes read COALESCE(akn_xml, full_text), so reruns are idempotent; =1 also
-selects rows with akn_xml IS NULL. The sentences above about leaving
-full_text untouched describe the pre-cleanup behaviour.
+selects rows with akn_xml IS NULL. A new edition whose clean text is
+degenerate (empty or under 0.3x the raw length) stores the raw text in
+full_text too (akn_xml = raw) and is counted as `degenerate`, not `cleaned`.
+The sentences above about leaving full_text untouched describe the
+pre-cleanup behaviour.
 
 SEQUENTIAL, NOT FANNED OUT (this is the one place this stage's structure
 differs from fetch_xml_stage's asyncio.gather-per-batch): text_extract.from_pdf()
@@ -191,6 +195,8 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
                         "storing raw as full_text", version_id, len(clean), len(text))
             clean = text
             report.degenerate += 1
+        else:
+            report.cleaned += 1
         with conn.transaction():
             db.complete_version(conn, version_id, "parsed", akn_xml=text,
                                 full_text=clean,
@@ -198,7 +204,6 @@ async def _process_one(fetcher: Fetcher, conn, row: dict, settings: Settings,
             if articles:
                 parse_akn_stage.store_articles(conn, version_id, articles)
         report.parsed += 1
-        report.cleaned += 1
     except PdfToolMissing:
         raise
     except Exception as exc:                            # noqa: BLE001
