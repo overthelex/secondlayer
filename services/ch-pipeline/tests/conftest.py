@@ -23,7 +23,7 @@ import pathlib
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_199 = _REPO_ROOT / "mcp_backend/src/migrations/199_ch_citation_graph.sql"
 MIGRATION_200 = _REPO_ROOT / "mcp_backend/src/migrations/200_ch_citation_state.sql"
-MIGRATION_259 = _REPO_ROOT / "mcp_backend/src/migrations/259_ch_text_clean_state.sql"
+MIGRATION_260 = _REPO_ROOT / "mcp_backend/src/migrations/260_ch_text_clean_state.sql"
 MIGRATION_206 = _REPO_ROOT / "mcp_backend/src/migrations/206_ch_cantonal_aliases.sql"
 
 _CH_ACT_ARTICLE = """
@@ -126,10 +126,10 @@ def apply_migration_200(conn) -> None:
     conn.execute(MIGRATION_206.read_text())
 
 
-def apply_migration_259(conn) -> None:
+def apply_migration_260(conn) -> None:
     """259 stands alone: no FK to ch_court_decisions, no seed (the clean-text
     stage seeds the rows). Idempotent via IF NOT EXISTS."""
-    conn.execute(MIGRATION_259.read_text())
+    conn.execute(MIGRATION_260.read_text())
 
 
 # --- migration 202 (ch_zefix_* / ch_shab_*) --------------------------------

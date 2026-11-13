@@ -10,7 +10,7 @@ from psycopg.rows import dict_row
 
 from chpipe import db, raw_text_archive, text_clean
 
-from conftest import apply_migration_259
+from conftest import apply_migration_260
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
 import restore_raw_text as rr  # noqa: E402
@@ -43,7 +43,7 @@ def conn():
             languages text[], metadata_json jsonb,
             updated_at timestamptz DEFAULT now())""")
         c.execute(MIGRATION_196.read_text())
-        apply_migration_259(c)
+        apply_migration_260(c)
         yield c
 
 

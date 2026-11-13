@@ -1153,10 +1153,10 @@ merged and deployed. Every write step goes through `./run-stage.sh`; heavy
 runs go in tmux with `nice -n 10 ionice -c3`. Shorthand used below:
 `PSQL="docker exec -i pg-lawrider psql -U secondlayer -d secondlayer_prod"`.
 
-### 1. Migration 259 is applied
+### 1. Migration 260 is applied
 
 ```bash
-$PSQL -Atc "SELECT 1 FROM schema_migrations WHERE filename='259_ch_text_clean_state.sql'"
+$PSQL -Atc "SELECT 1 FROM schema_migrations WHERE filename='260_ch_text_clean_state.sql'"
 ```
 
 Pass: prints `1`. If it prints nothing, the nightly extract/ocr

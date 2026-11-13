@@ -1,4 +1,4 @@
--- mcp_backend/src/migrations/259_ch_text_clean_state.sql
+-- mcp_backend/src/migrations/260_ch_text_clean_state.sql
 -- Per-decision bookkeeping for the clean-text stage, in a narrow side table.
 --
 -- Why a side table: same reasoning as migration 200 (ch_citation_state).

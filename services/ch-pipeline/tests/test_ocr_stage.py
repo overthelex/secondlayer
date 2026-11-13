@@ -8,7 +8,7 @@ from chpipe import raw_text_archive, text_clean
 from chpipe.config import Settings
 from chpipe.stages import ocr_stage
 
-from conftest import apply_migration_200, apply_migration_259
+from conftest import apply_migration_200, apply_migration_260
 
 
 def test_pauses_at_or_above_the_ceiling():
@@ -67,7 +67,7 @@ def conn():
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
         apply_migration_200(c)
         c.execute("DROP TABLE IF EXISTS ch_text_clean_state")
-        apply_migration_259(c)
+        apply_migration_260(c)
         yield c
 
 

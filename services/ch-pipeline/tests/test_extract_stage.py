@@ -10,7 +10,7 @@ from chpipe import raw_text_archive, text_clean, text_damage, text_quality
 from chpipe.config import Settings
 from chpipe.stages import clean_text_stage, extract_stage
 
-from conftest import apply_migration_200, apply_migration_259
+from conftest import apply_migration_200, apply_migration_260
 
 
 def _settings(tmp_path) -> Settings:
@@ -120,7 +120,7 @@ def conn():
         c.execute("DROP TABLE IF EXISTS ch_citation_state")
         apply_migration_200(c)
         c.execute("DROP TABLE IF EXISTS ch_text_clean_state")
-        apply_migration_259(c)
+        apply_migration_260(c)
         yield c
 
 
@@ -632,7 +632,7 @@ def test_unreadable_archive_unstamps_the_old_state_too(conn, raw_dir):
 # --- fix round 1 ---
 
 def test_missing_state_table_disables_cleaning_for_the_run(conn, raw_dir, caplog):
-    """Deploy order: code is rsynced before migration 259 runs. The stage must
+    """Deploy order: code is rsynced before migration 260 runs. The stage must
     behave exactly as before this task: raw text, no archive, no state write."""
     conn.execute("DROP TABLE ch_text_clean_state")
     _put_zg_pdf(raw_dir, "CH_ZG", "z1")

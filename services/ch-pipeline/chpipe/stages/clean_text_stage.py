@@ -23,7 +23,7 @@ PDFs were deleted after extraction), so the order per row is fixed:
   row stays pending, counted in `transient`.
 
 text_quality is not written here (measured separately). The queue is
-ch_text_clean_state (migration 259); `CHPIPE_SEED=1` enrols the backlog
+ch_text_clean_state (migration 260); `CHPIPE_SEED=1` enrols the backlog
 (db.seed_clean_state) and exits. The claim locks the state row only.
 
 Load guard: this runs on a box that also serves live traffic, so it waits
@@ -104,12 +104,12 @@ def cleans_new_text(row, source: str) -> bool:
 
 def state_table_present(conn) -> bool:
     """Deploy-order guard for extract/ocr: the code is rsynced before
-    lawrider-migrate runs, and migration 259 may be missing (failed build,
+    lawrider-migrate runs, and migration 260 may be missing (failed build,
     build_only dispatch). Without the table every stamp would fail."""
     row = conn.execute("SELECT to_regclass('public.ch_text_clean_state') AS t").fetchone()
     present = (row["t"] if isinstance(row, dict) else row[0]) is not None
     if not present:
-        log.error("ch_text_clean_state (migration 259) is missing: cleaning is "
+        log.error("ch_text_clean_state (migration 260) is missing: cleaning is "
                   "DISABLED for this run; PDF text is stored raw, unarchived and "
                   "unstamped until the migration is applied")
     return present

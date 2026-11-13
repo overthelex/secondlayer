@@ -1,6 +1,6 @@
 """clean_text_stage: rewrites PDF/OCR decision texts with chpipe.text_clean,
 archiving the raw text first (chpipe.raw_text_archive). The queue is
-ch_text_clean_state (migration 259). Scratch-database test: the
+ch_text_clean_state (migration 260). Scratch-database test: the
 compare-and-set UPDATE and the claim's FOR UPDATE OF s cannot be mocked."""
 import os
 import pathlib
@@ -14,7 +14,7 @@ from chpipe import db, raw_text_archive, text_clean
 from chpipe.config import Settings
 from chpipe.stages import clean_text_stage
 
-from conftest import apply_migration_259
+from conftest import apply_migration_260
 
 _REPO_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 MIGRATION_196 = _REPO_ROOT / "mcp_backend/src/migrations/196_ch_court_pipeline.sql"
@@ -50,7 +50,7 @@ def conn(settings):
                 updated_at timestamptz DEFAULT now())
         """)
         c.execute(MIGRATION_196.read_text())
-        apply_migration_259(c)
+        apply_migration_260(c)
         yield c
 
 

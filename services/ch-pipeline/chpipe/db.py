@@ -562,7 +562,7 @@ def claim_for_citations(conn, limit: int, spider: str | None = None,
         return cur.fetchall()
 
 
-# --- clean-text queue (migration 259, ch_text_clean_state) ---------------
+# --- clean-text queue (migration 260, ch_text_clean_state) ---------------
 
 _CLAIM_CLEAN_COLUMNS = ("s.doc_id, s.spider, s.raw_sha256, d.languages, d.full_text, "
                         "d.text_quality, d.metadata_json->>'Sprache' AS sprache")

@@ -1,11 +1,11 @@
-"""Applies migration 259 to a scratch database. A mocked DB cannot validate SQL."""
+"""Applies migration 260 to a scratch database. A mocked DB cannot validate SQL."""
 import os
 
 import psycopg
 import pytest
 from psycopg.rows import dict_row
 
-from conftest import apply_migration_259
+from conftest import apply_migration_260
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("CHPIPE_TEST_DSN"), reason="CHPIPE_TEST_DSN not set")
@@ -19,9 +19,9 @@ def conn():
         yield c
 
 
-def test_migration_259_creates_state_table(conn):
-    apply_migration_259(conn)
-    apply_migration_259(conn)  # twice: idempotent
+def test_migration_260_creates_state_table(conn):
+    apply_migration_260(conn)
+    apply_migration_260(conn)  # twice: idempotent
     cols = {r["column_name"] for r in conn.execute(
         "select column_name from information_schema.columns "
         "where table_name='ch_text_clean_state'")}
@@ -30,7 +30,7 @@ def test_migration_259_creates_state_table(conn):
 
 
 def test_pending_index_is_partial_and_defaults(conn):
-    apply_migration_259(conn)
+    apply_migration_260(conn)
     idx = conn.execute(
         "select indexdef from pg_indexes where indexname='idx_ch_text_clean_pending'"
     ).fetchone()["indexdef"]
