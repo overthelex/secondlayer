@@ -82,6 +82,9 @@ describe('normalizePhone', () => {
     ['0977009263', '380977009263'],
     ['(044) 123-45-67', '380441234567'],
     ['12345', null],
+    ['+380000000000', null],
+    ['000000000', null],
+    ['0999999999', null],
     ['', null],
   ])('%s → %s', (input, expected) => {
     expect(normalizePhone(input)).toBe(expected);
