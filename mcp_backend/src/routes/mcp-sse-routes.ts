@@ -619,7 +619,8 @@ export function createMCPSSERoutes(deps: {
   // /api/v2/mcp also resolves the proxied openreyestr_* tools via getAllToolDefinitions.
 
   // Build an MCP Server exposing only the curated v2 subset. Reuses the fully-wired v1
-  // builder (tools/list + tools/call with billing) with the whitelist applied.
+  // builder (tools/list + tools/call with billing) with the whitelist applied, and presents
+  // the tools for public directories (presentV2Tools: neutral descriptions, annotations).
   function buildMcpServerV2(userId: string | undefined, clientKey: string | undefined, keyOpts: SessionKeyOpts): Server {
     return buildMcpServer(userId, clientKey, {
       allowedTools: V2_TOOL_NAMES, presentForDirectory: true, version: '2.0.0', usageBilling: true, transport: 'v2/mcp', ...keyOpts,

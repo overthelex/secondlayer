@@ -10,6 +10,8 @@
  */
 import type { ToolAnnotations, ToolDefinition } from './base-tool-handler.js';
 
+// openWorldHint: false — the proxied registries are snapshots held in our own databases,
+// not live third-party calls. load_full_texts may fetch from the court registry, so it is open.
 const RO: Omit<ToolAnnotations, 'title'> = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -88,7 +90,7 @@ export const V2_DESCRIPTION_OVERRIDES: Record<string, string> = {
  * public court texts; it changes nothing the user owns).
  */
 export const V2_ANNOTATION_OVERRIDES: Record<string, ToolAnnotations> = {
-  load_full_texts: { title: 'Повні тексти рішень', ...RO },
+  load_full_texts: { title: 'Повні тексти рішень', ...RO, openWorldHint: true },
   openreyestr_get_by_edrpou: { title: 'ЄДР: компанія за кодом ЄДРПОУ', ...RO },
   openreyestr_get_entity_details: { title: 'ЄДР: повні відомості про суб\'єкт', ...RO },
   openreyestr_search_entities: { title: 'ЄДР: пошук суб\'єктів господарювання', ...RO },
