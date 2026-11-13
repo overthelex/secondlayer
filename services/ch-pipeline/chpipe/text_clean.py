@@ -118,42 +118,23 @@ def _sentence_final(stripped: str) -> bool:
 
 
 def _seam_lines(lines: list[str]) -> set[int]:
-    """Indices of non-blank lines that sit at a page seam.
+    """Indices of non-blank lines that sit at a page seam (linear time).
 
-    A seam is: within 2 non-blank lines of a run of 2+ blank lines; next to a
-    folio / "Seite N" line (blank lines between do not count as distance); in
-    the first or last 2 non-blank lines; or next to a form feed.
+    A seam is: within 2 non-blank lines of a run of 2+ blank lines (clean_pdf_text
+    turns a form feed into such a run); next to a folio / "Seite N" line (blank
+    lines between do not count as distance); or in the first or last 2
+    non-blank lines of the text.
     """
     nonblank = [i for i, ln in enumerate(lines) if ln.strip()]
-    pos = {i: k for k, i in enumerate(nonblank)}
-    seams: set[int] = set()
-    for k in (0, 1, len(nonblank) - 2, len(nonblank) - 1):
-        if 0 <= k < len(nonblank):
-            seams.add(nonblank[k])
-    # blank runs of 2+: mark the 2 non-blank lines on either side
-    i, n = 0, len(lines)
-    while i < n:
-        if lines[i].strip():
-            i += 1
-            continue
-        j = i
-        while j < n and not lines[j].strip():
-            j += 1
-        if j - i >= 2:
-            before = [x for x in nonblank if x < i][-2:]
-            after = [x for x in nonblank if x >= j][:2]
-            seams.update(before + after)
-        i = j
-    for i in nonblank:
-        k = pos[i]
+    seams: set[int] = set(nonblank[:2]) | set(nonblank[-2:])
+    for k, i in enumerate(nonblank):
         for d in (-1, 1):
             if 0 <= k + d < len(nonblank) and _is_folio_line(lines[nonblank[k + d]]):
                 seams.add(i)
-        if "\f" in lines[i]:
-            seams.add(i)
-    for i, ln in enumerate(lines):
-        if "\f" in ln:  # form feed, possibly on a blank line: neighbours are seams
-            seams.update(x for x in nonblank if abs(x - i) <= 1)
+        if k + 1 < len(nonblank) and nonblank[k + 1] - i >= 3:
+            # blank run of 2+ between nonblank[k] and nonblank[k+1]
+            seams.update(nonblank[max(0, k - 1):k + 1])
+            seams.update(nonblank[k + 1:k + 3])
     return seams
 
 
@@ -541,7 +522,7 @@ def split_columns(lines: list[str]) -> list[str]:
 
 def clean_pdf_text(raw: str, languages: list[str]) -> str:
     """Clean raw pdftotext-layout text; see the module docstring for the steps."""
-    text = normalise_chars(raw).replace("\r\n", "\n").replace("\f", "\n")
+    text = normalise_chars(raw).replace("\r\n", "\n").replace("\f", "\n\n\n")  # form feed = page seam
     lines = [ln.rstrip() for ln in text.split("\n")]
     lines = strip_page_furniture(lines)
     lines = split_columns(lines)

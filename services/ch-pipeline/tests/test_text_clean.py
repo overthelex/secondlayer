@@ -220,3 +220,41 @@ def test_clean_keeps_recurring_content_lines_and_drops_seam_headers():
     clean_lines = [ln.strip() for ln in clean.split("\n")]
     assert "D-3387/2012" not in clean
     assert not any(ln.startswith("Seite ") for ln in clean_lines)
+
+
+def test_seam_detection_is_linear():
+    para = ["Dies ist eine Zeile des Absatzes, die recht lang ist." for _ in range(4)]
+    raw = "\n\n\n".join("\n".join(para) for _ in range(4500))
+    assert len(raw) > 900_000
+    t0 = time.perf_counter()
+    clean_pdf_text(raw, ["de"])
+    assert time.perf_counter() - t0 < 2
+
+
+def test_form_feed_is_a_seam():
+    header = "Kopfzeile des Urteils."  # punctuated: only a seam saves it
+    pages = [f"{header}\n" + "\n".join(f"Zeile {n}.{k} des Urteils." for k in range(20)) for n in range(3)]
+    cleaned = clean_pdf_text("\f".join(pages), ["de"])
+    assert header not in cleaned
+    assert "Zeile 1.5 des Urteils." in cleaned
+
+
+def test_strip_page_furniture_punctuated_header_off_seam_is_kept():
+    header = "Urteil D-1/2012."  # documented cost: content-shaped, so kept
+    lines = [*_page(1), header, *_page(2), header, *_page(3), header, *_page(4)]
+    assert strip_page_furniture(lines) == lines
+
+
+def test_strip_page_furniture_punctuated_header_on_every_seam_is_dropped():
+    header = "Urteil D-1/2012."
+    lines = [header, *_page(1), "", "", header, *_page(2), "", "", header, *_page(3)]
+    out = strip_page_furniture(lines)
+    assert header not in out
+
+
+def test_strip_page_furniture_unpunctuated_midpage_recurrence_is_dropped():
+    # Known limitation: an unpunctuated line recurring mid-page, page-spaced,
+    # is indistinguishable from a header without seam signals and is dropped.
+    line = "Beschwerdeführerin"
+    lines = [*_page(1), line, *_page(2), line, *_page(3), line, *_page(4)]
+    assert line not in strip_page_furniture(lines)
