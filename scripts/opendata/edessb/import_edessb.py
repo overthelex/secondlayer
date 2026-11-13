@@ -12,13 +12,20 @@ Usage:
     python3 import_edessb.py --source all              # every known dump
     python3 import_edessb.py --zip /path/file.zip --label public_data_2026.zip
     python3 import_edessb.py --list
+    python3 import_edessb.py --update --state-file ~/edessb-import/state.json
 
 DB connection: POSTGRES_HOST/PORT/USER/PASSWORD/DB (same as import-tier1-local.py).
 Requires: psycopg2-binary.
 
 Idempotent: upsert on application_id; re-running a dump refreshes its rows.
-The yearly 2026 file is overwritten monthly at the same URL, so a monthly
-re-run of --source y2026 keeps it current.
+
+--update (the cron mode): the ministry republishes the current-year file about
+monthly as the same CKAN resource but under a NEW filename
+(public_data_2026-01-01_2026-11-01.zip -> ..._2026-12-01.zip), so a hardcoded
+URL goes stale. --update asks CKAN for every public_data_YYYY resource of the
+dataset and imports only those whose last_modified differs from the state
+file. A new year's resource and the final file of the previous year are
+picked up the same way.
 """
 
 import argparse
@@ -48,9 +55,14 @@ SOURCES = {
     # Snapshot published 22.02.2022, covers 2021-12-31 .. 2022-02-22.
     "y2022q1": "https://data.gov.ua/dataset/d1e27dd5-a9b4-4b20-b5f7-a7b3163e9e0e/resource/ead61051-b018-40df-a86b-16892c63a8a6/download/export_data_gov_ua_data_2022-02-22.zip",
     "y2021": "https://data.gov.ua/dataset/24c0ce1c-8cc5-4f4c-9847-d713043a6a8a/resource/697f6c79-be1d-4adc-bb7b-173fa334c558/download/public_data_2021-01-01_2021-12-31.zip",
-    # Current year, overwritten monthly at this URL.
+    # Current year as of 13.11.2026. Republished monthly under a new filename,
+    # so this URL goes stale: the cron uses --update, which resolves via CKAN.
     "y2026": "https://data.gov.ua/dataset/24c0ce1c-8cc5-4f4c-9847-d713043a6a8a/resource/f33311fa-dc3f-4398-a3f1-88e7d20c8e2b/download/public_data_2026-01-01_2026-11-01.zip",
 }
+
+# The yearly dumps (2021, current year) live in this CKAN dataset.
+CKAN_PACKAGE_URL = "https://data.gov.ua/api/3/action/package_show?id=24c0ce1c-8cc5-4f4c-9847-d713043a6a8a"
+YEARLY_RE = re.compile(r"public_data_(\d{4})-01-01_\d{4}-\d{2}-\d{2}\.zip$")
 
 # From api-description.xlsx shipped with the dataset.
 SERVICE_TYPES = {
@@ -291,6 +303,53 @@ def download(url, dest):
     log.info(f"saved {dest} ({os.path.getsize(dest) / 1e6:.1f} MB)")
 
 
+def yearly_resources():
+    """Every public_data_YYYY zip in the CKAN dataset, oldest year first."""
+    req = urllib.request.Request(CKAN_PACKAGE_URL, headers={"User-Agent": "opendata-importer/1.0"})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        pkg = json.load(resp)["result"]
+    out = []
+    for r in pkg["resources"]:
+        m = YEARLY_RE.search(r.get("url") or "")
+        if m:
+            out.append({"id": r["id"], "year": int(m.group(1)), "url": r["url"],
+                        "last_modified": r.get("last_modified") or r.get("metadata_modified")})
+    return sorted(out, key=lambda r: r["year"])
+
+
+def update(state_file, keep_dir, force=False):
+    """Import every yearly resource whose last_modified changed since the last run."""
+    state = {}
+    if os.path.exists(state_file):
+        with open(state_file) as f:
+            state = json.load(f)
+    resources = yearly_resources()
+    if not resources:
+        raise SystemExit("CKAN returned no public_data_YYYY resources; dataset layout changed?")
+    changed = 0
+    for r in resources:
+        name = os.path.basename(r["url"])
+        if not force and state.get(r["id"], {}).get("last_modified") == r["last_modified"]:
+            log.info(f"[{name}] unchanged since {r['last_modified']}, skip")
+            continue
+        workdir = keep_dir or tempfile.mkdtemp(prefix="edessb-")
+        os.makedirs(workdir, exist_ok=True)
+        dest = os.path.join(workdir, name)
+        download(r["url"], dest)
+        rows = import_zip(dest, name)
+        if not keep_dir:
+            os.remove(dest)
+        state[r["id"]] = {"last_modified": r["last_modified"], "file": name, "rows": rows,
+                          "imported_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+        # Write after each file so a crash on the next one does not redo this one.
+        tmp = state_file + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, state_file)
+        changed += 1
+    log.info(f"update done: {changed} of {len(resources)} yearly files imported")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--source", help=f"one of {', '.join(SOURCES)} or 'all'")
@@ -298,7 +357,16 @@ def main():
     ap.add_argument("--label", help="source_file label for --zip (default: zip basename)")
     ap.add_argument("--keep-dir", help="keep downloaded zips in this directory")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--update", action="store_true",
+                    help="import yearly files changed on CKAN since --state-file (cron mode)")
+    ap.add_argument("--state-file", default=os.path.expanduser("~/edessb-import/state.json"))
+    ap.add_argument("--force", action="store_true", help="with --update: ignore the state file")
     a = ap.parse_args()
+
+    if a.update:
+        os.makedirs(os.path.dirname(os.path.abspath(a.state_file)), exist_ok=True)
+        update(a.state_file, a.keep_dir, a.force)
+        return
 
     if a.list:
         for k, v in SOURCES.items():
