@@ -111,6 +111,26 @@ describe('RegistrySearchTool', () => {
       expect(calls[1].sql).toContain('COUNT(*)');
     });
 
+    it('construction_documents: edrpou matches every role column and never selects raw', async () => {
+      db = makeDb(() => ({ rows: [{ doc_type: 'Дозвіл на виконання будівельних робіт', _total_count: 1 }] }));
+      tool = new RegistrySearchTool(db);
+
+      await tool.executeTool('search_registry', {
+        registry: 'construction_documents',
+        filters: { edrpou: '38798218', date_from: '2021-01-01' },
+      });
+
+      expect(calls).toHaveLength(2);
+      expect(calls[0].sql).toContain('FROM opendata_edessb_documents');
+      for (const col of ['customer_edrpou', 'contractor_edrpou', 'designer_edrpou', 'expertise_edrpou', 'issuer_edrpou']) {
+        expect(calls[0].sql).toContain(`${col} = $1`);
+      }
+      expect(calls[0].sql).toContain('reg_date >= $2');
+      expect(calls[0].params).toEqual(['38798218', '2021-01-01', 20]);
+      // The full source record is ~3 KB per row; it must stay out of tool output.
+      expect(REGISTRY_CATALOG.construction_documents.selectColumns).not.toMatch(/\braw\b/);
+    });
+
     it('lawyers: last_name_prefix anchors the surname at its first letter', async () => {
       db = makeDb(() => ({ rows: [{ last_name: 'Абрамов', _total_count: 1 }] }));
       tool = new RegistrySearchTool(db);
