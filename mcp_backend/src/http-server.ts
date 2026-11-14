@@ -84,6 +84,8 @@ import { createReferralRoutes } from './routes/referral-routes.js';
 import { createSupportRoutes } from './routes/support-routes.js';
 import { createAbuseRoutes } from './routes/abuse-routes.js';
 import { createZakonRoutes } from './routes/zakon-routes.js';
+import { createCourtsRoutes } from './routes/courts-routes.js';
+import { CourtsRefresh } from './services/seo/courts-refresh.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
 import { createSessionReplayRoutes, createAdminSessionReplayRoutes } from './routes/session-replay-routes.js';
@@ -177,6 +179,19 @@ class HTTPMCPServer {
         logger.error('[Cron] Stuck escrow check failed', { error: (err as Error).message });
       });
     }, { timezone: 'Europe/Kyiv' });
+
+    // Cron: refresh /sud and /suddia data (decision counts, slugs, judges' courts)
+    // daily at 04:40 Kyiv time; also once at startup while the tables are empty.
+    {
+      const courtsRefresh = new CourtsRefresh(this.services.db);
+      const runCourtsRefresh = () => courtsRefresh.run().catch(err => {
+        logger.error('[Cron] SEO courts refresh failed', { error: (err as Error).message });
+      });
+      cron.schedule('40 4 * * *', () => { void runCourtsRefresh(); }, { timezone: 'Europe/Kyiv' });
+      courtsRefresh.isEmpty().then(empty => { if (empty) void runCourtsRefresh(); }).catch(err => {
+        logger.warn('[Cron] SEO courts refresh check skipped', { error: (err as Error).message });
+      });
+    }
 
     // Cron: check legislation changes daily at 06:00 Kyiv time
     cron.schedule('0 6 * * *', () => {
@@ -663,6 +678,10 @@ class HTTPMCPServer {
     // outside /api so they are indexable). The edge nginx proxies /zakon here.
     this.app.use('/zakon', createZakonRoutes(this.services.db));
     logger.info('Public code pages registered at /zakon');
+    const seoCourts = createCourtsRoutes(this.services.db);
+    this.app.use('/sud', seoCourts.courts);
+    this.app.use('/suddia', seoCourts.judges);
+    logger.info('Public court/judge pages registered at /sud, /suddia');
 
     // Legislation monitoring routes - subscriptions, changes, notifications
     this.app.use('/api/legislation/monitoring', requireJWT as any, createLegislationMonitoringRoutes(this.app_.legislationMonitoringService));
