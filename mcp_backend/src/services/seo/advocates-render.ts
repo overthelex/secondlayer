@@ -1,5 +1,5 @@
 /** HTML for /advokaty (lists) and /advokat (one advocate). Public ЄРАУ data only. */
-import { SITE, esc, uaDate, page, type Crumb } from './seo-page.js';
+import { SITE, esc, uaDate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
 import { slugify } from './translit.js';
 import type { Advocate, AdvocateLink } from './advocates-repository.js';
 
@@ -119,6 +119,6 @@ export function renderAdvocate(a: Advocate): string {
 <p class="meta">Адвокат${a.importedAt ? ` · за даними ЄРАУ станом на ${uaDate(a.importedAt)}` : ''}</p>
 <div class="scroll"><table class="stats">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table></div>
 <p class="meta">Сторінка містить лише відкриті відомості Єдиного реєстру адвокатів України (ст. 17 Закону України «Про адвокатуру та адвокатську діяльність»), без контактних даних. Щоб прибрати її з legal.org.ua, напишіть на <a href="mailto:${REMOVAL_EMAIL}">${REMOVAL_EMAIL}</a>, вказавши номер свідоцтва.</p>
-<section class="cta"><h2>LEX для адвокатів</h2><p>Пошук судової практики й позицій Верховного Суду, аналіз документів і реєстрів в одному місці, з посиланнями на джерела.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a></section>`,
+<section class="cta"><h2>LEX для адвокатів</h2><p>Пошук судової практики й позицій Верховного Суду, аналіз документів і реєстрів в одному місці, з посиланнями на джерела.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p></section>`,
   });
 }

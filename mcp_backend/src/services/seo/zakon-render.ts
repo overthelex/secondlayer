@@ -6,7 +6,7 @@ import { ZAKON_CODES, articleSlug, type ZakonCode } from './zakon-codes.js';
 import type { CodeData } from './zakon-repository.js';
 import type { Heading, ParsedArticle } from './zakon-text.js';
 import { sentenceCase } from './zakon-text.js';
-import { SITE, esc, uaDate, truncate, page, type Crumb } from './seo-page.js';
+import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
 import { vpListHtml } from './vp-render.js';
 import type { VpListItem } from './vp-repository.js';
 
@@ -156,7 +156,7 @@ ${vpListHtml(vp.items)}
 <section class="cta">
 <h2>Судова практика за статтею ${esc(art.artNo)} ${esc(code.articleRef)}</h2>
 <p>LEX знаходить рішення Верховного Суду та інших судів, які застосовують цю статтю, і пояснює правові позиції з посиланнями на джерела.</p>
-<a class="btn" href="/login">Спробувати LEX безкоштовно</a>
+<a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p>
 </section>`,
   });
 }

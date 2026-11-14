@@ -1,5 +1,5 @@
 /** HTML for /pozytsiia-vs: Grand Chamber decisions, official ЄДРСР text only. */
-import { SITE, esc, uaDate, truncate, page, type Crumb } from './seo-page.js';
+import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
 import { ZAKON_CODES, articleSlug } from './zakon-codes.js';
 import type { VpDecision, VpListItem, VpArticle } from './vp-repository.js';
 import { parseVpText, leadText } from './vp-text.js';
@@ -61,7 +61,7 @@ ${doc.header.length ? `<div class="text">${doc.header.map(l => `<p class="note">
 <div class="text">
 ${body}
 </div>
-<section class="cta"><h2>Схожа практика в LEX</h2><p>LEX знаходить постанови Верховного Суду з тих самих питань, показує, чи не відступили від висновку пізніше, і дає посилання на тексти рішень.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a></section>`,
+<section class="cta"><h2>Схожа практика в LEX</h2><p>LEX знаходить постанови Верховного Суду з тих самих питань, показує, чи не відступили від висновку пізніше, і дає посилання на тексти рішень.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p></section>`,
   });
 }
 
