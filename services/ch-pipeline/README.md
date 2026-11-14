@@ -1272,7 +1272,44 @@ returns paragraphs.
 
 ### 7. Cantonal PDF editions (phase C)
 
-Gate first (the dataset is already at `/data/ch-corpus/bench/pdf-gate-1113`):
+**The first run (2026-11-14) was rolled back.** It took the cleaned
+splitter's articles unconditionally and lost them on layouts the
+pre-cleanup splitter read: lexfind 1,165,061 -> 1,139,859 articles,
+lexwork_pdf 392,031 -> 393,444, zhlex 119,224 -> 174,188, with editions
+such as zhlex 294662 (ZH 181.10) 123 -> 2, lexwork_pdf 90361 (AI 270.000)
+137 -> 11, lexfind 335573 413 -> 199. On an 83-edition sample the stored
+articles were exactly the pre-cleanup splitter's output (77 of 79 PDF
+rows; the other two gain, the 4 zhlex WebRT rows are never resplit), so
+the losses came from #2689, not from older stored splits. Causes: ZH's
+indented `Art. N` headings on marginal-column pages (fixed:
+`_INDENTED_HEADING`), and, guarded but not fixed, AI's citation lists at
+column 0 once the page header is gone, footnote-glued numbers (`Art.
+4321`) breaking the order, a page that stays indented after its left
+column is removed (NE). Since then `pdf_text.split_text` runs the frozen
+pre-cleanup splitter (`chpipe/pdf_text_legacy.py`) beside the cleaned one
+and keeps the cleaned articles only when they lose no article number the
+legacy split finds (a bare `43` kept as `43a` counts as kept); otherwise
+it returns the legacy articles. full_text is always the cleaned text.
+
+Gate 0, the article gate, read-only, must pass on every source before the
+resplit (default limits: at most 1% of editions lose any article number,
+lost-share p95 0 and max 5%, total articles >= 99.5% of stored; exit 1
+otherwise):
+
+```bash
+cd ~/lawrider/repo/services/ch-pipeline && for s in lexwork_pdf lexfind zhlex; do
+  ~/lawrider/ch-pipeline-venv/bin/python scripts/cantonal_resplit_check.py \
+    --dsn "$CHPIPE_DSN" --source $s --limit 500 --json /data/ch-corpus/logs/resplit-check-$s.json
+done
+```
+
+On the rolled-back run's sample it FAILS on main at 7677971a (11 of 79
+editions lose, lost-share p95 0.50, max 0.98) and passes with the guard
+(0 lose, 22 gain: the ZH column layout and editions stored by an older
+splitter). `--jsonl FILE` runs it offline on a sample exported as one JSON
+per line (`version_id, source, lang, raw, before[{n, ...}]`).
+
+Then the PDF text gate (the dataset is already at `/data/ch-corpus/bench/pdf-gate-1113`):
 
 ```bash
 cd ~/lawrider/repo/services/ch-pipeline && ~/lawrider/ch-pipeline-venv/bin/python scripts/pdf_gate.py compare /data/ch-corpus/bench/pdf-gate-1113/html.jsonl /data/ch-corpus/bench/pdf-gate-1113/pdfs
@@ -1300,7 +1337,10 @@ python scripts/text_damage_probe.py --dsn "$CHPIPE_DSN" \
 Pass: change-log fingerprints differ only where article text changed (count
 them, read 10); the 10 zhlex/AR rows read clean (marginal titles out of the
 body, no `Betreibungs-ist`); a row the new split would leave article-less is
-counted `kept` and untouched.
+counted `kept` and untouched. After each source, compare the article totals
+(`SELECT source, sum(article_count) FROM ch_act_version WHERE stage='parsed'
+GROUP BY source`) with the numbers taken before: a total that falls is a
+stop, whatever the gate said on its sample.
 
 ### 8. Rollback, per phase
 

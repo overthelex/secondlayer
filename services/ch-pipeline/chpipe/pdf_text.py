@@ -46,9 +46,10 @@ import pathlib
 import re
 import subprocess
 import tempfile
+from collections import Counter
 from dataclasses import dataclass, field
 
-from . import akn, text_clean
+from . import akn, pdf_text_legacy, text_clean
 from .text_extract import PDFTOTEXT_TIMEOUT_SECONDS, PdfToolMissing
 
 _WS = re.compile(r"\s+")
@@ -164,6 +165,24 @@ _BODY_MIN_INDENT = 10       # the body beside a left column starts right of this
 # number) on the same line. The dot is required -- "§ 7 Abs. 2" is a citation.
 _DOTTED_HEADING = re.compile(
     r"^\s{0,24}§\s?(\d+(?:\s?[a-z](?=\.))?)\.(?:\d{1,2})?\s+((?:\d{1,2}\s+)?[A-ZÄÖÜ].*)$")
+# "   Art. 12 1 Das Bekenntnis ...", "    Art. 6 Die Landeskirche ...": the
+# same layout without the dot (ZH 181.10, the Kirchenordnung, version
+# 294662). Once the column is off, the body sits at column 0 and the
+# heading keeps its first-line indent, so _HEADING (column 0) never sees
+# it; the provision's first line (maybe opened by its paragraph number)
+# follows on the same line. Only on a page with the marginal column, never
+# a citation ("Art. 5 Abs. 2" -- _NOT_A_MARGINAL), and indented 1-6: ZH's
+# first-line indent is 2-5 (265 headings, phase C sample), AI's citation
+# lists on its column pages sit at 8 ("        Art. 132 Anweisung an ...").
+_INDENTED_HEADING = re.compile(
+    r"^\s{1,6}(?:Art\.|§)\s?(\d+[a-z]?)\s+" + _NOT_A_MARGINAL + r"((?:\d{1,2}\s+)?[A-ZÄÖÜ].*)$")
+
+
+def _column_heading(line: str):
+    """The heading of the marginal-column layout: dotted or indented."""
+    return _DOTTED_HEADING.match(line) or _INDENTED_HEADING.match(line)
+
+
 # "a. den Sitz", "b) ...": an enumeration item opens a new line even in
 # lowercase, so a blank above it stays a break (_bridges_blank)
 _ENUMERATION_START = re.compile(r"^[a-z]{1,2}[.)](?:\s|\d)")
@@ -571,7 +590,7 @@ def _bridges_blank(before: str, after: str, column: bool) -> bool:
 
 def _starts_heading(line: str, column: bool) -> bool:
     return bool(_HEADING.match(line) or _CENTRED_HEADING.match(line)
-                or _LEFT_COLUMN_HEADING.match(line) or (column and _DOTTED_HEADING.match(line)))
+                or _LEFT_COLUMN_HEADING.match(line) or (column and _column_heading(line)))
 
 
 def _blocks(pages: list[list[str]]) -> list[_Block]:
@@ -884,11 +903,52 @@ def _clause_articles(blocks: list[_Block], vocabulary: frozenset[str] = frozense
     return articles, text_lines
 
 
+def lost_numbers(before: list[str], after: list[str]) -> list[str]:
+    """The article numbers of `before` that `after` does not have, as a
+    multiset ("3" twice before, once after: one "3" lost). A bare number
+    is kept by the same number with a letter suffix ("43" -> "43a"): the
+    pre-cleanup splitter read ZH's "§ 43 a.26" (the letter apart, footnote
+    26 glued to it) as article 43, the cleaned one reads 43a."""
+    rest = Counter(after)
+    lost: list[str] = []
+    for number in before:
+        if rest[number] > 0:
+            rest[number] -= 1
+            continue
+        renamed = next((k for k in rest if rest[k] > 0 and number.isdigit()
+                        and k.startswith(number) and k[len(number):].isalpha()), None)
+        if renamed is not None:
+            rest[renamed] -= 1
+            continue
+        lost.append(number)
+    return lost
+
+
 def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], str]:
     """pdftotext -layout output -> (articles, full_text). The offline half
     of extract(): what pdf_text_stage stores in akn_xml is `raw`, so a
     better split later never needs the PDF again. `lang` is the edition's
-    language: its wordlist decides the line-end hyphens (text_clean)."""
+    language: its wordlist decides the line-end hyphens (text_clean).
+
+    full_text is always the cleaned split's (#2689: hyphens, furniture, the
+    marginal column off the body). The articles are the cleaned split's
+    only when they lose no article number the pre-cleanup splitter
+    (pdf_text_legacy) finds in the same text; otherwise the pre-cleanup
+    articles are returned, as they were stored before phase C. Phase C's
+    first run (2026-11-14, rolled back) took the cleaned split's articles
+    unconditionally and lost them by the thousand: the cleaned rules read
+    some layouts worse (AI's citation lists at column 0 once the page
+    header is gone, ZH's "Art. 4321" footnote-glued numbers breaking the
+    order, NE/VD layouts). scripts/cantonal_resplit_check.py is the gate."""
+    articles, full_text = _split_clean(raw, lang)
+    legacy, _ = pdf_text_legacy.split_text(text_clean.normalise_chars(raw))
+    if lost_numbers([a.article_number for a in legacy], [a.article_number for a in articles]):
+        return legacy, full_text
+    return articles, full_text
+
+
+def _split_clean(raw: str, lang: str | None = None) -> tuple[list[akn.Article], str]:
+    """The cleaned splitter alone: split_text without the legacy guard."""
     vocabulary = text_clean.hyphen_vocabulary([lang]) if lang else frozenset()
     blocks = _blocks(_clean_pages(text_clean.normalise_chars(raw)))
     sections = _Sections()
@@ -940,7 +1000,7 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
         if not heading and block.column:
             # the marginal-column layout: "   § 4.14 Die Gemeinde ..." is
             # its heading, never a centred one
-            heading = _DOTTED_HEADING.match(first)
+            heading = _column_heading(first)
             shape = "dotted"
         if not heading:
             heading = _CENTRED_HEADING.match(first)
@@ -1008,7 +1068,8 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
                 # line of its own under a blank ("Art. 1", "", "Gegenstand")
                 marginal = _tidy(following.lines[0])
                 following.lines = following.lines[1:]
-            label = "§" if shape == "dotted" else block.lines[0].split()[0]
+            label = (("Art." if heading.group(0).lstrip().startswith("Art") else "§")
+                     if shape == "dotted" else block.lines[0].split()[0])
             current = {"number": number, "marginal": [marginal] if marginal else [],
                        "e_id": sections.e_id(number), "parent": sections.parent,
                        "paragraphs": _paragraphs(block.lines[body_start:], left_column, vocabulary),
@@ -1020,7 +1081,7 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
         following = blocks[index + 1] if index + 1 < len(blocks) else None
         follows_heading = following is not None and (
             bool(_HEADING.match(following.lines[0]))
-            or (following.column and bool(_DOTTED_HEADING.match(following.lines[0])))
+            or (following.column and bool(_column_heading(following.lines[0])))
             or _section_of(following) is not None)
         if section and (follows_heading or current is None):
             close()
@@ -1030,7 +1091,7 @@ def split_text(raw: str, lang: str | None = None) -> tuple[list[akn.Article], st
             continue
         if current is not None and block.gap >= 1 and not _continues_article(block) \
                 and not any(_HEADING.match(b.lines[0])
-                            or (b.column and _DOTTED_HEADING.match(b.lines[0]))
+                            or (b.column and _column_heading(b.lines[0]))
                             for b in blocks[index + 1:]):
             # the signature block after the last article, an annex: not
             # part of the provision
