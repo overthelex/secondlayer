@@ -12,6 +12,7 @@ import { BannerService } from '../services/banner-service.js';
 import type { ICachePort } from '../domain/ports/index.js';
 import type { ReferralService } from '../services/referral-service.js';
 import type { BillingService } from '../services/billing-service.js';
+import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
 
 // ---------------------------------------------------------------------------
 // Module-level singletons (shared across all auth sub-modules)
@@ -154,7 +155,6 @@ export function generateBannerAsync(userId: string, name: string): void {
 // Welcome bonus for new users
 // ---------------------------------------------------------------------------
 
-const WELCOME_BONUS_UAH = 430;
 
 /**
  * Credit welcome bonus (430 UAH / ~$10 USD) to a newly registered user.
@@ -174,7 +174,7 @@ export function creditWelcomeBonus(userId: string): void {
       userId,
       amountUsd,
       amountUah: WELCOME_BONUS_UAH,
-      description: 'Вітальний бонус — 430 грн',
+      description: `Вітальний бонус — ${WELCOME_BONUS_UAH} грн`,
       paymentProvider: 'adjustment',
       paymentId: `welcome-${userId}`,
     });

@@ -1,5 +1,5 @@
 /** HTML for /sud (courts) and /suddia (judges). */
-import { SITE, esc, uaDate, page, type Crumb } from './seo-page.js';
+import { SITE, esc, uaDate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
 import type { Court, CourtListItem, StatRow, JudgeLink, Judge, CareerRow } from './courts-repository.js';
 
 const SOURCE = 'Дані: Єдиний державний реєстр судових рішень, реєстр суддів ДСА; статистику LEX оновлює щодня.';
@@ -86,7 +86,7 @@ ${sections}`,
 }
 
 function cta(title: string, text: string): string {
-  return `<section class="cta"><h2>${esc(title)}</h2><p>${esc(text)}</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a></section>`;
+  return `<section class="cta"><h2>${esc(title)}</h2><p>${esc(text)}</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p></section>`;
 }
 
 export function renderCourt(court: Court, stats: StatRow[], judges: JudgeLink[], today = new Date()): string {
