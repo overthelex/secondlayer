@@ -17,6 +17,44 @@ const SUBTOOL_TIMEOUT_MS = 40_000;
 const ROWS_PER_SECTION = 10;
 const MAX_TEXT = 400;
 const MAX_SHARED_CONTACTS = 3;
+const MAX_TITLE = 200;
+const MARKER_BUYERS = 5;
+const MARKER_SUPPLIERS = 10;
+
+const date = (v: unknown) => (typeof v === 'string' ? v.slice(0, 10) : v ?? null);
+const clip = (v: unknown, n = MAX_TITLE) => (typeof v === 'string' && v.length > n ? `${v.slice(0, n)}…` : v ?? null);
+
+/**
+ * Fields a dossier row keeps per section. A full ProZorro or Є-Data row repeats the
+ * company's own name, address and contacts in every line, and Є-Data nests each
+ * contractor's address: a big buyer's dossier came to 63K characters, more than an MCP
+ * client accepts in one tool result. Sections not listed keep the whole (trimmed) row.
+ */
+export const ROW_FIELDS: Record<string, (r: any) => any> = {
+  prozorro_supplier: (r) => ({
+    tender_number: r.tender_number, title: clip(r.title), buyer_name: r.buyer_name, buyer_edrpou: r.buyer_edrpou,
+    cpv_code: r.cpv_code, contract_amount: r.contract_amount, currency: r.currency, contract_status: r.contract_status,
+    date_created: date(r.date_created), date_signed: date(r.date_signed),
+    supplier_phone: r.supplier_phone ?? null, supplier_email: r.supplier_email ?? null,
+  }),
+  prozorro_buyer: (r) => ({
+    tender_number: r.tender_number, title: clip(r.title), status: r.status, expected_amount: r.expected_amount,
+    currency: r.currency, cpv_code: r.cpv_code, date_created: date(r.date_created),
+    winners: Array.isArray(r.winners)
+      ? r.winners.slice(0, 3).map((w: any) => ({ edrpou: w.edrpou ?? w.supplier_edrpou, name: w.name ?? w.supplier_name, amount: w.amount ?? w.contract_amount }))
+      : r.winners ?? null,
+  }),
+  spending_recipient: (r) => ({
+    payer_edrpou: r.edrpou, doc_type: r.doc_type_label ?? r.doc_type, document_number: r.document_number,
+    document_date: r.document_date, sign_date: r.sign_date, amount: r.amount, currency: r.currency, vat_included: r.pdv_include,
+  }),
+};
+
+/** An email that is only filler ("----------@ukr.net", "0@0.ua") matches unrelated suppliers. */
+export function isPlaceholderEmail(email: string): boolean {
+  const [local = '', domain = ''] = email.split('@');
+  return !/[a-zа-я]/i.test(local) || !domain.includes('.');
+}
 
 export type SectionStatus = 'found' | 'empty' | 'timeout' | 'error' | 'unavailable';
 
@@ -241,6 +279,11 @@ export class CompanyDossierTool extends BaseToolHandler {
     return this.wrapResponse(await this.buildDossier(edrpou));
   }
 
+  /** Compact JSON: indentation alone made a big dossier a third larger. */
+  protected override wrapResponse(data: any): ToolResult {
+    return { content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] };
+  }
+
   async buildDossier(edrpou: string): Promise<any> {
     const generatedAt = new Date().toISOString();
     // Everything starts at once; a call that needs an earlier result is chained on
@@ -268,7 +311,7 @@ export class CompanyDossierTool extends BaseToolHandler {
 
     const sections: Record<string, Section> = {};
     SECTION_SPECS.forEach((spec, i) => {
-      sections[spec.key] = this.section(spec.title, spec.tool, spec.source, sectionCalls[i], freshness);
+      sections[spec.key] = this.section(spec.title, spec.tool, spec.source, sectionCalls[i], freshness, spec.key);
     });
     sections.courts = this.courtsSection(courts.party, courts.c);
 
@@ -319,7 +362,7 @@ export class CompanyDossierTool extends BaseToolHandler {
     };
   }
 
-  private section(title: string, tool: string, src: SectionSource, call: SubCall, freshness: Record<string, any>): Section {
+  private section(title: string, tool: string, src: SectionSource, call: SubCall, freshness: Record<string, any>, key?: string): Section {
     const fr = src.freshness ? freshness[src.freshness] ?? {} : {};
     const note = [src.note, fr.note].filter(Boolean).join(' ') || undefined;
     const source = { name: src.name, tool, as_of: fr.as_of ?? null, ...(fr.basis ? { as_of_basis: fr.basis } : {}),
@@ -333,7 +376,7 @@ export class CompanyDossierTool extends BaseToolHandler {
     return {
       title, status: rows.length ? 'found' : 'empty', source, count,
       more_available: total == null && rows.length >= 20,
-      items: rows.slice(0, ROWS_PER_SECTION).map(trimRow),
+      items: rows.slice(0, ROWS_PER_SECTION).map((r) => trimRow(key && ROW_FIELDS[key] ? ROW_FIELDS[key](r) : r)),
       ...(rows.length ? {} : { message: message || 'Записів не знайдено.' }),
     };
   }
@@ -363,7 +406,7 @@ export class CompanyDossierTool extends BaseToolHandler {
     const emails = new Set<string>();
     for (const r of toRows(supplier.data).rows) {
       if (r.supplier_phone) phones.add(String(r.supplier_phone));
-      if (r.supplier_email) emails.add(String(r.supplier_email));
+      if (r.supplier_email && !isPlaceholderEmail(String(r.supplier_email))) emails.add(String(r.supplier_email));
     }
     const probes: Array<{ kind: 'phone' | 'email'; value: string }> = [
       ...[...phones].slice(0, MAX_SHARED_CONTACTS).map((value) => ({ kind: 'phone' as const, value })),
@@ -394,8 +437,9 @@ export class CompanyDossierTool extends BaseToolHandler {
         caveat: 'Контакти постачальника в договорі ProZorro часто вносить замовник, тому збіг може бути контактом замовника, а не спільним контактом постачальників. ' +
           'Збіг у договорах одного замовника слабша ознака, ніж у договорах різних замовників.',
         distinct_buyers: buyers.size,
-        buyers: [...buyers].slice(0, 10).map(([code, name]) => ({ edrpou: code, name })),
-        other_suppliers: [...others].slice(0, 20).map(([code, name]) => ({ edrpou: code, name })),
+        buyers: [...buyers].slice(0, MARKER_BUYERS).map(([code, name]) => ({ edrpou: code, name })),
+        other_suppliers: [...others].slice(0, MARKER_SUPPLIERS).map(([code, name]) => ({ edrpou: code, name })),
+        ...(others.size > MARKER_SUPPLIERS ? { other_suppliers_total: others.size } : {}),
         source: { name: 'ProZorro: контактні дані постачальника в договорах', tool: 'openreyestr_search_prozorro' },
       });
     });

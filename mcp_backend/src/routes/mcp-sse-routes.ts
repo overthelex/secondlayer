@@ -19,7 +19,7 @@ import { requestContext } from '../utils/openai-client.js';
 import { MCPSSEServer } from '../api/mcp-sse-server.js';
 import { ToolRegistry, ToolDefinition } from '../api/tool-registry.js';
 import { V2_TOOL_NAMES } from '../api/curated-mcp-tools.js';
-import { presentV2Tools } from '../api/v2-tool-presentation.js';
+import { applyListPrices, presentV2Tools } from '../api/v2-tool-presentation.js';
 import { checkToolAccess, isAdminUser, scopeVaultArgs } from '../api/tool-access-policy.js';
 import { isToolInToolset, filterToolsByToolset } from '../api/mcp-toolset.js';
 import { executePrivateTool, isPrivateToolName, privateToolDefinitionsFor } from '../api/private-tools/index.js';
@@ -31,6 +31,7 @@ import { CreditService } from '../services/credit-service.js';
 import { BillingService } from '../services/billing-service.js';
 import { FixedPriceBilling } from '../services/fixed-price-billing.js';
 import { getFixedToolPrice, FixedToolPrice } from '../services/tool-fixed-price.js';
+import { getAllToolListPricesUsd } from '../services/tool-list-price.js';
 import { acquireMcpCall } from '../services/mcp-usage-limits.js';
 import { callerFromHeaders, logMcpAccess, McpCallerInfo } from '../services/mcp-access-log.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -318,7 +319,8 @@ export function createMCPSSERoutes(deps: {
       // the registry, so no other door lists them. Not subject to the toolset/v2 filters.
       const privateTools = await privateToolDefinitionsFor(deps.db, userId);
       const publicTools = filterToolsByToolset(tools);
-      return { tools: [...(opts?.presentForDirectory ? presentV2Tools(publicTools) : publicTools), ...privateTools] };
+      const listed = opts?.presentForDirectory ? presentV2Tools(publicTools) : publicTools;
+      return { tools: [...applyListPrices(listed, await getAllToolListPricesUsd(deps.db)), ...privateTools] };
     });
 
     mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {

@@ -1,4 +1,4 @@
-import { CompanyDossierTool, normEdr, partyNameFor, registrationDate, SECTION_SPECS, toRows, trimRow } from '../tools/company-dossier-tool.js';
+import { CompanyDossierTool, isPlaceholderEmail, normEdr, ROW_FIELDS, partyNameFor, registrationDate, SECTION_SPECS, toRows, trimRow } from '../tools/company-dossier-tool.js';
 
 const ok = (data: any) => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] });
 
@@ -163,5 +163,29 @@ describe('dossier helpers', () => {
     expect(normEdr('0023227605')).toBe('23227605');
     expect(normEdr('2819204155')).toBe('2819204155');
     expect(normEdr('')).toBeNull();
+  });
+});
+
+describe('dossier size', () => {
+  it('keeps only report fields in ProZorro and Є-Data rows', () => {
+    const row = ROW_FIELDS.prozorro_supplier({ tender_number: 'UA-1', title: 'т'.repeat(300), supplier_name: 'X', supplier_address: 'вул', date_created: '2026-09-03T08:17:03.981Z', contract_amount: '5' });
+    expect(row).not.toHaveProperty('supplier_name');
+    expect(row).not.toHaveProperty('supplier_address');
+    expect(row.date_created).toBe('2026-09-03');
+    expect(row.title.length).toBe(201);
+    const pay = ROW_FIELDS.spending_recipient({ edrpou: '05403286', amount: '1', contractors: [{ address: { city: 'x' } }], doc_type_label: 'Акт' });
+    expect(pay).toEqual(expect.objectContaining({ payer_edrpou: '05403286', doc_type: 'Акт' }));
+    expect(pay).not.toHaveProperty('contractors');
+    const b = ROW_FIELDS.prozorro_buyer({ winners: [{ supplier_edrpou: '1', supplier_name: 'A', contract_amount: '2', date_signed: 'x' }] });
+    expect(b.winners).toEqual([{ edrpou: '1', name: 'A', amount: '2' }]);
+  });
+
+  it('returns compact JSON and skips filler emails', async () => {
+    const res = await new CompanyDossierTool(registry()).executeTool('get_company_dossier', { edrpou: '41633007' });
+    expect(res!.content[0].text).not.toMatch(/\n  /);
+    expect(isPlaceholderEmail('----------@ukr.net')).toBe(true);
+    expect(isPlaceholderEmail('0@0.ua')).toBe(true);
+    expect(isPlaceholderEmail('a@b.ua')).toBe(false);
+    expect(isPlaceholderEmail('masshtabbud@gmail.com')).toBe(false);
   });
 });

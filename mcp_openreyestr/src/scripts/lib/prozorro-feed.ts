@@ -99,6 +99,14 @@ export function edrCode(id: string | null | undefined, scheme: string | null | u
   return (!scheme || scheme === 'UA-EDR') && /^00\d{8}$/.test(v) ? v.slice(2) : v;
 }
 
+/** Lower-cased email, or null for filler such as "----------@ukr.net" or "0@0.ua". */
+export function normalizeEmail(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const e = v.trim().toLowerCase();
+  const [local = '', domain = ''] = e.split('@');
+  return /[a-z]/.test(local) && domain.includes('.') ? e : null;
+}
+
 export function pgSafe(v: unknown): unknown {
   if (typeof v === 'string') return v.includes('\u0000') ? v.replace(/\u0000/g, '') : v;
   if (v && typeof v === 'object' && !(v instanceof Date)) {
@@ -303,7 +311,7 @@ export function extractContracts(data: any): ContractRecord[] {
       supplier_region: str(addr.region, 200),
       supplier_locality: str(addr.locality, 200),
       supplier_address: str(addr.streetAddress, 500),
-      supplier_email: str(cp.email, 200)?.toLowerCase() ?? null,
+      supplier_email: normalizeEmail(str(cp.email, 200)),
       supplier_phone: normalizePhone(cp.telephone),
       supplier_count: suppliers.length,
       amount: cleanAmount(value.amount),

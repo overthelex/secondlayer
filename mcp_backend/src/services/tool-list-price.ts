@@ -54,6 +54,23 @@ export async function getToolListPriceUsd(db: Queryable, toolName: string): Prom
   return cache.prices.get(toolName) ?? 0;
 }
 
+/**
+ * All list prices (USD per call, before the tier markup), from the same cache. Used to
+ * put the real price into tool descriptions; empty on a lookup failure.
+ */
+export async function getAllToolListPricesUsd(db: Queryable): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (!cache || now - cache.loadedAt > CACHE_TTL_MS) {
+    try {
+      cache = { loadedAt: now, prices: await loadPrices(db) };
+    } catch (err: any) {
+      logger.warn('[ToolListPrice] Failed to load list prices', { error: err.message });
+      return cache?.prices ?? new Map();
+    }
+  }
+  return cache.prices;
+}
+
 /** Test hook: forget cached prices. */
 export function resetToolListPriceCache(): void {
   cache = null;
