@@ -153,3 +153,14 @@ describe('edrCode', () => {
     expect(edrCode(null, 'UA-EDR')).toBeNull();
   });
 });
+
+describe('normalizeEmail', () => {
+  it('keeps real addresses and drops filler', () => {
+    const { normalizeEmail } = require('../lib/prozorro-feed');
+    expect(normalizeEmail(' Kovalchuk_1018@UKR.NET ')).toBe('kovalchuk_1018@ukr.net');
+    expect(normalizeEmail('----------@ukr.net')).toBeNull();
+    expect(normalizeEmail('0@0.ua')).toBeNull();
+    expect(normalizeEmail('abc@localhost')).toBeNull();
+    expect(normalizeEmail(null)).toBeNull();
+  });
+});

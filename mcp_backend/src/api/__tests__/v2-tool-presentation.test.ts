@@ -58,3 +58,19 @@ describe('v2 tool presentation', () => {
     expect(input).toEqual(snapshot);
   });
 });
+
+describe('applyListPrices', () => {
+  const { applyListPrices } = require('../v2-tool-presentation');
+  it('replaces the hand-written cost line with the list price, keeps unpriced tools', () => {
+    const tools = [
+      { name: 'openreyestr_get_by_edrpou', description: 'Пошук\n\n💰 Орієнтовна вартість: $0.001 USD\nІнше', inputSchema: {} },
+      { name: 'get_company_dossier', description: 'Досьє', inputSchema: {} },
+      { name: 'search_legal_precedents', description: 'LLM\n💰 Орієнтовна вартість: $0.01-$0.05 USD', inputSchema: {} },
+    ];
+    const out = applyListPrices(tools, new Map([['openreyestr_get_by_edrpou', 0.01100657], ['get_company_dossier', 0.17610517]]));
+    expect(out[0].description).toBe('Пошук\n\n💰 Ціна за виклик: $0.011 USD за прайсом, плюс націнка тарифу (Startup +30%, Business +50%); якщо фактична вартість вища, списується вона.\nІнше');
+    expect(out[1].description).toMatch(/Досьє\n\n💰 Ціна за виклик: \$0\.18 USD/);
+    expect(out[2].description).toBe(tools[2].description);
+    expect(applyListPrices(tools, new Map())).toBe(tools);
+  });
+});

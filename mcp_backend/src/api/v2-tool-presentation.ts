@@ -123,6 +123,32 @@ function normaliseDescription(text: string): string {
     .replace(/Примерная стоимость:/g, 'Орієнтовна вартість:');
 }
 
+const COST_LINE = /💰\s*(?:Орієнтовна вартість|Примерная стоимость|Orientovna vartist)[^\n]*/g;
+
+function formatUsd(v: number): string {
+  return v >= 0.1 ? v.toFixed(2) : v >= 0.01 ? v.toFixed(3) : v.toFixed(4);
+}
+
+/**
+ * Replace the hand-written "💰 Орієнтовна вартість" line with the tool's list price from
+ * tool_pricing. The hand-written lines drifted from billing (get_by_edrpou said $0.001
+ * while a call costs $0.011 before markup), and client models plan spend by them.
+ * Tools without a list price keep their line: they are billed by actual usage.
+ */
+export function applyListPrices(tools: ToolDefinition[], prices: Map<string, number>): ToolDefinition[] {
+  if (prices.size === 0) return tools;
+  return tools.map((t) => {
+    const price = prices.get(t.name);
+    if (!price || typeof t.description !== 'string') return t;
+    const line = `💰 Ціна за виклик: $${formatUsd(price)} USD за прайсом, плюс націнка тарифу (Startup +30%, Business +50%); якщо фактична вартість вища, списується вона.`;
+    COST_LINE.lastIndex = 0;
+    const description = COST_LINE.test(t.description)
+      ? t.description.replace(COST_LINE, line)
+      : `${t.description}\n\n${line}`;
+    return { ...t, description };
+  });
+}
+
 /** Apply the v2 presentation rules. Pure: the input definitions are not mutated. */
 export function presentV2Tools(tools: ToolDefinition[]): ToolDefinition[] {
   return tools.map((t) => {
