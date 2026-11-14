@@ -112,7 +112,7 @@ ${ld}
 <nav class="crumbs" aria-label="Навігація">${crumbsHtml}</nav>
 ${o.body}
 </main>
-<footer><nav class="svc" aria-label="Сервіси LEX">Сервіси LEX: <a href="/sudova-praktyka">пошук судової практики</a> · <a href="/perevirka-kontragenta">перевірка контрагента</a> · <a href="/dlia-advokativ">для адвокатів</a> · <a href="/mcp-dlia-yurystiv">MCP для Claude і ChatGPT</a> · <a href="/pricing">ціни</a> · <a href="/about">про нас</a></nav>${esc(o.source ?? 'Тексти наведено за офіційними даними Верховної Ради України (zakon.rada.gov.ua).')} Інформація не є юридичною консультацією. © LEX, legal.org.ua</footer>
+<footer><nav class="svc" aria-label="Сервіси LEX">Сервіси LEX: <a href="/sudova-praktyka">пошук судової практики</a> · <a href="/perevirka-kontragenta">перевірка контрагента</a> · <a href="/dlia-advokativ">для адвокатів</a> · <a href="/mcp-dlia-yurystiv">MCP для Claude і ChatGPT</a> · <a href="/kalkuliator-sudovoho-zboru">калькулятор судового збору</a> · <a href="/pricing">ціни</a> · <a href="/about">про нас</a></nav>${esc(o.source ?? 'Тексти наведено за офіційними даними Верховної Ради України (zakon.rada.gov.ua).')} Інформація не є юридичною консультацією. © LEX, legal.org.ua</footer>
 </body>
 </html>`;
 }

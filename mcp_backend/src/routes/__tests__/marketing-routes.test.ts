@@ -71,6 +71,15 @@ describe('marketing routes', () => {
       expect(res.text).toContain(`<link rel="canonical" href="https://legal.org.ua${p}">`);
     }
     const sm = await request(app()).get('/sitemap-landing.xml');
-    expect(sm.text.match(/<url>/g)).toHaveLength(6);
+    expect(sm.text.match(/<url>/g)).toHaveLength(7);
+  });
+
+  it('computes the court fee from the query and keeps one canonical', async () => {
+    const res = await request(app()).get('/kalkuliator-sudovoho-zboru?court=civil&payer=person&doc=claim&kind=property&amount=100000&year=2026&e=1');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Судовий збір: 1\u00a0064,96 грн');
+    expect(res.text).toContain('<link rel="canonical" href="https://legal.org.ua/kalkuliator-sudovoho-zboru">');
+    const bad = await request(app()).get('/kalkuliator-sudovoho-zboru?court=admin&doc=order');
+    expect(bad.text).toContain('Судовий наказ в адміністративному судочинстві не видається.');
   });
 });
