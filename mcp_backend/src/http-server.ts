@@ -88,6 +88,7 @@ import { createCourtsRoutes } from './routes/courts-routes.js';
 import { CourtsRefresh } from './services/seo/courts-refresh.js';
 import { createVpRoutes } from './routes/vp-routes.js';
 import { createAdvocatesRoutes } from './routes/advocates-routes.js';
+import { createMarketingRoutes } from './routes/marketing-routes.js';
 import { VpRefresh } from './services/seo/vp-refresh.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
@@ -699,6 +700,8 @@ class HTTPMCPServer {
     this.app.use('/advokaty', seoAdvocates.lists);
     this.app.use('/advokat', seoAdvocates.profiles);
     logger.info('Public advocate pages registered at /advokaty, /advokat');
+    this.app.use(createMarketingRoutes(this.services.db));
+    logger.info('Public home, /pricing and landing pages registered');
 
     // Legislation monitoring routes - subscriptions, changes, notifications
     this.app.use('/api/legislation/monitoring', requireJWT as any, createLegislationMonitoringRoutes(this.app_.legislationMonitoringService));

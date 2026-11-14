@@ -53,6 +53,10 @@ h1{font-size:1.6rem;line-height:1.3;margin:8px 0 12px}h2{font-size:1.15rem;margi
 ul.toc,ul.codes{list-style:none;padding:0;margin:0}ul.toc li{margin:4px 0}ul.codes li{padding:12px 0;border-bottom:1px solid var(--line)}
 table.stats{border-collapse:collapse;width:100%;font-size:15px;margin:8px 0 16px}table.stats th,table.stats td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right}table.stats th:first-child,table.stats td:first-child{text-align:left}.scroll{overflow-x:auto}
 ul.cols{columns:2 280px;padding-left:18px}
+.lead{font-size:1.1rem;color:var(--muted);margin:0 0 20px}.hero{margin:28px 0 8px}.hero h1{font-size:2rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:12px 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}.card h3{margin-top:0}.card p{margin:0;font-size:15px;color:var(--muted)}
+.num{font-size:1.5rem;font-weight:700;display:block}details{border-bottom:1px solid var(--line);padding:10px 0}summary{cursor:pointer;font-weight:600}details p{margin:8px 0 0}
 footer{font-size:13px;color:var(--muted);padding-top:24px;padding-bottom:40px;border-top:1px solid var(--line);margin-top:40px}
 `;
 
@@ -65,6 +69,10 @@ export interface PageOpts {
   body: string;
   /** Source note in the footer; defaults to the Rada attribution of /zakon. */
   source?: string;
+  /** Inline script placed first in <head> (the home page sends signed-in users to the app). */
+  headScript?: string;
+  /** og:type; "article" by default. */
+  ogType?: string;
 }
 
 export function page(o: PageOpts): string {
@@ -78,10 +86,10 @@ export function page(o: PageOpts): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(o.title)}</title>
+${o.headScript ? `<script>${o.headScript}</script>\n` : ''}<title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(canonical)}">
-<meta property="og:type" content="article">
+<meta property="og:type" content="${o.ogType ?? 'article'}">
 <meta property="og:site_name" content="LEX">
 <meta property="og:locale" content="uk_UA">
 <meta property="og:title" content="${esc(o.title)}">
@@ -93,7 +101,7 @@ export function page(o: PageOpts): string {
 ${ld}
 </head>
 <body>
-<header><a class="logo" href="/product">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
+<header><a class="logo" href="/">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/pricing">Ціни</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
 <main>
 <nav class="crumbs" aria-label="Навігація">${crumbsHtml}</nav>
 ${o.body}

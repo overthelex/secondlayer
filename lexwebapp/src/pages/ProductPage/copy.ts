@@ -169,16 +169,16 @@ const en: ProductCopy = {
   pricing: {
     title: 'Pricing',
     plans: [
-      { name: 'Individual lawyer', price: '$29 / month' },
-      { name: 'Law firm', price: 'from $99 / month' },
-      { name: 'Pay-per-query API', price: '$0.05 / query' },
+      { name: 'Data tools (case law, legislation, registries)', price: 'fixed price per query' },
+      { name: 'AI chat', price: 'billed by actual usage' },
+      { name: 'API / MCP', price: 'same per-query prices' },
       { name: 'Enterprise / on-prem / VPC', price: 'custom' },
     ],
-    note: 'Free tier — 50 credits on signup, no credit card required.',
+    note: 'No subscription: top up your balance and pay per query. Full price list: legal.org.ua/pricing.',
   },
   cta: {
     title: 'Try LEX',
-    subtitle: 'Live product · Free tier · No credit card',
+    subtitle: 'Live product · No subscription · Pay per query',
     primary: 'Open legal.org.ua',
     secondary: 'Book a demo',
   },
@@ -313,16 +313,16 @@ const uk: ProductCopy = {
   pricing: {
     title: 'Тарифи',
     plans: [
-      { name: 'Окремий юрист', price: '$29 / міс' },
-      { name: 'Юридична фірма', price: 'від $99 / міс' },
-      { name: 'Pay-per-query API', price: '$0.05 / запит' },
+      { name: 'Інструменти даних (практика, законодавство, реєстри)', price: 'фіксована ціна за запит' },
+      { name: 'AI-чат', price: 'за фактичним використанням' },
+      { name: 'API / MCP', price: 'ті самі ціни за запит' },
       { name: 'Enterprise / on-prem / VPC', price: 'за домовленістю' },
     ],
-    note: 'Free tier — 50 кредитів при реєстрації, без картки.',
+    note: 'Без абонплати: поповнюєте баланс і платите за запит. Повний прайс: legal.org.ua/pricing.',
   },
   cta: {
     title: 'Спробувати LEX',
-    subtitle: 'Live-продукт · Free tier · Без картки',
+    subtitle: 'Live-продукт · Без абонплати · Оплата за запит',
     primary: 'Відкрити legal.org.ua',
     secondary: 'Demo',
   },

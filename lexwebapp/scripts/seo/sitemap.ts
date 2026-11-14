@@ -39,7 +39,6 @@ export const LEGAL_SLUGS: Array<{ slug: string; hasEn: boolean }> = [
 
 /** Prerendered marketing pages. Investor pages are deliberately absent (noindex). */
 const PAGES: SitemapEntry[] = [
-  { loc: '/', changefreq: 'daily', priority: '1.0' },
   { loc: '/product', changefreq: 'weekly', priority: '0.95' },
   { loc: '/about', changefreq: 'monthly', priority: '0.85' },
   { loc: '/about/team', changefreq: 'monthly', priority: '0.8' },
@@ -91,7 +90,7 @@ function urlset(entries: SitemapEntry[]): string {
  * Sitemaps generated at request time by mcp_backend (routes/zakon-routes.ts),
  * listed in the index but not written here. seo-check skips them.
  */
-export const BACKEND_SITEMAPS = ['/zakon/sitemap.xml', '/sud/sitemap.xml', '/suddia/sitemap.xml', '/pozytsiia-vs/sitemap.xml', '/advokat/sitemap.xml'];
+export const BACKEND_SITEMAPS = ['/zakon/sitemap.xml', '/sud/sitemap.xml', '/suddia/sitemap.xml', '/pozytsiia-vs/sitemap.xml', '/advokat/sitemap.xml', '/sitemap-landing.xml'];
 
 /** Writes sitemap.xml (index) + sitemap-<section>.xml into outDir. Returns URL count. */
 export function writeSitemaps(outDir: string, posts: BlogPostRef[]): number {
