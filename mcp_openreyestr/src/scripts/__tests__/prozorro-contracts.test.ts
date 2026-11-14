@@ -159,7 +159,7 @@ describe('normalizeEmail', () => {
     const { normalizeEmail } = require('../lib/prozorro-feed');
     expect(normalizeEmail(' Kovalchuk_1018@UKR.NET ')).toBe('kovalchuk_1018@ukr.net');
     expect(normalizeEmail('----------@ukr.net')).toBeNull();
-    expect(normalizeEmail('0@0.ua')).toBeNull();
+    expect(normalizeEmail('0504441122@ukr.net')).toBe('0504441122@ukr.net');
     expect(normalizeEmail('abc@localhost')).toBeNull();
     expect(normalizeEmail(null)).toBeNull();
   });
