@@ -93,24 +93,92 @@ def test_measure_counts_missing_words_hyphens_and_glued_refs():
     assert check.measure(raw, "Betreibungs- und Konkursämter")["hyphen_breaks"] == 0
 
 
+def _healthy():
+    return {"word_loss": 0.0, "token_loss": 0.0, "footnote_miss": 0.0, "length_ratio": 0.97,
+            "content_ratio": 0.99, "hyphen_breaks": 0.0, "glued_refs": 0.0}
+
+
 def test_summary_and_gate():
-    results = {v: {"word_loss": 0.0, "length_ratio": 0.97, "hyphen_breaks": 0.0, "glued_refs": 0.0}
-               for v in range(1, 21)}
-    results[7].update(word_loss=0.05, length_ratio=0.8, hyphen_breaks=2.0, glued_refs=1.0)
+    results = {v: _healthy() for v in range(1, 21)}
+    results[7].update(word_loss=0.05, length_ratio=0.8, content_ratio=0.8,
+                      hyphen_breaks=2.0, glued_refs=1.0)
     results[9]["word_loss"] = 0.004
     summary = check.summarise(results)
     assert summary["n"] == 20 and summary["worst"][:2] == [7, 9]
     assert summary["word_loss"]["median"] == 0.0 and summary["word_loss"]["max"] == 0.05
     assert summary["hyphen_share"] == pytest.approx(1 / 20)
+    assert summary["below_floor"] == [7] and summary["content_ratio"]["min"] == 0.8
     assert check.gate_ok(summary)
-    # one broken edition in twenty reaches the p95
-    results[8]["word_loss"] = 0.05
+    # one broken edition in twenty reaches the p95 / the p5
+    for key, bad in (("word_loss", 0.05), ("token_loss", 0.02), ("footnote_miss", 0.2)):
+        results[8][key] = bad
+        results[10][key] = bad
+        assert not check.gate_ok(check.summarise(results)), key
+        results[8][key] = results[10][key] = 0.0
+    results[8]["content_ratio"] = 0.7
     assert not check.gate_ok(check.summarise(results))
-    results[8]["word_loss"] = 0.0
+    results[8]["content_ratio"] = 0.99
     for v in range(1, 12):
         results[v]["length_ratio"] = 0.85      # the median of a footnote-less run
     assert not check.gate_ok(check.summarise(results))
     assert not check.gate_ok(check.summarise({}))
+
+
+def test_token_loss_sees_a_repeated_phrase_lost_once():
+    raw = ("1\nX\n\nArt. 1\nBundesgesetz ändert Verfassung.\n\nArt. 2\n"
+           "Bundesgesetz ändert Verfassung.\n")
+    clean = "X\n\nArt. 1\n\nBundesgesetz ändert Verfassung.\n\nArt. 2"
+    result = check.measure(raw, clean)
+    assert result["word_loss"] == 0.0                  # every type is still there
+    assert result["token_loss"] == pytest.approx(0.5)  # two of four tokens gone
+
+
+def test_footnote_miss_counts_heads_that_open_no_paragraph():
+    raw = ("101\nGesetz\n\nArt. 1\nText eins.\n\n"
+           "1        Accepté en votation populaire du 28 nov. 1993 (ACF\n"
+           "         - RO 1994 268).\n2        Accepté en votation populaire (RO 1994 270).\n\n"
+           "3\n")
+    good = ("Gesetz\n\nArt. 1\n\nText eins.\n\n1 Accepté en votation populaire du 28 nov. 1993 "
+            "(ACF - RO 1994 268).\n\n2 Accepté en votation populaire (RO 1994 270).")
+    assert [n for n, _ in check.raw_footnotes(raw)] == [1, 2]
+    assert check.measure(raw, good)["footnote_miss"] == 0.0
+    glued = good.replace("\n\n1 Accepté", " 1 Accepté")
+    assert check.measure(raw, glued)["footnote_miss"] == 0.5
+
+
+def test_content_ratio_lets_a_short_edition_drop_its_sr_header():
+    raw = "0.142.111.209\nNotenaustausch\nüber die Visa\n"
+    clean = "Notenaustausch\nüber die Visa"
+    result = check.measure(raw, clean)
+    assert result["length_ratio"] < 0.80
+    assert result["content_ratio"] >= check.CONTENT_RATIO_FLOOR
+
+
+def test_footnote_heads_with_one_wording_are_not_furniture():
+    # the same definition as the clean text (fedlex_split._header_key): the
+    # whole line, number included, must recur
+    raw = ("101\nX\n\n93        Accepté en votation populaire du 28 nov. 1993\n"
+           "         - RO 1994 268).\n\n94        Accepté en votation populaire du 28 nov. 1993\n"
+           "         - RO 1994 270).\n\nKonkurs. BG                       281.1\n"
+           "\nKonkurs. BG                       281.1\n")
+    lines = check.running_header_lines(raw)
+    text = raw.splitlines()
+    assert not any(text[i].startswith(("93", "94")) for i in lines)
+    assert sum(1 for i in lines if text[i].startswith("Konkurs")) == 2
+
+
+def test_random_sample_is_the_default(monkeypatch):
+    seen = {}
+
+    def fake_fetch(dsn, limit, random_order, ids):
+        seen["random"] = random_order
+        return iter(())
+    monkeypatch.setenv("CHPIPE_DSN", "postgresql://unused")
+    monkeypatch.setattr(check, "_fetch", fake_fetch)
+    check.main([])
+    assert seen["random"] is True
+    check.main(["--ordered"])
+    assert seen["random"] is False
 
 
 def test_main_refuses_without_dsn(monkeypatch, capsys):
@@ -124,7 +192,7 @@ def test_words_only_in_running_headers_are_not_counted():
            "Art. 2\nDie Kantone vollziehen Vorschriften.\n\n"
            "Neutralität und Rheinschifffahrt                    12\n\n"
            "Art. 3\nDie Kantone melden Vorschriften.\n\n"
-           "Neutralität und Rheinschifffahrt                    14\n")
+           "Neutralität und Rheinschifffahrt                    12\n")
     types = check.raw_word_types(raw)
     assert "Rheinschifffahrt" not in types and "Neutralität" not in types
     assert {"Verordnung", "Schifffahrt", "Kantone", "vollziehen"} <= types
