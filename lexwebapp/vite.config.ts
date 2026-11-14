@@ -1197,9 +1197,9 @@ function prerenderAboutAndProductPlugin(): Plugin {
 
       <h2>Pricing</h2>
       <ul>
-        <li>Data tools (case law, legislation, registries) — fixed price per query</li>
-        <li>AI chat — billed by actual usage</li>
-        <li>API / MCP — the same per-query prices</li>
+        <li>Data tools (case law, legislation, registries) – fixed price per query</li>
+        <li>AI chat – billed by actual usage</li>
+        <li>API / MCP – the same per-query prices</li>
         <li>Enterprise / on-prem / VPC — custom</li>
       </ul>
       <p>No subscription: top up your balance and pay per query. <a href="${BASE_URL}/pricing">Full price list</a>.</p>
