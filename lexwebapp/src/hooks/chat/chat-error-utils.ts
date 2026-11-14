@@ -28,8 +28,8 @@ export function handleStreamError(
   let toastMessage: string;
 
   if (error.code === 'BETA_RESTRICTED') {
-    content = `⚠️ **Доступ обмежено**\n\nЦя версія застосунку доступна лише учасникам бета-тестування або користувачам, які поповнили баланс через Monobank. [Поповнити баланс](/billing).`;
-    toastMessage = 'Доступ обмежено для бета-тестування';
+    content = `⚠️ **Потрібен баланс**\n\nЩоб користуватися чатом, прив'яжіть картку й отримайте 430 грн вітального бонусу або поповніть баланс. [Перейти до білінгу](/billing).`;
+    toastMessage = 'Прив\'яжіть картку або поповніть баланс';
   } else if (error.code === 'INSUFFICIENT_BALANCE') {
     const balance = error.current_balance_usd != null
       ? `$${error.current_balance_usd.toFixed(2)}`

@@ -62,9 +62,8 @@ export function createAccessGate(db: IDatabase, options: AccessGateOptions) {
       error: 'Beta access required',
       code: 'BETA_RESTRICTED',
       message:
-        'Ця версія застосунку доступна лише учасникам бета-тестування ' +
-        'або користувачам, які поповнили баланс через Monobank. ' +
-        'Поповніть баланс, щоб продовжити роботу.',
+        'Щоб продовжити, прив\'яжіть картку й отримайте вітальний бонус ' +
+        'або поповніть баланс через Monobank.',
       feature: options.feature,
       topup_url: '/billing',
     });
