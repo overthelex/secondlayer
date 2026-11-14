@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { useDocumentMeta } from '../../hooks/useDocumentMeta';
 import { useLocaleStore } from '../../stores/localeStore';
 import { LangToggle } from '../AboutPage/LangToggle';
+import { PublicNavLinks } from '../../components/PublicNavLinks';
 import { getProductCopy } from './copy';
 
 export function ProductPage() {
@@ -31,7 +32,8 @@ export function ProductPage() {
             <ArrowLeft size={16} />
             {c.back}
           </button>
-          <div className="flex-1" />
+          <PublicNavLinks className="flex-1 justify-center" />
+          <div className="flex-1 md:hidden" />
           <LangToggle />
           <img src="/Image.jpg" alt="LEX" className="h-9 w-auto" />
         </div>
