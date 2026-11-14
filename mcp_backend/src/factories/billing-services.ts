@@ -104,7 +104,7 @@ export function createBillingServices(db: Database, embeddingService: EmbeddingS
   logger.info('Phase 2 billing services initialized (API keys & credits)');
 
   // B2B Invoice service for legal entities
-  const b2bInvoiceService = new B2BInvoiceService(db);
+  const b2bInvoiceService = new B2BInvoiceService(db, currencyService);
   logger.info('B2B invoice service initialized');
 
   // Email service

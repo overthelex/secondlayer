@@ -16,8 +16,8 @@ const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
 
 /** Кількість інструментів за сервісами — звірено з GET /api/tools, 20.08.2026. */
 const TOOL_COUNTS = { total: 124, backend: 90, rada: 5, openreyestr: 29 };
-/** Курс НБУ на 20.08.2026, за яким перераховані гривневі суми нижче. */
-const USD_UAH = '44,70';
+/** Курс НБУ на 14.11.2026, за яким перераховані гривневі суми нижче. */
+const USD_UAH = '45,43';
 
 interface ToolDef {
   name: string;
@@ -35,22 +35,22 @@ const toolGroups: ToolGroup[] = [
   {
     title: 'Пошук судових рішень (ЄДРСР)',
     tools: [
-      { name: 'search_court_decisions', description: 'Єдиний пошук у ЄДРСР (136M+ документів). Режими: structured (метадані), fulltext (FTS), hybrid (FTS+семантика), semantic', params: [{ name: 'mode', required: true }, { name: 'query' }, { name: 'party_name' }, { name: 'party_role' }, { name: 'cause_num' }, { name: 'judge' }, { name: 'court_code' }, { name: 'court_name' }, { name: 'justice_kind' }, { name: 'judgment_code' }, { name: 'category_code' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'instance_code' }, { name: 'court_level' }, { name: 'military_preset' }, { name: 'kupap_preset' }, { name: 'include_fulltext' }, { name: 'limit' }, { name: 'offset' }, { name: 'oversample' }, { name: 'rrf_k' }], cost: '₴0.06 · до ₴0.55' },
-      { name: 'search_legal_precedents', description: 'Пошук прецедентів із семантичним аналізом; фільтри за рівнем суду (ВП/КЦС/КГС/КАС/ККС) та видом судочинства', params: [{ name: 'query', required: true }, { name: 'domain' }, { name: 'court_level' }, { name: 'procedure_code' }, { name: 'time_range' }, { name: 'limit' }, { name: 'offset' }, { name: 'count_all' }, { name: 'sections' }, { name: 'section_focus' }], cost: '₴0.65 · до ₴29' },
-      { name: 'find_similar_fact_pattern_cases', description: 'Справи зі схожою фабулою: семантичний пошук за описом фактичних обставин', params: [{ name: 'procedure_code', required: true }, { name: 'facts_text', required: true }, { name: 'court_level' }, { name: 'time_range' }, { name: 'limit' }], cost: '₴0 · до ₴0.09' },
-      { name: 'compare_practice_pro_contra', description: 'Дві лінії практики за правовою тезою — рішення «за» і рішення «проти»', params: [{ name: 'procedure_code', required: true }, { name: 'query', required: true }, { name: 'court_level' }, { name: 'time_range' }, { name: 'limit' }], cost: '₴0 · до ₴1.01' },
+      { name: 'search_court_decisions', description: 'Єдиний пошук у ЄДРСР (136M+ документів). Режими: structured (метадані), fulltext (FTS), hybrid (FTS+семантика), semantic', params: [{ name: 'mode', required: true }, { name: 'query' }, { name: 'party_name' }, { name: 'party_role' }, { name: 'cause_num' }, { name: 'judge' }, { name: 'court_code' }, { name: 'court_name' }, { name: 'justice_kind' }, { name: 'judgment_code' }, { name: 'category_code' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'instance_code' }, { name: 'court_level' }, { name: 'military_preset' }, { name: 'kupap_preset' }, { name: 'include_fulltext' }, { name: 'limit' }, { name: 'offset' }, { name: 'oversample' }, { name: 'rrf_k' }], cost: '₴0.45 · до ₴0.68' },
+      { name: 'search_legal_precedents', description: 'Пошук прецедентів із семантичним аналізом; фільтри за рівнем суду (ВП/КЦС/КГС/КАС/ККС) та видом судочинства', params: [{ name: 'query', required: true }, { name: 'domain' }, { name: 'court_level' }, { name: 'procedure_code' }, { name: 'time_range' }, { name: 'limit' }, { name: 'offset' }, { name: 'count_all' }, { name: 'sections' }, { name: 'section_focus' }], cost: '₴2.95 · до ₴4.43' },
+      { name: 'find_similar_fact_pattern_cases', description: 'Справи зі схожою фабулою: семантичний пошук за описом фактичних обставин', params: [{ name: 'procedure_code', required: true }, { name: 'facts_text', required: true }, { name: 'court_level' }, { name: 'time_range' }, { name: 'limit' }], cost: '₴3.00 · до ₴4.50' },
+      { name: 'compare_practice_pro_contra', description: 'Дві лінії практики за правовою тезою — рішення «за» і рішення «проти»', params: [{ name: 'procedure_code', required: true }, { name: 'query', required: true }, { name: 'court_level' }, { name: 'time_range' }, { name: 'limit' }], cost: '₴4.00 · до ₴6.00' },
       { name: 'edrsr_court_decisions_by_court', description: 'Рішення конкретного суду за FTS-запитом у заданому вікні дат', params: [{ name: 'court_code', required: true }, { name: 'fts_query', required: true }, { name: 'date_from', required: true }, { name: 'date_to' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'get_similar_reasoning', description: 'Схожі судові обґрунтування за векторною подібністю секцій рішень', params: [{ name: 'query', required: true }, { name: 'section_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'court' }, { name: 'chamber' }, { name: 'dispute_category' }, { name: 'outcome' }, { name: 'deviation_flag' }, { name: 'precedent_status' }, { name: 'case_number' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'get_similar_reasoning', description: 'Схожі судові обґрунтування за векторною подібністю секцій рішень', params: [{ name: 'query', required: true }, { name: 'section_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'court' }, { name: 'chamber' }, { name: 'dispute_category' }, { name: 'outcome' }, { name: 'deviation_flag' }, { name: 'precedent_status' }, { name: 'case_number' }, { name: 'limit' }], cost: '₴0.91 · до ₴1.36' },
     ],
   },
   {
     title: 'Документи справ',
     tools: [
-      { name: 'get_court_decision', description: 'Повний текст рішення з розбивкою на секції: ФАКТИ, МОТИВУВАННЯ, РІШЕННЯ', params: [{ name: 'doc_id' }, { name: 'case_number' }, { name: 'depth' }, { name: 'reasoning_budget' }, { name: 'include_citations' }], cost: '₴0 · до ₴2.07' },
-      { name: 'get_case_documents_chain', description: 'Усі документи справи через усі інстанції — перша, апеляція, касація', params: [{ name: 'case_number', required: true }, { name: 'include_full_text' }, { name: 'max_docs' }, { name: 'group_by_instance' }, { name: 'sort' }, { name: 'offset' }, { name: 'document_types' }], cost: '₴0' },
+      { name: 'get_court_decision', description: 'Повний текст рішення з розбивкою на секції: ФАКТИ, МОТИВУВАННЯ, РІШЕННЯ', params: [{ name: 'doc_id' }, { name: 'case_number' }, { name: 'depth' }, { name: 'reasoning_budget' }, { name: 'include_citations' }], cost: '₴0.25 · до ₴0.38' },
+      { name: 'get_case_documents_chain', description: 'Усі документи справи через усі інстанції — перша, апеляція, касація', params: [{ name: 'case_number', required: true }, { name: 'include_full_text' }, { name: 'max_docs' }, { name: 'group_by_instance' }, { name: 'sort' }, { name: 'offset' }, { name: 'document_types' }], cost: '₴0.45 · до ₴0.68' },
       { name: 'edrsr_get_decision_dispositive', description: 'Лише резолютивна частина: ВИРІШИВ / УХВАЛИВ / ПОСТАНОВИВ / ВИРОК', params: [{ name: 'doc_id', required: true }], cost: '₴0' },
       { name: 'extract_document_sections', description: 'Розбивка тексту рішення на структуровані секції (з LLM або без)', params: [{ name: 'doc_id' }, { name: 'document_id' }, { name: 'text' }, { name: 'use_llm' }] },
-      { name: 'load_full_texts', description: 'Пакетне завантаження повних текстів рішень за масивом doc_id', params: [{ name: 'doc_ids', required: true }, { name: 'max_docs' }, { name: 'batch_size' }, { name: 'return_texts' }, { name: 'snippet_chars' }], cost: '₴0 · до ₴1.98' },
+      { name: 'load_full_texts', description: 'Пакетне завантаження повних текстів рішень за масивом doc_id', params: [{ name: 'doc_ids', required: true }, { name: 'max_docs' }, { name: 'batch_size' }, { name: 'return_texts' }, { name: 'snippet_chars' }], cost: '₴0.32 · до ₴0.48' },
       { name: 'get_decision_cited_norms', description: 'Норми законодавства, на які фактично посилається рішення (граф цитувань)', params: [{ name: 'doc_id', required: true }], cost: '₴0' },
       { name: 'bulk_ingest_court_decisions', description: 'Масове завантаження та векторизація рішень за запитом (пагінація)', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'max_docs' }, { name: 'max_pages' }, { name: 'page_size' }, { name: 'supreme_court_hint' }] },
     ],
@@ -59,31 +59,31 @@ const toolGroups: ToolGroup[] = [
     title: 'Аналіз практики',
     tools: [
       { name: 'analyze_case_pattern', description: 'Патерни практики: успішні аргументи, ризики, статистика результатів', params: [{ name: 'intent', required: true }, { name: 'query' }, { name: 'case_ids' }, { name: 'documents' }, { name: 'method' }] },
-      { name: 'count_cases_by_party', description: 'Точна кількість справ за назвою сторони (позивач/відповідач)', params: [{ name: 'party_name', required: true }, { name: 'party_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'return_cases' }, { name: 'max_cases_to_return' }], cost: '₴0' },
-      { name: 'check_precedent_status', description: 'Чи не скасовано рішення вищою інстанцією', params: [{ name: 'case_id' }, { name: 'case_number' }, { name: 'doc_id' }], cost: '₴0' },
-      { name: 'get_citation_graph', description: 'Граф цитувань рішення: на які статті законодавства воно посилається', params: [{ name: 'case_id', required: true }, { name: 'depth' }], cost: '₴0' },
-      { name: 'search_court_case_status', description: 'Статус судової справи за номером, суддею або судом', params: [{ name: 'case_number' }, { name: 'judge' }, { name: 'description' }, { name: 'court_name' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'count_cases_by_party', description: 'Точна кількість справ за назвою сторони (позивач/відповідач)', params: [{ name: 'party_name', required: true }, { name: 'party_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'return_cases' }, { name: 'max_cases_to_return' }], cost: '₴0.50 · до ₴0.75' },
+      { name: 'check_precedent_status', description: 'Чи не скасовано рішення вищою інстанцією', params: [{ name: 'case_id' }, { name: 'case_number' }, { name: 'doc_id' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'get_citation_graph', description: 'Граф цитувань рішення: на які статті законодавства воно посилається', params: [{ name: 'case_id', required: true }, { name: 'depth' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'search_court_case_status', description: 'Статус судової справи за номером, суддею або судом', params: [{ name: 'case_number' }, { name: 'judge' }, { name: 'description' }, { name: 'court_name' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'analyze_data', description: 'Read-only SQL для аналітики: GROUP BY, COUNT, агрегати, JOIN (таймаут 45с)', params: [{ name: 'sql', required: true }], cost: '₴0' },
     ],
   },
   {
     title: 'Законодавство',
     tools: [
-      { name: 'get_legislation_section', description: 'Стаття за посиланням («ст. 625 ЦК») або за rada_id + article_number, з історичною редакцією на дату', params: [{ name: 'query' }, { name: 'rada_id' }, { name: 'article_number' }, { name: 'as_of_date' }, { name: 'include_html' }, { name: 'theme' }], cost: '₴0' },
-      { name: 'get_legislation_articles', description: 'Кілька статей одного акту за один виклик (напр. 354–356 ЦПК)', params: [{ name: 'rada_id', required: true }, { name: 'article_numbers', required: true }, { name: 'as_of_date' }, { name: 'include_html' }, { name: 'theme' }], cost: '₴0' },
-      { name: 'search_legislation', description: 'Семантичний пошук релевантних статей законодавства за описом ситуації', params: [{ name: 'query', required: true }, { name: 'rada_id' }, { name: 'limit' }, { name: 'include_html' }, { name: 'include_court_practice' }], cost: '₴0.15 · до ₴0.22' },
-      { name: 'get_legislation_structure', description: 'Структура акту: розділи, глави, параграфи з лічильником статей', params: [{ name: 'rada_id', required: true }, { name: 'include_articles' }, { name: 'offset' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'get_legislation_history', description: 'Історія редакцій акту: які статті змінювались і коли', params: [{ name: 'rada_id', required: true }, { name: 'article_number' }], cost: '₴0' },
-      { name: 'list_legislation_editions', description: 'Перелік доступних історичних редакцій акту з датами', params: [{ name: 'rada_id', required: true }], cost: '₴0' },
+      { name: 'get_legislation_section', description: 'Стаття за посиланням («ст. 625 ЦК») або за rada_id + article_number, з історичною редакцією на дату', params: [{ name: 'query' }, { name: 'rada_id' }, { name: 'article_number' }, { name: 'as_of_date' }, { name: 'include_html' }, { name: 'theme' }], cost: '₴0.10 · до ₴0.15' },
+      { name: 'get_legislation_articles', description: 'Кілька статей одного акту за один виклик (напр. 354–356 ЦПК)', params: [{ name: 'rada_id', required: true }, { name: 'article_numbers', required: true }, { name: 'as_of_date' }, { name: 'include_html' }, { name: 'theme' }], cost: '₴0.10 · до ₴0.15' },
+      { name: 'search_legislation', description: 'Семантичний пошук релевантних статей законодавства за описом ситуації', params: [{ name: 'query', required: true }, { name: 'rada_id' }, { name: 'limit' }, { name: 'include_html' }, { name: 'include_court_practice' }], cost: '₴0.45 · до ₴0.68' },
+      { name: 'get_legislation_structure', description: 'Структура акту: розділи, глави, параграфи з лічильником статей', params: [{ name: 'rada_id', required: true }, { name: 'include_articles' }, { name: 'offset' }, { name: 'limit' }], cost: '₴0.10 · до ₴0.15' },
+      { name: 'get_legislation_history', description: 'Історія редакцій акту: які статті змінювались і коли', params: [{ name: 'rada_id', required: true }, { name: 'article_number' }], cost: '₴0.10 · до ₴0.15' },
+      { name: 'list_legislation_editions', description: 'Перелік доступних історичних редакцій акту з датами', params: [{ name: 'rada_id', required: true }], cost: '₴0.10 · до ₴0.15' },
       { name: 'search_procedural_norms', description: 'Процесуальні норми ЦПК/ГПК/КАС через RADA MCP', params: [{ name: 'code', required: true }, { name: 'query' }, { name: 'article' }, { name: 'limit' }] },
     ],
   },
   {
     title: 'НПА та правові акти',
     tools: [
-      { name: 'search_npa', description: 'Повний корпус НПА України (293K актів): закони, підзаконні акти, редакції', params: [{ name: 'query' }, { name: 'title' }, { name: 'status' }, { name: 'doc_type' }, { name: 'as_of_date' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'get_npa_act', description: 'Картка акта НПА за nreg: метадані, редакції, текст, окрема стаття', params: [{ name: 'nreg', required: true }, { name: 'mode' }, { name: 'article_number' }, { name: 'as_of_date' }, { name: 'offset' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_edrnpa', description: 'Реєстр нормативно-правових актів ЄДРНПА (141K записів)', params: [{ name: 'name' }, { name: 'number' }, { name: 'publisher' }, { name: 'doc_type' }, { name: 'keywords' }, { name: 'include_text' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'search_npa', description: 'Повний корпус НПА України (293K актів): закони, підзаконні акти, редакції', params: [{ name: 'query' }, { name: 'title' }, { name: 'status' }, { name: 'doc_type' }, { name: 'as_of_date' }, { name: 'limit' }], cost: '₴0.10 · до ₴0.15' },
+      { name: 'get_npa_act', description: 'Картка акта НПА за nreg: метадані, редакції, текст, окрема стаття', params: [{ name: 'nreg', required: true }, { name: 'mode' }, { name: 'article_number' }, { name: 'as_of_date' }, { name: 'offset' }, { name: 'limit' }], cost: '₴0.04 · до ₴0.06' },
+      { name: 'search_edrnpa', description: 'Реєстр нормативно-правових актів ЄДРНПА (141K записів)', params: [{ name: 'name' }, { name: 'number' }, { name: 'publisher' }, { name: 'doc_type' }, { name: 'keywords' }, { name: 'include_text' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'search_legal_acts', description: 'Пошук НПА: закони, кодекси, укази, постанови', params: [{ name: 'query', required: true }, { name: 'target' }, { name: 'date_before' }, { name: 'limit' }], cost: '₴0' },
       { name: 'get_legal_act_meta', description: 'Кількість і метадані НПА за запитом без завантаження результатів', params: [{ name: 'query', required: true }, { name: 'target' }], cost: '₴0' },
     ],
@@ -94,7 +94,7 @@ const toolGroups: ToolGroup[] = [
       { name: 'calculate_procedural_deadlines', description: 'Калькулятор процесуальних строків з аналізом практики їх поновлення', params: [{ name: 'procedure_code', required: true }, { name: 'event_type' }, { name: 'event_date', required: true }, { name: 'received_full_text_date' }, { name: 'appeal_type', required: true }, { name: 'time_range' }, { name: 'practice_limit' }, { name: 'practice_queries_max' }, { name: 'practice_broad_queries_max' }, { name: 'practice_disable_time_range' }, { name: 'practice_use_court_practice' }, { name: 'practice_case_map_max' }, { name: 'practice_expand_docs' }, { name: 'practice_expand_depth' }, { name: 'reasoning_budget' }] },
       { name: 'build_procedural_checklist', description: 'Чекліст для стадії справи з посиланням на норму', params: [{ name: 'procedure_code', required: true }, { name: 'stage', required: true }, { name: 'case_category' }] },
       { name: 'calculate_monetary_claims', description: '3% річних, інфляційні втрати та інші грошові вимоги', params: [{ name: 'amount', required: true }, { name: 'date_from', required: true }, { name: 'date_to', required: true }, { name: 'claim_type' }] },
-      { name: 'search_court_hearing_schedule', description: 'Розклад судових засідань: дата, час, зал, учасники', params: [{ name: 'query' }, { name: 'source' }, { name: 'target' }, { name: 'case_number' }, { name: 'judge' }, { name: 'participant' }, { name: 'court_name' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'search_court_hearing_schedule', description: 'Розклад судових засідань: дата, час, зал, учасники', params: [{ name: 'query' }, { name: 'source' }, { name: 'target' }, { name: 'case_number' }, { name: 'judge' }, { name: 'participant' }, { name: 'court_name' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'bulk_ingest_court_sessions', description: 'Масовий імпорт судових засідань у локальну базу', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'max_sessions' }, { name: 'max_pages' }] },
       { name: 'build_legal_decision', description: 'Decision Layer: структурована правова позиція з результатів пошуку (таймаут 120с)', params: [{ name: 'query', required: true }, { name: 'context', required: true }, { name: 'pro_cases' }, { name: 'contra_cases' }, { name: 'legislation' }], cost: '₴24 · до ₴26' },
     ],
@@ -120,8 +120,8 @@ const toolGroups: ToolGroup[] = [
   {
     title: 'Pipeline',
     tools: [
-      { name: 'classify_intent', description: 'Класифікація запиту (service/task/depth) — точка входу в pipeline', params: [{ name: 'query', required: true }, { name: 'context' }, { name: 'reasoning_budget' }], cost: '₴0.05 · до ₴0.89' },
-      { name: 'retrieve_legal_sources', description: 'RAG retrieval: сирі джерела (справи, закони, роз’яснення) без аналізу', params: [{ name: 'context', required: true }, { name: 'limits' }], cost: '₴0' },
+      { name: 'classify_intent', description: 'Класифікація запиту (service/task/depth) — точка входу в pipeline', params: [{ name: 'query', required: true }, { name: 'context' }, { name: 'reasoning_budget' }], cost: '₴0.09 · до ₴0.14' },
+      { name: 'retrieve_legal_sources', description: 'RAG retrieval: сирі джерела (справи, закони, роз’яснення) без аналізу', params: [{ name: 'context', required: true }, { name: 'limits' }], cost: '₴0.45 · до ₴0.68' },
       { name: 'validate_response', description: 'Trust layer: перевірка, що відповідь спирається на надані джерела', params: [{ name: 'answer', required: true }, { name: 'sources', required: true }] },
       { name: 'format_answer_pack', description: 'Пакування результату у структуру norm / position / conclusion / risks', params: [{ name: 'desired_output' }, { name: 'norm' }, { name: 'position' }, { name: 'conclusion' }, { name: 'risks' }] },
     ],
@@ -129,24 +129,24 @@ const toolGroups: ToolGroup[] = [
   {
     title: 'Інтелектуальна власність',
     tools: [
-      { name: 'search_ip_objects', description: 'Реєстр об’єктів права інтелектуальної власності: ТМ, патенти, промзразки', params: [{ name: 'query' }, { name: 'obj_type' }, { name: 'obj_state' }, { name: 'classes' }, { name: 'owner' }, { name: 'owner_edrpou' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'search_ip_objects', description: 'Реєстр об’єктів права інтелектуальної власності: ТМ, патенти, промзразки', params: [{ name: 'query' }, { name: 'obj_type' }, { name: 'obj_state' }, { name: 'classes' }, { name: 'owner' }, { name: 'owner_edrpou' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
       { name: 'search_trademarks', description: 'Свідоцтва на знаки для товарів і послуг за класами МКТП та власником', params: [{ name: 'query' }, { name: 'nice_classes' }, { name: 'owner' }, { name: 'owner_edrpou' }, { name: 'obj_state' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'find_similar_trademarks', description: 'Тотожні та схожі ТМ у тих самих класах — перевірка на «зіткнення»', params: [{ name: 'app_number' }, { name: 'query' }, { name: 'classes' }, { name: 'obj_state' }, { name: 'min_similarity' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'get_ip_object', description: 'Картка об’єкта ІВ за номером заявки або реєстрації', params: [{ name: 'app_number' }, { name: 'registration_number' }, { name: 'obj_type' }], cost: '₴0' },
-      { name: 'get_trademark_dossier', description: 'Повне досьє ТМ за одним номером: заявка, діловодство, публікації', params: [{ name: 'number', required: true }], cost: '₴0.05 · до ₴0.07' },
+      { name: 'find_similar_trademarks', description: 'Тотожні та схожі ТМ у тих самих класах — перевірка на «зіткнення»', params: [{ name: 'app_number' }, { name: 'query' }, { name: 'classes' }, { name: 'obj_state' }, { name: 'min_similarity' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
+      { name: 'get_ip_object', description: 'Картка об’єкта ІВ за номером заявки або реєстрації', params: [{ name: 'app_number' }, { name: 'registration_number' }, { name: 'obj_type' }], cost: '₴0.01 · до ₴0.01' },
+      { name: 'get_trademark_dossier', description: 'Повне досьє ТМ за одним номером: заявка, діловодство, публікації', params: [{ name: 'number', required: true }], cost: '₴0.02 · до ₴0.03' },
     ],
   },
   {
     title: 'Відкриті дані та реєстри',
     tools: [
-      { name: 'search_registry', description: 'Єдиний вхід у 37 реєстрів відкритих даних: санкції, адвокати, корупціонери, банки НБУ, фінзвітність та ін.', params: [{ name: 'registry', required: true }, { name: 'filters' }, { name: 'aggregate' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_judges', description: 'Реєстр суддів ВККС: 6K чинних плюс 417K історичних записів', params: [{ name: 'full_name' }, { name: 'court_name' }, { name: 'dossier_number' }, { name: 'gender' }, { name: 'include_history' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_vkks', description: 'Дані ВККС у 5 категоріях: judges, evaluations, declarations, vacancies, efficiency', params: [{ name: 'category', required: true }, { name: 'judge_name' }, { name: 'court_name' }, { name: 'year' }, { name: 'region' }, { name: 'court_level' }, { name: 'dossier_number' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_vrp_judges_discipline', description: 'Дисциплінарні дані суддів ВРП: звільнені, відсторонені, втручання', params: [{ name: 'judge_name' }, { name: 'court_name' }, { name: 'type' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_public_spending', description: 'Публічні витрати spending.gov.ua: 12.6M+ записів (таймаут 120с)', params: [{ name: 'edrpou' }, { name: 'contractor_name' }, { name: 'contractor_edrpou' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'min_amount' }, { name: 'max_amount' }, { name: 'doc_type' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_invalid_passports', description: 'Недійсні паспорти МВС: 2.9M внутрішніх документів', params: [{ name: 'd_series' }, { name: 'd_number' }, { name: 'ovd' }, { name: 'd_status' }, { name: 'include_foreign' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'search_registry', description: 'Єдиний вхід у 37 реєстрів відкритих даних: санкції, адвокати, корупціонери, банки НБУ, фінзвітність та ін.', params: [{ name: 'registry', required: true }, { name: 'filters' }, { name: 'aggregate' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
+      { name: 'search_judges', description: 'Реєстр суддів ВККС: 6K чинних плюс 417K історичних записів', params: [{ name: 'full_name' }, { name: 'court_name' }, { name: 'dossier_number' }, { name: 'gender' }, { name: 'include_history' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'search_vkks', description: 'Дані ВККС у 5 категоріях: judges, evaluations, declarations, vacancies, efficiency', params: [{ name: 'category', required: true }, { name: 'judge_name' }, { name: 'court_name' }, { name: 'year' }, { name: 'region' }, { name: 'court_level' }, { name: 'dossier_number' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'search_vrp_judges_discipline', description: 'Дисциплінарні дані суддів ВРП: звільнені, відсторонені, втручання', params: [{ name: 'judge_name' }, { name: 'court_name' }, { name: 'type' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'search_public_spending', description: 'Публічні витрати spending.gov.ua: 12.6M+ записів (таймаут 120с)', params: [{ name: 'edrpou' }, { name: 'contractor_name' }, { name: 'contractor_edrpou' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'min_amount' }, { name: 'max_amount' }, { name: 'doc_type' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
+      { name: 'search_invalid_passports', description: 'Недійсні паспорти МВС: 2.9M внутрішніх документів', params: [{ name: 'd_series' }, { name: 'd_number' }, { name: 'ovd' }, { name: 'd_status' }, { name: 'include_foreign' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'search_terrorism_list', description: 'Перелік осіб і організацій, пов’язаних з тероризмом (ДСФМУ)', params: [{ name: 'name', required: true }, { name: 'limit' }], cost: '₴0' },
-      { name: 'search_amcu_practice', description: 'Семантичний пошук по рішеннях Антимонопольного комітету', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'search_amcu_practice', description: 'Семантичний пошук по рішеннях Антимонопольного комітету', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
     ],
   },
   {
@@ -159,45 +159,45 @@ const toolGroups: ToolGroup[] = [
   {
     title: 'Верховна Рада',
     tools: [
-      { name: 'rada_search_parliament_bills', description: 'Законопроєкти Верховної Ради з семантичним аналізом', params: [{ name: 'query', required: true }, { name: 'status' }, { name: 'initiator' }, { name: 'committee' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'rada_search_bill_documents', description: 'Супровідні документи законопроєктів: висновки ГНЕУ, комітетів, порівняльні таблиці', params: [{ name: 'query' }, { name: 'bill_number' }, { name: 'doc_kind' }, { name: 'convocation' }, { name: 'initiator' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'rada_get_deputy_info', description: 'Дані народного депутата: фракція, помічники, історія голосувань', params: [{ name: 'name' }, { name: 'rada_id' }, { name: 'faction' }, { name: 'include_voting_record' }, { name: 'include_assistants' }], cost: '₴0' },
-      { name: 'rada_search_legislation_text', description: 'Тексти законів із посиланнями на судові рішення', params: [{ name: 'law_identifier', required: true }, { name: 'article' }, { name: 'search_text' }, { name: 'include_court_citations' }], cost: '₴0' },
+      { name: 'rada_search_parliament_bills', description: 'Законопроєкти Верховної Ради з семантичним аналізом', params: [{ name: 'query', required: true }, { name: 'status' }, { name: 'initiator' }, { name: 'committee' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
+      { name: 'rada_search_bill_documents', description: 'Супровідні документи законопроєктів: висновки ГНЕУ, комітетів, порівняльні таблиці', params: [{ name: 'query' }, { name: 'bill_number' }, { name: 'doc_kind' }, { name: 'convocation' }, { name: 'initiator' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
+      { name: 'rada_get_deputy_info', description: 'Дані народного депутата: фракція, помічники, історія голосувань', params: [{ name: 'name' }, { name: 'rada_id' }, { name: 'faction' }, { name: 'include_voting_record' }, { name: 'include_assistants' }], cost: '₴0.02 · до ₴0.03' },
+      { name: 'rada_search_legislation_text', description: 'Тексти законів із посиланнями на судові рішення', params: [{ name: 'law_identifier', required: true }, { name: 'article' }, { name: 'search_text' }, { name: 'include_court_citations' }], cost: '₴0.07 · до ₴0.10' },
       { name: 'rada_analyze_voting_record', description: 'Аналіз голосувань депутата з AI-інсайтами', params: [{ name: 'deputy_name', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'bill_number' }, { name: 'analyze_patterns' }] },
     ],
   },
   {
     title: 'Державні реєстри (OpenReyestr)',
     tools: [
-      { name: 'openreyestr_search_entities', description: 'Юридичні особи та ФОП у ЄДР', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'record' }, { name: 'entityType' }, { name: 'stan' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_get_entity_details', description: 'Повна картка суб’єкта: засновники, бенефіціари, керівники', params: [{ name: 'record', required: true }, { name: 'entityType' }], cost: '₴0' },
-      { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴8.00 · до ₴10.40' },
-      { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0' },
-      { name: 'openreyestr_search_beneficiaries', description: 'Кінцеві бенефіціарні власники компаній', params: [{ name: 'query', required: true }, { name: 'limit' }], cost: '₴0' },
+      { name: 'openreyestr_search_entities', description: 'Юридичні особи та ФОП у ЄДР', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'record' }, { name: 'entityType' }, { name: 'stan' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_get_entity_details', description: 'Повна картка суб’єкта: засновники, бенефіціари, керівники', params: [{ name: 'record', required: true }, { name: 'entityType' }], cost: '₴0.50 · до ₴0.75' },
+      { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴8.00 · до ₴12.00' },
+      { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0.50 · до ₴0.75' },
+      { name: 'openreyestr_search_beneficiaries', description: 'Кінцеві бенефіціарні власники компаній', params: [{ name: 'query', required: true }, { name: 'limit' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_termination_started', description: 'Юрособи, щодо яких розпочато процедуру припинення', params: [{ name: 'query', required: true }, { name: 'entity_type' }, { name: 'signer_name' }, { name: 'reason' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'openreyestr_get_statistics', description: 'Агрегована статистика по ЄДР', cost: '₴0' },
-      { name: 'openreyestr_search_debtors', description: 'Єдиний реєстр боржників', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'collection_category' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_enforcement_proceedings', description: 'Виконавчі провадження', params: [{ name: 'query' }, { name: 'debtor_edrpou' }, { name: 'creditor_name' }, { name: 'proceeding_status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_bankruptcy_cases', description: 'Справи про банкрутство', params: [{ name: 'query' }, { name: 'debtor_edrpou' }, { name: 'case_number' }, { name: 'proceeding_status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_arma_seized_assets', description: 'Реєстр АРМА: активи під арештом у кримінальних провадженнях', params: [{ name: 'owner_name' }, { name: 'owner_edrpou' }, { name: 'case_number' }, { name: 'asset_type' }, { name: 'status' }, { name: 'court_name' }, { name: 'region' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_rnbo_sanctions', description: 'Санкційні списки РНБО', params: [{ name: 'query', required: true }, { name: 'schema_type' }, { name: 'country' }, { name: 'identifier' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_nazk_declarations', description: 'Декларації НАЗК', params: [{ name: 'declarant_name' }, { name: 'declarant_workplace' }, { name: 'declaration_year' }, { name: 'declaration_type' }, { name: 'declarant_region' }, { name: 'min_income' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_prozorro', description: 'Тендери ProZorro з переможцями', params: [{ name: 'query' }, { name: 'buyer_edrpou' }, { name: 'buyer_name' }, { name: 'supplier_edrpou' }, { name: 'supplier_name' }, { name: 'supplier_phone' }, { name: 'supplier_email' }, { name: 'status' }, { name: 'cpv_code' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
+      { name: 'openreyestr_get_statistics', description: 'Агрегована статистика по ЄДР', cost: '₴0.01 · до ₴0.01' },
+      { name: 'openreyestr_search_debtors', description: 'Єдиний реєстр боржників', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'collection_category' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_search_enforcement_proceedings', description: 'Виконавчі провадження', params: [{ name: 'query' }, { name: 'debtor_edrpou' }, { name: 'creditor_name' }, { name: 'proceeding_status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_search_bankruptcy_cases', description: 'Справи про банкрутство', params: [{ name: 'query' }, { name: 'debtor_edrpou' }, { name: 'case_number' }, { name: 'proceeding_status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_search_arma_seized_assets', description: 'Реєстр АРМА: активи під арештом у кримінальних провадженнях', params: [{ name: 'owner_name' }, { name: 'owner_edrpou' }, { name: 'case_number' }, { name: 'asset_type' }, { name: 'status' }, { name: 'court_name' }, { name: 'region' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_rnbo_sanctions', description: 'Санкційні списки РНБО', params: [{ name: 'query', required: true }, { name: 'schema_type' }, { name: 'country' }, { name: 'identifier' }, { name: 'limit' }, { name: 'offset' }], cost: '₴2.50 · до ₴3.75' },
+      { name: 'openreyestr_search_nazk_declarations', description: 'Декларації НАЗК', params: [{ name: 'declarant_name' }, { name: 'declarant_workplace' }, { name: 'declaration_year' }, { name: 'declaration_type' }, { name: 'declarant_region' }, { name: 'min_income' }, { name: 'limit' }, { name: 'offset' }], cost: '₴2.50 · до ₴3.75' },
+      { name: 'openreyestr_search_prozorro', description: 'Тендери ProZorro з переможцями', params: [{ name: 'query' }, { name: 'buyer_edrpou' }, { name: 'buyer_name' }, { name: 'supplier_edrpou' }, { name: 'supplier_name' }, { name: 'supplier_phone' }, { name: 'supplier_email' }, { name: 'status' }, { name: 'cpv_code' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_vat_payers', description: 'Реєстр платників ПДВ (ДПС)', params: [{ name: 'query' }, { name: 'vat_code' }, { name: 'limit' }, { name: 'offset' }] },
       { name: 'openreyestr_search_single_tax_payers', description: 'Реєстр платників єдиного податку (ДПС)', params: [{ name: 'query' }, { name: 'tin' }, { name: 'tax_group' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'openreyestr_search_tax_debt', description: 'Реєстр податкового боргу (ДПС)', params: [{ name: 'query' }, { name: 'tin' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
+      { name: 'openreyestr_search_tax_debt', description: 'Реєстр податкового боргу (ДПС)', params: [{ name: 'query' }, { name: 'tin' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_esv_debt', description: 'Реєстр боргу зі сплати ЄСВ', params: [{ name: 'query' }, { name: 'tin' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'openreyestr_search_notaries', description: 'Єдиний реєстр нотаріусів', params: [{ name: 'query' }, { name: 'region' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_court_experts', description: 'Атестовані судові експерти', params: [{ name: 'query' }, { name: 'region' }, { name: 'expertise_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_arbitration_managers', description: 'Арбітражні керуючі (банкрутство)', params: [{ name: 'query' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_forensic_methods', description: 'Методики судових експертиз', params: [{ name: 'query' }, { name: 'expertise_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_special_forms', description: 'Спеціальні бланки нотаріальних документів', params: [{ name: 'series' }, { name: 'form_number' }, { name: 'recipient' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_legal_acts', description: 'Нормативно-правові акти в реєстрі НАІС', params: [{ name: 'query' }, { name: 'act_type' }, { name: 'publisher' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_administrative_units', description: 'Адміністративно-територіальні одиниці (КОАТУУ)', params: [{ name: 'query' }, { name: 'region' }, { name: 'unit_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
-      { name: 'openreyestr_search_streets', description: 'Реєстр вулиць НАІС', params: [{ name: 'query' }, { name: 'settlement' }, { name: 'region' }, { name: 'street_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0' },
+      { name: 'openreyestr_search_notaries', description: 'Єдиний реєстр нотаріусів', params: [{ name: 'query' }, { name: 'region' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_court_experts', description: 'Атестовані судові експерти', params: [{ name: 'query' }, { name: 'region' }, { name: 'expertise_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_arbitration_managers', description: 'Арбітражні керуючі (банкрутство)', params: [{ name: 'query' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_forensic_methods', description: 'Методики судових експертиз', params: [{ name: 'query' }, { name: 'expertise_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_special_forms', description: 'Спеціальні бланки нотаріальних документів', params: [{ name: 'series' }, { name: 'form_number' }, { name: 'recipient' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_legal_acts', description: 'Нормативно-правові акти в реєстрі НАІС', params: [{ name: 'query' }, { name: 'act_type' }, { name: 'publisher' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'openreyestr_search_administrative_units', description: 'Адміністративно-територіальні одиниці (КОАТУУ)', params: [{ name: 'query' }, { name: 'region' }, { name: 'unit_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.01' },
+      { name: 'openreyestr_search_streets', description: 'Реєстр вулиць НАІС', params: [{ name: 'query' }, { name: 'settlement' }, { name: 'region' }, { name: 'street_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.01' },
       { name: 'openreyestr_search_street_renamings', description: 'Історія перейменувань вулиць (дані OpenStreetMap)', params: [{ name: 'query' }, { name: 'min_renames' }, { name: 'limit' }, { name: 'offset' }] },
       { name: 'openreyestr_search_exchange_data', description: 'Реєстр обміну даними з державними органами', params: [{ name: 'entity_record' }, { name: 'entity_type' }, { name: 'tax_payer_type' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'openreyestr_search_me_datasets', description: 'Каталог датасетів Мінекономіки', params: [{ name: 'query' }, { name: 'limit' }], cost: '₴0' },
+      { name: 'openreyestr_search_me_datasets', description: 'Каталог датасетів Мінекономіки', params: [{ name: 'query' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
       { name: 'openreyestr_search_me_records', description: 'Рядки всередині датасету Мінекономіки', params: [{ name: 'dataset' }, { name: 'resource_id' }, { name: 'query' }, { name: 'limit' }, { name: 'offset' }] },
     ],
   },
@@ -213,9 +213,9 @@ const toolGroups: ToolGroup[] = [
     title: 'Vault',
     tools: [
       { name: 'store_document', description: 'Зберегти документ у Vault: парсинг, секціонування, векторизація', params: [{ name: 'fileBase64', required: true }, { name: 'mimeType' }, { name: 'title', required: true }, { name: 'type', required: true }, { name: 'metadata' }] },
-      { name: 'get_document', description: 'Документ із Vault за ID: текст, метадані, теги, секції', params: [{ name: 'documentId', required: true }, { name: 'includeSections' }, { name: 'includePatterns' }], cost: '₴0' },
-      { name: 'list_documents', description: 'Список документів Vault з фільтрами та текстовим пошуком', params: [{ name: 'query' }, { name: 'type' }, { name: 'tags' }, { name: 'category' }, { name: 'uploadedAfter' }, { name: 'uploadedBefore' }, { name: 'limit' }, { name: 'offset' }, { name: 'sortBy' }, { name: 'sortOrder' }, { name: 'folderPath' }, { name: 'matterId' }], cost: '₴0' },
-      { name: 'semantic_search', description: 'Семантичний пошук по документах Vault через векторні ембедінги', params: [{ name: 'query', required: true }, { name: 'type' }, { name: 'tags' }, { name: 'limit' }, { name: 'threshold' }], cost: '₴0 · до ₴0' },
+      { name: 'get_document', description: 'Документ із Vault за ID: текст, метадані, теги, секції', params: [{ name: 'documentId', required: true }, { name: 'includeSections' }, { name: 'includePatterns' }], cost: '₴0.05 · до ₴0.07' },
+      { name: 'list_documents', description: 'Список документів Vault з фільтрами та текстовим пошуком', params: [{ name: 'query' }, { name: 'type' }, { name: 'tags' }, { name: 'category' }, { name: 'uploadedAfter' }, { name: 'uploadedBefore' }, { name: 'limit' }, { name: 'offset' }, { name: 'sortBy' }, { name: 'sortOrder' }, { name: 'folderPath' }, { name: 'matterId' }], cost: '₴0.05 · до ₴0.07' },
+      { name: 'semantic_search', description: 'Семантичний пошук по документах Vault через векторні ембедінги', params: [{ name: 'query', required: true }, { name: 'type' }, { name: 'tags' }, { name: 'limit' }, { name: 'threshold' }], cost: '₴0.91 · до ₴1.36' },
       { name: 'update_document', description: 'Оновити метадані документа: назву, теги, тип, категорію, теку', params: [{ name: 'documentId', required: true }, { name: 'title' }, { name: 'tags' }, { name: 'type' }, { name: 'category' }, { name: 'folderPath' }, { name: 'matterId' }] },
       { name: 'delete_document', description: 'Soft-delete документа разом із векторними ембедінгами', params: [{ name: 'documentId', required: true }] },
       { name: 'auto_tag_vault_documents', description: 'Автотегування документів Vault, у яких немає тегів', params: [{ name: 'userId', required: true }, { name: 'limit' }, { name: 'type' }, { name: 'force' }] },
@@ -839,14 +839,15 @@ function PricingSection() {
     <section id="pricing" data-section>
       <h1 className="text-[24px] font-bold text-claude-text tracking-tight">Вартість</h1>
       <p className="mt-2 text-[14px] text-claude-subtext leading-relaxed">
-        Списується фактична вартість виклику без націнки: токени LLM плюс зовнішні API.
-        Більшість інструментів &mdash; це read-only запити до бази й векторного індексу,
-        які не викликають LLM взагалі, тому коштують ₴0.
+        Кожен виклик коштує щонайменше ціну інструмента за прайсом; якщо фактична вартість
+        (токени LLM, зовнішні API) більша, списується вона. Зверху додається націнка тарифу:
+        Free 0%, Startup 30%, Enterprise 40%, Business 50%.
       </p>
       <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
-        Цифри нижче &mdash; не прайс, а фактичні заміри на проді (медіана та 95-й перцентиль
-        по завершених викликах). Перераховано за курсом НБУ {USD_UAH} ₴/$ на 20.08.2026.
-        Реальна сума залежить від обсягу тексту у відповіді.
+        У списку інструментів перше число &mdash; ціна за прайсом без націнки, друге &mdash; з
+        найбільшою націнкою (Business). Для інструментів без ціни в прайсі (аналітика з LLM)
+        наведено фактичні заміри на проді. Перераховано за курсом НБУ {USD_UAH} ₴/$ на
+        14.11.2026; списання з балансу йде за курсом НБУ на день поповнення.
       </p>
 
       <table className="mt-6 w-full text-[13px]">

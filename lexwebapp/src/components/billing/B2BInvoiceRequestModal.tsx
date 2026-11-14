@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { X, FileText, AlertCircle, Building2, Loader2 } from 'lucide-react';
 import { b2bInvoiceApi, billingApi } from '../../utils/api/billing';
+import { useCurrencyRate } from '../../hooks/useCurrencyRate';
 
 interface Props {
   onClose: () => void;
@@ -33,10 +34,11 @@ const billingCycles = [
   { value: 'annual', label: 'Щорічно', months: 12 },
 ];
 
-const DISPLAY_UAH_RATE = 41.5;
 const VAT_RATE = 0.20;
 
 export function B2BInvoiceRequestModal({ onClose, onCreated }: Props) {
+  // the same NBU rate the backend uses for the invoice, not a fixed 41,5
+  const { rate: uahRate } = useCurrencyRate();
   // Org info state
   const [orgLoading, setOrgLoading] = useState(true);
   const [org, setOrg] = useState<OrgInfo | null>(null);
@@ -118,7 +120,7 @@ export function B2BInvoiceRequestModal({ onClose, onCreated }: Props) {
   let estimatedTotal = 0;
 
   if (invoiceType === 'subscription' && selectedTier && selectedCycle) {
-    estimatedUah = selectedTier.monthly_price_usd * selectedCycle.months * DISPLAY_UAH_RATE;
+    estimatedUah = selectedTier.monthly_price_usd * selectedCycle.months * uahRate;
     estimatedVat = estimatedUah * VAT_RATE;
     estimatedTotal = estimatedUah + estimatedVat;
   } else if (invoiceType === 'topup') {

@@ -8,6 +8,7 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import type { IDatabase } from '../domain/ports/index.js';
 import { logger } from '../utils/logger.js';
+import type { CurrencyService } from './currency-service.js';
 
 export interface B2BInvoice {
   id: string;
@@ -169,10 +170,27 @@ function numberToUkrainianWords(num: number): string {
   return `${result} ${getHryvniaSuffix(wholePart)} ${kopStr} коп.`;
 }
 
+/** Fallback only when neither B2B_USD_UAH_RATE nor the NBU rate is available. */
+const DEFAULT_USD_UAH_RATE = 45.43;
+
 export class B2BInvoiceService {
   constructor(
     private db: IDatabase,
+    private currencyService?: CurrencyService,
   ) {}
+
+  /**
+   * USD→UAH rate for an invoice: B2B_USD_UAH_RATE if set (a rate fixed in a
+   * contract), otherwise the NBU rate of the day, the same rate Monobank top-ups
+   * and tool charges convert at. A fixed 41,5 credited ~9% more USD than paid for
+   * once the NBU rate moved to 45+.
+   */
+  private async usdToUahRate(): Promise<number> {
+    const fixed = parseFloat(process.env.B2B_USD_UAH_RATE || '');
+    if (fixed > 0) return fixed;
+    if (this.currencyService) return (await this.currencyService.getUsdToUahRate()).rate;
+    return DEFAULT_USD_UAH_RATE;
+  }
 
   /**
    * Generate next invoice number in format B2B-YYYY-NNNNN
@@ -226,9 +244,7 @@ export class B2BInvoiceService {
       else if (params.billingCycle === 'quarterly') months = 3;
       else months = 12;
 
-      // Convert USD to UAH (use fixed rate from env or default)
-      const usdToUah = parseFloat(process.env.B2B_USD_UAH_RATE || '41.50');
-      amountUah = monthlyUsd * months * usdToUah;
+      amountUah = monthlyUsd * months * (await this.usdToUahRate());
     } else {
       if (!params.amountUah || params.amountUah < 500) {
         throw new Error('Мінімальна сума поповнення — 500 грн');
@@ -241,7 +257,7 @@ export class B2BInvoiceService {
     const totalUah = Math.round((amountUah + vatUah) * 100) / 100;
 
     // Convert to USD for balance crediting
-    const usdToUah = parseFloat(process.env.B2B_USD_UAH_RATE || '41.50');
+    const usdToUah = await this.usdToUahRate();
     const amountUsd = Math.round((amountUah / usdToUah) * 100) / 100;
 
     const invoiceNumber = await this.generateInvoiceNumber();
