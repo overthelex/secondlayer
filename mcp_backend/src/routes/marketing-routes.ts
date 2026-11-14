@@ -3,6 +3,7 @@
  *   GET /                     home for guests (signed-in users are sent to /chat by an inline script)
  *   GET /pricing              live per-query prices (tool_pricing × default tier × NBU rate)
  *   GET /sudova-praktyka, /perevirka-kontragenta, /dlia-advokativ, /mcp-dlia-yurystiv
+ *   GET /kalkuliator-sudovoho-zboru   court fee calculator (GET form, computed per request)
  *   GET /sitemap-landing.xml
  */
 import { Router, Request, Response, NextFunction } from 'express';
@@ -12,6 +13,7 @@ import { cachedHtml } from '../services/seo/seo-cache.js';
 import { renderSitemap } from '../services/seo/zakon-render.js';
 import { MarketingRepository } from '../services/seo/marketing-repository.js';
 import { renderHome, renderPricing, renderLanding, LANDINGS } from '../services/seo/marketing-render.js';
+import { renderCourtFee, FEE_PATH } from '../services/seo/court-fee-render.js';
 
 const TTL_S = 6 * 60 * 60;
 
@@ -36,9 +38,17 @@ export function createMarketingRoutes(db: BaseDatabase, repo = new MarketingRepo
       send(res, (await cachedHtml(`mkt:v1:${l.path}`, TTL_S, async () => renderLanding(l, await repo.coverage())))!);
     }));
   }
+  r.get(FEE_PATH, wrap(async (req, res) => {
+    // With a query the result is per request (cheap, pure); the bare page is cached.
+    const q = req.query as Record<string, unknown>;
+    const html = Object.keys(q).length
+      ? renderCourtFee(q)
+      : (await cachedHtml('mkt:v1:court-fee', TTL_S, async () => renderCourtFee({})))!;
+    send(res, html);
+  }));
   r.get('/sitemap-landing.xml', wrap(async (_req, res) => {
     const d = new Date().toISOString().slice(0, 10);
-    const xml = renderSitemap(['/', '/pricing', ...LANDINGS.map(l => l.path)].map(path => ({ path, lastmod: d })));
+    const xml = renderSitemap(['/', '/pricing', FEE_PATH, ...LANDINGS.map(l => l.path)].map(path => ({ path, lastmod: d })));
     res.status(200).type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
   }));
   return r;
