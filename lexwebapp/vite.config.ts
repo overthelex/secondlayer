@@ -1194,12 +1194,12 @@ function prerenderAboutAndProductPlugin(): Plugin {
 
       <h2>Pricing</h2>
       <ul>
-        <li>Individual lawyer — $29 / month</li>
-        <li>Law firm — from $99 / month</li>
-        <li>Pay-per-query API — $0.05 / query</li>
+        <li>Data tools (case law, legislation, registries) — fixed price per query</li>
+        <li>AI chat — billed by actual usage</li>
+        <li>API / MCP — the same per-query prices</li>
         <li>Enterprise / on-prem / VPC — custom</li>
       </ul>
-      <p>Free tier — 50 credits on signup, no credit card required.</p>
+      <p>No subscription: top up your balance and pay per query. <a href="${BASE_URL}/pricing">Full price list</a>.</p>
 
       <p><a href="${BASE_URL}">Try LEX →</a> · <a href="${BASE_URL}/about">About SecondLayer</a> · <a href="${BASE_URL}/about/team">Meet the team</a> · <a href="${BASE_URL}/developer/docs">Developer API</a></p>
     </main>`
@@ -1217,11 +1217,6 @@ function prerenderAboutAndProductPlugin(): Plugin {
             `${BASE_URL}/product-screenshots/03-structured-legal-analysis.png`,
             `${BASE_URL}/product-screenshots/09-judge-profile.png`,
             `${BASE_URL}/product-screenshots/14-chatgpt-mcp-connected.png`,
-          ],
-          offers: [
-            { '@type': 'Offer', name: 'Individual lawyer', price: '29.00', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
-            { '@type': 'Offer', name: 'Law firm', price: '99.00', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
-            { '@type': 'Offer', name: 'Pay-per-query API', price: '0.05', priceCurrency: 'USD', availability: 'https://schema.org/InStock' },
           ],
           publisher: organizationJsonLd,
         }
