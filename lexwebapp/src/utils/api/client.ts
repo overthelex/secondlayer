@@ -178,7 +178,7 @@ apiClient.interceptors.response.use(
           // user still sees a clear message rather than a silent failure.
           showToast.error(
             (data as { message?: string } | undefined)?.message ||
-              'Доступ обмежено для бета-тестування'
+              'Прив\'яжіть картку або поповніть баланс'
           );
         });
       return Promise.reject(error);
