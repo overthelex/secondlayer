@@ -97,4 +97,23 @@ describe('marketing routes', () => {
     const some = await request(app()).get('/praktykum').query({ check: '1', t1: '530', t4: '4 800,00' });
     expect(some.text).toContain('Результат: 1 з 6');
   });
+
+  it('issues a verifiable certificate only for a full score', async () => {
+    process.env.JWT_SECRET = 'test-secret';
+    const full = { check: '1', t1: '625', t2: '910/1/20', t3: '11.02.2026', t4: '4800', t5: '490/234/26', t6: '910/18342/23' };
+    const page6 = await request(app()).get('/praktykum').query(full);
+    expect(page6.text).toContain('Отримати сертифікат');
+    const issued = await request(app()).get('/praktykum').query({ ...full, cert: 'issue', name: 'Олена Коваленко' });
+    expect(issued.status).toBe(302);
+    const url = issued.headers.location as string;
+    const cert = await request(app()).get(url);
+    expect(cert.status).toBe(200);
+    expect(cert.text).toContain('Олена Коваленко');
+    expect(cert.text).toContain('<meta name="robots" content="noindex">');
+    const forged = await request(app()).get(url.replace(/name=[^&]+/, 'name=Інша+Особа'));
+    expect(forged.status).toBe(404);
+    const partial = await request(app()).get('/praktykum').query({ ...full, t4: '1', cert: 'issue', name: 'Олена Коваленко' });
+    expect(partial.status).toBe(200);
+    expect(partial.text).not.toContain('Отримати сертифікат');
+  });
 });

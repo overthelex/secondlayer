@@ -4,6 +4,7 @@
  * so answers stay right as the data changes. Pure apart from the repository.
  */
 import type { BaseDatabase } from '@secondlayer/shared';
+import { createHmac } from 'node:crypto';
 import { courtFee } from './court-fee.js';
 
 export const PRAK_NREG = '435-15'; // ЦК
@@ -104,4 +105,26 @@ export async function checkAnswers(
     explain: `Справи № ${FAKE_CAUSE} серед постанов Великої Палати немає. Так виглядає «галюцинація» AI: правдоподібний номер, якого немає в реєстрі. Перевіряйте кожне посилання в ЄДРСР.` });
 
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Certificate: issued on a full score, verifiable from its URL alone.
+// ---------------------------------------------------------------------------
+
+const NAME_RE = /^[\p{L}][\p{L}'’ʼ .-]{1,78}[\p{L}.]$/u;
+
+export function cleanName(s: unknown): string | null {
+  const t = String(s ?? '').replace(/\s+/g, ' ').trim();
+  return NAME_RE.test(t) ? t : null;
+}
+
+/** null when the server has no secret: certificates are then simply not offered. */
+export function certCode(name: string, date: string, secret = process.env.JWT_SECRET): string | null {
+  if (!secret) return null;
+  return createHmac('sha256', secret).update(`praktykum|v1|${name}|${date}`).digest('hex').slice(0, 12);
+}
+
+export function certValid(name: string, date: string, code: string, secret = process.env.JWT_SECRET): boolean {
+  const want = certCode(name, date, secret);
+  return !!want && /^[0-9a-f]{12}$/.test(code) && want === code;
 }

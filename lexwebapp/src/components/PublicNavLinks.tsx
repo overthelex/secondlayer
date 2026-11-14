@@ -10,6 +10,7 @@ const LINKS: Array<{ href: string; uk: string; en: string }> = [
   { href: '/sud', uk: 'Суди', en: 'Courts' },
   { href: '/pozytsiia-vs', uk: 'Практика ВП', en: 'Supreme Court' },
   { href: '/kalkuliator-sudovoho-zboru', uk: 'Калькулятор збору', en: 'Court fee calculator' },
+  { href: '/praktykum', uk: 'Практикум', en: 'Practicum' },
   { href: '/pricing', uk: 'Ціни', en: 'Pricing' },
   { href: '/blog/uk', uk: 'Блог', en: 'Blog' },
 ];

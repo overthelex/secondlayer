@@ -79,6 +79,8 @@ export interface PageOpts {
   headScript?: string;
   /** og:type; "article" by default. */
   ogType?: string;
+  /** Adds robots noindex (personal pages such as a certificate). */
+  noindex?: boolean;
 }
 
 export function page(o: PageOpts): string {
@@ -95,7 +97,7 @@ export function page(o: PageOpts): string {
 ${o.headScript ? `<script>${o.headScript}</script>\n` : ''}<title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(canonical)}">
-<meta property="og:type" content="${o.ogType ?? 'article'}">
+${o.noindex ? '<meta name="robots" content="noindex">\n' : ''}<meta property="og:type" content="${o.ogType ?? 'article'}">
 <meta property="og:site_name" content="LEX">
 <meta property="og:locale" content="uk_UA">
 <meta property="og:title" content="${esc(o.title)}">
@@ -107,12 +109,12 @@ ${o.headScript ? `<script>${o.headScript}</script>\n` : ''}<title>${esc(o.title)
 ${ld}
 </head>
 <body>
-<header><a class="logo" href="/">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/kalkuliator-sudovoho-zboru">Калькулятор збору</a><a href="/pricing">Ціни</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
+<header><a class="logo" href="/">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/kalkuliator-sudovoho-zboru">Калькулятор збору</a><a href="/praktykum">Практикум</a><a href="/pricing">Ціни</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
 <main>
 <nav class="crumbs" aria-label="Навігація">${crumbsHtml}</nav>
 ${o.body}
 </main>
-<footer><nav class="svc" aria-label="Сервіси LEX">Сервіси LEX: <a href="/sudova-praktyka">пошук судової практики</a> · <a href="/perevirka-kontragenta">перевірка контрагента</a> · <a href="/dlia-advokativ">для адвокатів</a> · <a href="/mcp-dlia-yurystiv">MCP для Claude і ChatGPT</a> · <a href="/kalkuliator-sudovoho-zboru">калькулятор судового збору</a> · <a href="/pricing">ціни</a> · <a href="/about">про нас</a></nav>${esc(o.source ?? 'Тексти наведено за офіційними даними Верховної Ради України (zakon.rada.gov.ua).')} Інформація не є юридичною консультацією. © LEX, legal.org.ua</footer>
+<footer><nav class="svc" aria-label="Сервіси LEX">Сервіси LEX: <a href="/sudova-praktyka">пошук судової практики</a> · <a href="/perevirka-kontragenta">перевірка контрагента</a> · <a href="/dlia-advokativ">для адвокатів</a> · <a href="/mcp-dlia-yurystiv">MCP для Claude і ChatGPT</a> · <a href="/kalkuliator-sudovoho-zboru">калькулятор судового збору</a> · <a href="/praktykum">практикум для адвокатів</a> · <a href="/pricing">ціни</a> · <a href="/about">про нас</a></nav>${esc(o.source ?? 'Тексти наведено за офіційними даними Верховної Ради України (zakon.rada.gov.ua).')} Інформація не є юридичною консультацією. © LEX, legal.org.ua</footer>
 </body>
 </html>`;
 }

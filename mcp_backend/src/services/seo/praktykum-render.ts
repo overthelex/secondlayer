@@ -1,5 +1,5 @@
 /** /praktykum page: one GET form, answers checked server-side, works without JS. */
-import { esc, page, BONUS_NOTE, type Crumb } from './seo-page.js';
+import { esc, page, uaDate, BONUS_NOTE, type Crumb } from './seo-page.js';
 import { money, LIVING_WAGE, FEE_YEARS } from './court-fee.js';
 import { ZAKON_CODES, articleSlug } from './zakon-codes.js';
 import { FEE_PATH } from './court-fee-render.js';
@@ -70,7 +70,7 @@ function resultBadge(r: TaskResult | undefined): string {
     : `<p class="warn">✗ Не зовсім. ${esc(r.explain)}</p>`;
 }
 
-export function renderPraktykum(d: PraktykumData, q: Record<string, unknown>, results: TaskResult[] | null): string {
+export function renderPraktykum(d: PraktykumData, q: Record<string, unknown>, results: TaskResult[] | null, canCertify = false): string {
   const year = FEE_YEARS[0];
   const ts = tasks(d, year);
   const byId = new Map((results ?? []).map(r => [r.id, r]));
@@ -78,7 +78,7 @@ export function renderPraktykum(d: PraktykumData, q: Record<string, unknown>, re
   const summary = results
     ? `<section id="result" class="cta"><h2>Результат: ${score} з ${ts.length}</h2><p>${score === ts.length
       ? 'Усі завдання виконано. Так виглядає базова перевірка позиції перед поданням: норма, практика ВП, її актуальність, збір і контроль посилань.'
-      : 'Перегляньте підказки біля завдань і спробуйте ще раз.'}</p></section>`
+      : 'Перегляньте підказки біля завдань і спробуйте ще раз.'}</p>${score === ts.length && canCertify ? certForm(q, ts.map(t => t.id)) : ''}</section>`
     : '';
   const body = ts.map((t, i) => `<section class="task" id="${t.id}">
 <h2>${i + 1}. ${esc(t.title)}</h2>
@@ -104,13 +104,53 @@ ${resultBadge(byId.get(t.id))}
     body: `<style>.task{border-bottom:1px solid var(--line);padding:8px 0 16px}.task input:not([type=radio]){font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:inherit;width:100%;max-width:360px}.opts{display:grid;gap:6px}.ok{color:#1a7f37;font-weight:600}.warn{font-weight:600}form .btn{background:var(--accent);color:var(--accent-fg);border:0;padding:10px 18px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;margin-top:16px}</style>
 <h1>Практикум для адвокатів: AI-пошук і перевірка судової практики</h1>
 <p class="lead">${ts.length} завдань на реальних даних, приблизно 30 хвилин. Ви знайдете норму й позицію Великої Палати, перевірите її актуальність, розрахуєте судовий збір, знайдете засідання та навчитеся помічати вигадані AI рішення. Відповіді перевіряються автоматично.</p>
-<p class="meta">Чорнова версія. Завдання можна виконувати на відкритих сторінках legal.org.ua або в LEX. ${esc(BONUS_NOTE)}</p>
+<p class="meta">Завдання можна виконувати на відкритих сторінках legal.org.ua або в LEX. За повний результат можна отримати іменний сертифікат. ${esc(BONUS_NOTE)}</p>
 ${summary}
 <form method="get" action="${PRAK_PATH}#result">
 <input type="hidden" name="check" value="1">
 ${body}
 <button class="btn" type="submit">Перевірити відповіді</button>
 </form>
-<section class="cta"><h2>Для рад адвокатів і комітетів</h2><p>Практикум можна провести як заняття: є сценарій на 60–90 хвилин, слайди й відповіді для модератора. Напишіть на info@legal.org.ua.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a></section>`,
+<section class="cta"><h2>Для рад адвокатів і комітетів</h2><p>Практикум можна провести як заняття: є сценарій на 60–90 хвилин, слайди й відповіді для модератора. Напишіть на igor@legal.org.ua.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a></section>`,
+  });
+}
+
+function certForm(q: Record<string, unknown>, ids: string[]): string {
+  const hidden = ids.map(id => `<input type="hidden" name="${id}" value="${esc(String(q[id] ?? ''))}">`).join('');
+  return `<form method="get" action="${PRAK_PATH}" class="certform"><input type="hidden" name="check" value="1"><input type="hidden" name="cert" value="issue">${hidden}
+<label for="name">Ім’я та прізвище для сертифіката</label><input id="name" name="name" required maxlength="80" placeholder="Олена Коваленко">
+<button class="btn" type="submit">Отримати сертифікат</button>
+<p class="meta">Ім’я буде лише в адресі сертифіката, ми його не зберігаємо.</p></form>`;
+}
+
+export function renderCertificate(name: string, date: string, code: string): string {
+  return page({
+    title: `Сертифікат: ${name} | Практикум LEX`,
+    description: 'Сертифікат про проходження практикуму «AI у практиці адвоката: пошук і перевірка судової практики».',
+    path: PRAK_PATH,
+    crumbs: [...CRUMBS, { name: 'Сертифікат', href: PRAK_PATH }],
+    noindex: true,
+    ogType: 'website',
+    source: 'Сертифікат можна перевірити за його адресою: код зіставляється з іменем і датою.',
+    jsonLd: [],
+    body: `<style>.cert{border:2px solid var(--accent);border-radius:16px;padding:40px 28px;margin:24px 0;text-align:center}.cert h1{margin:8px 0 4px}.cert .who{font-size:1.8rem;font-weight:700;margin:18px 0}.cert .meta{margin-top:20px}@media print{header,footer,nav,.noprint{display:none!important}.cert{border-color:#000}}</style>
+<div class="cert">
+<p class="meta">LEX · legal.org.ua</p>
+<h1>Сертифікат</h1>
+<p>засвідчує, що</p>
+<p class="who">${esc(name)}</p>
+<p>${esc(uaDate(date))} успішно виконав(ла) всі завдання практикуму<br><strong>«AI у практиці адвоката: пошук і перевірка судової практики»</strong></p>
+<p>Пошук норми й позиції Великої Палати Верховного Суду, перевірка актуальності позиції, розрахунок судового збору, пошук засідань, розпізнавання вигаданих AI рішень.</p>
+<p class="meta">Код перевірки: ${esc(code)}. Сертифікат не є документом про підвищення кваліфікації адвоката.</p>
+</div>
+<p class="noprint"><button class="btn" onclick="window.print()" style="background:var(--accent);color:var(--accent-fg);border:0;padding:10px 18px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer">Друкувати або зберегти PDF</button> &nbsp; <a href="${PRAK_PATH}">До практикуму</a></p>`,
+  });
+}
+
+export function renderCertInvalid(): string {
+  return page({
+    title: 'Сертифікат не знайдено | Практикум LEX', description: 'Код сертифіката не збігається.', path: PRAK_PATH,
+    crumbs: CRUMBS, noindex: true, jsonLd: [],
+    body: `<h1>Сертифікат не підтверджено</h1><p>Код не відповідає імені й даті. Перевірте адресу або <a href="${PRAK_PATH}">пройдіть практикум</a>.</p>`,
   });
 }
