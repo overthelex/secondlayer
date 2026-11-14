@@ -13,6 +13,7 @@ export interface AboutCopy {
   market: { title: string; body: string };
   differentiation: { title: string; body: string };
   geography: { title: string; body: string };
+  legal: { title: string; intro: string; lines: string[] };
   ctaTry: string;
   ctaTeam: string;
 }
@@ -57,7 +58,12 @@ const en: AboutCopy = {
   geography: {
     title: 'Where we operate',
     body:
-      'Headquartered in Kyiv, Ukraine. Live production deployment on AWS (eu-central-1, Frankfurt). Active expansion into European jurisdictions — UK, Spain, Germany, Netherlands, France, Estonia — with country-specific data-source pages already shipped.',
+      'Headquartered in Kyiv, Ukraine. Production runs on our own server infrastructure in Kyiv behind Cloudflare. Active expansion into European jurisdictions — UK, Spain, Germany, Netherlands, France, Estonia — with country-specific data-source pages already shipped.',
+  },
+  legal: {
+    title: "Contacts and legal details",
+    intro: "The LEX service is provided under the public offer by:",
+    lines: ["Sole proprietor (ФОП) Ihor Kyrychenko", "Tax number (РНОКПП): 2967214056", "Address: 19 Levka Lukianenka St, apt. 110, Kyiv 04207, Ukraine", "Email: info@legal.org.ua"],
   },
   ctaTry: 'Try LEX',
   ctaTeam: 'Meet the team',
@@ -103,7 +109,12 @@ const uk: AboutCopy = {
   geography: {
     title: 'Де працюємо',
     body:
-      'Штаб-квартира — Київ. Продакшн — на AWS (eu-central-1, Франкфурт). Активне розширення в європейські юрисдикції (Велика Британія, Іспанія, Німеччина, Нідерланди, Франція, Естонія) — country-specific сторінки джерел даних уже опубліковано.',
+      'Штаб-квартира — Київ. Продакшн — на власній серверній інфраструктурі в Києві за Cloudflare. Активне розширення в європейські юрисдикції (Велика Британія, Іспанія, Німеччина, Нідерланди, Франція, Естонія) — country-specific сторінки джерел даних уже опубліковано.',
+  },
+  legal: {
+    title: "Контакти та реквізити",
+    intro: "Послуги сервісу LEX надає за публічною офертою:",
+    lines: ["ФОП Кириченко Ігор Вікторович", "РНОКПП: 2967214056", "Адреса: 04207, Україна, м. Київ, вул. Левка Лук'яненка, буд. 19, кв. 110", "Email: info@legal.org.ua"],
   },
   ctaTry: 'Спробувати LEX',
   ctaTeam: 'Команда',

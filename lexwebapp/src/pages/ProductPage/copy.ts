@@ -160,7 +160,7 @@ const en: ProductCopy = {
   infra: {
     title: 'Infrastructure (transparency)',
     items: [
-      { label: 'Cloud', value: 'AWS (eu-central-1, Frankfurt) — backed by AWS Activate' },
+      { label: 'Hosting', value: 'Own server infrastructure in Kyiv behind Cloudflare' },
       { label: 'Stack', value: 'TypeScript / Node.js 20, React 19, PostgreSQL 15 (PgBouncer), Redis 7, Qdrant, Docker, Nginx' },
       { label: 'AI providers', value: 'OpenAI GPT-4o, Anthropic Claude (via Amazon Bedrock), Voyage AI embeddings' },
       { label: 'CI/CD', value: 'Blue-green deployment with self-healing test agents on a self-hosted runner' },
@@ -304,7 +304,7 @@ const uk: ProductCopy = {
   infra: {
     title: 'Інфраструктура (для прозорості)',
     items: [
-      { label: 'Хмара', value: 'AWS (eu-central-1, Франкфурт) — підтримка AWS Activate' },
+      { label: 'Хостинг', value: 'Власна серверна інфраструктура в Києві за Cloudflare' },
       { label: 'Стек', value: 'TypeScript / Node.js 20, React 19, PostgreSQL 15 (PgBouncer), Redis 7, Qdrant, Docker, Nginx' },
       { label: 'AI-провайдери', value: 'OpenAI GPT-4o, Anthropic Claude (через Amazon Bedrock), Voyage AI embeddings' },
       { label: 'CI/CD', value: 'Blue-green deployment з self-healing test-агентами на self-hosted runner' },

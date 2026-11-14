@@ -112,6 +112,21 @@ export function AboutPage() {
         <Section title={c.differentiation.title} body={c.differentiation.body} />
         <Section title={c.geography.title} body={c.geography.body} />
 
+        <section className="mt-14">
+          <h2 className="text-2xl font-serif text-claude-text font-medium mb-3">{c.legal.title}</h2>
+          <p className="text-base text-claude-subtext font-sans leading-relaxed">{c.legal.intro}</p>
+          <address className="not-italic mt-2 text-base text-claude-subtext font-sans leading-relaxed">
+            {c.legal.lines.map((l) => (
+              <div key={l}>{l}</div>
+            ))}
+          </address>
+          <p className="mt-2 text-sm font-sans text-claude-subtext">
+            <a className="underline" href={language === 'uk' ? '/ua/offer' : '/en/offer'}>{language === 'uk' ? 'Публічна оферта' : 'Public offer'}</a>
+            {' · '}
+            <a className="underline" href="/pricing">{language === 'uk' ? 'Ціни' : 'Pricing'}</a>
+          </p>
+        </section>
+
         {/* CTA */}
         <div className="mt-16 rounded-2xl bg-white border border-claude-border p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-between">
           <div>
