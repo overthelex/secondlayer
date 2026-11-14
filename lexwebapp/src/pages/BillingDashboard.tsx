@@ -16,6 +16,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { TopUpModal } from '../components/billing/TopUpModal';
+import { WelcomeBonusCard } from '../components/billing/WelcomeBonusCard';
 
 type BillingTab = 'overview' | 'tariffs' | 'history' | 'analytics' | 'b2b-invoices' | 'settings';
 
@@ -82,6 +83,8 @@ export function BillingDashboard() {
             </p>
           </div>
         </div>
+
+        <div className="mt-4"><WelcomeBonusCard /></div>
 
         {/* Tabs */}
         <div className="flex gap-2 mt-4 overflow-x-auto">

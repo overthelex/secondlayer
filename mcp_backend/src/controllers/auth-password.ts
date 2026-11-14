@@ -13,7 +13,6 @@ import { requireTurnstile } from '../services/turnstile-service.js';
 import {
   generateToken,
   generateBannerAsync,
-  creditWelcomeBonus,
   validatePassword,
   validateEmail,
   getAuthEmailService,
@@ -213,9 +212,6 @@ export async function registerWithPassword(req: Request, res: Response): Promise
         logger.warn('Failed to link referral on registration', { referralCode, error: refErr.message });
       }
     }
-
-    // Welcome bonus for all new users
-    creditWelcomeBonus(user.id);
 
     // Create verification token and send email
     const verificationToken = await userService.createVerificationToken(user.id);

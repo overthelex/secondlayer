@@ -10,7 +10,6 @@ import { provisionNextcloudUser } from '../services/nextcloud-provisioning.js';
 import {
   generateToken,
   generateBannerAsync,
-  creditWelcomeBonus,
 } from './auth-common.js';
 
 /**
@@ -86,7 +85,6 @@ export async function oidcAuthCallback(req: Request, res: Response): Promise<voi
 
       generateBannerAsync(user.id, user.name || user.email);
       provisionNextcloudUser({ email: userInfo.email, name: userInfo.name }).catch(() => {});
-      creditWelcomeBonus(user.id);
     }
 
     const token = generateToken(user);
@@ -144,7 +142,6 @@ export async function oidcLoginWithPassword(req: Request, res: Response): Promis
 
       generateBannerAsync(user.id, user.name || user.email);
       provisionNextcloudUser({ email: userInfo.email, name: userInfo.name }).catch(() => {});
-      creditWelcomeBonus(user.id);
     }
 
     const token = generateToken(user);

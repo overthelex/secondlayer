@@ -4,7 +4,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { MonobankService } from '../services/monobank-service.js';
+import { MonobankService, CARD_VERIFY_AMOUNT_UAH } from '../services/monobank-service.js';
+import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
 import { MetaMaskService } from '../services/metamask-service.js';
 import { BinancePayService } from '../services/binance-pay-service.js';
 import { NOWPaymentsService } from '../services/nowpayments-service.js';
@@ -76,6 +77,42 @@ export function createPaymentRouter(
         error: 'Payment creation failed',
         message: 'An unexpected error occurred',
       });
+    }
+  });
+
+  /**
+   * @route   GET /api/billing/payment/welcome-bonus
+   * @desc    Whether this account can still get the welcome bonus by verifying a card
+   * @access  Protected (JWT required)
+   */
+  router.get('/welcome-bonus', async (req: any, res: Response) => {
+    try {
+      const userId = req.user?.userId || req.user?.id;
+      const claimed = await monobankService.hasWelcomeClaim(userId);
+      return res.json({ amount_uah: WELCOME_BONUS_UAH, verify_amount_uah: CARD_VERIFY_AMOUNT_UAH, available: !claimed });
+    } catch (error: any) {
+      logger.error('Failed to get welcome bonus status', { error: error.message });
+      return res.status(500).json({ error: 'Failed to get welcome bonus status' });
+    }
+  });
+
+  /**
+   * @route   POST /api/billing/payment/monobank/card-verify
+   * @desc    1 UAH invoice that verifies a card; the welcome bonus is credited
+   *          by the webhook and the 1 UAH is refunded
+   * @access  Protected (JWT required)
+   */
+  router.post('/monobank/card-verify', async (req: any, res: Response) => {
+    try {
+      const userId = req.user?.userId || req.user?.id;
+      const result = await monobankService.createCardVerifyInvoice(userId, req.user?.email);
+      return res.json(result);
+    } catch (error: any) {
+      if (error.message === 'WELCOME_BONUS_ALREADY_CLAIMED') {
+        return res.status(409).json({ error: 'already_claimed', message: 'Вітальний бонус для цього акаунта вже нараховано.' });
+      }
+      logger.error('Failed to create card verification invoice', { error: error.message });
+      return res.status(500).json({ error: 'Payment creation failed', message: 'An unexpected error occurred' });
     }
   });
 

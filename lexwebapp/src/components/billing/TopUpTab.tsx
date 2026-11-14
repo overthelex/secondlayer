@@ -22,6 +22,7 @@ import { toastT, toastTDynamic } from '../../i18n/toast-i18n';
 import { getErrorMessage, hasCode } from '../../utils/errors';
 import { useCurrencyRate } from '../../hooks/useCurrencyRate';
 import { ClosedBetaModal } from '../ClosedBetaModal';
+import { WelcomeBonusCard } from './WelcomeBonusCard';
 
 const MOCK_PAYMENTS = import.meta.env.VITE_MOCK_PAYMENTS === 'true';
 
@@ -592,6 +593,8 @@ export function TopUpTab({ initialAmount }: TopUpTabProps) {
           </div>
         </motion.div>
       )}
+
+      {!MOCK_PAYMENTS && <WelcomeBonusCard />}
 
       {/* Provider Selection */}
       <div className="bg-white border border-claude-border rounded-xl p-6">

@@ -68,6 +68,10 @@ export const b2bInvoiceApi = {
 export const paymentApi = {
   createMonobank: (data: { amount_uah: number; redirect_url?: string }) =>
     apiClient.post('/api/billing/payment/monobank/create', data),
+  getWelcomeBonus: () =>
+    apiClient.get('/api/billing/payment/welcome-bonus'),
+  createCardVerify: () =>
+    apiClient.post('/api/billing/payment/monobank/card-verify'),
   createMetaMask: (data: { amount_usd: number; network: string; token: string }) =>
     apiClient.post('/api/billing/payment/metamask/create', data),
   verifyMetaMask: (data: { paymentIntentId: string; txHash: string }) =>

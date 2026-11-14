@@ -9,7 +9,7 @@ export const SITE = 'https://legal.org.ua';
 
 export { WELCOME_BONUS_UAH };
 /** One line under every sign-up button, so the bonus is stated the same way everywhere. */
-export const BONUS_NOTE = `Після реєстрації на баланс зараховується ${WELCOME_BONUS_UAH} грн, без підписки й прив'язки картки.`;
+export const BONUS_NOTE = `Прив'яжіть картку після реєстрації й отримайте ${WELCOME_BONUS_UAH} грн на баланс. Без підписки, 1 ₴ за перевірку картки повертаємо.`;
 
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');

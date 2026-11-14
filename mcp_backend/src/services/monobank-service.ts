@@ -12,6 +12,12 @@ import { CurrencyService } from './currency-service.js';
 import { invoiceService } from './invoice-service.js';
 import type { IDatabase } from '../domain/ports/index.js';
 import type { AuditService } from './audit-service.js';
+import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
+
+/** Amount charged to verify a card; refunded right after the bonus is credited. */
+export const CARD_VERIFY_AMOUNT_UAH = 1;
+
+export type CardVerifyOutcome = 'credited' | 'already_claimed' | 'card_used' | 'no_card' | 'failed';
 
 export interface MonobankInvoiceResult {
   invoiceId: string;
@@ -77,7 +83,8 @@ export class MonobankService {
     amountUah: number,
     description: string,
     redirectUrl?: string,
-    email?: string
+    email?: string,
+    extraMeta: Record<string, unknown> = {}
   ): Promise<MonobankInvoiceResult> {
     const key = this.apiKey; // throws if not configured
 
@@ -144,7 +151,7 @@ export class MonobankService {
         data.invoiceId,
         0, // amount_usd not applicable for UAH payments
         amountUah,
-        JSON.stringify({ email, orderRef, pageUrl: data.pageUrl }),
+        JSON.stringify({ ...extraMeta, email, orderRef, pageUrl: data.pageUrl }),
       ]
     );
 
@@ -295,6 +302,11 @@ export class MonobankService {
         [JSON.stringify({ amount_mismatch: true, webhook_amount: webhookAmountUah }), pi.id]
       );
     }
+    if (this.isCardVerify(pi)) {
+      await this.processCardVerification(pi, body.invoiceId);
+      return { received: true };
+    }
+
     const amountUah = storedAmountUah > 0 ? storedAmountUah : webhookAmountUah;
     let amountUsd = 0;
     if (this.currencyService) {
@@ -343,19 +355,7 @@ export class MonobankService {
 
     // Save card details from invoice status (non-blocking)
     try {
-      const statusData = await this.getInvoiceStatusRaw(body.invoiceId);
-      if (statusData?.paymentInfo?.maskedPan) {
-        const pi2 = statusData.paymentInfo;
-        const last4 = pi2.maskedPan.replace(/[*\s]/g, '').slice(-4);
-        await this.billingService.savePaymentMethod(pi.user_id, {
-          provider: 'monobank',
-          cardLast4: last4,
-          cardBrand: pi2.paymentSystem || null,
-          cardBank: pi2.bank || null,
-          label: `${(pi2.paymentSystem || '').toUpperCase()} •••• ${last4}`,
-        });
-        logger.info('[MonobankService] Card saved from payment', { last4, brand: pi2.paymentSystem });
-      }
+      await this.saveCard(pi.user_id, await this.getInvoiceStatusRaw(body.invoiceId));
     } catch (cardErr: any) {
       logger.warn('[MonobankService] Failed to save card (non-critical)', { error: cardErr.message });
     }
@@ -379,6 +379,113 @@ export class MonobankService {
     }
 
     return { received: true };
+  }
+
+  /**
+   * Start card verification for the welcome bonus: a 1 UAH invoice that is
+   * refunded once the webhook confirms it. Throws if the account already
+   * received the bonus.
+   */
+  async createCardVerifyInvoice(userId: string, email?: string): Promise<MonobankInvoiceResult> {
+    if (await this.hasWelcomeClaim(userId)) {
+      throw new Error('WELCOME_BONUS_ALREADY_CLAIMED');
+    }
+    return this.createInvoice(
+      userId,
+      CARD_VERIFY_AMOUNT_UAH,
+      `Перевірка картки LEX: ${CARD_VERIFY_AMOUNT_UAH} ₴ буде повернено`,
+      `${this.redirectUrl}/billing/overview?card_verify=1`,
+      email,
+      { purpose: 'card_verify' }
+    );
+  }
+
+  async hasWelcomeClaim(userId: string): Promise<boolean> {
+    const r = await this.db.query('SELECT 1 FROM welcome_bonus_claims WHERE user_id = $1', [userId]);
+    return r.rows.length > 0;
+  }
+
+  private isCardVerify(pi: any): boolean {
+    const meta = typeof pi.metadata === 'string' ? JSON.parse(pi.metadata) : (pi.metadata || {});
+    return meta.purpose === 'card_verify';
+  }
+
+  private async saveCard(userId: string, statusData: any): Promise<string | null> {
+    const info = statusData?.paymentInfo;
+    if (!info?.maskedPan) return null;
+    const last4 = String(info.maskedPan).replace(/[*\s]/g, '').slice(-4);
+    await this.billingService.savePaymentMethod(userId, {
+      provider: 'monobank',
+      cardLast4: last4,
+      cardBrand: info.paymentSystem || null,
+      cardBank: info.bank || null,
+      label: `${(info.paymentSystem || '').toUpperCase()} •••• ${last4}`,
+    });
+    logger.info('[MonobankService] Card saved from payment', { last4, brand: info.paymentSystem });
+    return String(info.maskedPan);
+  }
+
+  /**
+   * A card-verification invoice was paid: save the card, credit the welcome
+   * bonus if neither the account nor the card has claimed it, then refund
+   * the 1 UAH. The verification payment itself never reaches the balance.
+   */
+  async processCardVerification(pi: any, invoiceId: string, statusData?: any): Promise<CardVerifyOutcome> {
+    let outcome: CardVerifyOutcome = 'no_card';
+    try {
+      const maskedPan = await this.saveCard(pi.user_id, statusData ?? await this.getInvoiceStatusRaw(invoiceId));
+      if (maskedPan) {
+        outcome = await this.claimWelcomeBonus(pi.user_id, maskedPan, invoiceId);
+      }
+    } catch (err: any) {
+      outcome = 'failed';
+      logger.error('[CardVerify] Failed to process verification', { userId: pi.user_id, invoiceId, error: err.message });
+    }
+
+    await this.db.query(
+      'UPDATE payment_intents SET metadata = metadata || $1::jsonb WHERE id = $2',
+      [JSON.stringify({ card_verify_outcome: outcome }), pi.id]
+    ).catch(() => {});
+
+    try {
+      await this.cancelInvoice(invoiceId);
+    } catch (err: any) {
+      logger.error('[CardVerify] Refund of verification payment failed, refund manually', { invoiceId, error: err.message });
+    }
+
+    logger.info('[CardVerify] Done', { userId: pi.user_id, invoiceId, outcome });
+    return outcome;
+  }
+
+  private async claimWelcomeBonus(userId: string, maskedPan: string, invoiceId: string): Promise<CardVerifyOutcome> {
+    // Both user_id and card_masked_pan are unique: one bonus per account and per card.
+    const claim = await this.db.query(
+      `INSERT INTO welcome_bonus_claims (user_id, card_masked_pan, invoice_id, amount_uah)
+       VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING user_id`,
+      [userId, maskedPan, invoiceId, WELCOME_BONUS_UAH]
+    );
+    if (claim.rows.length === 0) {
+      return (await this.hasWelcomeClaim(userId)) ? 'already_claimed' : 'card_used';
+    }
+    try {
+      await this.billingService.getOrCreateUserBilling(userId);
+      const amountUsd = await this.billingService.convertFromUah(WELCOME_BONUS_UAH);
+      await this.billingService.topUpBalance({
+        userId,
+        amountUsd,
+        amountUah: WELCOME_BONUS_UAH,
+        description: `Вітальний бонус за прив'язку картки: ${WELCOME_BONUS_UAH} грн`,
+        paymentProvider: 'adjustment',
+        paymentId: `welcome-${userId}`,
+        metadata: { invoiceId },
+      });
+    } catch (err) {
+      // Free the claim so a retry can succeed.
+      await this.db.query('DELETE FROM welcome_bonus_claims WHERE user_id = $1', [userId]).catch(() => {});
+      throw err;
+    }
+    logger.info('[WelcomeBonus] Credited after card verification', { userId, amountUah: WELCOME_BONUS_UAH });
+    return 'credited';
   }
 
   /**
@@ -427,10 +534,15 @@ export class MonobankService {
             invoiceId: pi.external_id,
           });
 
-          await this.db.query(
-            `UPDATE payment_intents SET status = 'succeeded', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+          const marked = await this.db.query(
+            `UPDATE payment_intents SET status = 'succeeded', updated_at = NOW() WHERE id = $1 AND status = 'pending' RETURNING id`,
             [pi.id]
           );
+          if (this.isCardVerify(pi)) {
+            if (marked.rows.length) await this.processCardVerification(pi, pi.external_id, statusData);
+            resolved++;
+            continue;
+          }
 
           const amountUah = parseFloat(pi.amount_uah) || (statusData.amount / 100);
           let amountUsd = 0;
