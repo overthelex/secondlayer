@@ -19,6 +19,9 @@ describe('getDataFreshness (LEXAI-2227)', () => {
     expect(f.enforcement_proceedings.as_of).toBeNull(); // no import_log row
     expect(f.tax_debt.note).toMatch(/22\.02\.2022/);
     expect(f.bankruptcy_cases.note).toMatch(/31\.05\.2024/);
+    // a frozen source carries its own last-update date, not the date we re-imported it
+    expect(f.bankruptcy_cases.as_of).toBe('2024-05-31');
+    expect(f.single_tax_payers.as_of).toBe('2022-02-23');
     expect(f.founders).toEqual(f.beneficiaries);
     for (const p of FRESHNESS_PROBES) expect(f[p.key]).toBeDefined();
     for (const [k] of FRESHNESS_FROM_IMPORT_LOG) expect(f[k]).toBeDefined();
