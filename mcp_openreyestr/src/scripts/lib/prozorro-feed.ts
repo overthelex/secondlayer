@@ -85,6 +85,19 @@ export function extractTenderData(data: any): TenderRecord | null {
  * Duplicate tender_ids inside one batch keep the newest version, otherwise
  * Postgres rejects the statement ("cannot affect row a second time").
  */
+/**
+ * PostgreSQL rejects NUL in text ("invalid byte sequence for encoding UTF8: 0x00")
+ * and \u0000 in jsonb; a single tender carrying one used to kill the whole batch.
+ */
+export function pgSafe(v: unknown): unknown {
+  if (typeof v === 'string') return v.includes('\u0000') ? v.replace(/\u0000/g, '') : v;
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    const json = JSON.stringify(v);
+    return json.includes('\\u0000') ? JSON.parse(json.replace(/\\u0000/g, '')) : v;
+  }
+  return v;
+}
+
 export function buildUpsert(records: TenderRecord[]): { text: string; values: unknown[] } | null {
   const byId = new Map<string, TenderRecord>();
   for (const r of records) {
@@ -98,7 +111,7 @@ export function buildUpsert(records: TenderRecord[]): { text: string; values: un
   const values: unknown[] = [];
   const tuples = rows.map((r) => {
     const ph = TENDER_COLUMNS.map((c) => {
-      values.push(r[c]);
+      values.push(pgSafe(r[c]));
       return `$${values.length}`;
     });
     return `(${ph.join(',')})`;
@@ -315,7 +328,7 @@ export function buildContractsUpsert(records: ContractRecord[]): { text: string;
   const values: unknown[] = [];
   const tuples = rows.map((r) => {
     const ph = CONTRACT_COLUMNS.map((c) => {
-      values.push(r[c]);
+      values.push(pgSafe(r[c]));
       return `$${values.length}`;
     });
     return `(${ph.join(',')})`;

@@ -30,7 +30,7 @@ for stage in "${STAGES[@]}"; do
     docker exec -e PROZORRO_CONCURRENCY="$CONCURRENCY" -e PROZORRO_EGRESS="$EGRESS" "$CONTAINER" \
       node dist/scripts/backfill-prozorro-contracts.js $stage 2>&1 \
       | grep --line-buffered -v dotenv | tee -a "$LOG" > "$out"
-    if grep -q "Stopped: done" "$out"; then rm -f "$out"; say "stage [${stage:-all}] done"; continue 2; fi
+    if grep -q "Stopped: done" "$out" && ! grep -q "^\[.*\] FAILED" "$out"; then rm -f "$out"; say "stage [${stage:-all}] done"; continue 2; fi
     if grep -q "Another contracts backfill holds the lock" "$out"; then rm -f "$out"; sleep 300; continue; fi
     rm -f "$out"
     say "stage [${stage:-all}] interrupted, retrying in 60s"
