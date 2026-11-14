@@ -9,6 +9,12 @@
  * keep-alive agent, its own worker count and its own back-off gate, so a 429 on
  * one IP pauses only that IP's workers.
  *
+ * Each lane is also self-tuning (AIMD): the worker count in PROZORRO_EGRESS is
+ * a ceiling. A 429/503 cuts the lane's active workers by a quarter (at most once
+ * per CUT_COOLDOWN_MS); after QUIET_MS without one the lane gets one worker back
+ * every RAISE_EVERY_MS, up to the ceiling. ProZorro's per-IP limit drifts, so a
+ * fixed count either leaves speed on the table or keeps hitting 429.
+ *
  *   PROZORRO_EGRESS="direct=10,http://127.0.0.1:8201=20,http://127.0.0.1:8202=20"
  *
  * Unset, there is one direct lane with the caller's concurrency (the old
@@ -22,6 +28,9 @@ import { ContractRecord, extractContracts, extractTenderData, retryDelayMs, Tend
 
 export const API_BASE = process.env.PROZORRO_API_BASE || 'https://public-api.prozorro.gov.ua/api/2.5';
 const MAX_ATTEMPTS = 8;
+export const CUT_COOLDOWN_MS = 5_000;
+export const QUIET_MS = 30_000;
+export const RAISE_EVERY_MS = 10_000;
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -85,12 +94,40 @@ export class ConnectProxyAgent extends https.Agent {
   }
 }
 
-interface Lane extends LaneSpec { agent: https.Agent; pausedUntil: number }
+export interface Lane extends LaneSpec {
+  agent: https.Agent;
+  pausedUntil: number;
+  /** Workers currently allowed to run (1..workers). */
+  active: number;
+  lastThrottle: number;
+  lastChange: number;
+}
+
+/** AIMD step on a throttle: cut a quarter of the active workers, once per cooldown. Returns true if cut. */
+export function onThrottle(lane: Lane, now: number): boolean {
+  lane.lastThrottle = now;
+  if (now - lane.lastChange < CUT_COOLDOWN_MS || lane.active <= 1) return false;
+  lane.active = Math.max(1, Math.floor(lane.active * 0.75));
+  lane.lastChange = now;
+  return true;
+}
+
+/** AIMD step on success: after a quiet period, one worker back per RAISE_EVERY_MS. Returns true if raised. */
+export function onSuccess(lane: Lane, now: number): boolean {
+  if (lane.active >= lane.workers) return false;
+  if (now - lane.lastThrottle < QUIET_MS || now - lane.lastChange < RAISE_EVERY_MS) return false;
+  lane.active++;
+  lane.lastChange = now;
+  return true;
+}
 
 export function createProzorroClient(concurrency: number, delayMs = 0, lanes: LaneSpec[] = parseEgress(process.env.PROZORRO_EGRESS, concurrency)) {
   const live: Lane[] = lanes.map((l) => ({
     ...l,
     pausedUntil: 0,
+    active: l.workers,
+    lastThrottle: 0,
+    lastChange: 0,
     agent: l.proxy
       ? new ConnectProxyAgent(new URL(l.proxy), { keepAlive: true, maxSockets: l.workers + 2 })
       : new https.Agent({ keepAlive: true, maxSockets: l.workers + 2 }),
@@ -134,11 +171,16 @@ export function createProzorroClient(concurrency: number, delayMs = 0, lanes: La
       if (wait > 0) await sleep(wait);
       try {
         const res = await httpGet(url, lane);
-        if (res.status === 200) { stats.get(lane.name)!.ok++; return JSON.parse(res.body); }
+        if (res.status === 200) {
+          stats.get(lane.name)!.ok++;
+          if (onSuccess(lane, Date.now())) log(`  lane ${lane.name} quiet, workers ${lane.active}/${lane.workers}`);
+          return JSON.parse(res.body);
+        }
         if (res.status === 404 || res.status === 410) return null;
         lastErr = `HTTP ${res.status}`;
         if (res.status === 429 || res.status === 503) {
           stats.get(lane.name)!.throttled++;
+          if (onThrottle(lane, Date.now())) log(`  lane ${lane.name} throttled, workers ${lane.active}/${lane.workers}`);
           const delay = retryDelayMs(attempt, res.retryAfter);
           if (Date.now() + delay > lane.pausedUntil) {
             lane.pausedUntil = Date.now() + delay;
@@ -161,8 +203,9 @@ export function createProzorroClient(concurrency: number, delayMs = 0, lanes: La
     let missing = 0;
     let idx = 0;
     let failure: Error | null = null;
-    async function worker(lane: Lane): Promise<void> {
+    async function worker(lane: Lane, slot: number): Promise<void> {
       while (idx < ids.length && !failure) {
+        if (slot >= lane.active) { await sleep(500); continue; }
         const id = ids[idx++];
         try {
           const json = await fetchJson(`${API_BASE}/tenders/${id}`, lane);
@@ -178,7 +221,7 @@ export function createProzorroClient(concurrency: number, delayMs = 0, lanes: La
       }
     }
     const workers: Promise<void>[] = [];
-    for (const lane of live) for (let i = 0; i < lane.workers; i++) workers.push(worker(lane));
+    for (const lane of live) for (let i = 0; i < lane.workers; i++) workers.push(worker(lane, i));
     await Promise.all(workers);
     if (failure) throw failure;
     return { records, contracts, missing };
@@ -190,7 +233,7 @@ export function createProzorroClient(concurrency: number, delayMs = 0, lanes: La
     lanes: live.map(({ name, proxy, workers }) => ({ name, proxy, workers })),
     totalWorkers,
     /** Per-lane ok/throttled counters since start. */
-    laneStats: () => Object.fromEntries(stats),
+    laneStats: () => Object.fromEntries(live.map((l) => [l.name, { ...stats.get(l.name)!, active: l.active, max: l.workers }])),
     destroy: () => live.forEach((l) => l.agent.destroy()),
   };
 }

@@ -1,7 +1,7 @@
 import http from 'http';
 import net from 'net';
 import https from 'https';
-import { ConnectProxyAgent, createProzorroClient, parseEgress } from '../lib/prozorro-http';
+import { ConnectProxyAgent, createProzorroClient, Lane, onSuccess, onThrottle, parseEgress } from '../lib/prozorro-http';
 
 describe('PROZORRO_EGRESS lanes (LEXAI-2227)', () => {
   it('parses lanes and keeps the old single direct lane by default', () => {
@@ -40,5 +40,32 @@ describe('PROZORRO_EGRESS lanes (LEXAI-2227)', () => {
     expect(connects[0]).toBe('public-api.prozorro.gov.ua:443');
     agent.destroy();
     proxy.close();
+  });
+});
+
+describe('adaptive lanes (AIMD)', () => {
+  const lane = (): Lane => ({ name: 'x', proxy: null, workers: 20, agent: null as any, pausedUntil: 0, active: 20, lastThrottle: 0, lastChange: 0 });
+
+  it('cuts a quarter on a 429, at most once per cooldown, never below 1', () => {
+    const l = lane();
+    expect(onThrottle(l, 100_000)).toBe(true);
+    expect(l.active).toBe(15);
+    expect(onThrottle(l, 101_000)).toBe(false); // a burst of 429s is one cut
+    expect(l.active).toBe(15);
+    let t = 100_000;
+    for (let i = 0; i < 20; i++) onThrottle(l, (t += 6_000));
+    expect(l.active).toBe(1);
+  });
+
+  it('adds one worker back per step after a quiet period, up to the ceiling', () => {
+    const l = lane();
+    onThrottle(l, 100_000);
+    expect(onSuccess(l, 110_000)).toBe(false); // not quiet yet
+    expect(onSuccess(l, 131_000)).toBe(true);
+    expect(l.active).toBe(16);
+    expect(onSuccess(l, 135_000)).toBe(false); // one step per 10 s
+    let t = 131_000;
+    for (let i = 0; i < 10; i++) onSuccess(l, (t += 10_000));
+    expect(l.active).toBe(20);
   });
 });

@@ -158,7 +158,7 @@ async function main(): Promise<void> {
       const secs = (Date.now() - t0) / 1000;
       log(`id<=${lastId}: ${seen} tenders (${(seen / secs).toFixed(1)}/s), ${withContracts} with contracts, ` +
         `${contracts} contracts (${withSupplier} with supplier), gone=${gone}`);
-      if (client.lanes.length > 1) log(`  lanes ${Object.entries(client.laneStats()).map(([n, v]) => `${n} ok=${v.ok} 429=${v.throttled}`).join(' | ')}`);
+      if (client.lanes.length > 1) log(`  lanes ${Object.entries(client.laneStats()).map(([n, v]) => `${n} ${v.active}/${v.max} ok=${v.ok} 429=${v.throttled}`).join(' | ')}`);
     }
   } catch (e) {
     // never report a crash as "done": the supervisor stops the stage on that word
