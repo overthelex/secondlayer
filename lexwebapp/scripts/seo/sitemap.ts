@@ -91,7 +91,7 @@ function urlset(entries: SitemapEntry[]): string {
  * Sitemaps generated at request time by mcp_backend (routes/zakon-routes.ts),
  * listed in the index but not written here. seo-check skips them.
  */
-export const BACKEND_SITEMAPS = ['/zakon/sitemap.xml', '/sud/sitemap.xml', '/suddia/sitemap.xml', '/pozytsiia-vs/sitemap.xml'];
+export const BACKEND_SITEMAPS = ['/zakon/sitemap.xml', '/sud/sitemap.xml', '/suddia/sitemap.xml', '/pozytsiia-vs/sitemap.xml', '/advokat/sitemap.xml'];
 
 /** Writes sitemap.xml (index) + sitemap-<section>.xml into outDir. Returns URL count. */
 export function writeSitemaps(outDir: string, posts: BlogPostRef[]): number {
