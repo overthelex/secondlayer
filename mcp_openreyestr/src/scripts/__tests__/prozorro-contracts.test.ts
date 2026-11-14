@@ -130,3 +130,15 @@ describe('backfill args', () => {
     expect(() => parseBackfillArgs(['--bogus'])).toThrow();
   });
 });
+
+describe('pgSafe (NUL bytes from ProZorro)', () => {
+  it('strips NUL from text and \\u0000 from jsonb values', () => {
+    const { pgSafe } = require('../lib/prozorro-feed');
+    expect(pgSafe('ТОВ\u0000 АЛЬФА')).toBe('ТОВ АЛЬФА');
+    expect(pgSafe({ a: 'x\u0000y', b: [1] })).toEqual({ a: 'xy', b: [1] });
+    expect(pgSafe(5)).toBe(5);
+    expect(pgSafe(null)).toBeNull();
+    const d = new Date(0);
+    expect(pgSafe(d)).toBe(d);
+  });
+});

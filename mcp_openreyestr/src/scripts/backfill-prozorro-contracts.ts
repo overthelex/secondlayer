@@ -160,6 +160,10 @@ async function main(): Promise<void> {
         `${contracts} contracts (${withSupplier} with supplier), gone=${gone}`);
       if (client.lanes.length > 1) log(`  lanes ${Object.entries(client.laneStats()).map(([n, v]) => `${n} ok=${v.ok} 429=${v.throttled}`).join(' | ')}`);
     }
+  } catch (e) {
+    // never report a crash as "done": the supervisor stops the stage on that word
+    reason = `error (${(e as Error).message})`;
+    throw e;
   } finally {
     log(`Stopped: ${reason}. ${seen} tenders in ${((Date.now() - t0) / 1000).toFixed(0)}s; ` +
       `${contracts} contracts, ${withSupplier} with supplier; cursor id=${lastId}`);
