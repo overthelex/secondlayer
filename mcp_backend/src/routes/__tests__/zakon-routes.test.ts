@@ -19,6 +19,7 @@ function fakeDb(statusCode = 5) {
       if (sql.includes('split_part')) return { rows: Object.entries(ARTICLES).map(([art_no, body]) => ({ art_no, first_line: body.split('\n')[0] })) };
       if (sql.includes('FROM npa.article')) return { rows: ARTICLES[params[2] as string] ? [{ body: ARTICLES[params[2] as string] }] : [] };
       if (sql.includes('FROM npa.edition_text')) return { rows: [{ body: EDITION }] };
+      if (sql.includes('seo_vp_articles')) return { rows: [{ slug: '911-952-22-2024-10-15', cause_num: '911/952/22', d: '2024-10-15', category: null, total: 1 }] };
       throw new Error(`unexpected SQL: ${sql}`);
     }),
   };
@@ -44,6 +45,7 @@ describe('/zakon routes', () => {
     expect(res.text).toContain('href="/zakon/tsyvilnyi-kodeks/stattia-626"');
     expect(res.text).toContain('Розділ I. Загальні положення');
     expect(res.text).toContain('"@type":"BreadcrumbList"');
+    expect(res.text).toContain('href="/pozytsiia-vs/911-952-22-2024-10-15"');
   });
 
   it('renders the table of contents', async () => {

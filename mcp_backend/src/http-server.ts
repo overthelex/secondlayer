@@ -86,6 +86,8 @@ import { createAbuseRoutes } from './routes/abuse-routes.js';
 import { createZakonRoutes } from './routes/zakon-routes.js';
 import { createCourtsRoutes } from './routes/courts-routes.js';
 import { CourtsRefresh } from './services/seo/courts-refresh.js';
+import { createVpRoutes } from './routes/vp-routes.js';
+import { VpRefresh } from './services/seo/vp-refresh.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
 import { createSessionReplayRoutes, createAdminSessionReplayRoutes } from './routes/session-replay-routes.js';
@@ -180,16 +182,24 @@ class HTTPMCPServer {
       });
     }, { timezone: 'Europe/Kyiv' });
 
-    // Cron: refresh /sud and /suddia data (decision counts, slugs, judges' courts)
+    // Cron: refresh /sud, /suddia and /pozytsiia-vs data (decision counts, slugs,
+    // judges' courts, Grand Chamber decisions)
     // daily at 04:40 Kyiv time; also once at startup while the tables are empty.
     {
       const courtsRefresh = new CourtsRefresh(this.services.db);
+      const vpRefresh = new VpRefresh(this.services.db);
       const runCourtsRefresh = () => courtsRefresh.run().catch(err => {
         logger.error('[Cron] SEO courts refresh failed', { error: (err as Error).message });
       });
-      cron.schedule('40 4 * * *', () => { void runCourtsRefresh(); }, { timezone: 'Europe/Kyiv' });
+      const runVpRefresh = () => vpRefresh.run().catch(err => {
+        logger.error('[Cron] SEO Grand Chamber refresh failed', { error: (err as Error).message });
+      });
+      cron.schedule('40 4 * * *', () => { void runCourtsRefresh().then(runVpRefresh); }, { timezone: 'Europe/Kyiv' });
       courtsRefresh.isEmpty().then(empty => { if (empty) void runCourtsRefresh(); }).catch(err => {
         logger.warn('[Cron] SEO courts refresh check skipped', { error: (err as Error).message });
+      });
+      vpRefresh.isEmpty().then(empty => { if (empty) void runVpRefresh(); }).catch(err => {
+        logger.warn('[Cron] SEO Grand Chamber refresh check skipped', { error: (err as Error).message });
       });
     }
 
@@ -682,6 +692,8 @@ class HTTPMCPServer {
     this.app.use('/sud', seoCourts.courts);
     this.app.use('/suddia', seoCourts.judges);
     logger.info('Public court/judge pages registered at /sud, /suddia');
+    this.app.use('/pozytsiia-vs', createVpRoutes(this.services.db));
+    logger.info('Public Grand Chamber pages registered at /pozytsiia-vs');
 
     // Legislation monitoring routes - subscriptions, changes, notifications
     this.app.use('/api/legislation/monitoring', requireJWT as any, createLegislationMonitoringRoutes(this.app_.legislationMonitoringService));

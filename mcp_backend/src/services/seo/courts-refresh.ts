@@ -59,7 +59,7 @@ export class CourtsRefresh {
         await client.query('DELETE FROM seo_judge_stats WHERE year = $1', [year]);
         await client.query(
           `INSERT INTO seo_court_stats (court_code, year, justice_kind, decisions, last_decision)
-           SELECT court_code, $1, coalesce(justice_kind, 0), count(*), max(adjudication_date)::date
+           SELECT court_code, $1, coalesce(justice_kind, 0), count(*), max(adjudication_date AT TIME ZONE 'Europe/Kyiv')::date
              FROM ${relname} WHERE court_code IS NOT NULL
             GROUP BY 1, 3`,
           [year],

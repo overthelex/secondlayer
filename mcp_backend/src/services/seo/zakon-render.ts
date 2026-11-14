@@ -7,6 +7,8 @@ import type { CodeData } from './zakon-repository.js';
 import type { Heading, ParsedArticle } from './zakon-text.js';
 import { sentenceCase } from './zakon-text.js';
 import { SITE, esc, uaDate, truncate, page, type Crumb } from './seo-page.js';
+import { vpListHtml } from './vp-render.js';
+import type { VpListItem } from './vp-repository.js';
 
 export { SITE, esc } from './seo-page.js';
 
@@ -105,7 +107,9 @@ function pathLine(path: Heading[]): string {
   return `<p class="path">${esc(txt)}</p>`;
 }
 
-export function renderArticle(code: ZakonCode, data: CodeData, art: ParsedArticle, repealed: boolean): string {
+export interface ArticleVp { total: number; items: VpListItem[] }
+
+export function renderArticle(code: ZakonCode, data: CodeData, art: ParsedArticle, repealed: boolean, vp?: ArticleVp): string {
   const i = data.index.findIndex(a => a.artNo === art.artNo);
   const prev = i > 0 ? data.index[i - 1] : null;
   const next = i >= 0 && i < data.index.length - 1 ? data.index[i + 1] : null;
@@ -145,6 +149,10 @@ ${repealedNote(code, data, repealed)}
 ${textHtml}
 </div>
 <nav class="pager">${prev ? link(prev, 'prev') : '<span></span>'}<a href="${codePath}">Зміст ${esc(code.abbr)}</a>${next ? link(next, 'next') : '<span></span>'}</nav>
+${vp && vp.total ? `<section>
+<h2>Постанови Великої Палати ВС, що застосовують статтю ${esc(art.artNo)} ${esc(code.articleRef)}${vp.total > vp.items.length ? ` (${vp.total})` : ''}</h2>
+${vpListHtml(vp.items)}
+</section>` : ''}
 <section class="cta">
 <h2>Судова практика за статтею ${esc(art.artNo)} ${esc(code.articleRef)}</h2>
 <p>LEX знаходить рішення Верховного Суду та інших судів, які застосовують цю статтю, і пояснює правові позиції з посиланнями на джерела.</p>
