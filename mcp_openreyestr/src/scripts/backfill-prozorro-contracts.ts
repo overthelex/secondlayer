@@ -67,6 +67,7 @@ async function main(): Promise<void> {
   const deadline = Number.isFinite(args.maxMinutes) ? Date.now() + args.maxMinutes * 60_000 : Infinity;
   const key = cursorKey(args);
   const client = createProzorroClient(CONCURRENCY, DELAY_MS);
+  log(`egress lanes: ${client.lanes.map((l) => `${l.name}×${l.workers}`).join(', ')} (${client.totalWorkers} workers)`);
 
   const pool = new Pool({
     host: process.env.POSTGRES_HOST || 'localhost',
@@ -157,6 +158,7 @@ async function main(): Promise<void> {
       const secs = (Date.now() - t0) / 1000;
       log(`id<=${lastId}: ${seen} tenders (${(seen / secs).toFixed(1)}/s), ${withContracts} with contracts, ` +
         `${contracts} contracts (${withSupplier} with supplier), gone=${gone}`);
+      if (client.lanes.length > 1) log(`  lanes ${Object.entries(client.laneStats()).map(([n, v]) => `${n} ok=${v.ok} 429=${v.throttled}`).join(' | ')}`);
     }
   } finally {
     log(`Stopped: ${reason}. ${seen} tenders in ${((Date.now() - t0) / 1000).toFixed(0)}s; ` +

@@ -12,6 +12,9 @@ set -uo pipefail
 CONTAINER=${CONTAINER:-openreyestr-app-local}
 CONCURRENCY=${PROZORRO_CONCURRENCY:-30}
 LOG=${LOG:-$HOME/logs/prozorro-contracts-backfill.log}
+# Egress lanes (see lib/prozorro-http.ts): one line PROZORRO_EGRESS=..., re-read on
+# every attempt, so a new proxy VM takes effect after the next restart of the run.
+EGRESS_FILE=${EGRESS_FILE:-$HOME/prozorro-egress/lanes.env}
 mkdir -p "$(dirname "$LOG")"
 STAGES=("--cpv=45 --since=2021-01-01" "")
 
@@ -22,8 +25,9 @@ for stage in "${STAGES[@]}"; do
     until [ "$(docker inspect -f '{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null)" = healthy ]; do sleep 30; done
     say "stage [${stage:-all}] attempt $attempt"
     out=$(mktemp)
+    EGRESS=$(sed -n 's/^PROZORRO_EGRESS=//p' "$EGRESS_FILE" 2>/dev/null | tail -1)
     # shellcheck disable=SC2086
-    docker exec -e PROZORRO_CONCURRENCY="$CONCURRENCY" "$CONTAINER" \
+    docker exec -e PROZORRO_CONCURRENCY="$CONCURRENCY" -e PROZORRO_EGRESS="$EGRESS" "$CONTAINER" \
       node dist/scripts/backfill-prozorro-contracts.js $stage 2>&1 \
       | grep --line-buffered -v dotenv | tee -a "$LOG" > "$out"
     if grep -q "Stopped: done" "$out"; then rm -f "$out"; say "stage [${stage:-all}] done"; continue 2; fi
