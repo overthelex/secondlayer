@@ -382,6 +382,12 @@ SCHKG_FR = (_FIXTURES / "pdftext_fedlex_schkg_281_1_fr_margins.txt").read_text()
 # footnote block ("c. pour les autocars      650"), then the next page's
 # running header.
 CST_FEE_ROWS = (_FIXTURES / "pdftext_fedlex_cst_101_fr_fee_rows.txt").read_text()
+# Cst 1874 RS 101 fr (version_id 560210): the head and two pages of Art.
+# 41bis/41ter with footnotes 88-98. Their continuation lines hang at column
+# 9-10 (deeper than the page strip's 2-8) and their text opens with
+# "Accepté en votation populaire", which the shared vocabulary lacks: the
+# shared strips miss these blocks, so they stay in the article stream.
+CST_FOOTNOTES = (_FIXTURES / "pdftext_fedlex_cst_101_fr_footnotes_93_98.txt").read_text()
 # The shape of RS 0.515.102 fr (version_id 560289): a treaty's scope table
 # whose last row ("Turquie ... 1907") stands right above the page's footnote
 # block -- the shape of a missed running header ("title   number") at a
@@ -439,6 +445,7 @@ _GOLDEN_INPUTS = {
     "NOTE": _NOTE, "CITATION": _CITATION, "SR220_MARGINAL": SR220_MARGINAL,
     "SCHKG_DE": SCHKG_DE, "SCHKG_FR": SCHKG_FR,
     "CST_FEE_ROWS": CST_FEE_ROWS, "TREATY_TABLE": TREATY_TABLE,
+    "CST_FOOTNOTES": CST_FOOTNOTES,
 }
 
 
@@ -699,10 +706,16 @@ def test_footnotes_found_mid_stream_are_kept_too():
 def test_column_zero_text_no_column_owns_is_kept():
     # ruling R28: a full-width line in the marginal layout (the preamble,
     # a line pdftotext set from column 0 across the column boundary) is kept
-    # whole, never cut into a margin and a body
-    text = clean_fedlex_text(SCHKG_DE, "de")
-    assert "Die Bundesversammlung der Schweizerischen Eidgenossenschaft," in text
-    assert "gestützt auf Artikel 64 der Bundesverfassung (BV)," in text
+    # whole, never cut into a margin and a body -- and in its place: a short
+    # column-0 line ("beschliesst:") with no body beside it is no marginal
+    # fragment, so it is not hoisted above the lines before it
+    preamble = ("Die Bundesversammlung der Schweizerischen Eidgenossenschaft,\n"
+                "gestützt auf Artikel 64 der Bundesverfassung (BV),\n"
+                "beschliesst:\n\nErster Titel: Allgemeine Bestimmungen")
+    assert preamble in clean_fedlex_text(SCHKG_DE, "de")
+    # a double space near the body column inside such a line cuts nothing
+    spaced = SCHKG_DE.replace("gestützt auf Artikel 64", "gestützt auf  Artikel 64")
+    assert preamble in clean_fedlex_text(spaced, "de")
 
 
 # --- R28 at page seams: a table row is not a running header ------------------
@@ -732,3 +745,54 @@ def test_missed_header_next_to_a_folio_is_still_dropped():
     # beside a folio is a page seam, the folio is the corroboration
     assert "Ergänzung des Schweizerischen" not in clean_fedlex_text(SR220_MARGINAL)
     assert "Verordnung über die Gebühren" not in clean_fedlex_text(FEES)
+
+
+# --- footnote heads that read like headers; footnotes the strips miss -------
+
+# two footnotes whose wording repeats: the number-first header shape
+# ("93        Accepté ...") must not make them a recurring running header
+REPEATED_NOTES = ("101\nConstitution\n\nArt. 1\nPremier texte.\n\n"
+                  "1        Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994\n"
+                  "         - RO 1994 268).\n\nArt. 2\nSecond texte.\n\n"
+                  "2        Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994\n"
+                  "         - RO 1994 270).")
+
+
+def test_repeated_footnote_heads_are_not_running_headers():
+    text = clean_fedlex_text(REPEATED_NOTES, "fr")
+    assert "Premier texte. - RO" not in text
+    assert ("\n\n1 Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994 "
+            "- RO 1994 268).") in text
+    assert ("\n\n2 Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994 "
+            "- RO 1994 270).") in text
+
+
+def test_footnotes_the_strips_miss_leave_the_sentence():
+    # 560210 Art. 9: the page's only footnote between the two halves of a
+    # sentence ("les rapports de" / page seam / "voisinage et de police")
+    raw = ("101\nConstitution fédérale\n\nArt. 9\n"
+           "Exceptionnellement, les cantons conservent le droit de conclure des traités\n"
+           "sur des objets concernant l’économie publique, les rapports de\n\n"
+           "3        Accepté en votation populaire du 14 juin 1981 (ACF du 17 août 1981 – RO 1981 1243 –\n"
+           "         et AF du 10 oct. 1980– FF 1980 III 713 787, 1980 I 73, 1981 II 1216).\n\n\n\n"
+           "voisinage et de police; néanmoins, ces traités ne doivent rien contenir de contraire à\n"
+           "la Confédération.\n\nArt. 10\n1 Les rapports officiels ont lieu par le Conseil fédéral.\n")
+    articles, text = split_fedlex_text(raw, "fr")
+    assert "3 Accepté" in articles[0].text                # the articles do not move
+    assert "les rapports de voisinage et de police; néanmoins" in text
+    assert ("la Confédération.\n\n3 Accepté en votation populaire du 14 juin 1981 (ACF du "
+            "17 août 1981 – RO 1981 1243 – et AF du 10 oct. 1980– FF 1980 III 713 787, "
+            "1980 I 73, 1981 II 1216).\n\nArt. 10") in text
+
+
+def test_bv_1874_footnote_block_is_footnotes_not_prose():
+    text = clean_fedlex_text(CST_FOOTNOTES, "fr")
+    for number in range(88, 99):
+        heads = re.findall(r"(?:^|\n\n)%d (?:Accepté|Phrase)" % number, text)
+        assert len(heads) == 1, number
+    # every footnote's text is there as often as in the raw
+    for ref in ("RO 1994 268", "RO 1994 262", "RO 1982 140", "RO 1994 266"):
+        assert text.count(ref) == CST_FOOTNOTES.count(ref), ref
+    # and no footnote is glued into a sentence
+    for m in re.finditer(r"Accepté en votation populaire", text):
+        assert re.search(r"(?:^|\n\n)\d{1,3} $", text[:m.start()]), text[m.start() - 60:m.start()]

@@ -683,10 +683,32 @@ _ENDS_NUMBER = re.compile(r"(?:^|\s)\d{1,3}$")
 # a footnote's first line inside a cut footnote block: "13    Eingefügt ...",
 # "538 SR 220", "2   [BS 1 3]. Der ..."
 _NOTE_HEAD = re.compile(r"^(\d{1,3})\s+(\S.*)$")
+# a footnote head the shared strips missed (text product only): number at
+# column 0, the four-character number column ("3        Accepté", "100 Fassung"),
+# text opening with a letter, a quote or a bracket
+_MISSED_NOTE_HEAD = re.compile(r"^(\d{1,2}(?=\s{2,})|\d{3}(?=\s))\s+([^\W\d_]|[«»„\"'(\[])")
+_MISSED_NOTE_STEP = 5
+# the popular-vote and amendment wording of the old prints, text product only
+# (the shared _FOOTNOTE_VOCAB feeds the article strip and must not widen)
+_MISSED_NOTE_VOCAB = re.compile(
+    r"^\d{1,3}\s+(?:Accepté|Acceptée|Accettat|Angenommen|Adopté|Approvat|Phrase|Satz|Frase|"
+    r"Abrog|Aufgehoben|Introdu|Eingefügt|Nouvelle teneur|Fassung|Nuovo testo)")
 
 
 def _header_title(match: re.Match) -> str:
     return _WS.sub(" ", match.group("a") or match.group("b")).strip()
+
+
+def _header_key(line: str) -> str | None:
+    """The recurrence key of a header-shaped line: the WHOLE line, number
+    included, whitespace collapsed -- None when the line has no header shape.
+    A running header repeats exactly; a footnote head of the number-first
+    shape ("93        Accepté en votation populaire du 28 nov. 1993 ...")
+    repeats its wording from page to page in the BV 1874 but never its
+    number, so a title-only key took those heads for headers (2026-11
+    review: 24 heads lost in 560210). scripts/fedlex_clean_check.py uses
+    the same key."""
+    return _WS.sub(" ", line).strip() if _HEADER_SHAPE.match(line.strip()) else None
 
 
 class _TextProduct:
@@ -742,11 +764,14 @@ class _TextProduct:
         self.art: dict | None = None
         titles: dict[str, int] = {}
         for line in lines:
-            m = _HEADER_SHAPE.match(line.strip())
-            if m:
-                key = _header_title(m)
+            key = _header_key(line)
+            if key:
                 titles[key] = titles.get(key, 0) + 1
         self.header_titles = titles
+        # footnote blocks the shared strips missed: out of the article
+        # stream's text, into the notes (see _find_missed_notes)
+        self.skip: set[int] = set()
+        self._find_missed_notes()
         if marginal_layout:
             # top-down, so each line's look upward (_column) meets memoised
             # cuts only -- no recursion through long column-0 runs
@@ -850,7 +875,7 @@ class _TextProduct:
         on the nearest indented line below. None: no evidence near."""
         seen, k = 0, index - 1
         while k >= 0 and seen < _COLUMN_LOOK:
-            if self.lines[k].strip():
+            if self.lines[k].strip() and k not in self.skip:
                 seen += 1
                 start = self._cut(k)[3]
                 if start is not None:
@@ -859,7 +884,7 @@ class _TextProduct:
         seen, k = 0, index + 1
         while k < len(self.lines) and seen < _COLUMN_LOOK:
             line = self.lines[k]
-            if line.strip():
+            if line.strip() and k not in self.skip:
                 seen += 1
                 indent = len(line) - len(line.lstrip(" "))
                 if indent >= _BODY_INDENT:
@@ -876,6 +901,82 @@ class _TextProduct:
                 return True
         return False
 
+    def _find_missed_notes(self) -> None:
+        """Footnote blocks the shared strips left in the stream (the shared
+        rules stay as they are: the articles must not move). The BV 1874
+        prints hang the continuation at column 9-10, deeper than the page
+        strip's 2-8, and open with "Accepté en votation populaire", which the
+        shared vocabulary lacks; the block then sits mid-sentence, between the
+        two halves of a paragraph split by the page seam.
+
+        A block: a footnote head at column 0 ("3        Accepté ...",
+        _MISSED_NOTE_HEAD) after a blank line, its number continuing the
+        document's footnote sequence (above the last footnote seen, at most
+        _MISSED_NOTE_STEP above it), then hanging continuation lines (indented
+        to the head's text column) and further heads with the next numbers,
+        up to a blank line (the page bottom) or the end. Accepted when it
+        hangs, opens with footnote vocabulary (the shared list plus
+        _MISSED_NOTE_VOCAB), or holds two heads. Its lines leave the text's
+        article/outside stream (self.skip) and join self.notes, anchored at
+        the head."""
+        lines, n = self.lines, len(self.lines)
+        anchored = sorted(self.notes, key=lambda note: note[0])
+        found: list = []
+        last, a, i = 0, 0, 0
+
+        def numbers(block: list[str]) -> list[int]:
+            return [int(m.group(1)) for line in block
+                    if not line.startswith(" ") and (m := _NOTE_HEAD.match(line))]
+
+        while i < n:
+            while a < len(anchored) and anchored[a][0] <= i:
+                last = max([last] + numbers(anchored[a][1]))
+                a += 1
+            head = _MISSED_NOTE_HEAD.match(lines[i])
+            if head and (i == 0 or not lines[i - 1].strip()):
+                number = int(head.group(1))
+                if last < number <= last + _MISSED_NOTE_STEP:
+                    column = head.start(2)
+                    heads, hanging, j = [number], False, i + 1
+                    while j < n and lines[j].strip():
+                        nxt = _MISSED_NOTE_HEAD.match(lines[j])
+                        if nxt and heads[-1] < int(nxt.group(1)) <= heads[-1] + 3:
+                            heads.append(int(nxt.group(1)))
+                            column = nxt.start(2)
+                            j += 1
+                            continue
+                        indent = len(lines[j]) - len(lines[j].lstrip(" "))
+                        if abs(indent - column) <= 1 and not _HEADING.match(lines[j]):
+                            hanging = True
+                            j += 1
+                            continue
+                        break
+                    at_bottom = j >= n or not lines[j].strip()
+                    vocab = bool(_FOOTNOTE_VOCAB.match(lines[i]) or _MISSED_NOTE_VOCAB.match(lines[i]))
+                    if at_bottom and (hanging or vocab or len(heads) > 1):
+                        found.append((i, lines[i:j]))
+                        self.skip.update(range(i, j))
+                        last = heads[-1]
+                        i = j
+                        continue
+            i += 1
+        if found:
+            self.notes = sorted(self.notes + found, key=lambda note: note[0])
+
+    def _run_has_body(self, index: int) -> bool:
+        """Is there an indented body line in the run of non-blank lines that
+        holds ``index``? Outside articles, a column-0 line beside no body
+        (the preamble's "beschliesst:", "gestützt auf  Artikel 64 ...")
+        belongs to no marginal column and is read whole, in place."""
+        for step in (-1, 1):
+            k = index + step
+            while 0 <= k < len(self.lines) and self.lines[k].strip():
+                line = self.lines[k]
+                if k not in self.skip and len(line) - len(line.lstrip(" ")) >= _BODY_INDENT:
+                    return True
+                k += step
+        return False
+
     def _beside_folio(self, index: int) -> bool:
         """Right next to a folio line (a bare page number)."""
         for step in (-1, 1):
@@ -886,8 +987,9 @@ class _TextProduct:
 
     def _is_header(self, index: int) -> bool:
         """A running header the page strip missed: the header shape AND one
-        of: its number is the learnt SR number, its title recurs (on two
-        pages or more), or a folio stands right beside it. Nothing else
+        of: its number is the learnt SR number, the whole line recurs (on
+        two pages or more; _header_key), or a folio stands right beside it
+        (number-first lines only with an SR-shaped, dotted number). Nothing else
         makes such a line furniture (ruling R28): a fee or table row
         ("Gebühr für eine Kopie      10", "c. pour les autocars   650",
         "Turquie   12 juin   1907   12 juin   1907") has the shape, and the
@@ -901,8 +1003,12 @@ class _TextProduct:
         number = m.group("an") or m.group("bn")
         if self.sysnr and number == self.sysnr:
             return True
-        if self.header_titles.get(_header_title(m), 0) >= 2:
+        if self.header_titles.get(_header_key(self.lines[index]), 0) >= 2:
             return True
+        if m.group("bn") and "." not in number:
+            # number first, and no SR shape: a footnote head ("93    Accepté
+            # ...") sits right above the folio as often as a header below it
+            return False
         return self._beside_folio(index)
 
     def _split(self, index: int) -> tuple[str | None, str | None]:
@@ -1005,7 +1111,13 @@ class _TextProduct:
         if _TAIL_BREAK.match(self.lines[index]):
             self.tail(index)
             return
+        if index in self.skip:
+            return
         fragment, piece = self._split(index)
+        if fragment is not None and not self._run_has_body(index):
+            # column-0 text beside no body: no marginal column owns it (R28),
+            # read it whole and in place
+            fragment, piece = None, _WS.sub(" ", self.lines[index]).strip()
         if fragment is not None and piece is None and not self._has_body_neighbour(index):
             piece, fragment = fragment, None     # a title line of the act, not a margin
         if fragment is not None:
@@ -1046,7 +1158,7 @@ class _TextProduct:
                     "fragments": fragments, "body": []}
 
     def article_line(self, index: int) -> None:
-        if self.art is None:
+        if self.art is None or index in self.skip:
             return
         fragment, piece = self._split(index)
         if fragment is not None:
