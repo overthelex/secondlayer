@@ -23,7 +23,12 @@ const PRICING = {
 function app() {
   const repo = { coverage: async () => COVERAGE, pricing: async () => PRICING };
   const a = express();
-  a.use(createMarketingRoutes({} as never, repo as never));
+  const prak = {
+    data: async () => ({ latestVpDate: '2026-02-11', realVp: ['910/1/20', '910/2/21'], fakeIsUnused: true }),
+    isVpForArticle: async (c: string) => c === '910/1/20',
+    courtHasHearing: async (c: string) => c === '490/234/26',
+  };
+  a.use(createMarketingRoutes({} as never, repo as never, prak as never));
   return a;
 }
 
@@ -71,7 +76,7 @@ describe('marketing routes', () => {
       expect(res.text).toContain(`<link rel="canonical" href="https://legal.org.ua${p}">`);
     }
     const sm = await request(app()).get('/sitemap-landing.xml');
-    expect(sm.text.match(/<url>/g)).toHaveLength(7);
+    expect(sm.text.match(/<url>/g)).toHaveLength(8);
   });
 
   it('computes the court fee from the query and keeps one canonical', async () => {
@@ -81,5 +86,15 @@ describe('marketing routes', () => {
     expect(res.text).toContain('<link rel="canonical" href="https://legal.org.ua/kalkuliator-sudovoho-zboru">');
     const bad = await request(app()).get('/kalkuliator-sudovoho-zboru?court=admin&doc=order');
     expect(bad.text).toContain('Судовий наказ в адміністративному судочинстві не видається.');
+  });
+
+  it('checks practicum answers against the data', async () => {
+    const bare = await request(app()).get('/praktykum');
+    expect(bare.status).toBe(200);
+    expect(bare.text).toContain('Постанова ВП ВС у справі № 910/18342/23');
+    const all = await request(app()).get('/praktykum').query({ check: '1', t1: 'ст. 625 ЦК', t2: '910/1/20', t3: '11.02.2026', t4: '4800', t5: '490/234/26', t6: '910/18342/23' });
+    expect(all.text).toContain('Результат: 6 з 6');
+    const some = await request(app()).get('/praktykum').query({ check: '1', t1: '530', t4: '4 800,00' });
+    expect(some.text).toContain('Результат: 1 з 6');
   });
 });
