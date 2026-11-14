@@ -15,6 +15,7 @@ import { articles, type Article } from './articles';
 import { enTranslations } from './articles-en';
 import { ruTranslations } from './articles-ru';
 import { ArticleModal } from './ArticleModal';
+import { PublicNavLinks } from '../../components/PublicNavLinks';
 import AttractorBanner from '../../components/AttractorBanner';
 
 import { getBlogUI, getLocalizedArticles } from './blog-i18n';
@@ -83,6 +84,7 @@ export function BlogPage() {
               <span className="font-sans font-medium text-claude-text text-sm">Blog</span>
             </div>
           </div>
+          <PublicNavLinks />
           <a
             href="/login"
             className="px-4 py-2 bg-claude-accent text-white rounded-xl text-sm font-medium font-sans hover:bg-[#C66345] transition-colors"

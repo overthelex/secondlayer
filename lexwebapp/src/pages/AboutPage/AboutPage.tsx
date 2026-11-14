@@ -5,6 +5,7 @@ import { useDocumentMeta } from '../../hooks/useDocumentMeta';
 import { useLocaleStore } from '../../stores/localeStore';
 import { getAboutCopy } from './copy';
 import { LangToggle } from './LangToggle';
+import { PublicNavLinks } from '../../components/PublicNavLinks';
 
 export function AboutPage() {
   const navigate = useNavigate();
@@ -31,7 +32,8 @@ export function AboutPage() {
             <ArrowLeft size={16} />
             {c.back}
           </button>
-          <div className="flex-1" />
+          <PublicNavLinks className="flex-1 justify-center" />
+          <div className="flex-1 md:hidden" />
           <LangToggle />
           <img src="/Image.jpg" alt="LEX" className="h-9 w-auto" />
         </div>

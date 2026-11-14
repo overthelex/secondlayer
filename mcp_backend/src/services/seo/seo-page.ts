@@ -107,7 +107,7 @@ ${o.headScript ? `<script>${o.headScript}</script>\n` : ''}<title>${esc(o.title)
 ${ld}
 </head>
 <body>
-<header><a class="logo" href="/">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/pricing">Ціни</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
+<header><a class="logo" href="/">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/kalkuliator-sudovoho-zboru">Калькулятор збору</a><a href="/pricing">Ціни</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
 <main>
 <nav class="crumbs" aria-label="Навігація">${crumbsHtml}</nav>
 ${o.body}
