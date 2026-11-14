@@ -1043,7 +1043,10 @@ function prerenderAboutAndProductPlugin(): Plugin {
       <p>We are not a generic chatbot wrapper. Every recommendation drills down to the underlying court decision or legislative article. A built-in HallucinationGuard validates every citation against the source before it reaches the user. Authority weighting (instance, citation graph, motivation density, overrule status) ranks results so the lawyer immediately sees which positions are load-bearing and which are noise.</p>
 
       <h2>Where we operate</h2>
-      <p>Headquartered in Kyiv, Ukraine. Live production deployment on AWS (eu-central-1, Frankfurt), with active expansion into European jurisdictions (UK, Spain, Germany, Netherlands, France, Estonia — country-specific data-source pages already shipped).</p>
+      <p>Headquartered in Kyiv, Ukraine. Production runs on our own server infrastructure in Kyiv behind Cloudflare, with active expansion into European jurisdictions (UK, Spain, Germany, Netherlands, France, Estonia — country-specific data-source pages already shipped).</p>
+
+      <h2>Contacts and legal details</h2>
+      <p>The LEX service is provided under the <a href="${BASE_URL}/ua/offer">public offer</a> by ФОП Кириченко Ігор Вікторович (РНОКПП 2967214056), 04207, Україна, м. Київ, вул. Левка Лук'яненка, буд. 19, кв. 110. Email: <a href="mailto:info@legal.org.ua">info@legal.org.ua</a>. <a href="${BASE_URL}/pricing">Pricing</a>.</p>
 
       <p><a href="${BASE_URL}/about/team">Meet the team →</a> · <a href="${BASE_URL}/product">See the product →</a></p>
     </main>`
@@ -1142,7 +1145,7 @@ function prerenderAboutAndProductPlugin(): Plugin {
         // /product — Product / Service Details
         // ---------------------------------------------------------------
         const productTitle = 'Product — LEX | AI legal platform for Ukraine'
-        const productDesc = 'LEX bundles five products around the Ukrainian legal corpus: AI research & drafting, state-registry OSINT, parliament analytics, attorney marketplace, and MCP Connect for any LLM client. Live in production on AWS.'
+        const productDesc = 'LEX bundles five products around the Ukrainian legal corpus: AI research & drafting, state-registry OSINT, parliament analytics, attorney marketplace, and MCP Connect for any LLM client. Live in production.'
         const productHeroImage = `${BASE_URL}/product-screenshots/01-hero-workflow-plan.png`
         const productSeo = `
     <main id="product-seo" lang="en" style="max-width:900px;margin:40px auto;font-family:system-ui,sans-serif;padding:0 24px;color:#e4e4e7;background:#0a0a0b">
@@ -1190,7 +1193,7 @@ function prerenderAboutAndProductPlugin(): Plugin {
       </ul>
 
       <h2>Infrastructure</h2>
-      <p>AWS (eu-central-1, Frankfurt), backed by AWS Activate. TypeScript / Node.js 20, React 19, PostgreSQL 15 with PgBouncer, Redis 7, Qdrant, Docker, Nginx. AI providers: OpenAI GPT-4o, Anthropic Claude (via Amazon Bedrock), Voyage AI embeddings. Blue-green CI/CD with self-healing test agents on a self-hosted runner.</p>
+      <p>Own server infrastructure in Kyiv behind Cloudflare. TypeScript / Node.js 20, React 19, PostgreSQL 15 with PgBouncer, Redis 7, Qdrant, Docker, Nginx. AI providers: OpenAI GPT-4o, Anthropic Claude (via Amazon Bedrock), Voyage AI embeddings. Blue-green CI/CD with self-healing test agents on a self-hosted runner.</p>
 
       <h2>Pricing</h2>
       <ul>

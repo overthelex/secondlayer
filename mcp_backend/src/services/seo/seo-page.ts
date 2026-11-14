@@ -57,7 +57,7 @@ ul.cols{columns:2 280px;padding-left:18px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:12px 0 20px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}.card h3{margin-top:0}.card p{margin:0;font-size:15px;color:var(--muted)}
 .num{font-size:1.5rem;font-weight:700;display:block}details{border-bottom:1px solid var(--line);padding:10px 0}summary{cursor:pointer;font-weight:600}details p{margin:8px 0 0}
-footer{font-size:13px;color:var(--muted);padding-top:24px;padding-bottom:40px;border-top:1px solid var(--line);margin-top:40px}
+footer nav.svc{margin-bottom:10px;line-height:1.9}footer{font-size:13px;color:var(--muted);padding-top:24px;padding-bottom:40px;border-top:1px solid var(--line);margin-top:40px}
 `;
 
 export interface PageOpts {
@@ -106,7 +106,7 @@ ${ld}
 <nav class="crumbs" aria-label="Навігація">${crumbsHtml}</nav>
 ${o.body}
 </main>
-<footer>${esc(o.source ?? 'Тексти наведено за офіційними даними Верховної Ради України (zakon.rada.gov.ua).')} Інформація не є юридичною консультацією. © LEX, legal.org.ua</footer>
+<footer><nav class="svc" aria-label="Сервіси LEX">Сервіси LEX: <a href="/sudova-praktyka">пошук судової практики</a> · <a href="/perevirka-kontragenta">перевірка контрагента</a> · <a href="/dlia-advokativ">для адвокатів</a> · <a href="/mcp-dlia-yurystiv">MCP для Claude і ChatGPT</a> · <a href="/pricing">ціни</a> · <a href="/about">про нас</a></nav>${esc(o.source ?? 'Тексти наведено за офіційними даними Верховної Ради України (zakon.rada.gov.ua).')} Інформація не є юридичною консультацією. © LEX, legal.org.ua</footer>
 </body>
 </html>`;
 }
