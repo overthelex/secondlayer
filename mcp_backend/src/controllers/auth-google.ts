@@ -13,7 +13,6 @@ import {
   type AuthenticatedRequest,
   generateToken,
   generateBannerAsync,
-  creditWelcomeBonus,
   FRONTEND_URL,
 } from './auth-common.js';
 
@@ -140,7 +139,6 @@ export async function googleMobileAuth(req: Request, res: Response): Promise<Res
         provisionAuthentikUser({ email, name }).catch(() => {});
         provisionNextcloudUser({ email, name }).catch(() => {});
         generateBannerAsync(user.id, user.name || user.email);
-        creditWelcomeBonus(user.id);
       }
     }
 

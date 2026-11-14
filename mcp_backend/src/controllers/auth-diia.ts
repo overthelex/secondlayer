@@ -11,7 +11,6 @@ import { provisionNextcloudUser } from '../services/nextcloud-provisioning.js';
 import {
   generateToken,
   generateBannerAsync,
-  creditWelcomeBonus,
   getAuthCache,
 } from './auth-common.js';
 
@@ -146,7 +145,6 @@ async function handleAuthCallback(req: Request, res: Response, traceId: string):
     generateBannerAsync(user.id, name);
     provisionAuthentikUser({ email, name }).catch(() => {});
     provisionNextcloudUser({ email, name }).catch(() => {});
-    creditWelcomeBonus(user.id);
   } else {
     await userService.updateLastLogin(user.id);
     logger.info('[Diia] Existing user webhook auth', { userId: user.id, traceId });

@@ -12,7 +12,6 @@ import { BannerService } from '../services/banner-service.js';
 import type { ICachePort } from '../domain/ports/index.js';
 import type { ReferralService } from '../services/referral-service.js';
 import type { BillingService } from '../services/billing-service.js';
-import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
 
 // ---------------------------------------------------------------------------
 // Module-level singletons (shared across all auth sub-modules)
@@ -58,7 +57,7 @@ export function setAuthReferralService(svc: ReferralService): void {
   authReferralService = svc;
 }
 
-/** Set the billing service for welcome bonus on registration. Call from composition root. */
+/** Set the billing service used by auth controllers. Call from composition root. */
 export function setAuthBillingService(svc: BillingService): void {
   authBillingService = svc;
 }
@@ -151,35 +150,3 @@ export function generateBannerAsync(userId: string, name: string): void {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Welcome bonus for new users
-// ---------------------------------------------------------------------------
-
-
-/**
- * Credit welcome bonus (430 UAH / ~$10 USD) to a newly registered user.
- * Fire-and-forget — logs errors but never throws.
- */
-export function creditWelcomeBonus(userId: string): void {
-  const billingService = authBillingService;
-  if (!billingService) {
-    logger.warn('[WelcomeBonus] Billing service not available', { userId });
-    return;
-  }
-
-  (async () => {
-    await billingService.getOrCreateUserBilling(userId);
-    const amountUsd = await billingService.convertFromUah(WELCOME_BONUS_UAH);
-    await billingService.topUpBalance({
-      userId,
-      amountUsd,
-      amountUah: WELCOME_BONUS_UAH,
-      description: `Вітальний бонус — ${WELCOME_BONUS_UAH} грн`,
-      paymentProvider: 'adjustment',
-      paymentId: `welcome-${userId}`,
-    });
-    logger.info('[WelcomeBonus] Credited', { userId, amountUah: WELCOME_BONUS_UAH, amountUsd });
-  })().catch((err: any) => {
-    logger.warn('[WelcomeBonus] Failed to credit', { userId, error: err.message });
-  });
-}
