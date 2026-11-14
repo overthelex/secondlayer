@@ -44,7 +44,11 @@ splitter fix (ligatures, wrap hyphens, the ZH/AR marginal column), when the
 rows that already have articles are exactly the ones to redo -- and
 rewrites full_text and articles in one transaction per row. A row the new
 split would leave article-less while it has articles today is not touched
-(counted `kept`): a regression is never written. zhlex is selected by the
+(counted `kept`): a regression is never written. split_text itself
+falls back to the pre-cleanup splitter's articles when the cleaned ones
+lose an article number (the 2026-11-14 run, rolled back, did not); run
+scripts/cantonal_resplit_check.py first (README, text cleanup step 7).
+zhlex is selected by the
 notes.zh.ch attachment prefix like the claim, so its HTML editions (akn_xml
 = the WebRT page) are never read as pdftotext output. Keyset pagination:
 the ~55K lexfind rows' akn_xml is too much to hold at once.
