@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { getDeviceId } from '../device-id';
 
 export const billingApi = {
   getBalance: () => apiClient.get('/api/billing/balance'),
@@ -71,7 +72,7 @@ export const paymentApi = {
   getWelcomeBonus: () =>
     apiClient.get('/api/billing/payment/welcome-bonus'),
   createCardVerify: () =>
-    apiClient.post('/api/billing/payment/monobank/card-verify'),
+    apiClient.post('/api/billing/payment/monobank/card-verify', { device_id: getDeviceId() }),
   createMetaMask: (data: { amount_usd: number; network: string; token: string }) =>
     apiClient.post('/api/billing/payment/metamask/create', data),
   verifyMetaMask: (data: { paymentIntentId: string; txHash: string }) =>

@@ -22,6 +22,7 @@ import { getErrorMessage } from '../../utils/errors';
 interface BonusStatus {
   amount_uah: number;
   verify_amount_uah: number;
+  status?: 'available' | 'credited' | 'pending_review' | 'rejected';
   available: boolean;
 }
 
@@ -78,10 +79,15 @@ export const BetaRestrictedModal: React.FC = () => {
               <ul className="list-disc pl-5 space-y-1">
                 <li>Monobank спише {offer.verify_amount_uah} ₴ для перевірки картки й одразу поверне їх.</li>
                 <li>Підписки немає: далі ви платите лише за виконані запити.</li>
-                <li>Один бонус на акаунт і на картку.</li>
+                <li>Один бонус на людину.</li>
               </ul>
             </div>
           </>
+        ) : bonus?.status === 'pending_review' ? (
+          <p>
+            Вітальний бонус {bonus.amount_uah} грн на перевірці: ми нараховуємо його один раз одній
+            людині й підтвердимо найближчим часом. Щоб працювати вже зараз, поповніть баланс через Monobank.
+          </p>
         ) : (
           <p>
             Чат і завантаження документів працюють за рахунок балансу. Поповніть його через

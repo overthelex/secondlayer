@@ -28,6 +28,7 @@ import {
   createAdminScrapingRoutes,
   createAdminImportRoutes,
   createAdminLimitsRoutes,
+  createAdminWelcomeBonusRoutes,
 } from './admin/index.js';
 
 export function createAdminRoutes(
@@ -59,6 +60,7 @@ export function createAdminRoutes(
   router.use(createAdminScrapingRoutes(db));
   router.use(createAdminImportRoutes(db));
   router.use(createAdminLimitsRoutes(db));
+  router.use(createAdminWelcomeBonusRoutes(db, logAdminAction, billingService));
 
   return router;
 }

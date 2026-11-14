@@ -6,6 +6,8 @@
 import { Router, Request, Response } from 'express';
 import { MonobankService, CARD_VERIFY_AMOUNT_UAH } from '../services/monobank-service.js';
 import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
+import { normalizeDeviceId } from '../services/welcome-bonus-service.js';
+import { callerFromHeaders } from '../services/mcp-access-log.js';
 import { MetaMaskService } from '../services/metamask-service.js';
 import { BinancePayService } from '../services/binance-pay-service.js';
 import { NOWPaymentsService } from '../services/nowpayments-service.js';
@@ -88,8 +90,13 @@ export function createPaymentRouter(
   router.get('/welcome-bonus', async (req: any, res: Response) => {
     try {
       const userId = req.user?.userId || req.user?.id;
-      const claimed = await monobankService.hasWelcomeClaim(userId);
-      return res.json({ amount_uah: WELCOME_BONUS_UAH, verify_amount_uah: CARD_VERIFY_AMOUNT_UAH, available: !claimed });
+      const status = await monobankService.welcomeBonus.status(userId);
+      return res.json({
+        amount_uah: WELCOME_BONUS_UAH,
+        verify_amount_uah: CARD_VERIFY_AMOUNT_UAH,
+        status,
+        available: status === 'available',
+      });
     } catch (error: any) {
       logger.error('Failed to get welcome bonus status', { error: error.message });
       return res.status(500).json({ error: 'Failed to get welcome bonus status' });
@@ -105,7 +112,10 @@ export function createPaymentRouter(
   router.post('/monobank/card-verify', async (req: any, res: Response) => {
     try {
       const userId = req.user?.userId || req.user?.id;
-      const result = await monobankService.createCardVerifyInvoice(userId, req.user?.email);
+      const result = await monobankService.createCardVerifyInvoice(userId, req.user?.email, {
+        clientIp: callerFromHeaders(req.headers, req.ip).clientIp,
+        deviceId: normalizeDeviceId(req.body?.device_id),
+      });
       return res.json(result);
     } catch (error: any) {
       if (error.message === 'WELCOME_BONUS_ALREADY_CLAIMED') {
