@@ -64,7 +64,7 @@ export function extractTenderData(data: any): TenderRecord | null {
     procurement_method: data.procurementMethod || null,
     procurement_method_type: data.procurementMethodType || null,
     buyer_name: buyer.name || buyer.identifier?.legalName || null,
-    buyer_edrpou: buyer.identifier?.id || null,
+    buyer_edrpou: edrCode(buyer.identifier?.id, buyer.identifier?.scheme) || null,
     buyer_region: buyer.address?.region || null,
     amount,
     currency: value.currency || 'UAH',
@@ -89,6 +89,16 @@ export function extractTenderData(data: any): TenderRecord | null {
  * PostgreSQL rejects NUL in text ("invalid byte sequence for encoding UTF8: 0x00")
  * and \u0000 in jsonb; a single tender carrying one used to kill the whole batch.
  */
+/**
+ * ЄДРПОУ is 8 digits, but some platforms send it zero-padded to 10 ("0023227605").
+ * Without this the same company counts as two in supplier matching.
+ */
+export function edrCode(id: string | null | undefined, scheme: string | null | undefined): string | null {
+  if (!id) return null;
+  const v = String(id).trim();
+  return (!scheme || scheme === 'UA-EDR') && /^00\d{8}$/.test(v) ? v.slice(2) : v;
+}
+
 export function pgSafe(v: unknown): unknown {
   if (typeof v === 'string') return v.includes('\u0000') ? v.replace(/\u0000/g, '') : v;
   if (v && typeof v === 'object' && !(v instanceof Date)) {
@@ -286,7 +296,7 @@ export function extractContracts(data: any): ContractRecord[] {
       award_id: str(c.awardID, 64),
       lot_id: str(award?.lotID, 64),
       status: str(c.status, 50),
-      supplier_edrpou: str(s.identifier?.id, 50),
+      supplier_edrpou: edrCode(str(s.identifier?.id, 50), s.identifier?.scheme),
       supplier_scheme: str(s.identifier?.scheme, 50),
       supplier_name: str(s.identifier?.legalName) || str(s.name),
       supplier_scale: str(s.scale, 20),

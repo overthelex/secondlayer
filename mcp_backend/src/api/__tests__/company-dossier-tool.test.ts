@@ -1,4 +1,4 @@
-import { CompanyDossierTool, partyNameFor, registrationDate, SECTION_SPECS, toRows, trimRow } from '../tools/company-dossier-tool.js';
+import { CompanyDossierTool, normEdr, partyNameFor, registrationDate, SECTION_SPECS, toRows, trimRow } from '../tools/company-dossier-tool.js';
 
 const ok = (data: any) => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] });
 
@@ -19,7 +19,7 @@ function registry(overrides: Record<string, (args: any) => any> = {}) {
     openreyestr_get_data_freshness: () => ok({
       legal_entities: { as_of: '2026-11-05', basis: 'остання зміна запису при імпорті ЄДР' },
       tax_debt: { as_of: '2022-02-22', basis: 'дата звіту ДПС', note: 'зріз станом на 22.02.2022' },
-      prozorro_contracts: { as_of: '2026-11-13', basis: 'остання синхронізація', note: 'дозавантажуються поступово' },
+      prozorro_contracts: { as_of: '2026-11-13', basis: 'остання синхронізація', note: 'за всю історію' },
     }),
     openreyestr_search_prozorro: (a) => {
       if (a.supplier_edrpou) return ok([
@@ -30,6 +30,9 @@ function registry(overrides: Record<string, (args: any) => any> = {}) {
         { supplier_edrpou: '41633007', supplier_name: 'МАСШТАБ' },
         { supplier_edrpou: '30287372', supplier_name: 'ДЕЛЬТА-98', buyer_edrpou: '04053915', buyer_name: 'Овруцька міська рада' },
         { supplier_edrpou: '30287372', supplier_name: 'ДЕЛЬТА-98', buyer_edrpou: '04053915', buyer_name: 'Овруцька міська рада' },
+        // the same supplier and buyer, zero-padded by another platform: not a second company
+        { supplier_edrpou: '0030287372', supplier_name: 'ДЕЛЬТА-98', buyer_edrpou: '0004053915', buyer_name: 'Овруцька міська рада' },
+        { supplier_edrpou: '0041633007', supplier_name: 'МАСШТАБ' },
       ]);
       if (a.supplier_email) return ok([{ supplier_edrpou: '41633007' }]);
       return ok([{ found: false, message: 'Тендерів не знайдено' }]);
@@ -157,5 +160,8 @@ describe('dossier helpers', () => {
     expect(partyNameFor(null)).toBeNull();
     expect(registrationDate({ registration: 'Дата: 01.02.2003' })).toBe('2003-02-01');
     expect(registrationDate({})).toBeNull();
+    expect(normEdr('0023227605')).toBe('23227605');
+    expect(normEdr('2819204155')).toBe('2819204155');
+    expect(normEdr('')).toBeNull();
   });
 });

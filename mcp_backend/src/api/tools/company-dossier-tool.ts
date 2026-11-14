@@ -165,6 +165,13 @@ export function trimRow(row: any): any {
   return out;
 }
 
+/** "0023227605" and "23227605" are one ЄДРПОУ (some platforms zero-pad it to 10 digits). */
+export function normEdr(code: unknown): string | null {
+  if (code == null || code === '') return null;
+  const v = String(code).trim();
+  return /^00\d{8}$/.test(v) ? v.slice(2) : v;
+}
+
 /**
  * Company name for a court-party search: legal form and quotes removed.
  * A one-word quoted name («ВОДОКАНАЛ», «ГАРНЕ МІСТО» is two) matches every
@@ -370,9 +377,11 @@ export class CompanyDossierTool extends BaseToolHandler {
       const others = new Map<string, string>();
       const buyers = new Map<string, string>();
       for (const r of toRows(results[i].data).rows) {
-        if (!r.supplier_edrpou || r.supplier_edrpou === edrpou) continue;
-        others.set(r.supplier_edrpou, r.supplier_name || '');
-        if (r.buyer_edrpou) buyers.set(r.buyer_edrpou, r.buyer_name || '');
+        const code = normEdr(r.supplier_edrpou);
+        if (!code || code === edrpou) continue;
+        if (!others.has(code)) others.set(code, r.supplier_name || '');
+        const buyer = normEdr(r.buyer_edrpou);
+        if (buyer && !buyers.has(buyer)) buyers.set(buyer, r.buyer_name || '');
       }
       if (others.size === 0) return;
       const what = p.kind === 'phone' ? 'Телефон' : 'Email';

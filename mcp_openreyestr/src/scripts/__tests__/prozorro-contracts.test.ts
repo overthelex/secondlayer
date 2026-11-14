@@ -142,3 +142,14 @@ describe('pgSafe (NUL bytes from ProZorro)', () => {
     expect(pgSafe(d)).toBe(d);
   });
 });
+
+describe('edrCode', () => {
+  it('drops the zero padding of a 10-digit ЄДРПОУ only for UA-EDR', () => {
+    const { edrCode } = require('../lib/prozorro-feed');
+    expect(edrCode('0023227605', 'UA-EDR')).toBe('23227605');
+    expect(edrCode('0023227605', undefined)).toBe('23227605');
+    expect(edrCode('2819204155', 'UA-EDR')).toBe('2819204155'); // РНОКПП ФОП
+    expect(edrCode('0012345678', 'PL-KRS')).toBe('0012345678');
+    expect(edrCode(null, 'UA-EDR')).toBeNull();
+  });
+});

@@ -389,15 +389,17 @@ export const FRESHNESS_PROBES: Array<{ key: string; sql: string; basis: string; 
   { key: 'dssu_financial_reports', sql: 'SELECT max(created_at) AS v FROM dssu_financial_reports', basis: 'останній імпорт' },
   { key: 'prozorro_tenders', sql: `SELECT max(updated_at) AS v FROM prozorro_sync_state WHERE feed = 'tenders'`, basis: 'остання синхронізація з ProZorro' },
   { key: 'prozorro_contracts', sql: `SELECT max(updated_at) AS v FROM prozorro_sync_state WHERE feed = 'tenders'`, basis: 'остання синхронізація з ProZorro',
-    note: 'Переможці за історію до листопада 2026 дозавантажуються поступово (спершу будівельні закупівлі CPV 45 з 2021 року), тож відсутність договору ще не означає, що компанія нічого не вигравала.' },
+    note: 'Переможці й договори завантажено за всю історію ProZorro (з 2015 року); нові надходять із щоденною синхронізацією. Договори, які замовник не оприлюднив у ProZorro, тут відсутні.' },
 ];
 
 /** Registries dated by their last completed import_log run, with an upstream caveat where one applies. */
-export const FRESHNESS_FROM_IMPORT_LOG: Array<[string, string?]> = [
+export const FRESHNESS_FROM_IMPORT_LOG: Array<[string, string?, string?]> = [
   ['debtors'],
   ['enforcement_proceedings'],
-  ['bankruptcy_cases', 'Джерело (реєстр справ про банкрутство) не оновлюється з 31.05.2024; новіші справи дивіться в оголошеннях про банкрутство.'],
-  ['single_tax_payers', 'Останній опублікований ДПС набір платників єдиного податку датований 23.02.2022.'],
+  // a frozen source is dated by its own last update, not by our re-import of it,
+  // or "станом на 2026-11-14" would be read as current data
+  ['bankruptcy_cases', 'Джерело (реєстр справ про банкрутство) не оновлюється з 31.05.2024; новіші справи дивіться в оголошеннях про банкрутство.', '2024-05-31'],
+  ['single_tax_payers', 'Останній опублікований ДПС набір платників єдиного податку датований 23.02.2022.', '2022-02-23'],
 ];
 
 export class OpenReyestrTools {
@@ -1592,8 +1594,10 @@ export class OpenReyestrTools {
     }));
     out.founders = { ...out.beneficiaries };
     out.signers = { ...out.beneficiaries };
-    for (const [key, note] of FRESHNESS_FROM_IMPORT_LOG) {
-      out[key] = { as_of: imports[key] ?? null, basis: 'останній успішний імпорт', ...(note ? { note } : {}) };
+    for (const [key, note, frozenAt] of FRESHNESS_FROM_IMPORT_LOG) {
+      out[key] = frozenAt
+        ? { as_of: frozenAt, basis: 'дата останнього оновлення джерела', ...(note ? { note } : {}) }
+        : { as_of: imports[key] ?? null, basis: 'останній успішний імпорт', ...(note ? { note } : {}) };
     }
 
     this.freshnessCache = { value: out, at: Date.now() };
