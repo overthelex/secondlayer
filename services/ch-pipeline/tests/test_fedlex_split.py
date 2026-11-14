@@ -770,15 +770,22 @@ def test_repeated_footnote_heads_are_not_running_headers():
 def test_footnotes_the_strips_miss_leave_the_sentence():
     # 560210 Art. 9: the page's only footnote between the two halves of a
     # sentence ("les rapports de" / page seam / "voisinage et de police")
-    raw = ("101\nConstitution fédérale\n\nArt. 9\n"
+    # the page before carries footnote 1 (the page strip cuts it): a missed
+    # block is only looked for once the document's footnotes have begun
+    raw = ("101\nConstitution fédérale\n\nArt. 8\nLa Confédération déclare la guerre.\n\n"
+           "1   Fassung gemäss Ziff. I des BG vom 1. Jan. 1980 (AS 1980 1).\n\n"
+           "                                                                    1\n"
+           "101                                                Constitution fédérale\n\n\n"
+           "Art. 9\n"
            "Exceptionnellement, les cantons conservent le droit de conclure des traités\n"
            "sur des objets concernant l’économie publique, les rapports de\n\n"
            "3        Accepté en votation populaire du 14 juin 1981 (ACF du 17 août 1981 – RO 1981 1243 –\n"
-           "         et AF du 10 oct. 1980– FF 1980 III 713 787, 1980 I 73, 1981 II 1216).\n\n\n\n"
+           "         et AF du 10 oct. 1980– FF 1980 III 713 787, 1980 I 73, 1981 II 1216).\n\n"
+           "2\nConstitution fédérale                                              101\n\n\n"
            "voisinage et de police; néanmoins, ces traités ne doivent rien contenir de contraire à\n"
            "la Confédération.\n\nArt. 10\n1 Les rapports officiels ont lieu par le Conseil fédéral.\n")
     articles, text = split_fedlex_text(raw, "fr")
-    assert "3 Accepté" in articles[0].text                # the articles do not move
+    assert "3 Accepté" in articles[1].text                # the articles do not move
     assert "les rapports de voisinage et de police; néanmoins" in text
     assert ("la Confédération.\n\n3 Accepté en votation populaire du 14 juin 1981 (ACF du "
             "17 août 1981 – RO 1981 1243 – et AF du 10 oct. 1980– FF 1980 III 713 787, "
@@ -796,3 +803,59 @@ def test_bv_1874_footnote_block_is_footnotes_not_prose():
     # and no footnote is glued into a sentence
     for m in re.finditer(r"Accepté en votation populaire", text):
         assert re.search(r"(?:^|\n\n)\d{1,3} $", text[:m.start()]), text[m.start() - 60:m.start()]
+
+
+# --- 2026-11 re-review: a body paragraph is no footnote; a repeated row is
+# no running header -------------------------------------------------------
+
+def test_a_two_space_paragraph_number_mid_article_is_not_a_missed_footnote():
+    # paragraph 2 set with two spaces and a hanging indent, mid-article, no
+    # footnote anchored anywhere: it must stay between 1 and 3
+    raw = ("101\nGesetz\n\nArt. 1\n1 Der Bund regelt das Verfahren.\n\n"
+           "2   Die Kantone bestimmen die zuständigen Behörden und regeln\n"
+           "    das Verfahren im Einzelnen.\n\n"
+           "3 Der Bundesrat erlässt die Ausführungsbestimmungen.\n\nArt. 2\nText.")
+    text = clean_fedlex_text(raw, "de")
+    one = text.index("1 Der Bund regelt")
+    two = text.index("Die Kantone bestimmen")
+    three = text.index("3 Der Bundesrat")
+    assert one < two < three
+
+
+def test_a_hanging_paragraph_followed_by_more_of_its_article_is_no_footnote():
+    # footnotes HAVE begun (page 1), but the candidate block sits mid-page,
+    # more paragraphs of the same article follow without a page break
+    raw = ("101\nGesetz\n\nArt. 1\nDer Bund regelt.\n\n"
+           "1   Fassung gemäss Ziff. I des BG vom 1. Jan. 1980 (AS 1980 1).\n\n"
+           "                                                                    1\n"
+           "101                                                Gesetz\n\n\n"
+           "Art. 2\n1 Der Bund regelt das Verfahren.\n\n"
+           "2   Die Kantone bestimmen die zuständigen Behörden und regeln\n"
+           "    das Verfahren im Einzelnen.\n\n"
+           "3 Der Bundesrat erlässt die Ausführungsbestimmungen.\n\nArt. 3\nText.")
+    text = clean_fedlex_text(raw, "de")
+    assert (text.index("1 Der Bund regelt das Verfahren") < text.index("Die Kantone bestimmen")
+            < text.index("3 Der Bundesrat"))
+    assert "\n\n1 Fassung gemäss Ziff. I" in text
+
+
+def test_a_table_row_repeated_word_for_word_is_kept():
+    raw = ("101\nGebührenverordnung\n\nArt. 1\nDie Gebühren betragen:\n"
+           "Gebühr für eine beglaubigte Kopie      10\n"
+           "Gebühr für einen Registerauszug        20\n\n"
+           "Art. 2\nFerner:\nGebühr für eine beglaubigte Kopie      10")
+    text = clean_fedlex_text(raw, "de")
+    assert text.count("Gebühr für eine beglaubigte Kopie 10") == 2
+    assert "Gebühr für einen Registerauszug 20" in text
+
+
+def test_a_recurring_running_header_at_page_seams_is_still_dropped():
+    # no SR number learnt at the head (an excerpt), the header recurs and
+    # every occurrence opens a page, right under the folio of the page before
+    raw = ("Gesetz\n\nArt. 1\nDer Bund regelt.\n\n4\n"
+           "Verordnung über die Gebühren                              172.041\n\n\n"
+           "Art. 2\nDie Kantone vollziehen.\n\n6\n"
+           "Verordnung über die Gebühren                              172.041\n\n\n"
+           "Art. 3\nText.\n")
+    text = clean_fedlex_text(raw, "de")
+    assert "Verordnung über die Gebühren" not in text

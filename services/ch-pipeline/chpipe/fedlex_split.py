@@ -303,7 +303,8 @@ def _is_running_header(line: str, sysnr: str) -> bool:
     return False
 
 
-def _strip_page_furniture(lines: list[str], notes: list | None = None) -> list[str]:
+def _strip_page_furniture(lines: list[str], notes: list | None = None,
+                          seams: list | None = None) -> list[str]:
     """Remove running headers, folios and footnote blocks from the single
     stream. Pages are reconstructed at the running-header lines (the only
     page boundary that survived the form-feed strip); each page then loses
@@ -311,8 +312,9 @@ def _strip_page_furniture(lines: list[str], notes: list | None = None) -> list[s
 
     With ``notes`` given, each footnote block cut is appended to it as
     (index in the returned list of the page seam it stood before, its
-    lines) -- for the text product, which keeps them; the return is the
-    same either way."""
+    lines) -- for the text product, which keeps them; with ``seams`` given,
+    the index of every page seam's blank line is appended to it. The return
+    is the same either way."""
     sysnr = _find_sysnr(lines[:8])
     pages: list[list[str]] = [[]]
     for index, line in enumerate(lines):
@@ -334,6 +336,8 @@ def _strip_page_furniture(lines: list[str], notes: list | None = None) -> list[s
         out.extend(page)
         if notes is not None and cut:
             notes.append((len(out), cut))
+        if seams is not None:
+            seams.append(len(out))
         out.append("")                  # keep a block boundary at the seam
     # page-1 head: drop the SR number line itself
     if sysnr:
@@ -341,6 +345,8 @@ def _strip_page_furniture(lines: list[str], notes: list | None = None) -> list[s
         out = [l for i, l in enumerate(out[:6]) if l.strip() != sysnr] + out[6:]
         if notes is not None and dropped:
             notes[:] = [(a - sum(1 for d in dropped if d < a), block) for a, block in notes]
+        if seams is not None and dropped:
+            seams[:] = [a - sum(1 for d in dropped if d < a) for a in seams]
     return out
 
 
@@ -501,11 +507,13 @@ def split_fedlex_text(raw: str, lang: str | None = None) -> tuple[list[akn.Artic
     # strips hand what they cut to the text product, anchored where it stood
     page_notes: list = []
     run_notes: list = []
+    page_seams: list[int] = []
     where: list[int] = []
-    lines = _strip_footnote_runs(_strip_page_furniture(raw.splitlines(), page_notes),
-                                 run_notes, where)
+    lines = _strip_footnote_runs(
+        _strip_page_furniture(raw.splitlines(), page_notes, page_seams), run_notes, where)
     notes = sorted([(where[a], block) for a, block in page_notes] + run_notes,
                    key=lambda note: note[0])
+    seams = sorted({where[a] for a in page_seams})
 
     # layout: where do the headings sit? Column 0, or one indented body
     # column with a marginal column to its left?
@@ -517,7 +525,7 @@ def split_fedlex_text(raw: str, lang: str | None = None) -> tuple[list[akn.Artic
 
     vocabulary = text_clean.hyphen_vocabulary([lang]) if lang else frozenset()
     product = _TextProduct(lines, marginal_layout, body_col, vocabulary,
-                           _find_sysnr(raw.splitlines()[:8]), notes)
+                           _find_sysnr(raw.splitlines()[:8]), notes, seams)
 
     articles: list[akn.Article] = []
     seen: dict[str, int] = {}
@@ -747,8 +755,9 @@ class _TextProduct:
 
     def __init__(self, lines: list[str], marginal_layout: bool, body_col: int,
                  vocabulary: frozenset[str], sysnr: str | None,
-                 notes: list | None = None) -> None:
+                 notes: list | None = None, seams: list[int] | None = None) -> None:
         self.lines = lines
+        self.seams = set(seams or [])      # the page seams' blank lines (page strip)
         self.notes = list(notes or [])     # (anchor, block lines), anchor-ordered
         self.pending_notes: list[str] = []
         self._cuts: dict[int, tuple[str, str | None, str | None, int | None]] = {}
@@ -762,12 +771,16 @@ class _TextProduct:
         self.head = True                   # nothing emitted yet
         self.after_tail = False
         self.art: dict | None = None
+        # a recurring header-shaped line, and whether EVERY occurrence sits
+        # at a page edge (see _is_header)
         titles: dict[str, int] = {}
-        for line in lines:
+        edges: dict[str, bool] = {}
+        for index, line in enumerate(lines):
             key = _header_key(line)
             if key:
                 titles[key] = titles.get(key, 0) + 1
-        self.header_titles = titles
+                edges[key] = edges.get(key, True) and self._at_page_edge(index)
+        self.header_titles = {key: count for key, count in titles.items() if edges[key]}
         # footnote blocks the shared strips missed: out of the article
         # stream's text, into the notes (see _find_missed_notes)
         self.skip: set[int] = set()
@@ -910,11 +923,14 @@ class _TextProduct:
         two halves of a paragraph split by the page seam.
 
         A block: a footnote head at column 0 ("3        Accepté ...",
-        _MISSED_NOTE_HEAD) after a blank line, its number continuing the
-        document's footnote sequence (above the last footnote seen, at most
+        _MISSED_NOTE_HEAD) after a blank line, once a strip has anchored a
+        footnote earlier in the document, its number continuing the
+        footnote sequence (above the last footnote seen, at most
         _MISSED_NOTE_STEP above it), then hanging continuation lines (indented
         to the head's text column) and further heads with the next numbers,
-        up to a blank line (the page bottom) or the end. Accepted when it
+        ending at the bottom of its page (_before_page_break: only blank lines
+        to the page seam, a folio or a running header -- a block with more of
+        its page after it is a paragraph of the article). Accepted when it
         hangs, opens with footnote vocabulary (the shared list plus
         _MISSED_NOTE_VOCAB), or holds two heads. Its lines leave the text's
         article/outside stream (self.skip) and join self.notes, anchored at
@@ -933,7 +949,10 @@ class _TextProduct:
                 last = max([last] + numbers(anchored[a][1]))
                 a += 1
             head = _MISSED_NOTE_HEAD.match(lines[i])
-            if head and (i == 0 or not lines[i - 1].strip()):
+            # only once the document's footnotes have begun (a strip has
+            # anchored one before this line): "2   Die Kantone ..." with a
+            # hanging indent is a paragraph until then
+            if head and a > 0 and (i == 0 or not lines[i - 1].strip()):
                 number = int(head.group(1))
                 if last < number <= last + _MISSED_NOTE_STEP:
                     column = head.start(2)
@@ -951,7 +970,9 @@ class _TextProduct:
                             j += 1
                             continue
                         break
-                    at_bottom = j >= n or not lines[j].strip()
+                    # at a page bottom, never with more of the page after
+                    # it (the same article going on is body, not a footnote)
+                    at_bottom = (j >= n or not lines[j].strip()) and self._before_page_break(j)
                     vocab = bool(_FOOTNOTE_VOCAB.match(lines[i]) or _MISSED_NOTE_VOCAB.match(lines[i]))
                     if at_bottom and (hanging or vocab or len(heads) > 1):
                         found.append((i, lines[i:j]))
@@ -962,6 +983,35 @@ class _TextProduct:
             i += 1
         if found:
             self.notes = sorted(self.notes + found, key=lambda note: note[0])
+
+    def _at_page_edge(self, index: int) -> bool:
+        """The first or the last non-blank line of a page: only blank lines
+        between it and a page seam (the page strip's seams, or a folio
+        line), or the very start / end of the stream."""
+        for step in (-1, 1):
+            k = index + step
+            while 0 <= k < len(self.lines) and not self.lines[k].strip() and k not in self.seams:
+                k += step
+            if k < 0 or k >= len(self.lines) or k in self.seams:
+                return True
+            if _BARE_NUMBER.match(self.lines[k].strip()):
+                return True
+        return False
+
+    def _before_page_break(self, end: int) -> bool:
+        """Is the block ending before ``end`` the bottom of its page: only
+        blank lines between it and a page seam, a folio or a running header,
+        or the end of the stream? More text of the page (the article going
+        on) means it is not."""
+        k = end
+        while k < len(self.lines) and not self.lines[k].strip():
+            if k in self.seams:
+                return True
+            k += 1
+        if k >= len(self.lines):
+            return True
+        nxt = self.lines[k].strip()
+        return bool(_BARE_NUMBER.match(nxt) or (self.sysnr and _is_running_header(self.lines[k], self.sysnr)))
 
     def _run_has_body(self, index: int) -> bool:
         """Is there an indented body line in the run of non-blank lines that
@@ -988,8 +1038,10 @@ class _TextProduct:
     def _is_header(self, index: int) -> bool:
         """A running header the page strip missed: the header shape AND one
         of: its number is the learnt SR number, the whole line recurs (on
-        two pages or more; _header_key), or a folio stands right beside it
-        (number-first lines only with an SR-shaped, dotted number). Nothing else
+        two pages or more; _header_key) with every occurrence at a page edge
+        (_at_page_edge: a table row repeated word for word sits mid-page),
+        or a folio stands right beside it (number-first lines only with an
+        SR-shaped, dotted number). Nothing else
         makes such a line furniture (ruling R28): a fee or table row
         ("Gebühr für eine Kopie      10", "c. pour les autocars   650",
         "Turquie   12 juin   1907   12 juin   1907") has the shape, and the
