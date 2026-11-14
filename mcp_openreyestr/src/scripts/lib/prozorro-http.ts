@@ -1,9 +1,23 @@
 /**
  * HTTP client for the ProZorro public API shared by import-prozorro.ts and
- * backfill-prozorro-contracts.ts: keep-alive agent, retries, and one back-off
- * gate so a 429/503 on any worker pauses all of them.
+ * backfill-prozorro-contracts.ts.
+ *
+ * Egress lanes (LEXAI-2227): ProZorro rate-limits per source IP (~80 req/s), so
+ * a long backfill can spread its workers over several egress IPs. A lane is
+ * either "direct" or an HTTP proxy that supports CONNECT (tinyproxy on a small
+ * VM, reached through an SSH tunnel on 127.0.0.1). Each lane has its own
+ * keep-alive agent, its own worker count and its own back-off gate, so a 429 on
+ * one IP pauses only that IP's workers.
+ *
+ *   PROZORRO_EGRESS="direct=10,http://127.0.0.1:8201=20,http://127.0.0.1:8202=20"
+ *
+ * Unset, there is one direct lane with the caller's concurrency (the old
+ * behaviour). Responses are requested gzip-compressed (~3x less traffic).
  */
+import http from 'http';
 import https from 'https';
+import tls from 'tls';
+import zlib from 'zlib';
 import { ContractRecord, extractContracts, extractTenderData, retryDelayMs, TenderRecord } from './prozorro-feed';
 
 export const API_BASE = process.env.PROZORRO_API_BASE || 'https://public-api.prozorro.gov.ua/api/2.5';
@@ -21,18 +35,88 @@ interface HttpResult { status: number; retryAfter: string | null; body: string }
 
 export interface TenderDetails { records: TenderRecord[]; contracts: ContractRecord[]; missing: number }
 
-export function createProzorroClient(concurrency: number, delayMs = 0) {
-  const agent = new https.Agent({ keepAlive: true, maxSockets: concurrency + 2 });
-  let pausedUntil = 0;
+export interface LaneSpec { name: string; proxy: string | null; workers: number }
 
-  function httpGet(url: string): Promise<HttpResult> {
+/** "direct=10,http://127.0.0.1:8201=20" → lanes; empty → one direct lane. */
+export function parseEgress(spec: string | undefined, defaultWorkers: number): LaneSpec[] {
+  if (!spec || !spec.trim()) return [{ name: 'direct', proxy: null, workers: defaultWorkers }];
+  return spec.split(',').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const eq = part.lastIndexOf('=');
+    if (eq <= 0) throw new Error(`PROZORRO_EGRESS: "${part}" needs <direct|http://host:port>=<workers>`);
+    const target = part.slice(0, eq);
+    const workers = parseInt(part.slice(eq + 1), 10);
+    if (!(workers > 0)) throw new Error(`PROZORRO_EGRESS: bad worker count in "${part}"`);
+    if (target === 'direct') return { name: 'direct', proxy: null, workers };
+    const u = new URL(target);
+    if (u.protocol !== 'http:') throw new Error(`PROZORRO_EGRESS: only http:// CONNECT proxies are supported, got "${target}"`);
+    return { name: `${u.hostname}:${u.port}`, proxy: target, workers };
+  });
+}
+
+/** HTTPS through an HTTP CONNECT proxy, with keep-alive (the tunnel is reused per socket). */
+export class ConnectProxyAgent extends https.Agent {
+  constructor(private proxy: URL, opts: https.AgentOptions) {
+    super(opts);
+  }
+
+  createConnection(options: any, callback?: (err: Error | null, socket?: any) => void): any {
+    const host = options.host || options.hostname;
+    const port = options.port || 443;
+    const req = http.request({
+      host: this.proxy.hostname,
+      port: Number(this.proxy.port) || 80,
+      method: 'CONNECT',
+      path: `${host}:${port}`,
+      headers: { Host: `${host}:${port}` },
+      timeout: 30_000,
+    });
+    req.once('connect', (res, socket) => {
+      if (res.statusCode !== 200) {
+        socket.destroy();
+        callback?.(new Error(`proxy CONNECT ${res.statusCode}`));
+        return;
+      }
+      callback?.(null, tls.connect({ socket, servername: options.servername || host }));
+    });
+    req.once('timeout', () => req.destroy(new Error('proxy CONNECT timeout')));
+    req.once('error', (e) => callback?.(e));
+    req.end();
+    return undefined;
+  }
+}
+
+interface Lane extends LaneSpec { agent: https.Agent; pausedUntil: number }
+
+export function createProzorroClient(concurrency: number, delayMs = 0, lanes: LaneSpec[] = parseEgress(process.env.PROZORRO_EGRESS, concurrency)) {
+  const live: Lane[] = lanes.map((l) => ({
+    ...l,
+    pausedUntil: 0,
+    agent: l.proxy
+      ? new ConnectProxyAgent(new URL(l.proxy), { keepAlive: true, maxSockets: l.workers + 2 })
+      : new https.Agent({ keepAlive: true, maxSockets: l.workers + 2 }),
+  }));
+  const totalWorkers = live.reduce((a, l) => a + l.workers, 0);
+  const stats = new Map<string, { ok: number; throttled: number }>(live.map((l) => [l.name, { ok: 0, throttled: 0 }]));
+
+  function httpGet(url: string, lane: Lane): Promise<HttpResult> {
     return new Promise((resolve, reject) => {
-      const req = https.get(url, { agent, timeout: 60_000, headers: { 'User-Agent': 'legal.org.ua openreyestr importer' } }, (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (c) => (body += c));
+      const req = https.get(url, {
+        agent: lane.agent,
+        timeout: 60_000,
+        headers: { 'User-Agent': 'legal.org.ua openreyestr importer', 'Accept-Encoding': 'gzip' },
+      }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
         res.on('end', () => {
           const ra = res.headers['retry-after'];
+          const raw = Buffer.concat(chunks);
+          let body: string;
+          try {
+            body = res.headers['content-encoding'] === 'gzip' ? zlib.gunzipSync(raw).toString('utf8') : raw.toString('utf8');
+          } catch (e) {
+            reject(e);
+            return;
+          }
           resolve({ status: res.statusCode || 0, retryAfter: Array.isArray(ra) ? ra[0] : ra || null, body });
         });
         res.on('error', reject);
@@ -42,43 +126,46 @@ export function createProzorroClient(concurrency: number, delayMs = 0) {
     });
   }
 
-  /** GET JSON with retries. Returns null on 404/410 (gone). Throws after MAX_ATTEMPTS. */
-  async function fetchJson(url: string): Promise<any | null> {
+  /** GET JSON with retries on one lane. Returns null on 404/410 (gone). Throws after MAX_ATTEMPTS. */
+  async function fetchJson(url: string, lane: Lane = live[0]): Promise<any | null> {
     let lastErr = '';
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      const wait = pausedUntil - Date.now();
+      const wait = lane.pausedUntil - Date.now();
       if (wait > 0) await sleep(wait);
       try {
-        const res = await httpGet(url);
-        if (res.status === 200) return JSON.parse(res.body);
+        const res = await httpGet(url, lane);
+        if (res.status === 200) { stats.get(lane.name)!.ok++; return JSON.parse(res.body); }
         if (res.status === 404 || res.status === 410) return null;
         lastErr = `HTTP ${res.status}`;
         if (res.status === 429 || res.status === 503) {
+          stats.get(lane.name)!.throttled++;
           const delay = retryDelayMs(attempt, res.retryAfter);
-          pausedUntil = Math.max(pausedUntil, Date.now() + delay);
-          log(`  ${res.status} from API, all workers pause ${Math.round(delay / 1000)}s`);
+          if (Date.now() + delay > lane.pausedUntil) {
+            lane.pausedUntil = Date.now() + delay;
+            log(`  ${res.status} on lane ${lane.name}, its workers pause ${Math.round(delay / 1000)}s`);
+          }
           continue;
         }
       } catch (e) {
-        lastErr = (e as Error).message;
+        lastErr = `${(e as Error).message} (lane ${lane.name})`;
       }
       await sleep(retryDelayMs(attempt, null));
     }
     throw new Error(`${lastErr} after ${MAX_ATTEMPTS} attempts: ${url}`);
   }
 
-  /** GET /tenders/<id> for every id; tender rows plus their contracts with the winner. */
+  /** GET /tenders/<id> for every id over all lanes; tender rows plus their contracts with the winner. */
   async function fetchDetails(ids: string[]): Promise<TenderDetails> {
     const records: TenderRecord[] = [];
     const contracts: ContractRecord[] = [];
     let missing = 0;
     let idx = 0;
     let failure: Error | null = null;
-    async function worker(): Promise<void> {
+    async function worker(lane: Lane): Promise<void> {
       while (idx < ids.length && !failure) {
         const id = ids[idx++];
         try {
-          const json = await fetchJson(`${API_BASE}/tenders/${id}`);
+          const json = await fetchJson(`${API_BASE}/tenders/${id}`, lane);
           const rec = json ? extractTenderData(json.data) : null;
           if (rec) {
             records.push(rec);
@@ -90,10 +177,20 @@ export function createProzorroClient(concurrency: number, delayMs = 0) {
         if (delayMs) await sleep(delayMs);
       }
     }
-    await Promise.all(Array.from({ length: Math.min(concurrency, ids.length) }, worker));
+    const workers: Promise<void>[] = [];
+    for (const lane of live) for (let i = 0; i < lane.workers; i++) workers.push(worker(lane));
+    await Promise.all(workers);
     if (failure) throw failure;
     return { records, contracts, missing };
   }
 
-  return { fetchJson, fetchDetails, destroy: () => agent.destroy() };
+  return {
+    fetchJson: (url: string) => fetchJson(url, live[0]),
+    fetchDetails,
+    lanes: live.map(({ name, proxy, workers }) => ({ name, proxy, workers })),
+    totalWorkers,
+    /** Per-lane ok/throttled counters since start. */
+    laneStats: () => Object.fromEntries(stats),
+    destroy: () => live.forEach((l) => l.agent.destroy()),
+  };
 }
