@@ -15,6 +15,12 @@ import { OAuthService } from '../services/oauth-service.js';
 import { logger } from '../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import { getUserService } from '../middleware/dual-auth.js';
+import { describeRedirectTarget, isSupportedPkceMethod } from '../utils/oauth-consent.js';
+
+const PKCE_PLAIN_REJECTED = {
+  error: 'invalid_request',
+  error_description: 'code_challenge_method must be S256',
+};
 
 function escapeHtml(str: string): string {
   return str
@@ -100,13 +106,24 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
         });
       }
 
+      if (!isSupportedPkceMethod(code_challenge_method)) {
+        return res.status(400).json(PKCE_PLAIN_REJECTED);
+      }
+
       // Render authorization form with modern design. OAUTH_BRAND=lawrider (mcp.lawrider.uk)
       // shows LawRider in English and hides Google sign-in, which is registered for
       // legal.org.ua only.
       const lawrider = process.env.OAUTH_BRAND === 'lawrider';
       const brand = lawrider
-        ? { title: 'LawRider MCP - Authorization', subtitle: 'LawRider (mcp.lawrider.uk) — sign in to connect', or: 'or', google: 'Sign in with Google', showGoogle: false }
-        : { title: 'SecondLayer MCP - Authorization', subtitle: 'MCP legal.org.ua — OAuth2 Authorization', or: 'або', google: 'Увійти через Google', showGoogle: true };
+        ? { title: 'LawRider MCP - Authorization', subtitle: 'LawRider (mcp.lawrider.uk) — sign in to connect', or: 'or', google: 'Sign in with Google', showGoogle: false,
+            app: 'Application requesting access', appNote: 'Name given by the application itself',
+            sendTo: 'Access will be sent to', local: 'an application on this computer',
+            warn: 'This application is not verified. Sign in only if you set it up yourself and recognise the address above. Otherwise close this page.' }
+        : { title: 'SecondLayer MCP - Authorization', subtitle: 'MCP legal.org.ua — OAuth2 Authorization', or: 'або', google: 'Увійти через Google', showGoogle: true,
+            app: 'Застосунок запитує доступ', appNote: 'Назву вказав сам застосунок',
+            sendTo: 'Доступ буде передано на', local: 'застосунок на цьому комп’ютері',
+            warn: 'Цей застосунок не перевірено. Входьте, лише якщо ви самі його підключали і впізнаєте адресу вище. Інакше закрийте сторінку.' };
+      const target = describeRedirectTarget(redirect_uri);
       const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -201,6 +218,34 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
       color: #1a1a1a;
       font-weight: 700;
       font-size: 15px;
+      word-break: break-all;
+    }
+
+    .client-info small {
+      display: block;
+      color: #6b7280;
+      font-size: 12px;
+      font-weight: 400;
+      margin-top: 2px;
+    }
+
+    .client-info span small {
+      display: inline;
+    }
+
+    .client-info .send-to {
+      margin-top: 14px;
+    }
+
+    .unverified-warning {
+      background: #fffbeb;
+      color: #92400e;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin: -12px 0 24px;
+      font-size: 14px;
+      line-height: 1.4;
+      border-left: 4px solid #d97706;
     }
 
     .form-group {
@@ -355,10 +400,15 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
     </div>
 
     <div class="client-info">
-      <strong>Application requesting access</strong>
+      <strong>${brand.app}</strong>
       <span>${escapeHtml(client.name)}</span>
+      <small>${brand.appNote}</small>
+      <strong class="send-to">${brand.sendTo}</strong>
+      <span>${escapeHtml(target.host)}${target.local ? ` <small>(${brand.local})</small>` : ''}</span>
     </div>
-
+${target.unverified ? `
+    <div class="unverified-warning" role="alert">${brand.warn}</div>
+` : ''}
     <div id="error" class="error"></div>
 
     <form id="authForm" onsubmit="handleSubmit(event)">
@@ -532,6 +582,10 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
           error: 'invalid_request',
           error_description: 'Invalid redirect_uri',
         });
+      }
+
+      if (!isSupportedPkceMethod(code_challenge_method)) {
+        return res.status(400).json(PKCE_PLAIN_REJECTED);
       }
 
       // Authenticate user
@@ -876,6 +930,9 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
       if (!isValidRedirect) {
         return res.status(400).json({ error: 'invalid_request', error_description: 'Invalid redirect_uri for this client' });
       }
+      if (!isSupportedPkceMethod(code_challenge_method)) {
+        return res.status(400).json(PKCE_PLAIN_REJECTED);
+      }
 
       // Sign MCP params into state
       const signedState = oauthService.signMcpState({
@@ -990,7 +1047,7 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
       grant_types_supported: ['authorization_code'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
       scopes_supported: ['mcp', 'claudeai'],
-      code_challenge_methods_supported: ['S256', 'plain'],
+      code_challenge_methods_supported: ['S256'],
     });
   });
 
@@ -1015,7 +1072,7 @@ export function createOAuthRouter(oauthService: OAuthService): Router {
       grant_types_supported: ['authorization_code'],
       token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
       scopes_supported: ['mcp', 'claudeai'],
-      code_challenge_methods_supported: ['S256', 'plain'],
+      code_challenge_methods_supported: ['S256'],
     });
   });
 
