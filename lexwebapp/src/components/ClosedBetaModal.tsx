@@ -1,5 +1,10 @@
+/**
+ * Shown when Monobank refuses to create a payment (e.g. the terminal is
+ * disabled), so the user knows payment is temporarily unavailable and whom
+ * to contact. The component name is historical.
+ */
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, FlaskConical } from 'lucide-react';
+import { X, Mail, CreditCard } from 'lucide-react';
 
 interface ClosedBetaModalProps {
   isOpen: boolean;
@@ -7,7 +12,7 @@ interface ClosedBetaModalProps {
   variant?: 'dark' | 'light';
 }
 
-const CONTACT_EMAIL = 'beta@legal.org.ua';
+const CONTACT_EMAIL = 'info@legal.org.ua';
 
 export function ClosedBetaModal({ isOpen, onClose, variant = 'dark' }: ClosedBetaModalProps) {
   const isDark = variant === 'dark';
@@ -49,19 +54,19 @@ export function ClosedBetaModal({ isOpen, onClose, variant = 'dark' }: ClosedBet
               <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl mb-4 ${
                 isDark ? 'bg-zinc-800/80' : 'bg-gray-100'
               }`}>
-                <FlaskConical size={18} className={isDark ? 'text-zinc-400' : 'text-gray-500'} />
+                <CreditCard size={18} className={isDark ? 'text-zinc-400' : 'text-gray-500'} />
               </div>
 
               <h3 className={`text-base font-semibold mb-2 ${
                 isDark ? 'text-zinc-100' : 'text-gray-900'
               }`}>
-                Закрите бета-тестування
+                Оплата тимчасово недоступна
               </h3>
 
               <p className={`text-sm leading-relaxed mb-4 ${
                 isDark ? 'text-zinc-400' : 'text-gray-600'
               }`}>
-                Платформа наразі працює в режимі закритого бета-тестування. Оплата та донати тимчасово недоступні.
+                Не вдалося відкрити сторінку оплати Monobank. Спробуйте ще раз за кілька хвилин.
               </p>
 
               <div className={`rounded-xl px-4 py-3 mb-4 ${
@@ -72,12 +77,12 @@ export function ClosedBetaModal({ isOpen, onClose, variant = 'dark' }: ClosedBet
                 <p className={`text-xs font-medium mb-1.5 ${
                   isDark ? 'text-zinc-300' : 'text-gray-700'
                 }`}>
-                  Щоб отримати доступ:
+                  Якщо помилка повторюється:
                 </p>
                 <p className={`text-xs leading-relaxed ${
                   isDark ? 'text-zinc-500' : 'text-gray-500'
                 }`}>
-                  Напишіть нам — додамо вас до групи бета-тестерів.
+                  Напишіть нам, і ми допоможемо поповнити баланс або виставимо рахунок для оплати.
                 </p>
               </div>
 
