@@ -4,6 +4,7 @@
  *   GET /pricing              live per-query prices (tool_pricing × default tier × NBU rate)
  *   GET /sudova-praktyka, /perevirka-kontragenta, /dlia-advokativ, /mcp-dlia-yurystiv
  *   GET /kalkuliator-sudovoho-zboru   court fee calculator (GET form, computed per request)
+ *   GET /praktykum/slaidy     the practicum deck to present (no answers)
  *   GET /praktykum            interactive practicum for advocates (answers checked against our data)
  *   GET /sitemap-landing.xml
  */
@@ -18,6 +19,7 @@ import { renderCourtFee, FEE_PATH } from '../services/seo/court-fee-render.js';
 import { PraktykumRepository, checkAnswers, cleanName, certCode, certValid } from '../services/seo/praktykum.js';
 import { renderPraktykum, renderCertificate, renderCertInvalid, PRAK_PATH } from '../services/seo/praktykum-render.js';
 import { FEE_YEARS } from '../services/seo/court-fee.js';
+import { renderSlides, SLIDES_PATH } from '../services/seo/praktykum-slides.js';
 
 const TTL_S = 6 * 60 * 60;
 
@@ -80,9 +82,10 @@ export function createMarketingRoutes(db: BaseDatabase, repo = new MarketingRepo
     res.status(200).type('html').set('Cache-Control', 'private, no-store')
       .send(renderPraktykum(d, q, results, !!certCode('x', '2000-01-01')));
   }));
+  r.get(SLIDES_PATH, (_req, res) => send(res, renderSlides()));
   r.get('/sitemap-landing.xml', wrap(async (_req, res) => {
     const d = new Date().toISOString().slice(0, 10);
-    const xml = renderSitemap(['/', '/pricing', FEE_PATH, PRAK_PATH, ...LANDINGS.map(l => l.path)].map(path => ({ path, lastmod: d })));
+    const xml = renderSitemap(['/', '/pricing', FEE_PATH, PRAK_PATH, SLIDES_PATH, ...LANDINGS.map(l => l.path)].map(path => ({ path, lastmod: d })));
     res.status(200).type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
   }));
   return r;

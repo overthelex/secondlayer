@@ -76,7 +76,7 @@ describe('marketing routes', () => {
       expect(res.text).toContain(`<link rel="canonical" href="https://legal.org.ua${p}">`);
     }
     const sm = await request(app()).get('/sitemap-landing.xml');
-    expect(sm.text.match(/<url>/g)).toHaveLength(8);
+    expect(sm.text.match(/<url>/g)).toHaveLength(9);
   });
 
   it('computes the court fee from the query and keeps one canonical', async () => {
@@ -115,5 +115,14 @@ describe('marketing routes', () => {
     const partial = await request(app()).get('/praktykum').query({ ...full, t4: '1', cert: 'issue', name: 'Олена Коваленко' });
     expect(partial.status).toBe(200);
     expect(partial.text).not.toContain('Отримати сертифікат');
+  });
+
+  it('serves the practicum slides without the answers', async () => {
+    const res = await request(app()).get('/praktykum/slaidy');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('Яке рішення AI вигадав?');
+    expect(res.text).not.toContain('4 800 грн');
+    expect(res.text).not.toContain('Вигадана:');
+    expect(res.text).not.toContain('нотатки модератора');
   });
 });
