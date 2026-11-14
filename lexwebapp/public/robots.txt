@@ -26,6 +26,9 @@ Allow: /sud/*
 Allow: /suddia/*
 Allow: /pozytsiia-vs
 Allow: /pozytsiia-vs/*
+Allow: /advokaty
+Allow: /advokaty/*
+Allow: /advokat/*
 
 Disallow: /chat
 Disallow: /profile

@@ -87,6 +87,7 @@ import { createZakonRoutes } from './routes/zakon-routes.js';
 import { createCourtsRoutes } from './routes/courts-routes.js';
 import { CourtsRefresh } from './services/seo/courts-refresh.js';
 import { createVpRoutes } from './routes/vp-routes.js';
+import { createAdvocatesRoutes } from './routes/advocates-routes.js';
 import { VpRefresh } from './services/seo/vp-refresh.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
@@ -694,6 +695,10 @@ class HTTPMCPServer {
     logger.info('Public court/judge pages registered at /sud, /suddia');
     this.app.use('/pozytsiia-vs', createVpRoutes(this.services.db));
     logger.info('Public Grand Chamber pages registered at /pozytsiia-vs');
+    const seoAdvocates = createAdvocatesRoutes(this.services.db);
+    this.app.use('/advokaty', seoAdvocates.lists);
+    this.app.use('/advokat', seoAdvocates.profiles);
+    logger.info('Public advocate pages registered at /advokaty, /advokat');
 
     // Legislation monitoring routes - subscriptions, changes, notifications
     this.app.use('/api/legislation/monitoring', requireJWT as any, createLegislationMonitoringRoutes(this.app_.legislationMonitoringService));
