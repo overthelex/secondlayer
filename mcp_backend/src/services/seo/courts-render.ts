@@ -1,6 +1,6 @@
 /** HTML for /sud (courts) and /suddia (judges). */
 import { SITE, esc, uaDate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
-import type { Court, CourtListItem, StatRow, JudgeLink, Judge, CareerRow } from './courts-repository.js';
+import type { Court, CourtListItem, StatRow, JudgeLink, Judge, CareerRow, Hearings } from './courts-repository.js';
 
 const SOURCE = 'Дані: Єдиний державний реєстр судових рішень, реєстр суддів ДСА; статистику LEX оновлює щодня.';
 
@@ -85,11 +85,23 @@ ${sections}`,
   });
 }
 
+const EMPTY: Hearings = { items: [], asOf: null };
+
+/** Upcoming hearings from the court's published schedule. Parties are never shown. */
+export function hearingsHtml(h: Hearings, withJudge: boolean): string {
+  if (!h.items.length) return '';
+  const head = `<tr><th>Дата і час</th><th>Справа</th>${withJudge ? '<th>Головуючий</th>' : ''}<th>Предмет</th><th>Зала</th></tr>`;
+  const rows = h.items.map(x => `<tr><td>${esc(x.at)}</td><td>${esc(x.caseNumber)}</td>${withJudge ? `<td>${esc(x.presiding ?? '–')}</td>` : ''}<td>${esc(x.subject ?? '–')}</td><td>${esc(x.room ?? '–')}</td></tr>`).join('');
+  return `<h2>Найближчі засідання</h2>
+<div class="scroll"><table class="stats"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
+<p class="meta">За розкладом засідань, який публікує суд (відкриті дані ДСА)${h.asOf ? `, станом на ${uaDate(h.asOf)}` : ''}. Розклад може змінитися: перевіряйте на сайті суду. Сторони справ не показуємо.</p>`;
+}
+
 function cta(title: string, text: string): string {
   return `<section class="cta"><h2>${esc(title)}</h2><p>${esc(text)}</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p></section>`;
 }
 
-export function renderCourt(court: Court, stats: StatRow[], judges: JudgeLink[], today = new Date()): string {
+export function renderCourt(court: Court, stats: StatRow[], judges: JudgeLink[], today = new Date(), hearings: Hearings = EMPTY): string {
   const path = `/sud/${court.slug}`;
   const active = isActive(court.lastDecision, today);
   const lastYear = stats.length ? Math.max(...stats.map(s => s.year)) : null;
@@ -104,9 +116,10 @@ export function renderCourt(court: Court, stats: StatRow[], judges: JudgeLink[],
     : '';
   const descr = `${court.name}: ${facts}.` +
     (lastYear ? ` ${n(yearTotal(stats, lastYear))} рішень у ЄДРСР за ${lastYear} рік.` : '') +
+    (hearings.items.length ? ' Розклад найближчих засідань.' : '') +
     (judges.length ? ` Судді (${judges.length}) і статистика рішень за роками.` : ' Статистика рішень за роками.');
   return page({
-    title: `${court.name}: судді, статистика рішень | LEX`,
+    title: hearings.items.length ? `${court.name}: розклад засідань, судді, статистика | LEX` : `${court.name}: судді, статистика рішень | LEX`,
     description: descr.slice(0, 300),
     path,
     crumbs: [...ROOT, { name: court.name, href: path }],
@@ -125,12 +138,13 @@ ${status}
 ${shares ? `<p>Структура справ за останні три роки: ${esc(shares)}.</p>` : ''}
 <h2>Рішення в ЄДРСР за роками</h2>
 ${statsTable(stats)}
+${hearingsHtml(hearings, true)}
 ${judgesHtml}
 ${cta('Практика цього суду в LEX', 'LEX шукає рішення цього суду за суттю спору, показує позиції суддів і результати оскарження з посиланнями на тексти рішень.')}`,
   });
 }
 
-export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[]): string {
+export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[], hearings: Hearings = EMPTY): string {
   const path = `/suddia/${j.slug}`;
   const listed = j.lastSeen !== null && j.lastSeen === j.registerDate;
   const courtName = j.court?.name ?? j.courtName ?? '';
@@ -148,6 +162,7 @@ export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[]): st
     : '';
   const descr = `${j.fullName}, суддя${courtName ? ` (${courtName})` : ''}.` +
     (lastYear ? ` ${n(yearTotal(stats, lastYear))} рішень у ЄДРСР за ${lastYear} рік.` : '') +
+    (hearings.items.length ? ' Найближчі засідання за розкладом суду.' : '') +
     ' Місце роботи і статистика рішень за роками та видами судочинства.';
   return page({
     title: `${j.fullName}, суддя${courtName ? `: ${courtName}` : ''} | LEX`,
@@ -167,6 +182,7 @@ export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[]): st
 ${status}
 ${shares ? `<p>Структура справ за останні три роки: ${esc(shares)}.</p>` : ''}
 ${statsHtml}
+${hearingsHtml(hearings, false)}
 ${careerHtml}
 ${cta('Практика цього судді в LEX', 'LEX знаходить рішення цього судді за суттю спору, показує типові результати розгляду та їх долю в апеляції й касації.')}`,
   });
