@@ -77,5 +77,7 @@ Disallow: /api/
 Disallow: /api/*
 Disallow: /sse
 Disallow: /mcp
+# The public landing shares the /mcp prefix; the longer Allow wins.
+Allow: /mcp-dlia-yurystiv
 
 Sitemap: https://legal.org.ua/sitemap.xml
