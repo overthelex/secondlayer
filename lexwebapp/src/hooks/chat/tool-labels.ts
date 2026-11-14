@@ -14,7 +14,6 @@ export const TOOL_LABELS: Record<string, string> = {
   count_cases_by_party: 'Справи сторони',
   get_case_text: 'Текст справи',
   analyze_case_pattern: 'Аналіз паттернів',
-  get_similar_reasoning: 'Схоже обґрунтування',
   get_citation_graph: 'Граф цитувань',
   check_precedent_status: 'Статус прецеденту',
   load_full_texts: 'Повні тексти рішень',

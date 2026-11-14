@@ -32,7 +32,6 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
     label: 'Аналіз',
     tools: [
       { name: 'analyze_case_pattern', label: 'Аналіз патерну' },
-      { name: 'get_similar_reasoning', label: 'Схоже обґрунтування' },
       { name: 'get_citation_graph', label: 'Граф цитувань' },
       { name: 'check_precedent_status', label: 'Статус прецеденту' },
     ],
