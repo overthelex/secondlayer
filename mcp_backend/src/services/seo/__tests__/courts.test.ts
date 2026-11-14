@@ -1,3 +1,5 @@
+import { subjectOrNull, presidingJudge, shortName } from '../courts-repository.js';
+import { hearingsHtml } from '../courts-render.js';
 import { translit, slugify } from '../translit.js';
 import { statsTable, kindShares, isActive, renderCourt, renderJudge } from '../courts-render.js';
 import type { Court, Judge, StatRow } from '../courts-repository.js';
@@ -69,5 +71,27 @@ describe('renderJudge', () => {
     expect(html).toContain('У чинному реєстрі суддів не значиться');
     expect(html).toContain('Місця роботи');
     expect(html).not.toContain('"worksFor"');
+  });
+});
+
+describe('upcoming hearings', () => {
+  it('drops subjects that name a person and keeps the rest', () => {
+    expect(subjectOrNull('Про визнання Дроздову Н.О. недієзд. та призн. опікуна')).toBeNull();
+    expect(subjectOrNull('про стягнення заборгованості за кредитним договором')).toBe('про стягнення заборгованості за кредитним договором');
+    expect(subjectOrNull('  ')).toBeNull();
+  });
+
+  it('reads the presiding judge and builds the schedule form of a name', () => {
+    expect(presidingJudge('Головуючий суддя: Агєєв О.В., суддя-доповідач: Агєєв О.В.')).toBe('Агєєв О.В.');
+    expect(presidingJudge(null)).toBeNull();
+    expect(shortName('Берднік Ігор Сергійович')).toBe('Берднік І.С.');
+  });
+
+  it('renders nothing without hearings and never a party column', () => {
+    expect(hearingsHtml({ items: [], asOf: null }, true)).toBe('');
+    const html = hearingsHtml({ asOf: '2026-11-08', items: [{ at: '17.11.2026 09:00', caseNumber: '490/5120/25', presiding: 'Черенкова Н.П.', room: null, subject: null }] }, true);
+    expect(html).toContain('490/5120/25');
+    expect(html).toContain('08.11.2026');
+    expect(html).not.toMatch(/Сторони<\/th>|Учасники/);
   });
 });

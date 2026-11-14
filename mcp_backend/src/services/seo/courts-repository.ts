@@ -33,6 +33,39 @@ export interface Judge {
 
 export interface CareerRow { courtName: string; from: string; to: string }
 
+export interface Hearing {
+  at: string; // "DD.MM.YYYY HH:MI", Kyiv time, as the court publishes it
+  caseNumber: string;
+  presiding: string | null;
+  room: string | null;
+  /** Subject of the case; null when it names a person (see subjectOrNull). */
+  subject: string | null;
+}
+
+export interface Hearings { items: Hearing[]; asOf: string | null }
+
+const NAMED = /[А-ЯІЇЄҐ][а-яіїєґ'’ʼ-]+\s+[А-ЯІЇЄҐ]\.\s*[А-ЯІЇЄҐ]\./;
+
+/** The published schedule sometimes names a party in the subject ("про визнання Іванову Н.О. недієздатною"): drop those. */
+export function subjectOrNull(s: string | null): string | null {
+  const t = (s ?? '').replace(/\s+/g, ' ').trim();
+  if (!t || NAMED.test(t)) return null;
+  return t.length > 140 ? `${t.slice(0, 139)}…` : t;
+}
+
+/** "Головуючий суддя: Черенкова Н.П., суддя-доповідач: …" → "Черенкова Н.П." */
+export function presidingJudge(judges: string | null): string | null {
+  const m = /Головуючий суддя:\s*([^,]+)/.exec(judges ?? '');
+  return m ? m[1].trim() : null;
+}
+
+/** "Берднік Ігор Сергійович" → "Берднік І.С.", the form the schedule uses. */
+export function shortName(fullName: string): string | null {
+  const [sur, first, mid] = fullName.trim().split(/\s+/);
+  if (!sur || !first) return null;
+  return `${sur} ${first[0]}.${mid ? `${mid[0]}.` : ''}`;
+}
+
 const CUR = `SELECT DISTINCT ON (dossier_number) dossier_number, full_name, court_name, last_seen
                FROM judges_current WHERE dossier_number IS NOT NULL
               ORDER BY dossier_number, last_seen DESC NULLS LAST`;
@@ -144,10 +177,53 @@ export class CourtsRepository {
     return r.rows;
   }
 
+  /**
+   * Next 30 days from the published schedule (opendata_court_schedule, reloaded weekly).
+   * Parties (case_involved) are never read. `judge` narrows to hearings where that
+   * judge sits, matched as "Прізвище І.Б." the way the schedule writes it.
+   */
+  async upcomingHearings(courtName: string, judge?: string | null, limit = 15): Promise<Hearings> {
+    const values: unknown[] = [courtName];
+    let judgeCond = '';
+    if (judge) {
+      values.push(`%${judge.replace(/[%_\\]/g, '').replace(/['’ʼ]/g, '_')}%`);
+      judgeCond = `AND judges ILIKE $${values.length}`;
+    }
+    values.push(limit);
+    const r = await this.db.query(
+      `WITH h AS (
+         SELECT DISTINCT ON (case_number, hearing_date) hearing_date, case_number, judges, court_room, case_description, imported_at,
+                to_timestamp(hearing_date, 'DD.MM.YYYY HH24:MI')::timestamp AS ts
+           FROM opendata_court_schedule
+          WHERE court_name = $1 ${judgeCond}
+            AND hearing_date ~ '^\\d{2}\\.\\d{2}\\.\\d{4}'
+            AND case_number IS NOT NULL)
+       SELECT hearing_date, case_number, judges, court_room, case_description,
+              to_char(imported_at, 'YYYY-MM-DD') AS as_of
+         FROM h
+        WHERE ts >= (now() AT TIME ZONE 'Europe/Kyiv') AND ts < (now() AT TIME ZONE 'Europe/Kyiv') + interval '30 days'
+        ORDER BY ts, case_number
+        LIMIT $${values.length}`,
+      values,
+    );
+    // The table is reloaded whole each week, so any row's imported_at dates the snapshot.
+    return { items: r.rows.map(rowToHearing), asOf: r.rows[0]?.as_of ?? null };
+  }
+
   async statsRefreshedAt(): Promise<string | null> {
     const r = await this.db.query(`SELECT to_char(max(refreshed_at), 'YYYY-MM-DD') AS d FROM seo_stats_years`);
     return r.rows[0]?.d ?? null;
   }
+}
+
+function rowToHearing(x: { hearing_date: string; case_number: string; judges: string | null; court_room: string | null; case_description: string | null }): Hearing {
+  return {
+    at: x.hearing_date,
+    caseNumber: x.case_number,
+    presiding: presidingJudge(x.judges),
+    room: x.court_room?.trim() || null,
+    subject: subjectOrNull(x.case_description),
+  };
 }
 
 function rowToCourt(x: Record<string, unknown>): CourtListItem {

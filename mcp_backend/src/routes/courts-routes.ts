@@ -18,7 +18,7 @@ import { logger } from '../utils/logger.js';
 import { cachedHtml } from '../services/seo/seo-cache.js';
 import { esc } from '../services/seo/seo-page.js';
 import { renderSitemap } from '../services/seo/zakon-render.js';
-import { CourtsRepository } from '../services/seo/courts-repository.js';
+import { CourtsRepository, shortName, type Hearings } from '../services/seo/courts-repository.js';
 import { renderCourtsIndex, renderCourt, renderJudge } from '../services/seo/courts-render.js';
 
 const TTL_S = 6 * 60 * 60;
@@ -37,6 +37,13 @@ const sendXml = (res: Response, xml: string) => res.status(200).type('applicatio
 
 export function createCourtsRoutes(db: BaseDatabase): { courts: Router; judges: Router } {
   const repo = new CourtsRepository(db);
+  const NO_HEARINGS: Hearings = { items: [], asOf: null };
+  /** The schedule is a nice-to-have: if it fails, the page still renders without it. */
+  const hearingsOf = (court: string, judge?: string) =>
+    repo.upcomingHearings(court, judge).catch((err: Error) => {
+      logger.warn('[seo] upcoming hearings failed', { court, error: err.message });
+      return NO_HEARINGS;
+    });
   const wrap = (fn: (req: Request, res: Response) => Promise<void>) => (req: Request, res: Response, next: NextFunction) =>
     fn(req, res).catch(err => {
       logger.error('[sud] render failed', { path: req.originalUrl, err: (err as Error).message });
@@ -59,11 +66,13 @@ export function createCourtsRoutes(db: BaseDatabase): { courts: Router; judges: 
   courts.get('/:slug', wrap(async (req, res) => {
     const slug = String(req.params.slug);
     if (!SLUG.test(slug)) return notFound(res);
-    const html = await cachedHtml(`sud:v1:court:${slug}`, TTL_S, async () => {
+    const html = await cachedHtml(`sud:v2:court:${slug}`, TTL_S, async () => {
       const court = await repo.courtBySlug(slug);
       if (!court) return null;
-      const [stats, judges] = await Promise.all([repo.courtStats(court.courtCode), repo.courtJudges(court.courtCode)]);
-      return renderCourt(court, stats, judges);
+      const [stats, judges, hearings] = await Promise.all([
+        repo.courtStats(court.courtCode), repo.courtJudges(court.courtCode), hearingsOf(court.name),
+      ]);
+      return renderCourt(court, stats, judges, new Date(), hearings);
     });
     if (!html) return notFound(res);
     send(res, html);
@@ -79,14 +88,18 @@ export function createCourtsRoutes(db: BaseDatabase): { courts: Router; judges: 
   judges.get('/:slug', wrap(async (req, res) => {
     const slug = String(req.params.slug);
     if (!SLUG.test(slug)) return notFound(res);
-    const html = await cachedHtml(`suddia:v1:${slug}`, TTL_S, async () => {
+    const html = await cachedHtml(`suddia:v2:${slug}`, TTL_S, async () => {
       const j = await repo.judgeBySlug(slug);
       if (!j) return null;
-      const [career, stats] = await Promise.all([
+      const listed = j.lastSeen !== null && j.lastSeen === j.registerDate;
+      const short = shortName(j.fullName);
+      const courtName = j.court?.name ?? j.courtName;
+      const [career, stats, hearings] = await Promise.all([
         repo.judgeCareer(j.dossier),
         j.courtCode !== null && j.judgeKey ? repo.judgeStats(j.courtCode, j.judgeKey) : Promise.resolve([]),
+        listed && short && courtName ? hearingsOf(courtName, short) : Promise.resolve(NO_HEARINGS),
       ]);
-      return renderJudge(j, career, stats);
+      return renderJudge(j, career, stats, hearings);
     });
     if (!html) return notFound(res);
     send(res, html);
