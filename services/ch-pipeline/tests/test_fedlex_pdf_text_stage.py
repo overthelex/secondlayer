@@ -391,7 +391,10 @@ def test_resplit_moves_raw_to_akn_xml_and_cleans_full_text(conn, settings):
     fedlex_pdf_text_stage.resplit(settings, everything=True)
     row = _vrow(conn, vid)
     assert row["akn_xml"] == COL0
-    assert "AS 1950 1" not in row["full_text"] and row["article_count"] == 2
+    # the publication line is furniture; the footnote is kept (2026-11 fix)
+    assert "\nAS 1950 1\n" not in row["full_text"] and row["article_count"] == 2
+    assert row["full_text"].endswith(
+        "\n\n1 Fassung gemäss Ziff. I des BG vom 1. Jan. 1950 (AS 1950 1).")
 
 
 def test_resplit_is_idempotent_reads_akn_xml(conn, settings):

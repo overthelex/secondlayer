@@ -35,9 +35,10 @@ hyphen-rejoining line join, the Article shape, the number normaliser.
 
 split_fedlex_text() returns (articles, text) like pdf_text.split_text().
 The text is the whole clean document (preamble, headings, bodies, sections,
-annexes; see _TextProduct); clean_fedlex_text() returns it alone. It is built
-beside the article split and never feeds back into it: the articles are
-byte-identical to what the splitter produced before the text product existed.
+footnotes, annexes; see _TextProduct); clean_fedlex_text() returns it alone.
+It is built beside the article split and never feeds back into it: the
+articles are byte-identical to what the splitter produced before the text
+product existed.
 """
 from __future__ import annotations
 
@@ -168,7 +169,8 @@ _FOOTNOTE_VOCAB = re.compile(
 _FOOTNOTE_CONT_MAX_INDENT = 14
 
 
-def _strip_footnote_runs(lines: list[str]) -> list[str]:
+def _strip_footnote_runs(lines: list[str], notes: list | None = None,
+                         where: list[int] | None = None) -> list[str]:
     """Remove footnote blocks WHEREVER they sit, not only at a page tail.
 
     _strip_page_furniture reconstructs pages at running-header lines and
@@ -190,9 +192,17 @@ def _strip_footnote_runs(lines: list[str]) -> list[str]:
     numbers ascend, across blank lines when the next non-blank line is a
     numbered continuation. A publication line ("AS 1952 1087") right
     before the block goes with it.
+
+    The text product keeps the footnotes: with ``notes`` given, every block
+    removed is appended to it as (index in the returned list where the block
+    stood, its lines); with ``where`` given, it is filled with the returned
+    list's index of every input line (plus one entry for the end), so a
+    position into ``lines`` can be carried over. Neither changes the return.
     """
     out: list[str] = []
     i, n = 0, len(lines)
+    if where is not None:
+        where[:] = [0] * (n + 1)
 
     def next_nonblank(k: int) -> int:
         while k < n and not lines[k].strip():
@@ -201,6 +211,8 @@ def _strip_footnote_runs(lines: list[str]) -> list[str]:
 
     while i < n:
         line = lines[i]
+        if where is not None:
+            where[i] = len(out)
         m = _FOOTNOTE_LINE.match(line)
         preceded = not out or not out[-1].strip() or bool(_PUBLICATION.match(out[-1]))
         if m and preceded:
@@ -234,10 +246,17 @@ def _strip_footnote_runs(lines: list[str]) -> list[str]:
                         j += 1
                         continue
                     break
+                if notes is not None:
+                    notes.append((len(out), lines[i:j]))
+                if where is not None:
+                    for k in range(i, j):
+                        where[k] = len(out)
                 i = j
                 continue
         out.append(line)
         i += 1
+    if where is not None:
+        where[n] = len(out)
     return out
 
 
@@ -284,11 +303,18 @@ def _is_running_header(line: str, sysnr: str) -> bool:
     return False
 
 
-def _strip_page_furniture(lines: list[str]) -> list[str]:
+def _strip_page_furniture(lines: list[str], notes: list | None = None,
+                          seams: list | None = None) -> list[str]:
     """Remove running headers, folios and footnote blocks from the single
     stream. Pages are reconstructed at the running-header lines (the only
     page boundary that survived the form-feed strip); each page then loses
-    its trailing folio and the footnote block above it."""
+    its trailing folio and the footnote block above it.
+
+    With ``notes`` given, each footnote block cut is appended to it as
+    (index in the returned list of the page seam it stood before, its
+    lines) -- for the text product, which keeps them; with ``seams`` given,
+    the index of every page seam's blank line is appended to it. The return
+    is the same either way."""
     sysnr = _find_sysnr(lines[:8])
     pages: list[list[str]] = [[]]
     for index, line in enumerate(lines):
@@ -302,14 +328,25 @@ def _strip_page_furniture(lines: list[str]) -> list[str]:
             page.pop()
         if page and (_FOLIO.match(page[-1]) or _FOLIO_RIGHT.match(page[-1])):
             page.pop()
-        page = _strip_footnote_block(page)
+        kept = _strip_footnote_block(page)
+        cut = page[len(kept):]
+        page = kept
         while page and not page[-1].strip():
             page.pop()
         out.extend(page)
+        if notes is not None and cut:
+            notes.append((len(out), cut))
+        if seams is not None:
+            seams.append(len(out))
         out.append("")                  # keep a block boundary at the seam
     # page-1 head: drop the SR number line itself
     if sysnr:
+        dropped = [i for i, l in enumerate(out[:6]) if l.strip() == sysnr]
         out = [l for i, l in enumerate(out[:6]) if l.strip() != sysnr] + out[6:]
+        if notes is not None and dropped:
+            notes[:] = [(a - sum(1 for d in dropped if d < a), block) for a, block in notes]
+        if seams is not None and dropped:
+            seams[:] = [a - sum(1 for d in dropped if d < a) for a in seams]
     return out
 
 
@@ -461,9 +498,22 @@ def split_fedlex_text(raw: str, lang: str | None = None) -> tuple[list[akn.Artic
     heading paragraph followed by its body paragraphs, section lines, and
     everything after the tail break (in-force date, annexes, signatures).
     ``lang`` picks the hyphen vocabulary (text_clean.hyphen_vocabulary; no
-    language, or German, means no vocabulary). The articles do not depend
-    on ``lang`` or on anything the text product does."""
-    lines = _strip_footnote_runs(_strip_page_furniture(raw.splitlines()))
+    language, or German, means no vocabulary). The footnotes the furniture
+    strips take out of the article stream stay in the text, one per
+    paragraph after the article the page ended in (see _TextProduct). The
+    articles do not depend on ``lang`` or on anything the text product
+    does."""
+    # the footnotes leave the article stream but not the document: both
+    # strips hand what they cut to the text product, anchored where it stood
+    page_notes: list = []
+    run_notes: list = []
+    page_seams: list[int] = []
+    where: list[int] = []
+    lines = _strip_footnote_runs(
+        _strip_page_furniture(raw.splitlines(), page_notes, page_seams), run_notes, where)
+    notes = sorted([(where[a], block) for a, block in page_notes] + run_notes,
+                   key=lambda note: note[0])
+    seams = sorted({where[a] for a in page_seams})
 
     # layout: where do the headings sit? Column 0, or one indented body
     # column with a marginal column to its left?
@@ -475,7 +525,7 @@ def split_fedlex_text(raw: str, lang: str | None = None) -> tuple[list[akn.Artic
 
     vocabulary = text_clean.hyphen_vocabulary([lang]) if lang else frozenset()
     product = _TextProduct(lines, marginal_layout, body_col, vocabulary,
-                           _find_sysnr(raw.splitlines()[:8]))
+                           _find_sysnr(raw.splitlines()[:8]), notes, seams)
 
     articles: list[akn.Article] = []
     seen: dict[str, int] = {}
@@ -513,6 +563,7 @@ def split_fedlex_text(raw: str, lang: str | None = None) -> tuple[list[akn.Artic
         current = None
 
     for index, line in enumerate(lines):
+        product.reach(index)
         if not line.strip():
             pending_blank = True
             if current is None:
@@ -615,9 +666,57 @@ _TITLE_START = re.compile(
 _PAIR_CONNECTOR = re.compile(r"\s(?:et|und|e|and)\s")
 _RANGE_CONNECTOR = re.compile(r"\s?[-–—]\s?|\s[àa]\s")
 
+# --- the marginal column, line by line --------------------------------------
+# pdftotext -layout does not keep the body column of the marginal layout in
+# one place: measured on the SchKG prints (SR 281.1, de/fr/it, 2026-11) the
+# article headings sit anywhere from column 15 to 22 -- between pages AND
+# within one page ("E. Protokolle    1 Die ..." at 17, the next line at 19).
+# One document-wide cut (the old body_col = the leftmost heading) put the
+# cut inside every marginal fragment longer than it ("oder Wertsachen" at a
+# cut of 15) and spliced the fragment into the body. So the column is read
+# per line, from the line's neighbours: the start of the body on the
+# nearest line above (an indented body line, a heading, or a line already
+# split), else below. A line that opens at column 0 is cut at the gap whose
+# end lies near that column; a line no cut fits stays whole (ruling R28:
+# text no column owns is never discarded, nor guessed apart).
+_COLUMN_LOOK = 8            # lines looked at, up and down, for the column
+_BODY_INDENT = 6            # a line indented this far is body (the margin starts at 0)
+_CUT_BEFORE, _CUT_AFTER = 5, 4   # where a cut may fall around that column
+_SINGLE_CUT_BODY = 20       # a body piece cut off by ONE space is at least this long
+# the body's first word is a paragraph number ("1 Vor Ablauf", "2bis Les")
+_PARAGRAPH_HEAD = re.compile(
+    r"\d{1,2}(?:bis|ter|quater|quinquies|sexies|septies|octies|novies|decies|[a-z])?"
+    r"\s+[A-ZÄÖÜÉÈÀÂÊÎÔÛÇ«„\"(]")
+_ENDS_NUMBER = re.compile(r"(?:^|\s)\d{1,3}$")
+# a footnote's first line inside a cut footnote block: "13    Eingefügt ...",
+# "538 SR 220", "2   [BS 1 3]. Der ..."
+_NOTE_HEAD = re.compile(r"^(\d{1,3})\s+(\S.*)$")
+# a footnote head the shared strips missed (text product only): number at
+# column 0, the four-character number column ("3        Accepté", "100 Fassung"),
+# text opening with a letter, a quote or a bracket
+_MISSED_NOTE_HEAD = re.compile(r"^(\d{1,2}(?=\s{2,})|\d{3}(?=\s))\s+([^\W\d_]|[«»„\"'(\[])")
+_MISSED_NOTE_STEP = 5
+# the popular-vote and amendment wording of the old prints, text product only
+# (the shared _FOOTNOTE_VOCAB feeds the article strip and must not widen)
+_MISSED_NOTE_VOCAB = re.compile(
+    r"^\d{1,3}\s+(?:Accepté|Acceptée|Accettat|Angenommen|Adopté|Approvat|Phrase|Satz|Frase|"
+    r"Abrog|Aufgehoben|Introdu|Eingefügt|Nouvelle teneur|Fassung|Nuovo testo)")
+
 
 def _header_title(match: re.Match) -> str:
     return _WS.sub(" ", match.group("a") or match.group("b")).strip()
+
+
+def _header_key(line: str) -> str | None:
+    """The recurrence key of a header-shaped line: the WHOLE line, number
+    included, whitespace collapsed -- None when the line has no header shape.
+    A running header repeats exactly; a footnote head of the number-first
+    shape ("93        Accepté en votation populaire du 28 nov. 1993 ...")
+    repeats its wording from page to page in the BV 1874 but never its
+    number, so a title-only key took those heads for headers (2026-11
+    review: 24 heads lost in 560210). scripts/fedlex_clean_check.py uses
+    the same key."""
+    return _WS.sub(" ", line).strip() if _HEADER_SHAPE.match(line.strip()) else None
 
 
 class _TextProduct:
@@ -636,11 +735,32 @@ class _TextProduct:
     R16) with glued footnotes stripped, then every marginal title from the
     heading to the next heading, one title level per line -- and body
     paragraphs, one per numbered paragraph. From a tail break on (annexes,
-    in-force date, signatures) lines are read whole, not column-sliced."""
+    in-force date, signatures) lines are read whole, not column-sliced.
+
+    The marginal column is cut line by line (see _COLUMN_LOOK and _cut):
+    the body column drifts by several characters across a pdftotext print.
+
+    Footnotes are kept (they are the act's amendment history). The furniture
+    strips hand every footnote block they cut over as ``notes`` (anchor
+    index into ``lines``, block lines); once the splitter has passed an
+    anchor, the block's footnotes wait for the next paragraph boundary
+    outside an article -- the end of the article the page ended in, or the
+    next blank line outside articles -- and follow there, one footnote per
+    paragraph, number first ("13 Eingefügt durch Ziff. I ... (AS 1995 1227;
+    BBl 1991 III 1)."), continuation lines joined, wrap hyphens rejoined.
+    The publication line above footnote 1 ("AS 11 529 und BS 3 3") stays
+    furniture. The in-text footnote references glued to words are still
+    stripped (_tidy): a reference set loose ("werden. 322") would read as a
+    paragraph number or an amount, and the footnote keeps its number."""
 
     def __init__(self, lines: list[str], marginal_layout: bool, body_col: int,
-                 vocabulary: frozenset[str], sysnr: str | None) -> None:
+                 vocabulary: frozenset[str], sysnr: str | None,
+                 notes: list | None = None, seams: list[int] | None = None) -> None:
         self.lines = lines
+        self.seams = set(seams or [])      # the page seams' blank lines (page strip)
+        self.notes = list(notes or [])     # (anchor, block lines), anchor-ordered
+        self.pending_notes: list[str] = []
+        self._cuts: dict[int, tuple[str, str | None, str | None, int | None]] = {}
         self.marginal = marginal_layout
         self.body_col = body_col
         self.vocabulary = vocabulary
@@ -651,82 +771,308 @@ class _TextProduct:
         self.head = True                   # nothing emitted yet
         self.after_tail = False
         self.art: dict | None = None
+        # a recurring header-shaped line, and whether EVERY occurrence sits
+        # at a page edge (see _is_header)
         titles: dict[str, int] = {}
-        for line in lines:
-            m = _HEADER_SHAPE.match(line.strip())
-            if m:
-                key = _header_title(m)
+        edges: dict[str, bool] = {}
+        for index, line in enumerate(lines):
+            key = _header_key(line)
+            if key:
                 titles[key] = titles.get(key, 0) + 1
-        self.header_titles = titles
+                edges[key] = edges.get(key, True) and self._at_page_edge(index)
+        self.header_titles = {key: count for key, count in titles.items() if edges[key]}
+        # footnote blocks the shared strips missed: out of the article
+        # stream's text, into the notes (see _find_missed_notes)
+        self.skip: set[int] = set()
+        self._find_missed_notes()
+        if marginal_layout:
+            # top-down, so each line's look upward (_column) meets memoised
+            # cuts only -- no recursion through long column-0 runs
+            for index, line in enumerate(lines):
+                if line.strip():
+                    self._cut(index)
 
     # -- line shapes --
 
-    def _kind(self, line: str) -> str:
-        """'body', 'two' (marginal + body), 'full' (one run across the
-        column boundary, or any line outside the marginal layout) or 'left'
-        (marginal column only)."""
+    def _kind(self, index: int) -> str:
+        """'body' (body column only), 'two' (marginal fragment + body),
+        'full' (a line no column cut fits, or any line outside the marginal
+        layout) or 'left' (marginal column only)."""
         if not self.marginal or self.after_tail:
             return "full"
-        left = line[:self.body_col].rstrip()
-        body = line[self.body_col - 1:]
-        if not body.strip():
-            return "left"
-        if not left.strip():
-            return "body"
-        if len(left) >= self.body_col - 1:
-            return "full"
-        return "two"
+        return self._cut(index)[0]
+
+    def _cut(self, index: int) -> tuple[str, str | None, str | None, int | None]:
+        """(kind, marginal fragment, body piece, body start column) of a line
+        in the marginal layout. Memoised: the column of a line is read from
+        the lines above it, which are cut first."""
+        if index in self._cuts:
+            return self._cuts[index]
+        line = self.lines[index]
+        indent = len(line) - len(line.lstrip(" "))
+        if indent >= _BODY_INDENT:
+            result = ("body", None, line.strip(), indent)
+        elif _HEADER_SHAPE.match(line.strip()) and self._is_header(index):
+            result = ("full", None, line.strip(), None)
+        else:
+            column = self._column(index)
+            result = ("full", None, line.strip(), None)
+            if column is not None:
+                best, best_score = None, None
+                for gap in re.finditer(r"\s+", line.rstrip()):
+                    start, end = gap.start(), gap.end()
+                    if not line[:start].strip():
+                        continue
+                    left, right = line[:start].strip(), line[end:]
+                    wide = end - start >= 2
+                    if wide:
+                        # a wide gap after a fragment that fits the margin:
+                        # the body may start further right (an enumeration,
+                        # "teur                       débiteur;")
+                        if start > column + 1 or end < column - _CUT_BEFORE:
+                            continue
+                    elif not column - _CUT_BEFORE <= end <= column + _CUT_AFTER:
+                        continue
+                    score = -abs(end - column) if end <= column + _CUT_AFTER else -_CUT_AFTER
+                    paragraph = bool(_PARAGRAPH_HEAD.match(right))
+                    if wide:
+                        score += 10
+                    elif len(right.strip()) < _SINGLE_CUT_BODY or not (
+                            paragraph or self._continues_body(index, right)
+                            or (abs(end - column) <= 1
+                                and self._continues_margin(index, left))):
+                        # one space is also every gap of a full-width line
+                        # ("Grundgebühr für die Erteilung ..."): a cut there
+                        # needs evidence of its own, and a body line runs
+                        # long ("du concordat à" is all margin)
+                        continue
+                    if paragraph:
+                        score += 6
+                    if _ENDS_NUMBER.search(left):
+                        score -= 6       # "D. Umwandlung 1" | "Forderungen": the 1 is body
+                    if best_score is None or score > best_score:
+                        best, best_score = (left, right.strip(), end), score
+                if best is not None:
+                    result = ("two", best[0], best[1], best[2])
+                elif len(line.rstrip()) <= column + 2:
+                    result = ("left", line.strip(), None, None)
+        self._cuts[index] = result
+        return result
+
+    def _continues_body(self, index: int, right: str) -> bool:
+        """Does ``right`` finish a word the body broke on the line above
+        ("... das Konkurs-" / "gericht auf Antrag")?"""
+        k = index - 1
+        while k >= 0 and not self.lines[k].strip():
+            k -= 1
+        if k < 0:
+            return False
+        piece = self._cut(k)[2]
+        return bool(piece and re.search(r"[^\W\d_]-$", piece) and right[:1].islower())
+
+    def _continues_margin(self, index: int, left: str) -> bool:
+        """Is ``left`` a marginal fragment by its own shape -- it opens a
+        title level ("1. Schriftlich und") -- or because the fragment above
+        is visibly unfinished ("a. Annotation au" / "registre foncier")?"""
+        if _TITLE_START.match(left):
+            return True
+        k = index - 1
+        while k >= 0 and not self.lines[k].strip():
+            k -= 1
+        fragment = self._cut(k)[1] if k >= 0 else None
+        return bool(fragment and _margin_continues(fragment))
+
+    def _column(self, index: int) -> int | None:
+        """The body column at ``index``: where the body starts on the nearest
+        line above (within _COLUMN_LOOK non-blank lines) that has a body, else
+        on the nearest indented line below. None: no evidence near."""
+        seen, k = 0, index - 1
+        while k >= 0 and seen < _COLUMN_LOOK:
+            if self.lines[k].strip() and k not in self.skip:
+                seen += 1
+                start = self._cut(k)[3]
+                if start is not None:
+                    return start
+            k -= 1
+        seen, k = 0, index + 1
+        while k < len(self.lines) and seen < _COLUMN_LOOK:
+            line = self.lines[k]
+            if line.strip() and k not in self.skip:
+                seen += 1
+                indent = len(line) - len(line.lstrip(" "))
+                if indent >= _BODY_INDENT:
+                    return indent
+            k += 1
+        return None
 
     def _has_body_neighbour(self, index: int) -> bool:
         for step in (-1, 1):
             k = index + step
             while 0 <= k < len(self.lines) and not self.lines[k].strip():
                 k += step
-            if 0 <= k < len(self.lines) and self._kind(self.lines[k]) in ("body", "two"):
+            if 0 <= k < len(self.lines) and self._kind(k) in ("body", "two"):
                 return True
         return False
 
-    def _at_seam(self, index: int) -> bool:
-        """Next to a folio line or a run of two or more blank lines."""
+    def _find_missed_notes(self) -> None:
+        """Footnote blocks the shared strips left in the stream (the shared
+        rules stay as they are: the articles must not move). The BV 1874
+        prints hang the continuation at column 9-10, deeper than the page
+        strip's 2-8, and open with "Accepté en votation populaire", which the
+        shared vocabulary lacks; the block then sits mid-sentence, between the
+        two halves of a paragraph split by the page seam.
+
+        A block: a footnote head at column 0 ("3        Accepté ...",
+        _MISSED_NOTE_HEAD) after a blank line, once a strip has anchored a
+        footnote earlier in the document, its number continuing the
+        footnote sequence (above the last footnote seen, at most
+        _MISSED_NOTE_STEP above it), then hanging continuation lines (indented
+        to the head's text column) and further heads with the next numbers,
+        ending at the bottom of its page (_before_page_break: only blank lines
+        to the page seam, a folio or a running header -- a block with more of
+        its page after it is a paragraph of the article). Accepted when it
+        hangs, opens with footnote vocabulary (the shared list plus
+        _MISSED_NOTE_VOCAB), or holds two heads. Its lines leave the text's
+        article/outside stream (self.skip) and join self.notes, anchored at
+        the head."""
+        lines, n = self.lines, len(self.lines)
+        anchored = sorted(self.notes, key=lambda note: note[0])
+        found: list = []
+        last, a, i = 0, 0, 0
+
+        def numbers(block: list[str]) -> list[int]:
+            return [int(m.group(1)) for line in block
+                    if not line.startswith(" ") and (m := _NOTE_HEAD.match(line))]
+
+        while i < n:
+            while a < len(anchored) and anchored[a][0] <= i:
+                last = max([last] + numbers(anchored[a][1]))
+                a += 1
+            head = _MISSED_NOTE_HEAD.match(lines[i])
+            # only once the document's footnotes have begun (a strip has
+            # anchored one before this line): "2   Die Kantone ..." with a
+            # hanging indent is a paragraph until then
+            if head and a > 0 and (i == 0 or not lines[i - 1].strip()):
+                number = int(head.group(1))
+                if last < number <= last + _MISSED_NOTE_STEP:
+                    column = head.start(2)
+                    heads, hanging, j = [number], False, i + 1
+                    while j < n and lines[j].strip():
+                        nxt = _MISSED_NOTE_HEAD.match(lines[j])
+                        if nxt and heads[-1] < int(nxt.group(1)) <= heads[-1] + 3:
+                            heads.append(int(nxt.group(1)))
+                            column = nxt.start(2)
+                            j += 1
+                            continue
+                        indent = len(lines[j]) - len(lines[j].lstrip(" "))
+                        if abs(indent - column) <= 1 and not _HEADING.match(lines[j]):
+                            hanging = True
+                            j += 1
+                            continue
+                        break
+                    # at a page bottom, never with more of the page after
+                    # it (the same article going on is body, not a footnote)
+                    at_bottom = (j >= n or not lines[j].strip()) and self._before_page_break(j)
+                    vocab = bool(_FOOTNOTE_VOCAB.match(lines[i]) or _MISSED_NOTE_VOCAB.match(lines[i]))
+                    if at_bottom and (hanging or vocab or len(heads) > 1):
+                        found.append((i, lines[i:j]))
+                        self.skip.update(range(i, j))
+                        last = heads[-1]
+                        i = j
+                        continue
+            i += 1
+        if found:
+            self.notes = sorted(self.notes + found, key=lambda note: note[0])
+
+    def _at_page_edge(self, index: int) -> bool:
+        """The first or the last non-blank line of a page: only blank lines
+        between it and a page seam (the page strip's seams, or a folio
+        line), or the very start / end of the stream."""
+        for step in (-1, 1):
+            k = index + step
+            while 0 <= k < len(self.lines) and not self.lines[k].strip() and k not in self.seams:
+                k += step
+            if k < 0 or k >= len(self.lines) or k in self.seams:
+                return True
+            if _BARE_NUMBER.match(self.lines[k].strip()):
+                return True
+        return False
+
+    def _before_page_break(self, end: int) -> bool:
+        """Is the block ending before ``end`` the bottom of its page: only
+        blank lines between it and a page seam, a folio or a running header,
+        or the end of the stream? More text of the page (the article going
+        on) means it is not."""
+        k = end
+        while k < len(self.lines) and not self.lines[k].strip():
+            if k in self.seams:
+                return True
+            k += 1
+        if k >= len(self.lines):
+            return True
+        nxt = self.lines[k].strip()
+        return bool(_BARE_NUMBER.match(nxt) or (self.sysnr and _is_running_header(self.lines[k], self.sysnr)))
+
+    def _run_has_body(self, index: int) -> bool:
+        """Is there an indented body line in the run of non-blank lines that
+        holds ``index``? Outside articles, a column-0 line beside no body
+        (the preamble's "beschliesst:", "gestützt auf  Artikel 64 ...")
+        belongs to no marginal column and is read whole, in place."""
+        for step in (-1, 1):
+            k = index + step
+            while 0 <= k < len(self.lines) and self.lines[k].strip():
+                line = self.lines[k]
+                if k not in self.skip and len(line) - len(line.lstrip(" ")) >= _BODY_INDENT:
+                    return True
+                k += step
+        return False
+
+    def _beside_folio(self, index: int) -> bool:
+        """Right next to a folio line (a bare page number)."""
         for step in (-1, 1):
             k = index + step
             if 0 <= k < len(self.lines) and _BARE_NUMBER.match(self.lines[k].strip()):
-                return True
-            k2 = index + 2 * step
-            if (0 <= k < len(self.lines) and 0 <= k2 < len(self.lines)
-                    and not self.lines[k].strip() and not self.lines[k2].strip()):
                 return True
         return False
 
     def _is_header(self, index: int) -> bool:
         """A running header the page strip missed: the header shape AND one
-        of: its number is the learnt SR number, its title recurs, or it sits
-        at a page seam. A fee row ("Gebühr für eine Kopie      10") has the
-        shape but none of the corroboration and is kept."""
+        of: its number is the learnt SR number, the whole line recurs (on
+        two pages or more; _header_key) with every occurrence at a page edge
+        (_at_page_edge: a table row repeated word for word sits mid-page),
+        or a folio stands right beside it (number-first lines only with an
+        SR-shaped, dotted number). Nothing else
+        makes such a line furniture (ruling R28): a fee or table row
+        ("Gebühr für eine Kopie      10", "c. pour les autocars   650",
+        "Turquie   12 juin   1907   12 juin   1907") has the shape, and the
+        last row of a table sits at a page seam -- above the footnote block,
+        blank lines on either side -- exactly where a missed header would.
+        A seam of blank lines alone is therefore no evidence (the 2026-11
+        prod gate lost those rows to it: 560289, 560210)."""
         m = _HEADER_SHAPE.match(self.lines[index].strip())
         if not m:
             return False
         number = m.group("an") or m.group("bn")
         if self.sysnr and number == self.sysnr:
             return True
-        if self.header_titles.get(_header_title(m), 0) >= 2:
+        if self.header_titles.get(_header_key(self.lines[index]), 0) >= 2:
             return True
-        return self._at_seam(index)
+        if m.group("bn") and "." not in number:
+            # number first, and no SR shape: a footnote head ("93    Accepté
+            # ...") sits right above the folio as often as a header below it
+            return False
+        return self._beside_folio(index)
 
     def _split(self, index: int) -> tuple[str | None, str | None]:
         """(marginal fragment, body piece) of the line at ``index``; either
         is None when absent. A missed running header yields neither."""
-        line = self.lines[index]
-        kind = self._kind(line)
-        if kind == "left":
-            return line.strip(), None
-        if kind == "body":
-            return None, line[self.body_col - 1:].strip()
-        if kind == "two":
-            return line[:self.body_col].strip(), line[self.body_col - 1:].strip()
-        if self._is_header(index):
-            return None, None
-        return None, line.strip()
+        kind = self._kind(index)
+        if kind == "full":
+            if self._is_header(index):
+                return None, None
+            return None, self.lines[index].strip()
+        _, fragment, piece, _ = self._cut(index)
+        return fragment, piece
 
     # -- joining --
 
@@ -759,6 +1105,8 @@ class _TextProduct:
         if self.open:
             self.paragraphs.append("\n".join(self.open))
             self.open = []
+        if self.art is None:
+            self._emit_notes()
 
     def _emit_line(self, piece: str) -> None:
         tidy = _tidy(piece)
@@ -773,6 +1121,39 @@ class _TextProduct:
         else:
             self.open.append(tidy if not piece.endswith("-") else _tidy(piece[:-1]) + "-")
 
+    # -- footnotes --
+
+    def _footnotes(self, block: list[str]) -> list[str]:
+        """A cut footnote block -> one paragraph per footnote, "N text". A
+        line that opens no footnote continues the one before it; the
+        publication line ("AS 11 529 und BS 3 3") is dropped. Text before
+        the first footnote (an indented line the cut took along) is kept as
+        its own paragraph -- never dropped."""
+        out: list[str] = []
+        for line in block:
+            if not line.strip() or _PUBLICATION.match(line):
+                continue
+            head = _NOTE_HEAD.match(line)
+            if head and not line.startswith(" "):
+                out.append(f"{head.group(1)} {head.group(2).strip()}")
+            elif out:
+                out[-1] = self._append(out[-1], line.strip())
+            else:
+                out.append(line.strip())
+        return [t for t in (_WS.sub(" ", t).strip() for t in out) if t]
+
+    def reach(self, index: int) -> None:
+        """The splitter is at ``index``: footnote blocks anchored at or
+        before it are due at the next paragraph boundary."""
+        while self.notes and self.notes[0][0] <= index:
+            self.pending_notes.extend(self._footnotes(self.notes.pop(0)[1]))
+
+    def _emit_notes(self) -> None:
+        if self.pending_notes:
+            self.paragraphs.extend(self.pending_notes)
+            self.pending_notes = []
+            self.head = False
+
     # -- events from the splitter --
 
     def blank(self) -> None:
@@ -782,14 +1163,19 @@ class _TextProduct:
         if _TAIL_BREAK.match(self.lines[index]):
             self.tail(index)
             return
-        line = self.lines[index]
+        if index in self.skip:
+            return
         fragment, piece = self._split(index)
+        if fragment is not None and not self._run_has_body(index):
+            # column-0 text beside no body: no marginal column owns it (R28),
+            # read it whole and in place
+            fragment, piece = None, _WS.sub(" ", self.lines[index]).strip()
         if fragment is not None and piece is None and not self._has_body_neighbour(index):
             piece, fragment = fragment, None     # a title line of the act, not a margin
         if fragment is not None:
             self.open_fragments.append(fragment)
         if piece is not None:
-            self._emit_line(piece if self._kind(line) != "full" else line.strip())
+            self._emit_line(piece)
 
     def tail(self, index: int) -> None:
         """The tail-break line ("Anhang", "Datum des Inkrafttretens", ...),
@@ -811,7 +1197,11 @@ class _TextProduct:
         self.after_tail = False
         fragments: list[str] = []
         if self.marginal:
-            left = self.lines[index][:self.body_col].strip()
+            # the heading's line may carry a marginal fragment left of it;
+            # cut where the heading starts, not at a document-wide column
+            line = self.lines[index]
+            label = line.find(text.strip()[:4], max(0, self.body_col - 1))
+            left = line[:label].strip() if label > 0 else ""
             if left:
                 fragments.append(left)
         if heading.group(3):
@@ -820,7 +1210,7 @@ class _TextProduct:
                     "fragments": fragments, "body": []}
 
     def article_line(self, index: int) -> None:
-        if self.art is None:
+        if self.art is None or index in self.skip:
             return
         fragment, piece = self._split(index)
         if fragment is not None:
@@ -843,6 +1233,7 @@ class _TextProduct:
             paragraph = self._append(paragraph, piece)
         if _tidy(paragraph):
             self.paragraphs.append(_tidy(paragraph))
+        self._emit_notes()
 
     @staticmethod
     def _printed_heading(heading: re.Match, text: str, number: str) -> str:
@@ -870,6 +1261,7 @@ class _TextProduct:
         return f"{label} {shown}"
 
     def text(self) -> str:
+        self.reach(len(self.lines))
         if self.art is not None:
             self.end_article()
         self._flush()

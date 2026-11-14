@@ -1178,6 +1178,18 @@ python scripts/text_damage_probe.py --dsn "$CHPIPE_DSN" \
   --out /data/ch-corpus/logs/text-damage-phaseA-pilot.json
 ```
 
+Before the pilot, run the read-only clean-text gate (exit 0 required):
+
+```bash
+python scripts/fedlex_clean_check.py --limit 200            # random sample
+python scripts/fedlex_clean_check.py --limit 200 --ordered
+```
+
+It recomputes the clean text from the raw and gates on word/token loss, footnote heads
+starting a paragraph and a per-edition content-ratio floor. The first pilot (14.11.2026,
+rolled back) dropped footnotes and spliced the marginal column into the body; that is
+what this gate exists to catch.
+
 Re-run the two fingerprint queries into `phaseA-*-after.txt` and `diff` them.
 Pass: the article count and `sum(article_count)` are identical, and on the
 touched editions `glued_refs` share < 0.5 % and `hyphen_breaks` share < 1 %.
@@ -1223,10 +1235,10 @@ then fill the decision table (fill in after the 1,000-row pilot):
 
 | measured | value |
 |---|---|
-| seconds / row | _TBD_ |
-| `idx_ch_court_fts` size before / after 1,000 rows | _TBD_ |
-| `CHPIPE_BATCH` | _TBD_ |
-| nightly window (outside 10:15 Kyiv) | _TBD_ |
+| seconds / row | 0.087 (1,000 CH_BVGer rows in 87 s, 14.11.2026); full backfill about 21-29 rows/s |
+| `idx_ch_court_fts` size before / after 1,000 rows | 8,163 MB / 8,163 MB (+49 KB, pending list) |
+| `CHPIPE_BATCH` | default |
+| nightly window (outside 10:15 Kyiv) | backfill ran 00:39 onward next to the nightly delta without errors |
 
 If > 50 ms/row keep `fastupdate = on` (default) and plan the REINDEX; if the
 GIN grows > 1 GB over the full run the REINDEX is mandatory.

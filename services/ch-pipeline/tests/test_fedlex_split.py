@@ -355,6 +355,7 @@ def test_marginal_layout_footnote_block_does_not_leak_into_the_body():
 # the splitter at 03ae9520, BEFORE the text product existed.
 
 import json
+import re
 from pathlib import Path
 
 from chpipe.fedlex_split import clean_fedlex_text
@@ -366,6 +367,58 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 # Zivilgesetzbuches. BG   220") and a folio ("8") at a page seam that the
 # furniture strip does not catch (the cut has no SR number at its head).
 SR220_MARGINAL = (_FIXTURES / "pdftext_fedlex_sr220_marginal.txt").read_text()
+
+# SchKG SR 281.1 de 2020-01-01 (version_id 560275): pages 1-5 (Art. 1-12),
+# the page holding Art. 37-39 and the one holding Art. 78-80, cut from the
+# stored full_text. Marginal-column layout whose body column drifts from
+# column 15 to 22 between pages and inside a page (pdftotext -layout), and
+# whose marginal titles wrap over up to five lines -- the 2026-11 pilot spliced
+# "rung von Geld" / "oder Wertsachen" into the Art. 9 body here.
+SCHKG_DE = (_FIXTURES / "pdftext_fedlex_schkg_281_1_de_margins.txt").read_text()
+# LP RS 281.1 fr 1996-07-01 (version_id 560212): pages 1-3 (Art. 1-9).
+SCHKG_FR = (_FIXTURES / "pdftext_fedlex_schkg_281_1_fr_margins.txt").read_text()
+# Cst 1874 RS 101 fr (version_id 560210): the head and the page of the
+# transitional Art. 19-21, whose fee table ends right above the page's
+# footnote block ("c. pour les autocars      650"), then the next page's
+# running header.
+CST_FEE_ROWS = (_FIXTURES / "pdftext_fedlex_cst_101_fr_fee_rows.txt").read_text()
+# Cst 1874 RS 101 fr (version_id 560210): the head and two pages of Art.
+# 41bis/41ter with footnotes 88-98. Their continuation lines hang at column
+# 9-10 (deeper than the page strip's 2-8) and their text opens with
+# "Accepté en votation populaire", which the shared vocabulary lacks: the
+# shared strips miss these blocks, so they stay in the article stream.
+CST_FOOTNOTES = (_FIXTURES / "pdftext_fedlex_cst_101_fr_footnotes_93_98.txt").read_text()
+# The shape of RS 0.515.102 fr (version_id 560289): a treaty's scope table
+# whose last row ("Turquie ... 1907") stands right above the page's footnote
+# block -- the shape of a missed running header ("title   number") at a
+# page seam, with no folio, no SR number and no repetition to back it.
+TREATY_TABLE = """\
+0.515.102
+Convention
+concernant les droits et les devoirs des Puissances neutrales
+
+Conclue le 18 octobre 1907
+
+Art. 1
+Le territoire des Puissances neutres est inviolable.
+
+Champ d’application le 1er janvier 20204
+Thaïlande                                 4 septembre     1900          4 septembre        1900
+Turquie                                  12 juin          1907         12 juin             1907
+
+
+
+
+4     Une version du champ d’application mise à jour est publiée sur le site web du DFAE
+
+                                                                                        3
+0.515.102                                                                       Neutralité
+
+
+Art. 2
+Il est interdit aux belligérants de faire passer à travers le territoire d’une Puissance
+neutre des troupes.
+"""
 
 # (e_id, article_number, marginal_note, text, ordinal) of COL0, captured from
 # the old splitter.
@@ -390,6 +443,9 @@ _GOLDEN_INPUTS = {
     "COL0": COL0, "MARGINAL": MARGINAL, "ROMAN": ROMAN, "REPEALS": REPEALS,
     "DECIMAL": DECIMAL, "MIDSTREAM": MIDSTREAM, "MARGINAL_MIDSTREAM": MARGINAL_MIDSTREAM,
     "NOTE": _NOTE, "CITATION": _CITATION, "SR220_MARGINAL": SR220_MARGINAL,
+    "SCHKG_DE": SCHKG_DE, "SCHKG_FR": SCHKG_FR,
+    "CST_FEE_ROWS": CST_FEE_ROWS, "TREATY_TABLE": TREATY_TABLE,
+    "CST_FOOTNOTES": CST_FOOTNOTES,
 }
 
 
@@ -403,7 +459,7 @@ def test_text_keeps_preamble_and_tail():
     assert text.startswith("Bundesverfassung\nder Schweizerischen Eidgenossenschaft")
     assert "Angenommen in der Volksabstimmung vom 19. April 1874" in text
     assert "Erster Abschnitt: Allgemeine Bestimmungen" in text
-    assert "AS 1 1; BS 1 3" not in text                 # footnote block gone
+    assert "AS 1 1; BS 1 3" not in text                 # the publication line is furniture
     assert "Übersetzung1" not in text and "\n1\n" not in text
     # headings and bodies in reading order, paragraphs one blank line apart
     assert "Art. 4 Grundsatz\n\nDie Kantone sind souverän" in text
@@ -534,13 +590,272 @@ def test_articles_equal_golden_capture_on_every_fixture():
             assert _rows(split_fedlex_text(raw, lang)[0]) == golden[name], (name, lang)
 
 
-def test_text_product_equals_the_375d1595_capture_on_every_fixture():
-    # ruling R27: the text product (second return value) stays byte-identical
-    # to commit 375d1595 for every fixture x lang -- the Task 3 resplit of the
-    # 51K fedlex_pdf editions is gated on it
+def test_text_product_equals_the_golden_capture_on_every_fixture():
+    # the text product (second return value) for every fixture x lang, a
+    # regression net for the full resplit. Captured at 375d1595 (ruling
+    # R27) and re-captured by the 2026-11 margins/footnotes fix, which
+    # changed the text product on purpose (the articles did not move: see
+    # the golden test above)
     golden = json.loads((_FIXTURES / "fedlex_split_golden_text.json").read_text())
     assert set(golden) == set(_GOLDEN_INPUTS)
     for name, raw in _GOLDEN_INPUTS.items():
         assert split_fedlex_text(raw)[1] == golden[name][""], name
         for lang in ("de", "fr", "it"):
             assert split_fedlex_text(raw, lang)[1] == golden[name][lang], (name, lang)
+
+
+# --- the marginal column and the footnotes (2026-11 pilot defects) -----------
+
+def _lines(text):
+    return text.split("\n")
+
+
+def test_marginal_column_of_art_9_is_not_spliced_into_the_body():
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    assert ("Art. 9 F. Aufbewahrung von Geld oder Wertsachen\n\n"
+            "Die Betreibungs- und die Konkursämter haben Geldsummen, Wertpapiere "
+            "und Wertsachen, über welche nicht binnen drei Tagen nach dem Eingange "
+            "verfügt wird, der Depositenanstalt zu übergeben.") in text
+    for line in _lines(text):
+        assert "Wert- oder" not in line and "Wertsachen papiere" not in line
+        assert "rung von Geld" not in line or line.startswith("Art. 9 F.")
+
+
+def test_marginal_titles_wrapping_over_several_lines_stay_whole():
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    assert ("Art. 38 A. Gegenstand der Schuldbetreibung und Betreibungsarten\n\n"
+            "1 Auf dem Wege der Schuldbetreibung werden die Zwangsvollstreckungen "
+            "durchgeführt, welche auf eine Geldzahlung oder eine Sicherheitsleistung "
+            "gerichtet sind.") in text
+    assert ("Art. 79 D. Beseitigung des Rechtsvorschlages\n"
+            "1. Im Zivilprozess oder im Verwaltungsverfahren\n\n"
+            "Ein Gläubiger, gegen dessen Betreibung Rechtsvorschlag erhoben worden ist, "
+            "hat seinen Anspruch im Zivilprozess oder im Verwaltungsverfahren geltend "
+            "zu machen. Er kann die Fortsetzung der Betreibung nur aufgrund eines "
+            "vollstreckbaren Entscheids erwirken, der den Rechtsvorschlag ausdrücklich "
+            "beseitigt.") in text
+    # the body column at 17 on two lines and 19 on the next (one page)
+    assert ("Art. 8 E. Protokolle und Register\n1. Führung, Beweiskraft und Berichtigung"
+            "\n\n1 Die Betreibungs- und die Konkursämter führen über ihre Amtstätigkeiten "
+            "sowie die bei ihnen eingehenden Begehren und Erklärungen Protokoll; "
+            "sie führen die Register.") in text
+    # a marginal fragment glued to the body by ONE space ("Sachwalterbe- 1 Vor"),
+    # the body at column 15 on the heading's line and 19 below it
+    assert ("Art. 304 H. Sachwalterbericht; öffentliche Bekanntmachung der Verhandlung "
+            "vor dem Nachlassgericht\n\n1 Vor Ablauf der Stundung unterbreitet der "
+            "Sachwalter dem Nachlassgericht alle Aktenstücke. Er orientiert in seinem "
+            "Bericht über bereits erfolgte Zustimmungen und empfiehlt die Bestätigung "
+            "oder Ablehnung des Nachlassvertrages.") in text
+    assert "Art. 10 G. Ausstandspflicht\n\n1 Die Beamten" in text
+
+
+def test_marginal_column_fr():
+    text = clean_fedlex_text(SCHKG_FR, "fr")
+    assert ("Art. 9 F. Dépôt d'espèces et d'objets de prix\n\n"
+            "Les offices de poursuites et de faillites sont tenus de consigner à la "
+            "caisse des dépôts et consignations les sommes, valeurs et objets de prix "
+            "dont ils n'ont pas emploi dans les trois jours.") in text
+    assert "Art. 1 A. Arrondissements de poursuite et de faillite\n\n" in text
+
+
+def test_footnotes_are_kept_one_per_paragraph_after_the_article():
+    text = clean_fedlex_text(SCHKG_DE, "de")
+    # page 4's notes follow Art. 9, the article the page ended in
+    assert ("der Depositenanstalt zu übergeben.\n\n"
+            "13 Eingefügt durch Ziff. I des BG vom 16. Dez. 1994, in Kraft seit "
+            "1. Jan. 1997 (AS 1995 1227; BBl 1991 III 1).\n\n"
+            "14 Ausdruck gemäss Anhang 1 Ziff. II 17 der Zivilprozessordnung vom "
+            "19. Dez. 2008, in Kraft seit 1. Jan. 2011 (AS 2010 1739; BBl 2006 7221)."
+            "\n\n15 Eingefügt durch Ziff. I des BG vom 16. Dez. 2016") in text
+    # a wrap hyphen inside a footnote is joined
+    assert ("10 Fassung gemäss Anhang Ziff. 4 des BG vom 15. Juni 2018 (Revision des "
+            "Verjährungsrechts), in Kraft seit 1. Jan. 2020") in text
+    # every footnote of the excerpt is there, each opening its own paragraph
+    heads = re.findall(r"^(\d{1,3}) +(\S+ \S+)", SCHKG_DE, re.MULTILINE)
+    assert len(heads) == 35
+    for number, words in heads:
+        assert f"\n\n{number} {words}" in text, number
+    # the publication line and the running headers are still furniture
+    assert "AS 11 529 und BS 3 3" not in text
+    assert "Ordentliches Verfahren bei Schuldbetreibung und Konkurs" not in text
+
+
+def test_footnotes_fr():
+    text = clean_fedlex_text(SCHKG_FR, "fr")
+    assert ("\n\n12 Introduit par le ch. I de la LF du 16 déc. 1994, en vigueur depuis "
+            "le 1er janv. 1997 (RO 1995 1227 1309; FF 1991 III 1).") in text
+    assert "\n\n2 RS 101" in text
+
+
+def test_footnotes_kept_in_the_col0_layout():
+    text = clean_fedlex_text(COL0)
+    assert ("\n\n2 Angenommen in der Volksabstimmung vom 24. Sept. 1978, in Kraft seit "
+            "1. Jan. 1979 (AS 1978 1579).") in text
+    assert "\n\n3 Angenommen in der Volksabstimmung vom 14. Juni 1981 (AS 1981 1243)." in text
+    assert "AS 1 1; BS 1 3" not in text
+
+
+def test_footnotes_found_mid_stream_are_kept_too():
+    _, text = split_fedlex_text(MIDSTREAM)
+    assert "Fassung gemäss" in text and "Eingefügt durch" in text
+    _, text = split_fedlex_text(MARGINAL_MIDSTREAM)
+    assert ("61 Fassung gemäss Ziff. I 1 des BG vom 25. Juni 1976, in Kraft seit "
+            "1. Jan. 1978 (AS 1977 237 264; BBl 1974 II 1).") in text
+
+
+def test_column_zero_text_no_column_owns_is_kept():
+    # ruling R28: a full-width line in the marginal layout (the preamble,
+    # a line pdftotext set from column 0 across the column boundary) is kept
+    # whole, never cut into a margin and a body -- and in its place: a short
+    # column-0 line ("beschliesst:") with no body beside it is no marginal
+    # fragment, so it is not hoisted above the lines before it
+    preamble = ("Die Bundesversammlung der Schweizerischen Eidgenossenschaft,\n"
+                "gestützt auf Artikel 64 der Bundesverfassung (BV),\n"
+                "beschliesst:\n\nErster Titel: Allgemeine Bestimmungen")
+    assert preamble in clean_fedlex_text(SCHKG_DE, "de")
+    # a double space near the body column inside such a line cuts nothing
+    spaced = SCHKG_DE.replace("gestützt auf Artikel 64", "gestützt auf  Artikel 64")
+    assert preamble in clean_fedlex_text(spaced, "de")
+
+
+# --- R28 at page seams: a table row is not a running header ------------------
+
+def test_last_table_row_before_the_footnote_block_is_kept():
+    # 560289: the scope table's last row looks like "title   number" at a
+    # seam; only the SR number, a folio, a publication line or a repeat on
+    # two pages may make a line furniture
+    text = clean_fedlex_text(TREATY_TABLE, "fr")
+    assert "Turquie 12 juin 1907 12 juin 1907" in text
+    assert "Thaïlande 4 septembre 1900 4 septembre 1900" in text
+    assert "Neutralité" not in text                 # the real running header
+    assert "\n\n4 Une version du champ d’application mise à jour" in text
+
+
+def test_last_fee_row_before_the_footnote_block_is_kept():
+    # 560210: "c. pour les autocars   650" above footnote 179
+    text = clean_fedlex_text(CST_FEE_ROWS, "fr")
+    assert "c. pour les autocars 650" in text
+    assert "– de plus de 10 tonnes 2000" in text
+    assert "Constitution fédérale 101" not in text    # running header still dropped
+    assert "\n\n179 Accepté en votation populaire du 23 sept. 1990" in text
+
+
+def test_missed_header_next_to_a_folio_is_still_dropped():
+    # the SR220 excerpt (no SR number learnt) and FEES: the header shape
+    # beside a folio is a page seam, the folio is the corroboration
+    assert "Ergänzung des Schweizerischen" not in clean_fedlex_text(SR220_MARGINAL)
+    assert "Verordnung über die Gebühren" not in clean_fedlex_text(FEES)
+
+
+# --- footnote heads that read like headers; footnotes the strips miss -------
+
+# two footnotes whose wording repeats: the number-first header shape
+# ("93        Accepté ...") must not make them a recurring running header
+REPEATED_NOTES = ("101\nConstitution\n\nArt. 1\nPremier texte.\n\n"
+                  "1        Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994\n"
+                  "         - RO 1994 268).\n\nArt. 2\nSecond texte.\n\n"
+                  "2        Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994\n"
+                  "         - RO 1994 270).")
+
+
+def test_repeated_footnote_heads_are_not_running_headers():
+    text = clean_fedlex_text(REPEATED_NOTES, "fr")
+    assert "Premier texte. - RO" not in text
+    assert ("\n\n1 Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994 "
+            "- RO 1994 268).") in text
+    assert ("\n\n2 Accepté en votation populaire du 28 nov. 1993 (ACF du 27 janv. 1994 "
+            "- RO 1994 270).") in text
+
+
+def test_footnotes_the_strips_miss_leave_the_sentence():
+    # 560210 Art. 9: the page's only footnote between the two halves of a
+    # sentence ("les rapports de" / page seam / "voisinage et de police")
+    # the page before carries footnote 1 (the page strip cuts it): a missed
+    # block is only looked for once the document's footnotes have begun
+    raw = ("101\nConstitution fédérale\n\nArt. 8\nLa Confédération déclare la guerre.\n\n"
+           "1   Fassung gemäss Ziff. I des BG vom 1. Jan. 1980 (AS 1980 1).\n\n"
+           "                                                                    1\n"
+           "101                                                Constitution fédérale\n\n\n"
+           "Art. 9\n"
+           "Exceptionnellement, les cantons conservent le droit de conclure des traités\n"
+           "sur des objets concernant l’économie publique, les rapports de\n\n"
+           "3        Accepté en votation populaire du 14 juin 1981 (ACF du 17 août 1981 – RO 1981 1243 –\n"
+           "         et AF du 10 oct. 1980– FF 1980 III 713 787, 1980 I 73, 1981 II 1216).\n\n"
+           "2\nConstitution fédérale                                              101\n\n\n"
+           "voisinage et de police; néanmoins, ces traités ne doivent rien contenir de contraire à\n"
+           "la Confédération.\n\nArt. 10\n1 Les rapports officiels ont lieu par le Conseil fédéral.\n")
+    articles, text = split_fedlex_text(raw, "fr")
+    assert "3 Accepté" in articles[1].text                # the articles do not move
+    assert "les rapports de voisinage et de police; néanmoins" in text
+    assert ("la Confédération.\n\n3 Accepté en votation populaire du 14 juin 1981 (ACF du "
+            "17 août 1981 – RO 1981 1243 – et AF du 10 oct. 1980– FF 1980 III 713 787, "
+            "1980 I 73, 1981 II 1216).\n\nArt. 10") in text
+
+
+def test_bv_1874_footnote_block_is_footnotes_not_prose():
+    text = clean_fedlex_text(CST_FOOTNOTES, "fr")
+    for number in range(88, 99):
+        heads = re.findall(r"(?:^|\n\n)%d (?:Accepté|Phrase)" % number, text)
+        assert len(heads) == 1, number
+    # every footnote's text is there as often as in the raw
+    for ref in ("RO 1994 268", "RO 1994 262", "RO 1982 140", "RO 1994 266"):
+        assert text.count(ref) == CST_FOOTNOTES.count(ref), ref
+    # and no footnote is glued into a sentence
+    for m in re.finditer(r"Accepté en votation populaire", text):
+        assert re.search(r"(?:^|\n\n)\d{1,3} $", text[:m.start()]), text[m.start() - 60:m.start()]
+
+
+# --- 2026-11 re-review: a body paragraph is no footnote; a repeated row is
+# no running header -------------------------------------------------------
+
+def test_a_two_space_paragraph_number_mid_article_is_not_a_missed_footnote():
+    # paragraph 2 set with two spaces and a hanging indent, mid-article, no
+    # footnote anchored anywhere: it must stay between 1 and 3
+    raw = ("101\nGesetz\n\nArt. 1\n1 Der Bund regelt das Verfahren.\n\n"
+           "2   Die Kantone bestimmen die zuständigen Behörden und regeln\n"
+           "    das Verfahren im Einzelnen.\n\n"
+           "3 Der Bundesrat erlässt die Ausführungsbestimmungen.\n\nArt. 2\nText.")
+    text = clean_fedlex_text(raw, "de")
+    one = text.index("1 Der Bund regelt")
+    two = text.index("Die Kantone bestimmen")
+    three = text.index("3 Der Bundesrat")
+    assert one < two < three
+
+
+def test_a_hanging_paragraph_followed_by_more_of_its_article_is_no_footnote():
+    # footnotes HAVE begun (page 1), but the candidate block sits mid-page,
+    # more paragraphs of the same article follow without a page break
+    raw = ("101\nGesetz\n\nArt. 1\nDer Bund regelt.\n\n"
+           "1   Fassung gemäss Ziff. I des BG vom 1. Jan. 1980 (AS 1980 1).\n\n"
+           "                                                                    1\n"
+           "101                                                Gesetz\n\n\n"
+           "Art. 2\n1 Der Bund regelt das Verfahren.\n\n"
+           "2   Die Kantone bestimmen die zuständigen Behörden und regeln\n"
+           "    das Verfahren im Einzelnen.\n\n"
+           "3 Der Bundesrat erlässt die Ausführungsbestimmungen.\n\nArt. 3\nText.")
+    text = clean_fedlex_text(raw, "de")
+    assert (text.index("1 Der Bund regelt das Verfahren") < text.index("Die Kantone bestimmen")
+            < text.index("3 Der Bundesrat"))
+    assert "\n\n1 Fassung gemäss Ziff. I" in text
+
+
+def test_a_table_row_repeated_word_for_word_is_kept():
+    raw = ("101\nGebührenverordnung\n\nArt. 1\nDie Gebühren betragen:\n"
+           "Gebühr für eine beglaubigte Kopie      10\n"
+           "Gebühr für einen Registerauszug        20\n\n"
+           "Art. 2\nFerner:\nGebühr für eine beglaubigte Kopie      10")
+    text = clean_fedlex_text(raw, "de")
+    assert text.count("Gebühr für eine beglaubigte Kopie 10") == 2
+    assert "Gebühr für einen Registerauszug 20" in text
+
+
+def test_a_recurring_running_header_at_page_seams_is_still_dropped():
+    # no SR number learnt at the head (an excerpt), the header recurs and
+    # every occurrence opens a page, right under the folio of the page before
+    raw = ("Gesetz\n\nArt. 1\nDer Bund regelt.\n\n4\n"
+           "Verordnung über die Gebühren                              172.041\n\n\n"
+           "Art. 2\nDie Kantone vollziehen.\n\n6\n"
+           "Verordnung über die Gebühren                              172.041\n\n\n"
+           "Art. 3\nText.\n")
+    text = clean_fedlex_text(raw, "de")
+    assert "Verordnung über die Gebühren" not in text
