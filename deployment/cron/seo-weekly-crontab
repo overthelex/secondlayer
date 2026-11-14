@@ -1,0 +1,7 @@
+# Weekly SEO report for legal.org.ua (cthulhu, user vovkes): mail to vladimir@legal.org.ua.
+# Install (merge into the existing crontab):
+#   crontab -l | cat - ~/SecondLayer/deployment/cron/seo-weekly-crontab | crontab -
+# Script: scripts/seo-report/seo_weekly_report.py (env in its header; DRY_RUN=1 to print).
+
+# Mondays at 08:00 server time, covering the previous 7 full days.
+0 8 * * 1 mkdir -p $HOME/logs && /usr/bin/python3 /home/vovkes/SecondLayer/scripts/seo-report/seo_weekly_report.py >> $HOME/logs/seo-weekly-report.log 2>&1
