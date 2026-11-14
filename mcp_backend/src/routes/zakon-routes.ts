@@ -12,7 +12,7 @@
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import type { BaseDatabase } from '@secondlayer/shared';
-import { getRedisClient } from '../utils/redis-client.js';
+import { cachedHtml } from '../services/seo/seo-cache.js';
 import { logger } from '../utils/logger.js';
 import { NPA_REPEALED_CODES } from '../api/tools/npa-dicts.js';
 import { ZAKON_CODES, codeBySlug, artNoFromSlug, articleSlug, type ZakonCode } from '../services/seo/zakon-codes.js';
@@ -26,33 +26,7 @@ const HTML_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=86400';
 
 type Cache = { get(k: string): Promise<string | null>; set(k: string, v: string, o: { EX: number }): Promise<unknown> };
 
-const REDIS_TIMEOUT_MS = 300;
-
-/** Resolve to null instead of waiting: a slow or reconnecting Redis must not stall a page. */
-function withTimeout<T>(p: Promise<T>, ms = REDIS_TIMEOUT_MS): Promise<T | null> {
-  return new Promise(resolve => {
-    const t = setTimeout(() => resolve(null), ms);
-    p.then(v => { clearTimeout(t); resolve(v); }, () => { clearTimeout(t); resolve(null); });
-  });
-}
-
-async function cache(): Promise<Cache | null> {
-  const c = (await withTimeout(getRedisClient() as Promise<unknown>)) as (Cache & { isReady?: boolean }) | null;
-  return c && c.isReady !== false ? c : null;
-}
-
-async function cached(key: string, build: () => Promise<string | null>): Promise<string | null> {
-  const c = await cache();
-  if (c) {
-    const hit = await withTimeout(c.get(CACHE_PREFIX + key));
-    if (hit) return hit;
-  }
-  const html = await build();
-  if (html && c) {
-    withTimeout(c.set(CACHE_PREFIX + key, html, { EX: CACHE_TTL_S })).catch(() => undefined);
-  }
-  return html;
-}
+const cached = (key: string, build: () => Promise<string | null>) => cachedHtml(CACHE_PREFIX + key, CACHE_TTL_S, build);
 
 function notFound(res: Response, message = 'Сторінку не знайдено'): void {
   res.status(404).type('html').set('Cache-Control', 'public, max-age=300').send(

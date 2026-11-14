@@ -21,6 +21,9 @@ Allow: /ua/data-sources
 Allow: /eu/comparison
 Allow: /zakon
 Allow: /zakon/*
+Allow: /sud
+Allow: /sud/*
+Allow: /suddia/*
 
 Disallow: /chat
 Disallow: /profile
