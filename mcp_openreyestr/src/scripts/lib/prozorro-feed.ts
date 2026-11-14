@@ -99,12 +99,15 @@ export function edrCode(id: string | null | undefined, scheme: string | null | u
   return (!scheme || scheme === 'UA-EDR') && /^00\d{8}$/.test(v) ? v.slice(2) : v;
 }
 
-/** Lower-cased email, or null for filler such as "----------@ukr.net" or "0@0.ua". */
+/**
+ * Lower-cased email, or null for filler such as "----------@ukr.net". A digits-only local
+ * part ("0504441122@ukr.net") is a real address and is kept.
+ */
 export function normalizeEmail(v: string | null | undefined): string | null {
   if (!v) return null;
   const e = v.trim().toLowerCase();
   const [local = '', domain = ''] = e.split('@');
-  return /[a-z]/.test(local) && domain.includes('.') ? e : null;
+  return /[a-z0-9]/.test(local) && domain.includes('.') ? e : null;
 }
 
 export function pgSafe(v: unknown): unknown {

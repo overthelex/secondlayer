@@ -50,10 +50,13 @@ export const ROW_FIELDS: Record<string, (r: any) => any> = {
   }),
 };
 
-/** An email that is only filler ("----------@ukr.net", "0@0.ua") matches unrelated suppliers. */
+/**
+ * An email that is only filler ("----------@ukr.net") matches unrelated suppliers. A local
+ * part of digits is a real address (a phone number at ukr.net is common), not filler.
+ */
 export function isPlaceholderEmail(email: string): boolean {
   const [local = '', domain = ''] = email.split('@');
-  return !/[a-zа-я]/i.test(local) || !domain.includes('.');
+  return !/[a-z0-9а-я]/i.test(local) || !domain.includes('.');
 }
 
 export type SectionStatus = 'found' | 'empty' | 'timeout' | 'error' | 'unavailable';

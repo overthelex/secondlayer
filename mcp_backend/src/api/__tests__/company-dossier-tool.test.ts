@@ -184,7 +184,7 @@ describe('dossier size', () => {
     const res = await new CompanyDossierTool(registry()).executeTool('get_company_dossier', { edrpou: '41633007' });
     expect(res!.content[0].text).not.toMatch(/\n  /);
     expect(isPlaceholderEmail('----------@ukr.net')).toBe(true);
-    expect(isPlaceholderEmail('0@0.ua')).toBe(true);
+    expect(isPlaceholderEmail('0504441122@ukr.net')).toBe(false);
     expect(isPlaceholderEmail('a@b.ua')).toBe(false);
     expect(isPlaceholderEmail('masshtabbud@gmail.com')).toBe(false);
   });
