@@ -102,39 +102,51 @@ _CLEAN_BREAK = re.compile(
 _GLUED_REF = re.compile(r"[a-zäöüéèàç]\.?\d{2,3}(?=\s)")
 
 
+# The gate's OWN furniture definition -- nothing borrowed from fedlex_split,
+# so a furniture rule of the code under test cannot hide its own losses
+# (the 2026-11 re-review: a table row repeated word for word was dropped by
+# the code AND excluded by the gate, which shared its recurrence rule).
+_SR_NUMBER = re.compile(r"^\d{1,4}(?:\.\d{1,3})*[a-z]?$")
+_FOLIO_LINE = re.compile(r"^\d{1,4}$")
+_PUBLICATION_LINE = re.compile(r"^(?:AS|BS|BBl|RO|RS|CS|RU|FF)\s+\d")
+
+
+def _lines(raw: str) -> list[str]:
+    return raw.replace("\r\n", "\n").split("\n")
+
+
 def running_header_lines(raw: str) -> set[int]:
-    """Indices of the raw's page-furniture lines: the SR number learnt at
-    the head, alone or with a title one wide gap away ("281.1   Poursuite
-    pour dettes et faillite", "Rheinschifffahrt   747.224.131"); a
-    "title   number" line that recurs WHOLE, number included, on two pages or
-    more (fedlex_split._header_key, the same definition the clean text
-    uses: a footnote head "93   Accepté ..." repeats its wording, never its
-    number); and the bare folios. The clean text drops them on purpose, so
-    words printed only there are no content loss."""
-    lines = raw.splitlines()
-    sysnr = fedlex_split._find_sysnr(lines[:8])
+    """Indices (into _lines(raw)) of the raw's page furniture, by the gate's
+    own rules: the SR number (the first non-blank line, when it is one),
+    alone or a wide gap from a title ("281.1   Poursuite pour dettes",
+    "Rheinschifffahrt   747.224.131"); the folios (a bare number on its
+    line) and a form feed's line; and the line right beside a folio or a
+    form feed (the running header across the page break). Recurrence
+    alone makes nothing furniture. The clean text drops these lines on
+    purpose, so words printed only there are no content loss."""
+    lines = _lines(raw)
+    first = next((l.strip() for l in lines if l.strip()), "")
+    sysnr = first if _SR_NUMBER.match(first) else None
+    gap = (re.compile(r"^%s\s{2,}\S|\S\s{2,}%s$" % (re.escape(sysnr), re.escape(sysnr)))
+           if sysnr else None)
     out: set[int] = set()
-    counts: dict[str, list[int]] = {}
     for index, line in enumerate(lines):
-        stripped = line.strip()
-        if sysnr and (stripped == sysnr or (index and fedlex_split._is_running_header(line, sysnr))):
+        stripped = line.replace("\f", " ").strip()
+        if sysnr and (stripped == sysnr or gap.search(stripped)):
             out.add(index)
-            continue
-        if fedlex_split._FOLIO.match(stripped):
-            out.add(index)
-            continue
-        key = fedlex_split._header_key(line)
-        if key:
-            counts.setdefault(key, []).append(index)
-    for indices in counts.values():
-        if len(indices) >= 2:
-            out.update(indices)
+        breaks = "\f" in line or bool(_FOLIO_LINE.match(stripped))
+        if breaks:
+            out.add(index)            # the folio, or the line a form feed opens
+            for k in (index - 1, index + 1):
+                if 0 <= k < len(lines) and lines[k].strip() and not _FOLIO_LINE.match(lines[k].strip()):
+                    out.add(k)
     return out
 
 
 def _content(raw: str) -> str:
     headers = running_header_lines(raw)
-    return "\n".join(line for index, line in enumerate(raw.splitlines()) if index not in headers)
+    return "\n".join(line.replace("\f", "") for index, line in enumerate(_lines(raw))
+                     if index not in headers)
 
 
 def _raw_words(raw: str) -> list[str]:
@@ -167,7 +179,7 @@ def raw_footnotes(raw: str) -> list[tuple[int, str]]:
     the last one, at most _RAW_NOTE_STEP above it). Independent of the
     splitter's own strips -- this is what the clean text is checked
     against."""
-    lines = text_clean.normalise_chars(raw).splitlines()
+    lines = [text_clean.normalise_chars(line) for line in _lines(raw)]
     furniture = running_header_lines(raw)
     out: list[tuple[int, str]] = []
     last, in_block = 0, False
@@ -176,7 +188,7 @@ def raw_footnotes(raw: str) -> list[tuple[int, str]]:
             continue
         m = _RAW_NOTE.match(line)
         prev = lines[index - 1] if index else ""
-        if m and (not prev.strip() or in_block or fedlex_split._PUBLICATION.match(prev)):
+        if m and (not prev.strip() or in_block or _PUBLICATION_LINE.match(prev)):
             number = int(m.group(1))
             if last < number <= last + _RAW_NOTE_STEP:
                 out.append((number, m.group(2)))

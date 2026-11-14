@@ -155,16 +155,37 @@ def test_content_ratio_lets_a_short_edition_drop_its_sr_header():
 
 
 def test_footnote_heads_with_one_wording_are_not_furniture():
-    # the same definition as the clean text (fedlex_split._header_key): the
-    # whole line, number included, must recur
+    # the gate's own definition: recurrence alone makes nothing furniture
     raw = ("101\nX\n\n93        Accepté en votation populaire du 28 nov. 1993\n"
            "         - RO 1994 268).\n\n94        Accepté en votation populaire du 28 nov. 1993\n"
-           "         - RO 1994 270).\n\nKonkurs. BG                       281.1\n"
-           "\nKonkurs. BG                       281.1\n")
+           "         - RO 1994 270).\n\n7\nKonkurs. BG                       281.1\n"
+           "\n8\nKonkurs. BG                       281.1\n")
     lines = check.running_header_lines(raw)
     text = raw.splitlines()
-    assert not any(text[i].startswith(("93", "94")) for i in lines)
+    assert not any(text[i].startswith(("93", "94", " ")) for i in lines)
     assert sum(1 for i in lines if text[i].startswith("Konkurs")) == 2
+
+
+def test_gate_furniture_is_its_own_definition():
+    # the gate must not borrow the code's furniture rules: with a repeated
+    # table row dropped from the clean text (what the code did before the
+    # re-review fix), token_loss sees it
+    import inspect
+    source = inspect.getsource(check.running_header_lines)
+    assert "fedlex_split" not in source
+    raw = ("101\nGebührenverordnung\n\nArt. 1\nDie Gebühren betragen:\n"
+           "Gebühr für eine beglaubigte Kopie      10\n"
+           "Gebühr für einen Registerauszug        20\n\n"
+           "Art. 2\nFerner:\nGebühr für eine beglaubigte Kopie      10")
+    rows_dropped = ("Gebührenverordnung\n\nArt. 1\n\nDie Gebühren betragen: "
+                    "Gebühr für einen Registerauszug 20\n\nArt. 2\n\nFerner:")
+    result = check.measure(raw, rows_dropped)
+    assert result["token_loss"] > 0
+    assert result["content_ratio"] < 1.0
+    kept = ("Gebührenverordnung\n\nArt. 1\n\nDie Gebühren betragen: Gebühr für eine "
+            "beglaubigte Kopie 10 Gebühr für einen Registerauszug 20\n\nArt. 2\n\nFerner: "
+            "Gebühr für eine beglaubigte Kopie 10")
+    assert check.measure(raw, kept)["token_loss"] == 0
 
 
 def test_random_sample_is_the_default(monkeypatch):
@@ -187,12 +208,14 @@ def test_main_refuses_without_dsn(monkeypatch, capsys):
 
 
 def test_words_only_in_running_headers_are_not_counted():
+    # the gate's own furniture: the SR-number line, and the lines right
+    # beside a folio (a page break)
     raw = ("747.224.131\nVerordnung\nüber die Schifffahrt\n\nArt. 1\nDer Bund regelt Schiffe.\n\n"
            "2\nRheinschifffahrt                                    747.224.131\n\n"
            "Art. 2\nDie Kantone vollziehen Vorschriften.\n\n"
+           "                                                       3\n"
            "Neutralität und Rheinschifffahrt                    12\n\n"
-           "Art. 3\nDie Kantone melden Vorschriften.\n\n"
-           "Neutralität und Rheinschifffahrt                    12\n")
+           "Art. 3\nDie Kantone melden Vorschriften.\n")
     types = check.raw_word_types(raw)
     assert "Rheinschifffahrt" not in types and "Neutralität" not in types
     assert {"Verordnung", "Schifffahrt", "Kantone", "vollziehen"} <= types
