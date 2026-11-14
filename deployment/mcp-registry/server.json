@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "ua.org.legal/lex",
+  "title": "LEX — Ukrainian law",
+  "description": "Ukrainian court decisions (ЄДРСР), legislation with editions and state registries for AI agents",
+  "websiteUrl": "https://legal.org.ua/mcp-dlia-yurystiv",
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.legal.org.ua/api/v2/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer sl_… API key from legal.org.ua; OAuth sign-in also works",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
