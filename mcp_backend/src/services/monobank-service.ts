@@ -12,12 +12,12 @@ import { CurrencyService } from './currency-service.js';
 import { invoiceService } from './invoice-service.js';
 import type { IDatabase } from '../domain/ports/index.js';
 import type { AuditService } from './audit-service.js';
-import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
+import { WelcomeBonusService, type ClaimSignals } from './welcome-bonus-service.js';
 
 /** Amount charged to verify a card; refunded right after the bonus is credited. */
 export const CARD_VERIFY_AMOUNT_UAH = 1;
 
-export type CardVerifyOutcome = 'credited' | 'already_claimed' | 'card_used' | 'no_card' | 'failed';
+export type CardVerifyOutcome = 'credited' | 'pending_review' | 'already_claimed' | 'card_used' | 'no_card' | 'failed';
 
 export interface MonobankInvoiceResult {
   invoiceId: string;
@@ -43,13 +43,16 @@ export interface MonobankWebhookBody {
 
 export class MonobankService {
   protected auditService?: AuditService;
+  readonly welcomeBonus: WelcomeBonusService;
 
   constructor(
     protected billingService: BillingService,
     protected emailService: EmailService,
     protected db: IDatabase,
     protected currencyService?: CurrencyService
-  ) {}
+  ) {
+    this.welcomeBonus = new WelcomeBonusService(db, billingService);
+  }
 
   setAuditService(auditService: AuditService): void {
     this.auditService = auditService;
@@ -384,10 +387,11 @@ export class MonobankService {
   /**
    * Start card verification for the welcome bonus: a 1 UAH invoice that is
    * refunded once the webhook confirms it. Throws if the account already
-   * received the bonus.
+   * has a claim. The client IP and device id are kept with the invoice so the
+   * claim can be compared with earlier claimants.
    */
-  async createCardVerifyInvoice(userId: string, email?: string): Promise<MonobankInvoiceResult> {
-    if (await this.hasWelcomeClaim(userId)) {
+  async createCardVerifyInvoice(userId: string, email?: string, signals: ClaimSignals = {}): Promise<MonobankInvoiceResult> {
+    if ((await this.welcomeBonus.status(userId)) !== 'available') {
       throw new Error('WELCOME_BONUS_ALREADY_CLAIMED');
     }
     return this.createInvoice(
@@ -396,18 +400,16 @@ export class MonobankService {
       `Перевірка картки LEX: ${CARD_VERIFY_AMOUNT_UAH} ₴ буде повернено`,
       `${this.redirectUrl}/billing/overview?card_verify=1`,
       email,
-      { purpose: 'card_verify' }
+      { purpose: 'card_verify', client_ip: signals.clientIp || null, device_id: signals.deviceId || null }
     );
   }
 
-  async hasWelcomeClaim(userId: string): Promise<boolean> {
-    const r = await this.db.query('SELECT 1 FROM welcome_bonus_claims WHERE user_id = $1', [userId]);
-    return r.rows.length > 0;
+  private meta(pi: any): Record<string, any> {
+    return typeof pi.metadata === 'string' ? JSON.parse(pi.metadata) : (pi.metadata || {});
   }
 
   private isCardVerify(pi: any): boolean {
-    const meta = typeof pi.metadata === 'string' ? JSON.parse(pi.metadata) : (pi.metadata || {});
-    return meta.purpose === 'card_verify';
+    return this.meta(pi).purpose === 'card_verify';
   }
 
   private async saveCard(userId: string, statusData: any): Promise<string | null> {
@@ -426,8 +428,9 @@ export class MonobankService {
   }
 
   /**
-   * A card-verification invoice was paid: save the card, credit the welcome
-   * bonus if neither the account nor the card has claimed it, then refund
+   * A card-verification invoice was paid: save the card, claim the welcome
+   * bonus (credited, or held for review if it looks like an earlier
+   * claimant; see WelcomeBonusService), then refund
    * the 1 UAH. The verification payment itself never reaches the balance.
    */
   async processCardVerification(pi: any, invoiceId: string, statusData?: any): Promise<CardVerifyOutcome> {
@@ -435,7 +438,10 @@ export class MonobankService {
     try {
       const maskedPan = await this.saveCard(pi.user_id, statusData ?? await this.getInvoiceStatusRaw(invoiceId));
       if (maskedPan) {
-        outcome = await this.claimWelcomeBonus(pi.user_id, maskedPan, invoiceId);
+        const meta = this.meta(pi);
+        outcome = await this.welcomeBonus.claim(pi.user_id, maskedPan, invoiceId, {
+          clientIp: meta.client_ip, deviceId: meta.device_id,
+        });
       }
     } catch (err: any) {
       outcome = 'failed';
@@ -455,37 +461,6 @@ export class MonobankService {
 
     logger.info('[CardVerify] Done', { userId: pi.user_id, invoiceId, outcome });
     return outcome;
-  }
-
-  private async claimWelcomeBonus(userId: string, maskedPan: string, invoiceId: string): Promise<CardVerifyOutcome> {
-    // Both user_id and card_masked_pan are unique: one bonus per account and per card.
-    const claim = await this.db.query(
-      `INSERT INTO welcome_bonus_claims (user_id, card_masked_pan, invoice_id, amount_uah)
-       VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING user_id`,
-      [userId, maskedPan, invoiceId, WELCOME_BONUS_UAH]
-    );
-    if (claim.rows.length === 0) {
-      return (await this.hasWelcomeClaim(userId)) ? 'already_claimed' : 'card_used';
-    }
-    try {
-      await this.billingService.getOrCreateUserBilling(userId);
-      const amountUsd = await this.billingService.convertFromUah(WELCOME_BONUS_UAH);
-      await this.billingService.topUpBalance({
-        userId,
-        amountUsd,
-        amountUah: WELCOME_BONUS_UAH,
-        description: `Вітальний бонус за прив'язку картки: ${WELCOME_BONUS_UAH} грн`,
-        paymentProvider: 'adjustment',
-        paymentId: `welcome-${userId}`,
-        metadata: { invoiceId },
-      });
-    } catch (err) {
-      // Free the claim so a retry can succeed.
-      await this.db.query('DELETE FROM welcome_bonus_claims WHERE user_id = $1', [userId]).catch(() => {});
-      throw err;
-    }
-    logger.info('[WelcomeBonus] Credited after card verification', { userId, amountUah: WELCOME_BONUS_UAH });
-    return 'credited';
   }
 
   /**

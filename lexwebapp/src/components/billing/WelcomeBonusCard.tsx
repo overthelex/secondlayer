@@ -13,6 +13,7 @@ import { getErrorMessage } from '../../utils/errors';
 interface BonusStatus {
   amount_uah: number;
   verify_amount_uah: number;
+  status?: 'available' | 'credited' | 'pending_review' | 'rejected';
   available: boolean;
 }
 
@@ -30,12 +31,21 @@ export function WelcomeBonusCard() {
 
   if (!status) return null;
 
+  if (status.status === 'pending_review') {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+        Картку перевірено, {status.verify_amount_uah} ₴ повертаємо. Вітальний бонус {status.amount_uah} грн
+        на перевірці: ми нараховуємо його один раз одній людині й підтвердимо найближчим часом.
+      </div>
+    );
+  }
+
   if (!status.available) {
     if (!returned) return null;
     return (
       <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
         Картку перевірено. Вітальний бонус {status.amount_uah} грн нараховано на баланс (якщо ця картка
-        ще не приносила бонус іншому акаунту), а {status.verify_amount_uah} ₴ повертаємо на картку.
+        ще не приносила бонус), а {status.verify_amount_uah} ₴ повертаємо на картку.
       </div>
     );
   }
@@ -61,7 +71,7 @@ export function WelcomeBonusCard() {
         <p className="text-sm text-claude-subtext mt-1">
           {returned
             ? 'Оплату перевірки ще обробляємо. Оновіть сторінку за хвилину.'
-            : `Monobank спише ${status.verify_amount_uah} ₴ для перевірки картки й одразу поверне їх. Один бонус на акаунт і на картку.`}
+            : `Monobank спише ${status.verify_amount_uah} ₴ для перевірки картки й одразу поверне їх. Один бонус на людину.`}
         </p>
       </div>
       <button

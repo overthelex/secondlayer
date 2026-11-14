@@ -1,20 +1,22 @@
 /**
  * Admin Billing Management Page
- * 3 tabs: Pricing Tiers, Organizations, Subscriptions
+ * Tabs: Pricing Tiers, Organizations, Subscriptions, Welcome bonuses
  */
 
 import { useState } from 'react';
 import { PricingTiersTab } from './PricingTiersTab';
 import { OrganizationsTab } from './OrganizationsTab';
 import { SubscriptionsTab } from './SubscriptionsTab';
+import { WelcomeBonusTab } from './WelcomeBonusTab';
 
 export function AdminBillingPage() {
-  const [tab, setTab] = useState<'tiers' | 'organizations' | 'subscriptions'>('tiers');
+  const [tab, setTab] = useState<'tiers' | 'organizations' | 'subscriptions' | 'welcome'>('tiers');
 
   const tabs = [
     { id: 'tiers' as const, label: 'Pricing Tiers' },
     { id: 'organizations' as const, label: 'Organizations' },
     { id: 'subscriptions' as const, label: 'Subscriptions' },
+    { id: 'welcome' as const, label: 'Вітальні бонуси' },
   ];
 
   return (
@@ -41,6 +43,7 @@ export function AdminBillingPage() {
         {tab === 'tiers' && <PricingTiersTab />}
         {tab === 'organizations' && <OrganizationsTab />}
         {tab === 'subscriptions' && <SubscriptionsTab />}
+        {tab === 'welcome' && <WelcomeBonusTab />}
       </div>
     </div>
   );

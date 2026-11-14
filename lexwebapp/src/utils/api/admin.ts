@@ -70,6 +70,10 @@ export const adminApi = {
     apiClient.put('/api/admin/billing/volume-discounts', { thresholds }),
   getOrganizations: () =>
     apiClient.get('/api/admin/billing/organizations'),
+  getPendingWelcomeBonuses: () =>
+    apiClient.get('/api/admin/welcome-bonus/pending'),
+  reviewWelcomeBonus: (userId: string, action: 'approve' | 'reject') =>
+    apiClient.post(`/api/admin/welcome-bonus/${userId}/${action}`),
   getOrganization: (id: string) =>
     apiClient.get(`/api/admin/billing/organizations/${id}`),
   updateOrganization: (id: string, data: Record<string, unknown>) =>
