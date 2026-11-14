@@ -24,6 +24,8 @@ Allow: /zakon/*
 Allow: /sud
 Allow: /sud/*
 Allow: /suddia/*
+Allow: /pozytsiia-vs
+Allow: /pozytsiia-vs/*
 
 Disallow: /chat
 Disallow: /profile

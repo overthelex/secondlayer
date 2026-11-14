@@ -40,8 +40,8 @@ const CSS = `
 @media (prefers-color-scheme:dark){:root{--bg:#0c0a09;--fg:#e7e5e4;--muted:#a8a29e;--line:#292524;--card:#1c1917;--accent:#60a5fa;--accent-fg:#0c0a09;--note:#a8a29e;--warn-bg:#422006;--warn-fg:#fde68a}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 a{color:var(--accent)}header,main,footer{max-width:820px;margin:0 auto;padding:0 16px}
-header{display:flex;justify-content:space-between;align-items:center;padding-top:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
-header .logo{font-weight:700;text-decoration:none;color:var(--fg);letter-spacing:.02em}header nav a{margin-left:16px;font-size:15px}
+header{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding-top:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+header .logo{font-weight:700;text-decoration:none;color:var(--fg);letter-spacing:.02em}header nav a{margin-left:14px;font-size:15px;white-space:nowrap}
 nav.crumbs{font-size:14px;color:var(--muted);margin:20px 0 8px}nav.crumbs a{color:var(--muted)}
 h1{font-size:1.6rem;line-height:1.3;margin:8px 0 12px}h2{font-size:1.15rem;margin:28px 0 8px}h3{font-size:1.02rem;margin:20px 0 6px}h4{font-size:.95rem;margin:16px 0 4px;color:var(--muted)}
 .meta{font-size:14px;color:var(--muted);margin-bottom:20px}.path{font-size:14px;color:var(--muted);margin:0 0 16px}
@@ -93,7 +93,7 @@ export function page(o: PageOpts): string {
 ${ld}
 </head>
 <body>
-<header><a class="logo" href="/product">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
+<header><a class="logo" href="/product">LEX</a><nav><a href="/zakon">Кодекси</a><a href="/sud">Суди</a><a href="/pozytsiia-vs">Практика ВП</a><a href="/blog/uk">Блог</a><a href="/login">Увійти</a></nav></header>
 <main>
 <nav class="crumbs" aria-label="Навігація">${crumbsHtml}</nav>
 ${o.body}
