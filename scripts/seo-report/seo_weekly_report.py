@@ -10,12 +10,16 @@ the last 7 full days with the 7 before:
 Only page requests count (GET, no /api, assets or MCP). The User-Agent is not verified
 against the bots' IP ranges: the numbers are for trends, not an audit.
 
-Search Console numbers (impressions, clicks, indexed pages) are not here: the domain
-property was verified on 13.11.2026 and has no API access set up yet.
+Search Console (sc-domain:legal.org.ua) adds clicks, impressions, CTR and position for the
+7 days ending 3 days ago (GSC data lags) vs the 7 before, by section and top queries, plus
+the submitted sitemaps. It reads with the service account seo-report@secondlayer-gpu
+(Restricted user in GSC); key in GSC_KEY_FILE (~/.config/seo-report/gsc-sa.json, chmod 600).
+Without the key or on an API error that part is replaced by a note.
 
 Env: MAIL_TO / MAIL_FROM (vladimir@legal.org.ua), SMTP_HOST (smtp.azurecomm.net),
      SMTP_PORT (587), SMTP_ENV_FILE (~/.acs-smtp.env: ACS_SMTP_USER, ACS_SMTP_PASS),
      NGINX_CONTAINER (nginx-local), LOG_FILE (/var/log/nginx/local-ssl-access.log),
+     GSC_KEY_FILE, GSC_SITE (sc-domain:legal.org.ua),
      DRY_RUN=1 prints the report instead of mailing it.
 """
 import collections
@@ -111,6 +115,68 @@ def build(c, urls, mid: dt.date, end: dt.date):
     return period, rows
 
 
+def gsc_rows():
+    """Search Console tables, or one note row when unavailable."""
+    key = os.environ.get('GSC_KEY_FILE', os.path.expanduser('~/.config/seo-report/gsc-sa.json'))
+    site = os.environ.get('GSC_SITE', 'sc-domain:legal.org.ua')
+    if not os.path.exists(key):
+        return [('Search Console', ['Примітка'], [('немає ключа сервісного акаунта',)])]
+    try:
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import AuthorizedSession
+        from urllib.parse import quote
+        creds = service_account.Credentials.from_service_account_file(
+            key, scopes=['https://www.googleapis.com/auth/webmasters.readonly'])
+        http = AuthorizedSession(creds)
+        base = f'https://searchconsole.googleapis.com/webmasters/v3/sites/{quote(site, safe="")}'
+        end = dt.date.today() - dt.timedelta(days=3)
+        cur = (end - dt.timedelta(days=6), end)
+        prev = (cur[0] - dt.timedelta(days=7), cur[0] - dt.timedelta(days=1))
+
+        def q(rng, dims, limit=1000):
+            body = {'startDate': rng[0].isoformat(), 'endDate': rng[1].isoformat(), 'dimensions': dims, 'rowLimit': limit}
+            r = http.post(base + '/searchAnalytics/query', json=body, timeout=60)
+            r.raise_for_status()
+            return r.json().get('rows', [])
+
+        def tot(rows):
+            c = sum(r['clicks'] for r in rows); i = sum(r['impressions'] for r in rows)
+            pos = sum(r['position'] * r['impressions'] for r in rows) / i if i else 0
+            return c, i, pos
+
+        out = []
+        tc, ti, tp = tot(q(cur, ['date']))
+        pc, pi, pp = tot(q(prev, ['date']))
+        out.append((f'Search Console: {cur[0]:%d.%m}–{cur[1]:%d.%m} (дані GSC запізнюються на 2–3 дні)',
+                    ['Метрика', 'Цей тиждень (зміна)'],
+                    [('Кліки', delta(int(tc), int(pc))), ('Покази', delta(int(ti), int(pi))),
+                     ('CTR', f'{(tc / ti * 100 if ti else 0):.1f}%'), ('Середня позиція', f'{tp:.1f}' if ti else '—')]))
+        agg = {'cur': collections.Counter(), 'prev': collections.Counter()}
+        for per, rng in (('cur', cur), ('prev', prev)):
+            for r in q(rng, ['page'], 25000):
+                path = re.sub(r'^https?://[^/]+', '', r['keys'][0]) or '/'
+                agg[per][(section(path), 'c')] += r['clicks']
+                agg[per][(section(path), 'i')] += r['impressions']
+        secs = sorted({k[0] for k in agg['cur']}, key=lambda s: -agg['cur'][(s, 'i')])
+        out.append(('Search Console за розділами', ['Розділ', 'Покази (зміна)', 'Кліки (зміна)'],
+                    [(s, delta(int(agg['cur'][(s, 'i')]), int(agg['prev'][(s, 'i')])),
+                      delta(int(agg['cur'][(s, 'c')]), int(agg['prev'][(s, 'c')]))) for s in secs]))
+        top = sorted(q(cur, ['query'], 100), key=lambda r: -r['impressions'])[:15]
+        out.append(('Топ-15 запитів за показами', ['Запит', 'Покази', 'Кліки', 'Позиція'],
+                    [(r['keys'][0], str(int(r['impressions'])), str(int(r['clicks'])), f"{r['position']:.1f}") for r in top]))
+        r = http.get(base + '/sitemaps', timeout=60)
+        r.raise_for_status()
+        sm = []
+        for x in r.json().get('sitemap', []):
+            subm = sum(int(c.get('submitted', 0)) for c in x.get('contents', []))
+            sm.append((x['path'].replace('https://legal.org.ua', ''), str(subm), x.get('lastDownloaded', '')[:10],
+                       f"помилок {x.get('errors', 0)}, попереджень {x.get('warnings', 0)}"))
+        out.append(('Sitemaps у Search Console', ['Sitemap', 'Адрес', 'Прочитано', 'Стан'], sm))
+        return out
+    except Exception as e:  # report the rest even if GSC fails
+        return [('Search Console', ['Примітка'], [(f'помилка API: {type(e).__name__}: {str(e)[:200]}',)])]
+
+
 def render_text(period, rows):
     out = [f'SEO legal.org.ua за {period} (у дужках зміна до попередніх 7 днів)', '']
     for title, head, data in rows:
@@ -118,7 +184,7 @@ def render_text(period, rows):
         out.append('  ' + ' | '.join(head))
         out += ['  ' + ' | '.join(r) for r in data] or ['  —']
         out.append('')
-    out.append('Джерело: лог nginx (Referer і User-Agent, без перевірки IP ботів). Дані Search Console: search.google.com/search-console')
+    out.append('Джерела: Search Console API і лог nginx (Referer і User-Agent, без перевірки IP ботів).')
     return '\n'.join(out)
 
 
@@ -132,7 +198,7 @@ def render_html(period, rows):
         for r in data or [['—']]:
             parts.append('<tr>' + ''.join(f'<td style="border-bottom:1px solid #eee;padding:4px 10px">{html.escape(x)}</td>' for x in r) + '</tr>')
         parts.append('</table>')
-    parts.append('<p style="font-family:system-ui;color:#777;font-size:12px">Джерело: лог nginx (Referer і User-Agent, без перевірки IP ботів).</p>')
+    parts.append('<p style="font-family:system-ui;color:#777;font-size:12px">Джерела: Search Console API і лог nginx (Referer і User-Agent, без перевірки IP ботів).</p>')
     return '\n'.join(parts)
 
 
@@ -168,6 +234,7 @@ def main():
     start = mid - dt.timedelta(days=7)
     c, urls = collect(read_log(), start, mid, end)
     period, rows = build(c, urls, mid, end)
+    rows = gsc_rows() + rows
     text = render_text(period, rows)
     if os.environ.get('DRY_RUN'):
         print(text)
