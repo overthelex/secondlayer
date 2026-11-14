@@ -265,3 +265,23 @@ describe('B2BInvoiceService', () => {
     });
   });
 });
+
+describe('B2BInvoiceService USD→UAH rate', () => {
+  const saved = process.env.B2B_USD_UAH_RATE;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.B2B_USD_UAH_RATE;
+    else process.env.B2B_USD_UAH_RATE = saved;
+  });
+
+  it('uses the NBU rate of the day, not a fixed 41,5', async () => {
+    delete process.env.B2B_USD_UAH_RATE;
+    const svc = new B2BInvoiceService({} as any, { getUsdToUahRate: async () => ({ rate: 45.4274, source: 'NBU', lastUpdated: '' }) } as any);
+    expect(await (svc as any).usdToUahRate()).toBe(45.4274);
+  });
+
+  it('keeps a contract rate from B2B_USD_UAH_RATE when it is set', async () => {
+    process.env.B2B_USD_UAH_RATE = '44.00';
+    const svc = new B2BInvoiceService({} as any, { getUsdToUahRate: async () => ({ rate: 45.4274 }) } as any);
+    expect(await (svc as any).usdToUahRate()).toBe(44);
+  });
+});

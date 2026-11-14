@@ -37,7 +37,7 @@ class CurrencyServiceClass extends BaseService {
         return this.cachedRate;
       }
       return {
-        rate: 41.5,
+        rate: 45.43,
         source: 'default',
         lastUpdated: new Date().toISOString(),
       };

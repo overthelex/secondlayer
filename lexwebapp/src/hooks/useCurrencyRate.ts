@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { currencyService, ExchangeRateInfo } from '../services/api/CurrencyService';
 
-const DEFAULT_RATE = 41.5;
+const DEFAULT_RATE = 45.43;
 
 interface UseCurrencyRateReturn {
   rate: number;

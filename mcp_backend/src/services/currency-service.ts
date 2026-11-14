@@ -2,7 +2,7 @@
  * CurrencyService
  * Fetches USD->UAH exchange rate from NBU (National Bank of Ukraine) public API.
  * Caches rate in Redis with 24-hour TTL (NBU updates rate once daily).
- * Falls back to last-known rate or default (~41.5 UAH) if API unavailable.
+ * Falls back to last-known rate or default (~45.43 UAH, NBU 14.11.2026) if API unavailable.
  */
 
 import { logger } from '../utils/logger.js';
@@ -10,7 +10,7 @@ import { getRedisClient } from '../utils/redis-client.js';
 
 const REDIS_KEY = 'exchange_rate:NBU_USD_UAH';
 const REDIS_TTL_SECONDS = 86400; // 24 hours
-const DEFAULT_RATE = 41.5;
+const DEFAULT_RATE = 45.43;
 const NBU_API_URL = 'https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json';
 
 export interface ExchangeRateInfo {
