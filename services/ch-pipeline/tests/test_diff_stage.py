@@ -334,3 +334,61 @@ def test_a_rolled_back_pair_does_not_inflate_the_report(conn, settings,
     assert report.errors == 1
     assert report.changes == 0
     assert report.orphaned == 0
+
+
+WORK2 = "https://fedlex.data.admin.ch/eli/cc/1999/404"
+
+
+def _edition_of(conn, work, date, text):
+    vid = versions_stage.upsert_version(conn, {
+        "work": work, "consolidation": f"{work}/{date}", "dateApplicability": date,
+        "lang": L + "DEU", "fileUrl": "https://x/x.xml"})
+    conn.execute(
+        "INSERT INTO ch_act_article (version_id, e_id, article_number, text, "
+        "ordinal) VALUES (%s,'art_1','1',%s,1)", (vid, text))
+    conn.execute("UPDATE ch_act_version SET stage='parsed', article_count=1 "
+                 "WHERE version_id=%s", (vid,))
+    return vid
+
+
+def _two_acts_one_cantonal(conn):
+    acts_stage.upsert_act(conn, {"work": WORK2, "srNotation": "101"})
+    cantonal = [_edition_of(conn, WORK, d, t)
+                for d, t in (("2020-01-01", "alt"), ("2022-01-01", "neu"))]
+    federal = [_edition_of(conn, WORK2, d, t)
+               for d, t in (("2020-01-01", "alt"), ("2022-01-01", "neu"))]
+    conn.execute("UPDATE ch_act_version SET source='lexfind' WHERE version_id = ANY(%s)",
+                 (cantonal,))
+    return cantonal, federal
+
+
+def test_sources_limits_the_walk_to_acts_with_an_edition_from_them(conn, settings):
+    cantonal, federal = _two_acts_one_cantonal(conn)
+    report = diff_stage.run(settings, sources=["lexfind", "zhlex"])
+    assert report.acts == 1
+    rows = {r[0] for r in conn.execute("SELECT to_version_id FROM ch_act_change")}
+    assert rows == {cantonal[1]}, "the federal act must not be diffed"
+
+
+def test_no_sources_still_walks_every_act(conn, settings):
+    cantonal, federal = _two_acts_one_cantonal(conn)
+    report = diff_stage.run(settings)
+    assert report.acts == 2
+    rows = {r[0] for r in conn.execute("SELECT to_version_id FROM ch_act_change")}
+    assert rows == {cantonal[1], federal[1]}
+
+
+def test_main_reads_a_comma_separated_source_list(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(diff_stage, "run",
+                        lambda settings, lang, sources: seen.update(lang=lang, sources=sources)
+                        or diff_stage.DiffReport())
+    monkeypatch.setattr(diff_stage.Settings, "from_env", staticmethod(lambda: None))
+    monkeypatch.setattr(diff_stage.throttle, "renice", lambda n: None)
+    monkeypatch.setenv("CHPIPE_LANG", "fr")
+    monkeypatch.setenv("CHPIPE_SOURCE", " lexfind, zhlex ,")
+    diff_stage.main()
+    assert seen == {"lang": "fr", "sources": ["lexfind", "zhlex"]}
+    monkeypatch.setenv("CHPIPE_SOURCE", "")
+    diff_stage.main()
+    assert seen["sources"] is None

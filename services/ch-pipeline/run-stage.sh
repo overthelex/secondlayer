@@ -71,6 +71,8 @@ case "$STAGE" in
     export CHPIPE_SPIDER="$ARG"
     ;;
   diff|provenance)
+    # diff also reads CHPIPE_SOURCE: a comma-separated ch_act_version.source
+    # list that limits the walk to acts with a parsed edition from one of them.
     ARG="${POS:-${CHPIPE_LANG:-}}"
     export CHPIPE_LANG="$ARG"
     ;;

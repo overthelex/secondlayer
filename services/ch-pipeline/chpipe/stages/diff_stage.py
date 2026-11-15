@@ -114,7 +114,16 @@ def _articles(conn, version_id: int) -> list[dict]:
         "WHERE version_id = %s ORDER BY ordinal", (version_id,)).fetchall()]
 
 
-def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> DiffReport:
+def run(settings: Settings, lang: str = "de", act_id: int | None = None,
+        sources: list[str] | None = None) -> DiffReport:
+    """Diff every act with a parsed edition in `lang`.
+
+    `sources` narrows the walk to the acts that have a parsed edition from
+    one of those sources (ch_act_version.source). The act is still diffed
+    whole: every parsed edition of it in `lang`, whatever its source, since
+    the change log is per act. The cantonal weekly job uses this to diff
+    the cantonal acts it re-parsed without walking the federal corpus too.
+    """
     report = DiffReport()
     conn = db.connect(settings)
     try:
@@ -124,6 +133,9 @@ def run(settings: Settings, lang: str = "de", act_id: int | None = None) -> Diff
         if act_id is not None:
             sql += " AND act_id = %s"
             params.append(act_id)
+        if sources:
+            sql += " AND source = ANY(%s)"
+            params.append(list(sources))
         sql += " ORDER BY act_id"
         acts = [r["act_id"] for r in conn.execute(sql, params).fetchall()]
 
@@ -207,7 +219,12 @@ def main() -> DiffReport:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     throttle.renice(throttle.NICE_CPU)
-    result = run(Settings.from_env(), lang=os.environ.get("CHPIPE_LANG") or "de")
+    # CHPIPE_SOURCE: optional comma-separated ch_act_version.source list
+    # (e.g. "lexwork_pdf,lexfind,zhlex"); unset or empty walks every act.
+    sources = [s.strip() for s in os.environ.get("CHPIPE_SOURCE", "").split(",")
+               if s.strip()] or None
+    result = run(Settings.from_env(), lang=os.environ.get("CHPIPE_LANG") or "de",
+                 sources=sources)
     log.info("acts=%d comparisons=%d changes=%d (added=%d modified=%d repealed=%d) "
              "orphaned=%d errors=%d", result.acts, result.comparisons,
              result.changes, result.added, result.modified, result.repealed,
