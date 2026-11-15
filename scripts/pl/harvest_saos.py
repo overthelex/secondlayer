@@ -11,6 +11,11 @@ dump returns the whole text plus judgmentResult, meansOfAppeal and the source
 judgmentId (the Portal Orzeczeń id), which is what lets us de-duplicate
 against the hf-pl-court-raw rows later.
 
+Daily mode: --since-days N sets sinceModificationDate to midnight N days ago
+(cron uses 3, so a missed run or two is caught up). Give it its own
+--state-file: the since value changes every day, and a state file written for
+another since is ignored and overwritten.
+
 Resume: the state file stores the last page fully committed; start again with
 the same --state-file and it continues from the next page. Pages are stable
 for a fixed pageSize as long as --since is the same, so always rerun with the
@@ -25,7 +30,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import psycopg2
 import psycopg2.extras
@@ -128,11 +133,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--page-size", type=int, default=100)
     ap.add_argument("--since", help="sinceModificationDate, e.g. 2026-04-01T00:00:00.000 (omit for the full dump)")
+    ap.add_argument("--since-days", type=int, default=0,
+                    help="daily mode: --since = midnight N days ago (overlapping windows are harmless, "
+                         "existing ids are skipped); use with its own --state-file")
     ap.add_argument("--state-file", default=os.path.expanduser("~/lawrider/pl-saos.state"))
     ap.add_argument("--rate", type=float, default=1.0, help="max requests per second")
     ap.add_argument("--max-pages", type=int, default=0, help="stop after N pages (testing)")
     ap.add_argument("--dry-run", action="store_true", help="fetch and parse, do not write")
     args = ap.parse_args()
+    if args.since_days:
+        if args.since:
+            ap.error("--since and --since-days are exclusive")
+        d = datetime.now(timezone.utc).date() - timedelta(days=args.since_days)
+        args.since = f"{d.isoformat()}T00:00:00.000"
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
 

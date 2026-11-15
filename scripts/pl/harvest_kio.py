@@ -16,7 +16,7 @@ skipped, so the two sources do not double up.
 Calendar-week windows, newest first, state in sqlite, resumable; windows from
 the last --recheck-days are re-listed on every run because the portal
 publishes late. Some documents have an empty PDF on the portal (status
-pdf_error) and one is a test record ('Treść testowa'). PG* env. local.lex.
+pdf_error) and one is a test record ('Treść testowa'). PG* env (cthulhu: ~/lawrider/pl-env.sh).
 """
 import argparse
 import html
@@ -161,7 +161,7 @@ def main():
     ap.add_argument("--to", dest="d_to", default=date.today().isoformat())
     ap.add_argument("--rate", type=float, default=1.5)
     ap.add_argument("--db", default=os.path.expanduser("~/lawrider/kio/queue.sqlite"))
-    ap.add_argument("--raw-dir", default="/data/pl_kio/raw")
+    ap.add_argument("--raw-dir", default=os.path.expanduser("~/lawrider/kio/raw"))
     ap.add_argument("--max-windows", type=int, default=0)
     ap.add_argument("--recheck-days", type=int, default=120,
                     help="always re-list windows ending within this many days (late publications)")

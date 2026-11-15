@@ -24,9 +24,16 @@ PG_DB=secondlayer_prod
 | 3+4 struct + text | `harvest_eli_texts.py` | **done** - 673,735 articles, 5.5M units, 7 unresolved of 39,106 |
 | 5 incremental sync | `sync_eli_changes.py` | daily cron on cthulhu 04:30 |
 | 5b PDF articles | `segment_eli_pdf.py` (parser `pl_pdf_segmenter.py`) | **done** 2026-11-15 - 903 of 3,395 PDF-only snapshots split, 80,369 articles; 2,490 have no `Art.` (rozporządzenia), 2 rejected |
-| 5c PDF article vectors | `vectorize_pdf_articles.py` | 2026-11-15: 117,513 chunks of those articles into `pl_corpus_bge_cls` on CPU TEI (~5 chunks/s); each edition's whole-text `pl_act_text` points are dropped once its articles are in. Not in the cron: new splits stay whole-text until it is re-run |
+| 5c PDF article vectors | `vectorize_pdf_articles.py` | 2026-11-15: 117,513 chunks of those articles into `pl_corpus_bge_cls` on CPU TEI (~5 chunks/s); each edition's whole-text `pl_act_text` points are dropped once its articles are in. One-off; later splits are picked up by 5d |
+| 5d incremental vectors | `vectorize_incremental.py` + `run_vectorize_incremental.sh` | daily cron 08:30 (LEXAI-2253). Chunking/ids/payloads from `pl_chunk_export.py` (the bulk exporter of 10.11, now in the repo). Diff against Qdrant: only new or changed chunk texts are embedded |
 | 6 audit | `audit_pl_load.sh` | not written |
-| courts | `harvest_ncourt.py`, `harvest_cbosa.py`, `harvest_sn_tk.py` | not written |
+| courts: ncourt | `harvest_ncourt.py` | daily cron 07:15 |
+| courts: SAOS | `harvest_saos.py --since-days 3` | daily cron 03:15; backfill done 08.11 (52,110 new) |
+| courts: KIO | `harvest_kio.py` (re-lists last 120 days) | daily cron 03:30; backfill done 09.11 (16,610) |
+| courts: TK | `harvest_tk.py` (OTK ZU, via SOCKS) | daily cron 04:00; backfill done 09.11 (4,299) |
+| courts: NSA | `harvest_cbosa.py` | **manual only, never in cron**: NSA blocks scraping (policy) |
+| registers | `load_pl_files.py` | weekly Sun 03:00 (mswia_sankcje, komornicy, kprm_wykaz, rzecznicy_patentowi), monthly 1st 02:30 (sady_*), quarterly (teryt_*); unchanged files are skipped by sha256 |
+| matview | `pl_decision_meta` (migration 273) | daily 07:50 `REFRESH ... CONCURRENTLY` after the court harvesters (waits for the ncourt lock); no-op until the view exists |
 | legacy repair | `repair_legacy.py` | not written |
 
 Parser: `pl_article_parser.py`, tests `test_pl_article_parser.py` (all passing).
@@ -40,6 +47,52 @@ Schema: `mcp_backend/src/migrations/190_pl_legislation.sql`, `191_pl_law_texts.s
 plus `192_pl_indexes_concurrently.sql` **which the migration runner must not run**
 (it wraps each file in one transaction and `CREATE INDEX CONCURRENTLY` cannot run
 in one - same reason as `scripts/nl/179b_*`).
+
+## Cron (cthulhu)
+
+The whole PL schedule is `crontab.pl.fragment` (server time EET, absolute paths,
+runs from the checkout `/home/vovkes/SecondLayer-pl` on main - `git pull` there
+after a merge). Install: back up (`crontab -l > ~/lawrider/crontab.bak-$(date
++%Y%m%d-%H%M%S)`) and append only the lines that are not in `crontab -l` yet.
+The psycopg2 harvesters (SAOS, KIO, TK) take `PG*` from `~/lawrider/pl-env.sh`
+(127.0.0.1:5448); the plprod ones take `PL_SSH_HOST= PG_CONTAINER=pg-lawrider`.
+Python is `/usr/bin/python3` with requests/openpyxl in the *user* site-packages,
+so never `python3 -I`.
+
+Order: SAOS 03:15, KIO 03:30, TK 04:00, ELI 04:30, KRS 05:15, Sejm 05:45,
+SLPS 06:15, BZP 06:45, ncourt 07:15, pl_decision_meta 07:50, vectors 08:30.
+
+## Incremental vectors
+
+`run_vectorize_incremental.sh`: export on the host (rows changed since the
+cursors in `~/lawrider/pl-vectors/incremental/state.json`) -> `batch.ndjson`,
+then a throwaway `python:3.12-slim` container on the `lawrider` network
+(`pl-vec-incr`, requests from `~/lawrider/pl-vectors/pydeps`) diffs it against
+Qdrant and embeds on `tei-bge-m3-lawrider`. Streams and their cursors:
+decisions `greatest(imported_at, updated_at)`, editions
+`pl_snapshot_texts.fetched_at` plus new PDF splits (a set: `segment_eli_pdf.py`
+does not touch `fetched_at`), BZP `fetched_at` plus the update notices of the
+same procedures (CPV filled later), Sejm `fetched_at`, open-data source reloads.
+The first cursor is the bulk export start (2026-11-10 17:58 UTC).
+
+- Every expected point is looked up by id first; unchanged text = no embedding,
+  changed payload only = payload overwrite. Re-running a batch costs lookups.
+- An edition is replaced as a unit (its other points deleted, `must_not has_id`);
+  an edition with no text yet is never emptied. PDF-split editions get articles
+  only (their whole-text points go), HTML editions keep articles + whole text,
+  as in the bulk export.
+- `is_current` is set per act by filter after its editions: latest snapshot true,
+  the rest false (bulk rule: the latest snapshot is current even with no text).
+- Caps: `--max-chunks 40000` per export (cursor stays at the last unit taken),
+  `--max-seconds 7200` per load (the rest of the batch runs next day; no new
+  export while a batch is pending).
+- While `pl-pdf-vec` runs, legislation is skipped (both would rewrite
+  `pl_act_text` points of the same editions).
+
+Volume (measured 10-15.11): ~70 ncourt + ~45 SAOS decisions a day at ~19 chunks
+each, ~2,500 BZP notices (one short chunk), Sejm refetches 3-30K objects
+(titles, almost all unchanged). On the live CPU TEI next to other load:
+~1.2 decision chunks/s, so a normal day is 40-60 min.
 
 ## Run
 
@@ -131,6 +184,12 @@ without noticing.
   resolve both at read time (`courtNameSql`, `caseNumberSql` in
   `pl-legal-tools.ts`). Do not backfill the columns with an UPDATE: it is not a
   HOT update and re-inserts every row into the full-text GIN index.
+- **Sejm `fetched_at` moves on every refetch** (27K objects on 15.11), so the
+  Sejm stream is mostly lookups; do not count its rows as daily new data.
+- **`/data/pl_kio` does not exist on cthulhu**: KIO keeps PDFs under
+  `~/lawrider/kio/raw` (the default now).
+- **TK needs the SOCKS tunnel**: if tmux `socks` is down the TK cron logs curl
+  retries and gives up; restart with `tmux new -d -s socks ~/lawrider/socks-mail2.sh`.
 - **BZP update notices carry no CPV and no order type.** `harvest_bzp.py`
   copies both from another notice of the same `tender_id` after each run
   (`fill_updates`, last 120 days); the 2021-2026 backfill filled 304,005 of
