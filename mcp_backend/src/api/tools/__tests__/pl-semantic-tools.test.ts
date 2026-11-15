@@ -109,6 +109,35 @@ describe('pl_semantic_search', () => {
     expect(r.decisions[0].excerpt).toBe('A. K. wniosła pozew. Sąd zważył , co następuje');
   });
 
+  it('fills a missing case number and court name from Postgres, only for the hits that lack them', async () => {
+    const queries: any[] = [];
+    const db = {
+      transaction: async (fn: any) => fn({
+        query: async (sql: string, params: unknown[]) => {
+          if (sql.startsWith('SET')) return { rows: [] };
+          queries.push(params);
+          return { rows: [{ id: 'hf-pl-nsa-1', case_number: 'II GZ 184/13', court_name: 'Naczelny Sąd Administracyjny' }] };
+        },
+      }),
+    };
+    tool = new PlSemanticTools(db);
+    const bare = decision('hf-pl-nsa-1', 0.9);
+    bare.payload.case_number = null as any;
+    mockSearch.mockResolvedValueOnce([bare, decision('saos-3', 0.8)]);
+    const r = parse(await tool.executeTool('pl_semantic_search', { query: 'pomoc', scope: 'decisions' }));
+    expect(queries).toEqual([[['hf-pl-nsa-1', 'saos-3']]]); // saos-3 has a case number but no court_name
+    expect(r.decisions[0]).toMatchObject({ case_number: 'II GZ 184/13', court_name: 'Naczelny Sąd Administracyjny' });
+    expect(r.decisions[1].case_number).toBe('I CSK 1/20');
+  });
+
+  it('still answers when the metadata lookup fails', async () => {
+    const bare = decision('hf-pl-nsa-2', 0.9);
+    bare.payload.case_number = null as any;
+    mockSearch.mockResolvedValueOnce([bare]);
+    const r = parse(await tool.executeTool('pl_semantic_search', { query: 'pomoc', scope: 'decisions' }));
+    expect(r.decisions[0]).toMatchObject({ id: 'hf-pl-nsa-2', case_number: null, court_name: null });
+  });
+
   it('leaves plain-text excerpts with a ">" untouched', async () => {
     const d = decision('saos-8', 0.9);
     d.payload.text = 'kwota > 500 zł';

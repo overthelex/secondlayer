@@ -20,8 +20,8 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { BgeM3Client } from '../../utils/bge-m3-client.js';
 import { logger } from '../../utils/logger.js';
-import { COURT_TYPES } from './pl-legal-tools.js';
-import { plainText } from './pl-tool-utils.js';
+import { COURT_TYPES, caseNumberSql, courtNameSql } from './pl-legal-tools.js';
+import { plainText, runQuery } from './pl-tool-utils.js';
 
 const COLLECTION = process.env.PL_BGE_COLLECTION || 'pl_corpus_bge_cls';
 /** Chunks pulled before collapsing — decisions average ~13 windows each. */
@@ -177,17 +177,39 @@ export class PlSemanticTools extends BaseToolHandler {
     const hits = await this.qdrant.search(COLLECTION, {
       vector, limit: lim * DECISION_MULTIPLIER, filter: { must }, with_payload: true,
     });
-    return collapse(hits, (p) => (p.decision_id ? String(p.decision_id) : null), lim).map((v) => ({
+    const top = collapse(hits, (p) => (p.decision_id ? String(p.decision_id) : null), lim);
+    const filled = await this.fillDecisionMeta(top.map((v) => v.payload)
+      .filter((p) => !p.case_number || !p.court_name).map((p) => String(p.decision_id)));
+    return top.map((v) => ({
       id: v.payload.decision_id,
-      case_number: v.payload.case_number,
+      case_number: v.payload.case_number ?? filled.get(String(v.payload.decision_id))?.case_number ?? null,
       court_type: v.payload.court_type,
-      court_name: v.payload.court_name,
+      court_name: v.payload.court_name ?? filled.get(String(v.payload.decision_id))?.court_name ?? null,
       decision_type: v.payload.decision_type,
       decision_date: v.payload.decision_date,
       ...(v.payload.ecli && { ecli: v.payload.ecli }),
       similarity: sim(v.score),
       excerpt: excerpt(v.payload),
     }));
+  }
+
+  /**
+   * The vector payloads copy the decision columns as exported, so hf-pl-nsa hits have no case
+   * number and most common-court hits no court name. Fill them the way pl_get_court_decision
+   * does; a failed lookup only leaves the fields empty.
+   */
+  private async fillDecisionMeta(ids: string[]): Promise<Map<string, any>> {
+    const out = new Map<string, any>();
+    if (!ids.length) return out;
+    try {
+      const rows = await runQuery(this.db,
+        `SELECT id, ${caseNumberSql()} AS case_number, ${courtNameSql()} AS court_name
+         FROM pl_court_decisions WHERE id = ANY($1::text[])`, [ids]);
+      for (const r of rows) out.set(String(r.id), r);
+    } catch (error: any) {
+      logger.warn('pl_semantic_search: decision metadata lookup failed', { error: error.message });
+    }
+    return out;
   }
 
   private async searchLegislation(vector: number[], lim: number): Promise<any[]> {
