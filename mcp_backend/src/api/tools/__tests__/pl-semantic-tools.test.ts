@@ -101,6 +101,22 @@ describe('pl_semantic_search', () => {
     expect(mockSearch.mock.calls[0][1].limit).toBe(40);
   });
 
+  it('strips SAOS HTML from excerpts, including a tag cut at the window edges', async () => {
+    const d = decision('saos-7', 0.9);
+    d.payload.text = 'lass="anon-block">A. K.</span> wniosła pozew.</p> <p>Sąd <strong>zważył</strong>, co następuje <span cla';
+    mockSearch.mockResolvedValueOnce([d]);
+    const r = parse(await tool.executeTool('pl_semantic_search', { query: 'pozew', scope: 'decisions' }));
+    expect(r.decisions[0].excerpt).toBe('A. K. wniosła pozew. Sąd zważył , co następuje');
+  });
+
+  it('leaves plain-text excerpts with a ">" untouched', async () => {
+    const d = decision('saos-8', 0.9);
+    d.payload.text = 'kwota > 500 zł';
+    mockSearch.mockResolvedValueOnce([d]);
+    const r = parse(await tool.executeTool('pl_semantic_search', { query: 'x', scope: 'decisions' }));
+    expect(r.decisions[0].excerpt).toBe('kwota > 500 zł');
+  });
+
   it('searches decisions and current legislation for scope=all, one hit per article', async () => {
     mockSearch.mockImplementation(async (_c: string, req: any) => {
       const dt = req.filter.must[0].match;
