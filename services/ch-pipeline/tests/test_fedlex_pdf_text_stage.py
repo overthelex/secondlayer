@@ -496,3 +496,20 @@ def test_new_edition_degenerate_clean_text_stores_raw(conn, settings, monkeypatc
     assert report.degenerate == 1 and report.parsed == 1 and report.cleaned == 0
     row = _vrow(conn, vid)
     assert row["akn_xml"] == raw and row["full_text"] == raw
+
+
+def test_layout_padding_does_not_make_a_clean_text_degenerate():
+    from chpipe.stages.fedlex_pdf_text_stage import _degenerate
+    # one annex table row as pdftotext -layout renders it: words far apart
+    row = "vorerfassen" + " " * 40 + "RUD" + " " * 40 + "-" + " " * 40 + "-\n"
+    raw = row * 50
+    clean = "vorerfassen RUD - -\n" * 50
+    assert len(clean) < 0.3 * len(raw.strip()), "the old measure flagged this"
+    assert not _degenerate(raw, clean)
+
+
+def test_a_clean_text_that_lost_most_words_is_still_degenerate():
+    from chpipe.stages.fedlex_pdf_text_stage import _degenerate
+    raw = "Art. 1 Der Vertrag ist gültig und bleibt es.\n" * 50
+    assert _degenerate(raw, "Art. 1 Der Vertrag\n")
+    assert _degenerate(raw, "   \n")

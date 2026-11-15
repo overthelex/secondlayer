@@ -87,8 +87,14 @@ MIN_CLEAN_RATIO = 0.3
 
 
 def _degenerate(raw: str, clean: str) -> bool:
+    """Empty, or under MIN_CLEAN_RATIO of the raw text with its whitespace
+    runs collapsed. Collapsed, because pdftotext -layout pads wide annex
+    tables with hundreds of spaces per line: on 14.11.2026 all 46 editions
+    flagged against the padded length kept 90-97% of the raw words (only
+    page headers and footers were gone) and scored 0.93-0.98 against the
+    collapsed length."""
     c = clean.strip()
-    return not c or len(c) < MIN_CLEAN_RATIO * len(raw.strip())
+    return not c or len(c) < MIN_CLEAN_RATIO * len(" ".join(raw.split()))
 
 
 BATCH_SIZE = 50
