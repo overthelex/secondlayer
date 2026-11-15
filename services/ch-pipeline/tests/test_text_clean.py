@@ -12,6 +12,7 @@ from chpipe.text_clean import (
     join_hyphen,
     normalise_chars,
     split_columns,
+    strip_archive_cover,
     strip_page_furniture,
     unwrap,
 )
@@ -27,7 +28,7 @@ V = frozenset()
 
 
 def test_constants():
-    assert CLEANER_VERSION == 1
+    assert CLEANER_VERSION == 2
     assert OWN_REFLOW_SPIDERS == frozenset({"CH_WEKO_RPW", "CH_WEKO"})
 
 
@@ -274,3 +275,65 @@ def test_a_word_made_of_head_and_conjunction_joins():
 ])
 def test_suspended_compounds_stay_split_for_any_head(head, tail):
     assert join_hyphen(head, tail, V) == head + " " + tail
+
+
+VB_BANNER = [
+    "Schweizerisches Bundesarchiv, Digitale Amtsdruckschriften",
+    "Archives fédérales suisses, Publications officielles numérisées",
+    "Archivio federale svizzero, Pubblicazioni ufficiali digitali",
+]
+VB_COVER = VB_BANNER + [
+    "", "", "Arrêté fédéral approuvant trois instruments", "", "",
+    "In                               Bundesblatt",
+    "Dans                             Feuille fédérale",
+    "In                               Foglio federale",
+    "",
+    "Jahr                             2000",
+    "Année", "Anno", "",
+    "Seite                            343-343",
+    "Page", "Pagina", "",
+    "Ref. No                          10 124 217",
+    "", "",
+    "Die elektronischen Daten der Schweizerischen Bundeskanzlei wurden durch das Schweizerische Bundesarchiv",
+    "übernommen.",
+    "I dati elettronici della Cancelleria federale svizzera sono stati ripresi dall'Archivio federale svizzero.",
+]
+VB_BODY = ["Le présent arrêté n'est pas sujet au référendum.", "",
+        "1999-5244                                                     343"]
+
+
+def test_archive_cover_page_is_dropped():
+    assert strip_archive_cover(VB_BODY + VB_COVER) == VB_BODY
+
+
+def test_archive_cover_dropped_through_clean_pdf_text():
+    out = clean_pdf_text("\n".join(VB_BODY + VB_COVER), ["fr"])
+    assert "Bundesarchiv" not in out
+    assert "Ref. No" not in out
+    assert "Cancelleria" not in out
+    assert out.startswith("Le présent arrêté")
+
+
+def test_banner_without_cover_table_drops_only_the_banner():
+    after = ["Art. 2", "Der Bundesrat vollzieht diesen Beschluss."]
+    assert strip_archive_cover(VB_BODY + VB_BANNER + after) == VB_BODY + after
+
+
+def test_banner_followed_by_a_long_text_is_not_a_cover():
+    long_tail = VB_BANNER + ["Jahr                             2000"] + [
+        f"Satz {i} des Textes." for i in range(80)]
+    out = strip_archive_cover(VB_BODY + long_tail)
+    assert out == VB_BODY + long_tail[3:]
+
+
+def test_text_naming_the_archive_is_kept():
+    lines = ["Schweizerisches Bundesarchiv: Geschäftsbericht 1998",
+             "Schweizerisches Bundesarchiv", "(Herausgeber)"]
+    assert strip_archive_cover(lines) == lines
+
+
+def test_unwrap_width_override_sets_the_short_line_threshold():
+    lines = ["Gesamtabstimmung - Vote sur l'ensemble",
+             "Für Annahme des Entwurfes stimmten am Ende des Tages viele Räte"]
+    assert unwrap(lines, V) == [" ".join(lines)]
+    assert unwrap(lines, V, width=100) == lines

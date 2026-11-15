@@ -4,7 +4,8 @@
 are public so the federal, cantonal and decision pipelines can reuse them:
 
 1. ``normalise_chars``: ligatures, no-break spaces, soft hyphens.
-2. ``strip_page_furniture``: folios, "Seite N", running headers.
+2. ``strip_archive_cover``: the Federal Archives cover page (CH_VB);
+   ``strip_page_furniture``: folios, "Seite N", running headers.
 3. ``split_columns``: de-interleave two-column runs (left column first).
 4. ``unwrap`` (only when ``is_hard_wrapped``): rebuild paragraphs from
    hard-wrapped lines, joining hyphen line-wraps with ``join_hyphen``.
@@ -20,7 +21,7 @@ from statistics import median
 
 from chpipe.text_quality import _wordlist
 
-CLEANER_VERSION: int = 1
+CLEANER_VERSION: int = 2
 
 # Spiders whose text is reflowed by their own parser (rpw.py); never cleaned here.
 OWN_REFLOW_SPIDERS: frozenset[str] = frozenset({"CH_WEKO_RPW", "CH_WEKO"})
@@ -83,6 +84,19 @@ COLUMN_TAIL_LINES = 3
 COLUMN_MAX_BLANKS = 1
 SPLIT_SLACK = 6
 
+# The Federal Archives' digitised official publications (CH_VB) end with a
+# cover page: this banner, the title again, a metadata table (Jahr, Band,
+# Seite, Ref. No ...) and a note on who digitised it. Measured on 4,000 raw
+# CH_VB texts: one banner per text, always followed by the table, at most 40
+# non-blank lines to the end.
+_ARCHIVE_BANNER = "Schweizerisches Bundesarchiv, Digitale Amtsdruckschriften"
+_ARCHIVE_BANNER_TAIL = (
+    "Archives fédérales suisses, Publications officielles numérisées",
+    "Archivio federale svizzero, Pubblicazioni ufficiali digitali",
+)
+_COVER_TABLE = re.compile(r"^\s*Jahr\s{2,}\d{4}\s*$")
+COVER_MAX_LINES = 60
+
 
 def normalise_chars(text: str) -> str:
     """Ligatures to letters, U+00A0/U+202F to space, soft hyphens removed.
@@ -90,6 +104,34 @@ def normalise_chars(text: str) -> str:
     U+FFFD is left as is: it marks a lost character that we cannot recover.
     """
     return text.translate(_CHAR_MAP)
+
+
+def strip_archive_cover(lines: list[str]) -> list[str]:
+    """Drop the Federal Archives cover page that ends a CH_VB text.
+
+    From the last banner line ("Schweizerisches Bundesarchiv, Digitale
+    Amtsdruckschriften", followed by its French line) everything to the end
+    goes, but only when that tail holds the cover's metadata table (a
+    "Jahr  NNNN" line) and has at most COVER_MAX_LINES non-blank lines. A
+    banner without that tail is not a cover: only the banner lines go and the
+    text after them stays.
+    """
+    stripped = [ln.strip() for ln in lines]
+    for i in range(len(lines) - 1, -1, -1):
+        if stripped[i] != _ARCHIVE_BANNER:
+            continue
+        rest = [j for j in range(i + 1, len(lines)) if stripped[j]]
+        if not rest or stripped[rest[0]] != _ARCHIVE_BANNER_TAIL[0]:
+            continue
+        tail = [stripped[i]] + [stripped[j] for j in rest]
+        if (len(tail) <= COVER_MAX_LINES
+                and any(_COVER_TABLE.match(t) for t in tail)):
+            return lines[:i]
+        banner = {i, rest[0]}
+        if len(rest) > 1 and stripped[rest[1]] == _ARCHIVE_BANNER_TAIL[1]:
+            banner.add(rest[1])
+        return [ln for j, ln in enumerate(lines) if j not in banner]
+    return lines
 
 
 def _folio_header(stripped: str) -> tuple[str, int] | None:
@@ -323,7 +365,8 @@ def _bridge(lines: list[str], i: int, paragraph: str, prev_len: int,
     return None
 
 
-def unwrap(lines: list[str], vocabulary: frozenset[str]) -> list[str]:
+def unwrap(lines: list[str], vocabulary: frozenset[str],
+           width: int | None = None) -> list[str]:
     """Rebuild paragraphs from hard-wrapped lines; one paragraph per output line.
 
     A line ends its paragraph when the next line is blank, or the line is
@@ -334,8 +377,10 @@ def unwrap(lines: list[str], vocabulary: frozenset[str]) -> list[str]:
     "12. Juli 2019" and "gemäss" / "Art. 8 EMRK" stay one sentence).
     Blank lines are bridged only inside a sentence, see ``_bridge``.
     Blank lines that end a paragraph are kept as "".
+    `width` overrides the measured column width (clean_pdf_text passes the
+    width measured before strip_archive_cover).
     """
-    short = SHORT_LINE_FACTOR * _column_width(lines)
+    short = SHORT_LINE_FACTOR * (_column_width(lines) if width is None else width)
     out: list[str] = []
     held: list[str] = []
     paragraph = ""
@@ -546,10 +591,18 @@ def clean_pdf_text(raw: str, languages: list[str]) -> str:
     """Clean raw pdftotext-layout text; see the module docstring for the steps."""
     text = normalise_chars(raw).replace("\r\n", "\n").replace("\f", "\n\n\n")  # form feed = page seam
     lines = [ln.rstrip() for ln in text.split("\n")]
-    lines = strip_page_furniture(lines)
-    lines = split_columns(lines)
-    if is_hard_wrapped("\n".join(lines)):
-        lines = unwrap(lines, hyphen_vocabulary(languages))
+    kept = strip_archive_cover(lines)
+    laid_out = split_columns(strip_page_furniture(lines))
+    # The layout is measured with the cover in place: it was measured that way
+    # when CH_VB was first cleaned, and on 1,500 prod texts measuring without
+    # it lowered the column width enough to merge headings into paragraphs.
+    wrapped = is_hard_wrapped("\n".join(laid_out))
+    width = _column_width(laid_out)
+    if len(kept) != len(lines):
+        laid_out = split_columns(strip_page_furniture(kept))
+    lines = laid_out
+    if wrapped:
+        lines = unwrap(lines, hyphen_vocabulary(languages), width=width)
     out: list[str] = []
     for line in lines:
         if not line.strip():
