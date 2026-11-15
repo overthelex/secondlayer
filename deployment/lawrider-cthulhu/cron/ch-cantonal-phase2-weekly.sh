@@ -26,6 +26,14 @@ run env CHPIPE_SOURCE=zhlex ./run-stage.sh pdf-text
 run env CHPIPE_SOURCE=lexwork_pdf ./run-stage.sh pdf-text
 run ./run-stage.sh lexfind-versions
 run env CHPIPE_SOURCE=lexfind ./run-stage.sh pdf-text
+# The change log (ch_act_change) for the editions parsed above. Without this
+# the new cantonal editions never got one: the 14.11.2026 re-diff found ~20K
+# edition pairs that had never been compared. diff is idempotent per act, so
+# re-diffing the unchanged acts costs time (~25 min for all of them), not
+# correctness. CHPIPE_SOURCE keeps it off the federal corpus.
+for lang in de fr it rm; do
+  run env CHPIPE_SOURCE=zhlex,lexwork_pdf,lexfind,sil,ti_rl ./run-stage.sh diff "$lang"
+done
 run ./run-stage.sh reports-cantonal
 run ./run-stage.sh project-legacy
 echo "== $(date -u +%FT%TZ) PHASE2 WEEKLY DONE"
