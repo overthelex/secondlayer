@@ -31,7 +31,7 @@ const SNIPPET_RAW_CHARS = 3000;
 const VERDICT_TEXT = [200, 906];
 
 // The sources label the same kind of court differently.
-const COURT_TYPES: Record<string, string[]> = {
+export const COURT_TYPES: Record<string, string[]> = {
   common: ['COMMON', 'ordinary_court'],
   supreme: ['SUPREME'],
   administrative: ['administrative court'],
