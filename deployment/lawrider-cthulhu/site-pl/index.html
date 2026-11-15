@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FAF8F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1A1917" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Polskie prawo i orzecznictwo dla asystentów AI: 2,5 mln orzeczeń, 164 955 aktów z historią tekstów jednolitych, KRS, BZP i Sejm przez 19 narzędzi MCP.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://lawrider.pl/">
+<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<title>Lawrider — polskie prawo dla asystentów AI</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lawrider">
+<meta property="og:url" content="https://lawrider.pl/">
+<meta property="og:title" content="Lawrider — polskie prawo dla asystentów AI">
+<meta property="og:description" content="2,5 mln orzeczeń polskich sądów, 164 955 aktów z historią tekstów jednolitych, KRS, BZP i Sejm przez 19 narzędzi MCP.">
+<meta property="og:locale" content="pl_PL">
+<meta property="og:locale:alternate" content="en_GB">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"Organization","@id":"https://lawrider.pl/#org","name":"Lawrider","url":"https://lawrider.pl/","logo":"https://lawrider.pl/apple-touch-icon.png","email":"hello@lawrider.pl","areaServed":"PL"},
+ {"@type":"WebSite","@id":"https://lawrider.pl/#site","url":"https://lawrider.pl/","name":"Lawrider","publisher":{"@id":"https://lawrider.pl/#org"},"inLanguage":["pl","en"]}]}
+</script>
+<style>
+  :root{
+    --paper:#FAF8F4;
+    --surface:#F3F0E9;
+    --ink:#2A2A2A;
+    --muted:#6E685E;
+    --rule:#E4DFD5;
+    --gold:#C99231;
+    --band:#2A2A2A;
+    --band-ink:#F2EFE8;
+    --band-muted:#A39B8D;
+    --band-rule:#3A3835;
+    --serif:ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+    --col:660px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1A1917; --surface:#232120; --ink:#EDE9E1; --muted:#9C958A;
+      --rule:#322F2C; --gold:#D9A544;
+      --band:#111010; --band-ink:#EDE9E1; --band-muted:#8C857A; --band-rule:#2A2826;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1A1917; --surface:#232120; --ink:#EDE9E1; --muted:#9C958A;
+    --rule:#322F2C; --gold:#D9A544;
+    --band:#111010; --band-ink:#EDE9E1; --band-muted:#8C857A; --band-rule:#2A2826;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:var(--sans);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;
+    overflow-wrap:break-word;-webkit-tap-highlight-color:rgba(201,146,49,.18);
+  }
+  img{max-width:100%}
+  .wrap{max-width:var(--col);margin:0 auto;padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}
+  .bleed{border-top:1px solid var(--rule)}
+
+  header{padding:22px 0}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:inherit}
+  .brand img{width:26px;height:26px;display:block}
+  .brand b{font-family:var(--serif);font-weight:600;font-size:19px;letter-spacing:-.01em}
+  .headright{display:flex;align-items:center;gap:18px}
+  nav{display:flex;gap:10px 18px;flex-wrap:wrap;min-width:0}
+  nav a{white-space:nowrap;font-size:13px;color:var(--muted);text-decoration:none;padding-bottom:2px;border-bottom:1px solid transparent}
+  nav a:hover,nav a:focus-visible{color:var(--ink);border-bottom-color:var(--gold)}
+
+  /* language switcher */
+  .lang{display:flex;align-items:center;gap:0;flex:0 0 auto;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+  .lang button{
+    appearance:none;background:transparent;border:0;cursor:pointer;
+    font-family:var(--sans);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--muted);padding:5px 9px;line-height:1.4;
+    border-right:1px solid var(--rule);
+  }
+  .lang button:last-child{border-right:0}
+  .lang button:hover{color:var(--ink)}
+  .lang button[aria-current="true"]{color:var(--ink);background:var(--surface);font-weight:600}
+
+  .hero{padding:76px 0 64px}
+  h1{
+    font-family:var(--serif);font-weight:400;
+    font-size:clamp(34px,5.4vw,50px);line-height:1.12;letter-spacing:-.02em;
+    margin:0 0 22px;text-wrap:balance;
+  }
+  h1 em{font-style:normal;color:var(--gold)}
+  .lede{font-size:19px;color:var(--muted);margin:0;max-width:56ch}
+
+  .label{
+    display:flex;align-items:center;gap:9px;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 18px;
+  }
+  .label::before{content:"";width:11px;height:11px;flex:none;border-left:2px solid var(--gold);border-bottom:2px solid var(--gold)}
+
+  section{padding:56px 0}
+  h2{font-family:var(--serif);font-weight:600;font-size:25px;letter-spacing:-.01em;margin:0 0 14px}
+  p{margin:0 0 16px;max-width:65ch}
+  p:last-child{margin-bottom:0}
+  a{color:var(--ink);text-decoration-color:var(--gold);text-underline-offset:3px}
+  a:hover{color:var(--gold)}
+
+  .specs{width:100%;border-collapse:collapse;font-size:15px;margin-top:6px}
+  .specs td{padding:11px 0;border-bottom:1px solid var(--rule);vertical-align:baseline}
+  .specs tr:last-child td{border-bottom:0}
+  .specs td:first-child{color:var(--muted);padding-right:20px;hyphens:auto}
+  .specs td:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .note{font-size:13.5px;color:var(--muted);margin-top:14px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em;word-break:break-all}
+
+  .band{background:var(--band);color:var(--band-ink);padding:64px 0}
+  .hero-band{padding:0}
+  .band .label{color:var(--band-muted)}
+  .band h2{color:var(--band-ink)}
+  .band p{color:var(--band-muted)}
+  .band strong{color:var(--band-ink);font-weight:500}
+  .papers{list-style:none;padding:0;margin:26px 0 0;border-top:1px solid var(--band-rule)}
+  .papers li{padding:14px 0;border-bottom:1px solid var(--band-rule);font-size:15px}
+  .papers .id{font-size:12px;letter-spacing:.06em;color:var(--gold);display:block;margin-bottom:3px;font-variant-numeric:tabular-nums}
+
+  .chart{margin:24px 0 8px}
+  .chart svg{width:100%;height:auto;display:block;overflow:visible}
+  .chart .bar{fill:var(--gold)}
+  .chart .bar.ytd{opacity:.55}
+  .chart .bar.future{fill:none;stroke:var(--gold);stroke-width:1.5;stroke-dasharray:3 3}
+  .chart .bar.open{opacity:.55}
+  .chart .axis{stroke:var(--rule);stroke-width:1}
+  .chart .grid{stroke:var(--rule);stroke-width:1}
+  .chart .stem{stroke:var(--rule);stroke-width:1}
+  .chart .dot{fill:var(--gold);stroke:var(--paper);stroke-width:2}
+  .chart text{font-family:var(--sans);font-size:12px;fill:var(--muted)}
+  .chart .tick{font-size:11px}
+  .chart .cat{fill:var(--ink)}
+  .chart .val{font-variant-numeric:tabular-nums;fill:var(--ink)}
+  .chart figcaption{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .chart h3{font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);margin:0 0 10px}
+  table.data{width:100%;border-collapse:collapse;margin:24px 0 8px;font-size:14px}
+  table.data th,table.data td{padding:8px 6px;border-bottom:1px solid var(--rule);text-align:right;font-variant-numeric:tabular-nums;vertical-align:top}
+  table.data th{font-family:var(--sans);font-weight:600;color:var(--muted);font-size:12.5px}
+  table.data th:first-child,table.data td:first-child{text-align:left}
+  table.data td:first-child{color:var(--ink)}
+  table.data.pit td:first-child{white-space:nowrap}
+  .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.data .share{color:var(--ink)}
+  @media (max-width:560px){table.data{font-size:12.5px} table.data th,table.data td{padding:7px 3px}}
+  @media (max-width:560px){.chart .wide{overflow-x:auto;-webkit-overflow-scrolling:touch} .chart .wide svg{min-width:540px}}
+  .steps{list-style:none;padding:0;margin:18px 0 0;counter-reset:s}
+  .steps li{counter-increment:s;position:relative;padding:0 0 18px 34px;font-size:15.5px;color:var(--muted)}
+  .steps li::before{
+    content:counter(s);position:absolute;left:0;top:1px;
+    font-size:12px;color:var(--gold);font-variant-numeric:tabular-nums;
+    border-left:2px solid var(--gold);padding-left:8px;line-height:1.4;
+  }
+  .steps b{color:var(--ink);font-weight:600}
+
+  .contact{display:flex;flex-wrap:wrap;gap:12px 34px;margin-top:18px;font-size:15px}
+  .contact div{min-width:150px}
+  .contact span{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+
+  footer{padding:34px 0 48px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+  :focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:2px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media (max-width:560px){
+    body{font-size:16px}
+    header{padding:16px 0}
+    .head{gap:12px}
+    .hero{padding:52px 0 44px}
+    section{padding:42px 0}
+    .band{padding:52px 0}
+    h1{hyphens:auto}
+    .lede{font-size:17.5px}
+    h2{font-size:23px}
+    /* nav and the language switcher drop to their own row, thumb-sized */
+    .headright{gap:12px;width:100%;justify-content:space-between}
+    nav{gap:16px}
+    nav a{font-size:14px;padding:7px 0}
+    .lang button{padding:8px 11px;font-size:11.5px}
+    .steps li{padding-bottom:16px}
+    .contact{gap:14px 26px}
+    .contact div{min-width:132px}
+    footer{flex-direction:column;gap:6px;padding:28px 0 40px}
+  }
+  @media (max-width:430px){
+    .wrap{padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right))}
+    /* switcher moves up beside the logo, nav takes a full row of its own:
+       three links plus the switcher on one line do not fit 320px */
+    .headright{display:contents}
+    .head{gap:10px 12px}
+    .lang{order:2;margin-left:auto}
+    nav{order:3;flex:1 1 100%;gap:10px 18px}
+    /* label above value: a two-column table with a nowrap number cannot fit 360px */
+    .specs{font-size:15px}
+    .specs tr{display:block;padding:11px 0;border-bottom:1px solid var(--rule)}
+    .specs tr:last-child{border-bottom:0}
+    .specs td{display:block;padding:0;border-bottom:0}
+    .specs td:first-child{padding-right:0;font-size:13px;letter-spacing:.02em}
+    .specs td:last-child{text-align:left;margin-top:2px}
+    .contact{gap:16px 22px}
+    .contact div{min-width:0;flex:1 1 100%}
+  }
+</style>
+
+<style>
+/* The flag as a watermark, as on lawrider.uk: a mark of jurisdiction, not a
+   background. White over red, faded out before the text column. */
+.hero-band { position:relative; overflow:hidden; }
+.hero-flag { position:absolute; top:0; right:0; height:100%; width:62%;
+  opacity:.18; filter:saturate(.8);
+  -webkit-mask-image:linear-gradient(90deg, transparent 0%, #000 42%, #000 100%);
+  mask-image:linear-gradient(90deg, transparent 0%, #000 42%, #000 100%);
+  pointer-events:none; }
+.hero-band > .wrap { position:relative; z-index:1; }
+@media (max-width:820px) { .hero-flag { display:none; } }
+.tools{list-style:none;padding:0;margin:22px 0 0;border-top:1px solid var(--rule)}
+.tools li{padding:12px 0;border-bottom:1px solid var(--rule);font-size:15px;color:var(--muted)}
+.tools code{display:block;color:var(--ink);font-size:13.5px;margin-bottom:2px;word-break:normal}
+.tools h3{font-family:var(--sans);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:26px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap head">
+    <a class="brand" href="#top"><img src="data:image/png;base64,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" alt="Lawrider"><b>Lawrider</b></a>
+    <div class="headright">
+      <nav>
+        <a href="#what" data-i18n="nav1">Co to jest</a>
+        <a href="#data" data-i18n="nav2">Dane</a>
+        <a href="#mcp">MCP</a>
+        <a href="#contact" data-i18n="nav3">Kontakt</a>
+      </nav>
+      <div class="lang" role="group" aria-label="Język">
+        <button type="button" data-lang="pl" aria-current="true">PL</button>
+        <button type="button" data-lang="en" aria-current="false">EN</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <div class="band hero-band">
+    <svg class="hero-flag" viewBox="0 0 16 10" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <rect width="16" height="5" fill="#FFFFFF"/>
+      <rect y="5" width="16" height="5" fill="#DC143C"/>
+    </svg>
+    <div class="wrap hero">
+      <p class="label" data-i18n="heroLabel">Badania prawne · Polska</p>
+      <h1 data-i18n="heroH1">Polskie prawo i orzecznictwo, <em>wprost w asystencie AI</em>.</h1>
+      <p class="lede" data-i18n="heroLede">2,5 mln orzeczeń polskich sądów, 164 955 aktów Dziennika Ustaw i Monitora Polskiego z historią tekstów jednolitych, KRS, BZP i Sejm. Dziewiętnaście narzędzi MCP, które odpowiadają z tej samej bazy, na której policzono liczby na tej stronie.</p>
+    </div>
+  </div>
+
+  <section id="what" class="wrap">
+    <p class="label" data-i18n="whatLabel">Co to jest</p>
+    <h2 data-i18n="whatH2">Źródła pierwotne zamiast odpowiedzi z pamięci modelu</h2>
+    <p data-i18n="whatP1">Model językowy zapytany o polskie prawo odpowie płynnie i z pewnością, zacytuje artykuł i sygnaturę. Nie powie natomiast, czy ten artykuł brzmiał tak w dniu, o który chodzi, ani czy wyrok o tej sygnaturze w ogóle istnieje.</p>
+    <p data-i18n="whatP2">Lawrider daje asystentowi dostęp do samych źródeł: pełnych tekstów orzeczeń, aktów prawnych w kolejnych tekstach jednolitych, rejestru KRS, ogłoszeń zamówień publicznych i prac Sejmu. Asystent wyszukuje, czyta i cytuje dokument, zamiast go odtwarzać.</p>
+    <table class="specs">
+      <tr><td data-i18n="spec1">Orzeczenia sądów, pełny tekst</td><td>2 500 600</td></tr>
+      <tr><td data-i18n="spec2">Akty Dziennika Ustaw i Monitora Polskiego</td><td>164 955</td></tr>
+      <tr><td data-i18n="spec3">Artykuły aktów, wydzielone</td><td>754 104</td></tr>
+      <tr><td data-i18n="spec4">Powiązania między aktami (ISAP)</td><td>735 824</td></tr>
+      <tr><td data-i18n="spec5">Podmioty w KRS</td><td>1 195 237</td></tr>
+      <tr><td data-i18n="spec6">Ogłoszenia BZP, od 2021 r.</td><td>2 898 157</td></tr>
+      <tr><td data-i18n="spec7">Obiekty Sejmu, kadencje IX i X</td><td>106 670</td></tr>
+      <tr><td data-i18n="spec8">Losowania SLPS, od 2018 r.</td><td>25 910 851</td></tr>
+    </table>
+    <p class="note" data-i18n="whatNote">Policzono 15.11.2026 na produkcyjnej bazie danych.</p>
+  </section>
+
+  <div class="bleed"></div>
+
+  <section id="data" class="wrap">
+    <p class="label" data-i18n="dataLabel">Dane</p>
+    <h2 data-i18n="dataH2">Co jest w bazie, i czego w niej nie ma</h2>
+    <figure class="chart">
+      <h3 data-i18n="decH3">Orzeczenia według rodzaju sądu</h3>
+      <div class="tblwrap"><table class="data">
+        <tr><th data-i18n="decTh1">Sąd</th><th data-i18n="decTh2">Orzeczenia</th><th data-i18n="decTh3">Do</th></tr>
+        <tr><td data-i18n="decAdm">Sądy administracyjne (NSA, WSA)</td><td>1 900 251</td><td>11.2026</td></tr>
+        <tr><td data-i18n="decCom">Sądy powszechne</td><td>499 471</td><td>2026</td></tr>
+        <tr><td data-i18n="decKio">Krajowa Izba Odwoławcza</td><td>48 989</td><td>10.2026</td></tr>
+        <tr><td data-i18n="decSn">Sąd Najwyższy</td><td>38 081</td><td>06.2016</td></tr>
+        <tr><td data-i18n="decTk">Trybunał Konstytucyjny</td><td>13 808</td><td>10.2026</td></tr>
+      </table></div>
+      <figcaption data-i18n="decCap">Orzeczenia Sądu Najwyższego kończą się w czerwcu 2016 r.: nowszych nie da się dziś pobrać automatycznie, i mówimy o tym wprost, zamiast liczyć je jako pokrycie. Osoby fizyczne są w orzeczeniach zanonimizowane u źródła.</figcaption>
+    </figure>
+    <figure class="chart">
+      <h3 data-i18n="legH3">Prawo w czasie</h3>
+      <p data-i18n="legP1">W Polsce nie ma oficjalnej usługi „tekst na dzień”. Istnieją tylko dwa rodzaje tekstu: ogłoszony przy uchwaleniu i każdy kolejny tekst jednolity. Trzymamy je wszystkie (164 948 wersji), z datą stanu prawnego i grafem zmian, więc na pytanie o umowę z 2019 r. odpowiada brzmienie z 2019 r., a liczba nowelizacji po danym tekście jest podana obok, a nie ukryta.</p>
+      <p data-i18n="legP2">Najnowsze teksty jednolite są często publikowane wyłącznie w PDF. Dzielimy je na artykuły sami i sprawdzamy wynik z poprzednią wersją HTML; tam, gdzie podział się nie udał, narzędzie zwraca pełny tekst i ostrzeżenie. Monitor Polski nie ma tekstów w HTML w ogóle, więc dla niego mamy rejestr i powiązania.</p>
+    </figure>
+  </section>
+
+  <div class="bleed"></div>
+
+  <section id="mcp" class="wrap">
+    <p class="label" data-i18n="mcpLabel">Dostęp MCP</p>
+    <h2 data-i18n="mcpH2">Polski korpus w Claude, ChatGPT i innych asystentach</h2>
+    <p data-i18n="mcpP1">Baza jest udostępniona jako serwer Model Context Protocol. Wszystkie narzędzia są tylko do odczytu i dotyczą wyłącznie Polski.</p>
+    <table class="specs">
+      <tr><td data-i18n="mcpSpec1">Adres</td><td><code>https://mcp.lawrider.pl/v2/mcp</code></td></tr>
+      <tr><td data-i18n="mcpSpec2">Protokół</td><td data-i18n="mcpSpec2v">MCP przez Streamable HTTP, klucz Bearer</td></tr>
+      <tr><td data-i18n="mcpSpec3">Narzędzia</td><td data-i18n="mcpSpec3v">19, tylko Polska, tylko odczyt</td></tr>
+    </table>
+    <ul class="tools">
+      <li><h3 data-i18n="tgSearch">Wyszukiwanie</h3></li>
+      <li><code>pl_semantic_search</code><span data-i18n="t_sem">Wyszukiwanie po znaczeniu w orzeczeniach, aktach i zamówieniach: opisz sytuację własnymi słowami, w dowolnym języku.</span></li>
+      <li><code>pl_search_court_decisions</code><span data-i18n="t_scd">Pełnotekstowo w 2,5 mln orzeczeń, we wszystkich formach gramatycznych słów, albo po sygnaturze.</span></li>
+      <li><code>pl_get_court_decision</code><span data-i18n="t_gcd">Pełny tekst i metryka orzeczenia.</span></li>
+      <li><code>pl_count_cases_by_party</code><span data-i18n="t_cnt">Ile orzeczeń wymienia firmę lub urząd: według sądu i lat, z najnowszymi.</span></li>
+      <li><h3 data-i18n="tgLaw">Legislacja</h3></li>
+      <li><code>pl_search_legislation</code><span data-i18n="t_sl">Akty Dziennika Ustaw i Monitora Polskiego po tytule lub ELI.</span></li>
+      <li><code>pl_get_act</code><span data-i18n="t_ga">Karta aktu i wszystkie opublikowane teksty, z liczbą zmian po każdym.</span></li>
+      <li><code>pl_get_act_structure</code><span data-i18n="t_gas">Spis treści: księgi, tytuły, działy, rozdziały z zakresami artykułów.</span></li>
+      <li><code>pl_get_act_article</code><span data-i18n="t_gaa">Brzmienie artykułu na wskazany dzień.</span></li>
+      <li><code>pl_get_act_text</code><span data-i18n="t_gat">Pełny tekst wersji aktu, także odczytanej z PDF.</span></li>
+      <li><code>pl_get_act_relations</code><span data-i18n="t_gar">Nowelizacje, akty wykonawcze, podstawa prawna, uchylenia, wyroki TK z ISAP.</span></li>
+      <li><h3 data-i18n="tgReg">Rejestry i zamówienia</h3></li>
+      <li><code>pl_search_companies</code><span data-i18n="t_sc">Podmioty KRS po nazwie, KRS, NIP lub REGON.</span></li>
+      <li><code>pl_get_company</code><span data-i18n="t_gc">Odpis z KRS: dane, reprezentacja, zaległości, likwidacja i upadłość.</span></li>
+      <li><code>pl_search_procurement</code><span data-i18n="t_sp">Ogłoszenia BZP po zamawiającym, wykonawcy, CPV i dacie.</span></li>
+      <li><code>pl_get_procurement_notice</code><span data-i18n="t_gp">Pełne ogłoszenie BZP z wykonawcami.</span></li>
+      <li><code>pl_search_register</code><span data-i18n="t_sr">Komornicy, rzecznicy patentowi, lista sankcyjna MSWiA, wykaz prac legislacyjnych KPRM, sądy i ich właściwość, TERYT.</span></li>
+      <li><h3 data-i18n="tgCourt">Sądy i Sejm</h3></li>
+      <li><code>pl_search_case_assignments</code><span data-i18n="t_sca">Raporty SLPS: który sędzia wylosował sprawę i z jakiej puli kandydatów.</span></li>
+      <li><code>pl_get_judge_workload</code><span data-i18n="t_gjw">Ostatnie znane obciążenie sędziego w każdym wydziale według SLPS.</span></li>
+      <li><code>pl_search_sejm</code><span data-i18n="t_ss">Projekty ustaw, procesy legislacyjne, druki, głosowania, interpelacje.</span></li>
+      <li><code>pl_get_sejm_object</code><span data-i18n="t_gs">Pełne dane obiektu Sejmu, z imiennymi głosami posłów.</span></li>
+    </ul>
+    <p data-i18n="mcpP3" style="margin-top:22px">Dostęp na wniosek. Napisz na <a href="mailto:mcp@lawrider.pl">mcp@lawrider.pl</a> z adresu służbowego, z jednym zdaniem o tym, kim jesteś i czego szukasz; odpowiemy kluczem i instrukcją podłączenia dla Twojego klienta.</p>
+  </section>
+
+  <div class="bleed"></div>
+
+  <section id="contact" class="wrap">
+    <p class="label" data-i18n="conLabel">Kontakt</p>
+    <h2 data-i18n="conH2">Porozmawiajmy</h2>
+    <p data-i18n="conP1">Lawrider jest przeznaczony dla prawników, działów prawnych i badaczy. Dostęp mają wyłącznie zweryfikowani użytkownicy. Nie jest oferowany ogółowi ani stronom działającym bez pełnomocnika i nie stanowi porady prawnej.</p>
+    <div class="contact">
+      <div><span data-i18n="conEmail">E-mail</span><a href="mailto:hello@lawrider.pl">hello@lawrider.pl</a></div>
+      <div><span>MCP</span><a href="mailto:mcp@lawrider.pl">mcp@lawrider.pl</a></div>
+    </div>
+  </section>
+</main>
+
+<div class="bleed"></div>
+
+<footer class="wrap">
+  <div>Lawrider · <span data-i18n="footCity">Polska</span></div>
+  <div data-i18n="footTag">Polskie prawo ze źródeł pierwotnych</div>
+</footer>
+
+<script>
+(function(){
+  var T = {
+    en: {
+      nav1:"What it is", nav2:"Data", nav3:"Contact",
+      heroLabel:"Legal research · Poland",
+      heroH1:"Polish law and case law, <em>inside your AI assistant</em>.",
+      heroLede:"2.5 million Polish court decisions, 164,955 acts of Dziennik Ustaw and Monitor Polski with their history of consolidated texts, the KRS company register, BZP procurement and the Sejm. Nineteen MCP tools answering from the same database the figures on this page were counted on.",
+      whatLabel:"What it is",
+      whatH2:"Primary sources instead of answers from model memory",
+      whatP1:"Ask a language model about Polish law and it will answer fluently and with confidence, citing an article and a docket number. What it cannot tell you is whether that article read that way on the date that matters, or whether a judgment with that docket number exists at all.",
+      whatP2:"Lawrider gives the assistant the sources themselves: full texts of decisions, legislation in each successive consolidated text, the KRS register, public procurement notices and the work of the Sejm. The assistant searches, reads and quotes the document instead of reconstructing it.",
+      spec1:"Court decisions, full text", spec2:"Acts of Dziennik Ustaw and Monitor Polski",
+      spec3:"Articles, segmented", spec4:"Links between acts (ISAP)",
+      spec5:"Entities in KRS", spec6:"BZP notices, since 2021",
+      spec7:"Sejm objects, 9th and 10th terms", spec8:"SLPS case-assignment draws, since 2018",
+      whatNote:"Counted on 15 November 2026 against the production database.",
+      dataLabel:"Data", dataH2:"What the database holds, and what it does not",
+      decH3:"Decisions by court", decTh1:"Court", decTh2:"Decisions", decTh3:"Until",
+      decAdm:"Administrative courts (NSA, WSA)", decCom:"Common courts", decKio:"National Appeal Chamber (KIO)",
+      decSn:"Supreme Court", decTk:"Constitutional Tribunal",
+      decCap:"Supreme Court decisions stop in June 2016: newer ones cannot currently be retrieved automatically, and we say so rather than count them as coverage. Natural persons are anonymised in the decisions at source.",
+      legH3:"Law over time",
+      legP1:"Poland has no official point-in-time service. Only two kinds of text exist: the one published on enactment and each later consolidated text. We hold all of them (164,948 versions) with their legal-status date and the amendment graph, so a question about a 2019 contract is answered with the 2019 wording, and the number of amendments after a given text is shown next to it rather than hidden.",
+      legP2:"The newest consolidated texts are often published only as PDF. We split them into articles ourselves and check the result against the previous HTML version; where the split fails, the tool returns the full text with a warning. Monitor Polski has no HTML texts at all, so for it we hold the register and the links.",
+      mcpLabel:"MCP access", mcpH2:"The Polish corpus in Claude, ChatGPT and other assistants",
+      mcpP1:"The database is exposed as a Model Context Protocol server. Every tool is read-only and covers Poland only.",
+      mcpSpec1:"Endpoint", mcpSpec2:"Protocol", mcpSpec2v:"MCP over Streamable HTTP, Bearer key",
+      mcpSpec3:"Tools", mcpSpec3v:"19, Poland only, read-only",
+      tgSearch:"Search", tgLaw:"Legislation", tgReg:"Registers and procurement", tgCourt:"Courts and the Sejm",
+      t_sem:"Search by meaning across decisions, legislation and procurement: describe the situation in your own words, in any language.",
+      t_scd:"Full-text search over 2.5 million decisions, in every grammatical form of the words, or by docket number.",
+      t_gcd:"Full text and particulars of a decision.",
+      t_cnt:"How many decisions mention a company or authority: by court and year, with the latest.",
+      t_sl:"Acts of Dziennik Ustaw and Monitor Polski by title or ELI.",
+      t_ga:"The act's record and every published text, with the number of amendments after each.",
+      t_gas:"Table of contents: books, titles, divisions, chapters with their article ranges.",
+      t_gaa:"The wording of an article on a given date.",
+      t_gat:"Full text of a version of the act, including text read from PDF.",
+      t_gar:"Amendments, implementing acts, legal basis, repeals, Constitutional Tribunal rulings, from ISAP.",
+      t_sc:"KRS entities by name, KRS, NIP or REGON number.",
+      t_gc:"KRS extract: particulars, representation, arrears, liquidation and insolvency.",
+      t_sp:"BZP notices by contracting authority, contractor, CPV and date.",
+      t_gp:"A full BZP notice with its contractors.",
+      t_sr:"Bailiffs, patent attorneys, the Interior Ministry sanctions list, the government legislative work list, courts and their jurisdiction, TERYT.",
+      t_sca:"SLPS reports: which judge drew a case, and from which pool of candidates.",
+      t_gjw:"A judge's latest known workload in each division, from SLPS.",
+      t_ss:"Bills, legislative processes, prints, votes, interpellations.",
+      t_gs:"Full data on a Sejm object, with each MP's vote.",
+      mcpP3:"Access is by request. Write to <a href=\"mailto:mcp@lawrider.pl\">mcp@lawrider.pl</a> from your professional address, with a line on who you are and what you want to look up; we reply with a key and connection instructions for your client.",
+      conLabel:"Contact", conH2:"Talk to us",
+      conP1:"Lawrider is built for legal professionals, in-house teams and researchers. Access is restricted to verified users. It is not offered to the general public or to litigants in person, and it does not provide legal advice.",
+      conEmail:"Email", footCity:"Poland", footTag:"Polish law from primary sources"
+    }
+  };
+
+  var nodes = document.querySelectorAll('[data-i18n]');
+  var PL = {};
+  nodes.forEach(function(n){ PL[n.getAttribute('data-i18n')] = n.innerHTML; });
+  T.pl = PL;
+
+  var buttons = document.querySelectorAll('.lang button');
+
+  function apply(lang){
+    var dict = T[lang] || T.pl;
+    nodes.forEach(function(n){
+      var k = n.getAttribute('data-i18n');
+      n.innerHTML = dict[k] !== undefined ? dict[k] : T.pl[k];
+    });
+    buttons.forEach(function(b){
+      b.setAttribute('aria-current', b.getAttribute('data-lang') === lang ? 'true' : 'false');
+    });
+    document.documentElement.setAttribute('lang', lang);
+    try { localStorage.setItem('lawrider.pl.lang', lang); } catch (e) {}
+  }
+
+  buttons.forEach(function(b){
+    b.addEventListener('click', function(){ apply(b.getAttribute('data-lang')); });
+  });
+
+  var initial = '';
+  try { initial = localStorage.getItem('lawrider.pl.lang') || ''; } catch (e) { initial = ''; }
+  if (!initial) initial = (navigator.language || 'pl').slice(0,2).toLowerCase() === 'pl' ? 'pl' : 'en';
+  apply(initial);
+})();
+</script>
+</body>
+</html>

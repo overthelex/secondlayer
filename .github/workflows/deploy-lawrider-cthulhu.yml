@@ -154,7 +154,7 @@ jobs:
           # the edge routes every host (inside the lawrider network)
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: lawrider.ch' http://127.0.0.1/
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: mcp.lawrider.ch' http://127.0.0.1/health/ready
-          docker exec lawrider-edge wget -q -O /dev/null --header 'Host: lawrider.pl' http://127.0.0.1/
+          docker exec lawrider-edge wget -q -O - --header 'Host: lawrider.pl' http://127.0.0.1/ | grep -F 'https://mcp.lawrider.pl/v2/mcp' > /dev/null
           docker exec lawrider-edge wget -q -O /dev/null --header 'Host: mcp.lawrider.pl' http://127.0.0.1/health/ready
           # public path through the tunnel: only meaningful once DNS points at it
           if getent hosts mcp.lawrider.ch >/dev/null; then
