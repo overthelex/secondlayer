@@ -419,6 +419,20 @@ services:
           memory: 256M
     networks: [lawrider]
 
+  # lawrider.pl: its own static site (Polish corpus only), shipped with the repo
+  # so a merge deploys it. Directory mount, same reason as the edge below.
+  site-pl:
+    image: nginx:1.27-alpine
+    container_name: lawrider-site-pl
+    restart: unless-stopped
+    volumes:
+      - ./site-pl:/usr/share/nginx/html:ro
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks: [lawrider]
+
   # Internal edge: host routing for lawrider.ch / www / mcp / check and
   # lawrider.pl / www / mcp / attorney.
   # Plain HTTP on the lawrider network only; TLS ends at Cloudflare and the
@@ -433,6 +447,7 @@ services:
       - ./nginx:/etc/nginx/conf.d:ro
     depends_on:
       - site
+      - site-pl
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80/healthz || exit 1"]
       interval: 15s
