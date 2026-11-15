@@ -46,6 +46,43 @@ const ACT_COLS = `eli, publisher, year, pos, display_address, act_type, title, s
   announcement_date, entry_into_force, repeal_date, is_consolidation, consolidates_eli,
   amends_count, amended_by_count, snapshot_count, text_html, text_pdf`;
 
+/**
+ * ISAP's relation lists, keyed in English. Each row of pl_act_references is one entry of the
+ * list `category` on the page of act src_eli, so every key reads from the asked act's side:
+ * amended_by on the Kodeks cywilny lists the acts that amend it.
+ */
+export const RELATIONS: Record<string, string> = {
+  amended_by: 'Akty zmieniające',
+  amends: 'Akty zmienione',
+  amended_after_consolidation: 'Nowelizacje po tekście jednolitym',
+  implementing_acts: 'Akty wykonawcze',
+  legal_basis: 'Podstawa prawna',
+  legal_basis_article: 'Podstawa prawna z art.',
+  references: 'Odesłania',
+  repealed_by: 'Akty uchylające',
+  repeals: 'Akty uchylone',
+  deemed_repealed: 'Akty uznane za uchylone',
+  repealed_as_result_of: 'Uchylenia wynikające z',
+  consolidated_texts: 'Inf. o tekście jednolitym',
+  consolidates: 'Tekst jednolity dla aktu',
+  tk_rulings: 'Orzeczenie TK',
+  tk_ruling_on: 'Orzeczenie TK dla aktu',
+  corrections: 'Sprostowanie',
+  corrects: 'Sprostowanie dla aktów',
+  introducing_acts: 'Przepisy wprowadzające',
+  introduced_acts: 'Przepisy wprowadzane',
+};
+const RELATION_KEY = Object.fromEntries(Object.entries(RELATIONS).map(([k, v]) => [v, k]));
+const RELATION_PREVIEW = 5;
+
+/** pl_act_units heading types, outermost first; articles are 'arti'. */
+const HEADING_TYPES = ['part', 'book', 'titl', 'sect', 'bran', 'chpt', 'schp'];
+const MAX_HEADINGS = 600;
+
+/** Party names are matched as a phrase; short tokens (sp, z, o) are not inflected. */
+const PARTY_MIN_INFLECT = 4;
+const PARTY_LATEST = 10;
+
 const PAGING = {
   limit: { type: 'number', default: 20, maximum: 50, description: 'Макс. результатів' },
   offset: { type: 'number', default: 0, maximum: 1000, description: 'Зсув для пагінації' },
@@ -84,6 +121,71 @@ function snapshotWarnings(chosen: Snapshot, skipped: Snapshot[], what: string): 
     out.push(`Після цієї редакції набрали чинності зміни: ${chosen.amendments_after}. Текст їх не враховує.`);
   }
   return out;
+}
+
+/** A tsquery literal for one lexeme. */
+function tsLexeme(lexeme: string): string {
+  return `'${lexeme.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+}
+
+/**
+ * Consecutive words joined with <N>, N = the gap between their positions, so "sp. z o.o."
+ * (sp z o o) stays one phrase. Each word may match any of its forms.
+ */
+export function phraseTsQuery(words: { word: string; pos: number; forms: string[] }[]): string | null {
+  if (!words.length) return null;
+  let out = '';
+  words.forEach((w, i) => {
+    const alts = [...new Set([w.word, ...w.forms])].map(tsLexeme);
+    const term = alts.length > 1 ? `(${alts.join(' | ')})` : alts[0];
+    out += i === 0 ? term : ` <${Math.max(w.pos - words[i - 1].pos, 1)}> ${term}`;
+  });
+  return out;
+}
+
+interface OutlineUnit { ord: number; depth: number; unit_type: string; name: string | null; title: string | null; in_annex: boolean }
+
+/**
+ * Headings in document order with the first and last article under each. An article belongs
+ * to every heading that is still open when it appears; a heading closes at the next heading of
+ * the same or a shallower depth.
+ */
+export function buildOutline(units: OutlineUnit[]) {
+  const headings: any[] = [];
+  const open: any[] = [];
+  const articles = { count: 0, first: null as string | null, last: null as string | null };
+  for (const u of units) {
+    if (u.unit_type === 'arti') {
+      // Unit names write superscripts as 43_10; articles are looked up as 43^10.
+      const name = String(u.name ?? u.title ?? '').replace(/_/g, '^');
+      articles.count += 1;
+      articles.first ??= name;
+      articles.last = name;
+      for (const h of open) {
+        h.first_article ??= name;
+        h.last_article = name;
+        h.article_count += 1;
+      }
+      continue;
+    }
+    while (open.length && open[open.length - 1].depth >= u.depth) open.pop();
+    const h = {
+      type: u.unit_type,
+      depth: u.depth,
+      title: u.title ?? u.name,
+      ...(u.in_annex ? { in_annex: true } : {}),
+      first_article: null as string | null,
+      last_article: null as string | null,
+      article_count: 0,
+    };
+    headings.push(h);
+    open.push(h);
+  }
+  // Consolidated texts sit wholly inside the annex: the flag only helps when an act has both.
+  if (headings.every((h) => h.in_annex) || !headings.some((h) => h.in_annex)) {
+    for (const h of headings) delete h.in_annex;
+  }
+  return { headings, articles };
 }
 
 export class PlLegalTools extends BaseToolHandler {
@@ -185,6 +287,53 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
           required: ['eli'],
         },
       },
+      {
+        name: 'pl_get_act_relations',
+        annotations: { title: 'Зв’язки польського акта', readOnlyHint: true },
+        description: `Зв’язки польського акта за ELI з реєстру ISAP: які акти його змінюють і які змінює він, виконавчі акти, правова підстава, відсилання, скасування, консолідовані тексти, рішення Конституційного трибуналу щодо нього.
+
+Без relation повертає кількість у кожному виді зв’язку і по ${RELATION_PREVIEW} найновіших записів; з relation повертає повний список із пагінацією. Ключі relation читаються з боку запитаного акта: amended_by = акти, що його змінюють; tk_rulings = рішення TK щодо нього; repealed_by = акти, що його скасували. Далі: pl_get_act.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            eli: ELI_PROP,
+            relation: { type: 'string', enum: Object.keys(RELATIONS), description: 'Вид зв’язку; без нього підсумок за всіма' },
+            ...PAGING,
+          },
+          required: ['eli'],
+        },
+      },
+      {
+        name: 'pl_get_act_structure',
+        annotations: { title: 'Структура польського акта', readOnlyHint: true },
+        description: `Зміст польського акта: частини, книги, титули, розділи, глави з діапазоном статей у кожній, для редакції на дату. Лише редакції з поділом на статті; найновіші редакції, доступні тільки в PDF, пропускаються з попередженням. Далі: pl_get_act_article.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            eli: ELI_PROP,
+            as_of: AS_OF_PROP,
+            max_depth: { type: 'number', description: 'Найбільша глибина заголовків (0 = верхній рівень)' },
+          },
+          required: ['eli'],
+        },
+      },
+      {
+        name: 'pl_count_cases_by_party',
+        annotations: { title: 'Справи за учасником (Польща)', readOnlyHint: true },
+        description: `Скільки рішень судів Польщі згадують учасника: розподіл за видом суду і роками та ${PARTY_LATEST} найновіших рішень. Назва шукається як фраза в тексті рішення в усіх граматичних формах (PKN Orlen знаходить і PKN Orlenu).
+
+Підходить для компаній, установ і органів влади. Фізичні особи в польських рішеннях знеособлені, тож пошук за прізвищем майже нічого не дасть. Підрахунок рахує згадки, а не лише сторони справи. Рішення Верховного суду в корпусі є лише до червня 2016 р. Дуже поширена назва без фільтрів може не вкластися в час запиту. Далі: pl_search_court_decisions, pl_get_court_decision.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            party: { type: 'string', description: 'Назва учасника, напр. "PKN Orlen", "Zakład Ubezpieczeń Społecznych"' },
+            court_type: { type: 'string', enum: Object.keys(COURT_TYPES), description: 'Вид суду' },
+            date_from: { type: 'string', description: 'Від (YYYY-MM-DD)' },
+            date_to: { type: 'string', description: 'До (YYYY-MM-DD, включно)' },
+          },
+          required: ['party'],
+        },
+      },
     ];
   }
 
@@ -198,6 +347,9 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
         case 'pl_get_act': return await this.getAct(args);
         case 'pl_get_act_article': return await this.getArticle(args);
         case 'pl_get_act_text': return await this.getText(args);
+        case 'pl_get_act_relations': return await this.getRelations(args);
+        case 'pl_get_act_structure': return await this.getStructure(args);
+        case 'pl_count_cases_by_party': return await this.countByParty(args);
         default: return null;
       }
     } catch (err) {
@@ -385,6 +537,167 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       warnings: snapshotWarnings(chosen, skipped, 'завантаженого тексту'),
       ...sliceText(stored[0]?.body ?? '', Number(args.text_offset) || 0, ACT_TEXT_CHARS),
     });
+  }
+
+  private async getRelations(args: Record<string, unknown>): Promise<ToolResult> {
+    const resolved = await this.resolveAct(args.eli);
+    if ('error' in resolved) return resolved.error;
+    const { act } = resolved;
+    const head = {
+      act: { eli: act.eli, title: act.title, in_force: act.in_force, repeal_date: act.repeal_date },
+      ...(resolved.resolvedFrom ? { resolved_from: resolved.resolvedFrom } : {}),
+    };
+    const ITEM = `r.dst_eli AS eli, r.effective_date::text AS effective_date, r.art_ref,
+                  a.title, a.act_type, a.in_force, a.announcement_date::text AS announcement_date`;
+    const ORDER = 'r.effective_date DESC NULLS LAST, a.announcement_date DESC NULLS LAST, r.dst_eli DESC';
+
+    if (args.relation !== undefined && args.relation !== '') {
+      const category = RELATIONS[String(args.relation)];
+      if (!category) return this.wrapError(`relation має бути одним з: ${Object.keys(RELATIONS).join(', ')}.`);
+      const page = pageOf(args);
+      const [rows, total] = await Promise.all([
+        runQuery(this.db,
+          `SELECT ${ITEM} FROM pl_act_references r LEFT JOIN pl_acts a ON a.eli = r.dst_eli
+           WHERE r.src_eli = $1 AND r.category = $2
+           ORDER BY ${ORDER} LIMIT ${page.limit + 1} OFFSET ${page.offset}`, [act.eli, category]),
+        runQuery(this.db,
+          'SELECT count(*)::int AS n FROM pl_act_references WHERE src_eli = $1 AND category = $2', [act.eli, category]),
+      ]);
+      return this.wrapResponse({
+        ...head,
+        relation: args.relation,
+        category,
+        total: total[0]?.n ?? 0,
+        ...pageResponse(rows, page),
+      });
+    }
+
+    const rows = await runQuery(this.db,
+      `SELECT * FROM (
+         SELECT r.category, count(*) OVER (PARTITION BY r.category)::int AS total,
+                row_number() OVER (PARTITION BY r.category ORDER BY ${ORDER}) AS rn, ${ITEM}
+         FROM pl_act_references r LEFT JOIN pl_acts a ON a.eli = r.dst_eli
+         WHERE r.src_eli = $1
+       ) x WHERE rn <= ${RELATION_PREVIEW} ORDER BY category, rn`, [act.eli]);
+    const groups = new Map<string, { relation: string; category: string; total: number; latest: any[] }>();
+    for (const { category, total, rn, ...item } of rows) {
+      const relation = RELATION_KEY[category] ?? category;
+      if (!groups.has(relation)) groups.set(relation, { relation, category, total, latest: [] });
+      groups.get(relation)!.latest.push(item);
+    }
+    const order = Object.keys(RELATIONS);
+    const relations = [...groups.values()].sort((a, b) => order.indexOf(a.relation) - order.indexOf(b.relation));
+    return this.wrapResponse({
+      ...head,
+      relations,
+      ...(relations.length ? {} : { note: 'ISAP не містить зв’язків для цього акта.' }),
+    });
+  }
+
+  private async getStructure(args: Record<string, unknown>): Promise<ToolResult> {
+    const asOf = this.asOfArg(args.as_of);
+    if (asOf === false) return this.wrapError('as_of має бути у форматі YYYY-MM-DD.');
+    const maxDepth = args.max_depth === undefined || args.max_depth === '' ? null : Number(args.max_depth);
+    if (maxDepth !== null && !(Number.isInteger(maxDepth) && maxDepth >= 0)) {
+      return this.wrapError('max_depth має бути цілим числом від 0.');
+    }
+    const resolved = await this.resolveAct(args.eli);
+    if ('error' in resolved) return resolved.error;
+    const snaps = await this.snapshots(resolved.act.eli);
+    const { chosen, skipped } = pickSnapshot(snaps, asOf, (s) => (s.article_count ?? 0) > 0);
+    if (!chosen) {
+      return this.wrapResponse({
+        error: 'no_segmented_edition',
+        eli: resolved.act.eli,
+        as_of: asOf,
+        note: 'На цю дату немає редакції з поділом на статті. Спробуйте pl_get_act_text.',
+      });
+    }
+    const units = await runQuery(this.db,
+      `SELECT ord, depth, unit_type, name, title, in_annex FROM pl_act_units
+       WHERE snapshot_eli = $1 AND unit_type = ANY($2::text[]) ORDER BY ord`,
+      [chosen.snapshot_eli, [...HEADING_TYPES, 'arti']]);
+    const { headings, articles } = buildOutline(units);
+    const shown = headings.filter((h) => maxDepth === null || h.depth <= maxDepth);
+    return this.wrapResponse({
+      act: { eli: resolved.act.eli, title: resolved.act.title, in_force: resolved.act.in_force },
+      as_of: asOf,
+      snapshot: { snapshot_eli: chosen.snapshot_eli, exact_on: chosen.exact_on, valid_to: chosen.valid_to },
+      article_count: articles.count,
+      first_article: articles.first,
+      last_article: articles.last,
+      headings: shown.slice(0, MAX_HEADINGS),
+      ...(shown.length > MAX_HEADINGS ? { truncated: true, total_headings: shown.length } : {}),
+      warnings: snapshotWarnings(chosen, skipped, 'поділу на статті'),
+    });
+  }
+
+  private async countByParty(args: Record<string, unknown>): Promise<ToolResult> {
+    const party = String(args.party ?? '').trim().replace(/\s+/g, ' ');
+    if (party.length < 3) return this.wrapError('Вкажіть party: назву учасника (щонайменше 3 символи).');
+    const tsquery = await this.partyTsQuery(party);
+    if (!tsquery) return this.wrapError('У назві учасника немає слів для пошуку.');
+
+    const params: unknown[] = [tsquery];
+    const where = [`${COURT_FTS} @@ $1::tsquery`, 'decision_date <= CURRENT_DATE'];
+    if (args.court_type) {
+      const types = COURT_TYPES[String(args.court_type)];
+      if (!types) return this.wrapError(`court_type має бути одним з: ${Object.keys(COURT_TYPES).join(', ')}.`);
+      params.push(types);
+      where.push(`court_type = ANY($${params.length}::text[])`);
+    }
+    for (const [arg, op] of [['date_from', '>='], ['date_to', '<=']] as const) {
+      if (args[arg] === undefined || args[arg] === '') continue;
+      const d = isoDate(args[arg]);
+      if (!d) return this.wrapError('Дати мають бути у форматі YYYY-MM-DD.');
+      params.push(d);
+      where.push(`decision_date ${op} $${params.length}::date`);
+    }
+    const rows = await runSearchQuery(this.db,
+      `WITH m AS MATERIALIZED (
+         SELECT id, court_type, decision_date FROM pl_court_decisions WHERE ${where.join(' AND ')}
+       )
+       SELECT (SELECT count(*)::int FROM m) AS total,
+              (SELECT coalesce(json_agg(x ORDER BY x.n DESC), '[]') FROM
+                 (SELECT court_type, count(*)::int AS n FROM m GROUP BY 1) x) AS by_court_type,
+              (SELECT coalesce(json_agg(x ORDER BY x.year), '[]') FROM
+                 (SELECT extract(year FROM decision_date)::int AS year, count(*)::int AS n FROM m GROUP BY 1) x) AS by_year,
+              (SELECT coalesce(json_agg(d ORDER BY d.decision_date DESC, d.id), '[]') FROM
+                 (SELECT p.id, p.case_number, p.court_type, p.court_name, p.decision_type,
+                         p.decision_date::text AS decision_date
+                  FROM pl_court_decisions p
+                  JOIN (SELECT id FROM m ORDER BY decision_date DESC, id LIMIT ${PARTY_LATEST}) l USING (id)) d) AS latest`,
+      params);
+    const r = rows[0] ?? { total: 0, by_court_type: [], by_year: [], latest: [] };
+    const courtKey = (raw: string | null) =>
+      Object.entries(COURT_TYPES).find(([, values]) => raw !== null && values.includes(raw))?.[0] ?? raw;
+    // Several source labels share one key (COMMON, ordinary_court): sum them.
+    const byCourt = new Map<string, number>();
+    for (const { court_type, n } of r.by_court_type) {
+      const key = String(courtKey(court_type) ?? 'unknown');
+      byCourt.set(key, (byCourt.get(key) ?? 0) + n);
+    }
+    return this.wrapResponse({
+      party,
+      total: r.total,
+      by_court_type: Object.fromEntries([...byCourt.entries()].sort((a, b) => b[1] - a[1])),
+      by_year: Object.fromEntries(r.by_year.map((y: any) => [String(y.year), y.n])),
+      latest: r.latest.map((d: any) => ({ ...d, court_type: courtKey(d.court_type) })),
+      note: 'Рахуються рішення, у тексті яких є ця назва, а не лише ті, де учасник є стороною.',
+    });
+  }
+
+  /** The party's words as a phrase, each longer word in any inflected form. */
+  private async partyTsQuery(party: string): Promise<string | null> {
+    const rows = await runQuery(this.db,
+      `SELECT q.lexeme AS word, p.pos::int AS pos,
+              CASE WHEN length(q.lexeme) >= ${PARTY_MIN_INFLECT} AND q.lexeme !~ '[0-9]'
+                   THEN array_remove(array_agg(DISTINCT g.form), NULL) ELSE '{}'::text[] END AS forms
+       FROM unnest(to_tsvector('simple'::regconfig, $1)) AS q CROSS JOIN LATERAL unnest(q.positions) AS p(pos)
+       LEFT JOIN pl_word_forms f ON f.form = q.lexeme
+       LEFT JOIN pl_word_forms g ON g.lemma = f.lemma AND g.pos = f.pos
+       GROUP BY q.lexeme, p.pos ORDER BY p.pos`, [party]);
+    return phraseTsQuery(rows.map((r: any) => ({ word: r.word, pos: r.pos, forms: r.forms ?? [] })));
   }
 
   private hasText(s: Snapshot): boolean {
