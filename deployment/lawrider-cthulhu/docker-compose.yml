@@ -349,8 +349,8 @@ services:
     # bge-m3 CLS, float16 on disk + binary quantization in RAM.
     # Served by ch_semantic_search through QDRANT_URL on `app`.
     # Also the PL corpus: pl_corpus_bge_cls, 37.4M points (33.1M decision
-    # chunks, 2.9M BZP subjects, 1.4M legislation), same profile, loaded by
-    # scripts/pl/upsert_pl_vectors.py.
+    # chunks, 2.9M BZP subjects, 1.4M legislation), loaded by
+    # scripts/pl/upsert_pl_vectors.py; HNSW and payload indexes on disk.
     volumes:
       - /data/lawrider/qdrant:/qdrant/storage
     healthcheck:
@@ -365,12 +365,13 @@ services:
           # measured after the full load: anon RSS 11.7G — the HNSW graph over
           # 22.3M points lives in RAM (binary quant 2.9G + links); 8G would
           # OOM-loop on the next recreate.
-          # PL adds 37.4M points: by the same ratio ~19.6G, so ~31G for both
-          # collections; 40G leaves room for the optimizer while it builds
-          # HNSW after the bulk load. 4 cpus so that build takes hours, not
-          # a day (host has 16).
+          # PL adds 37.4M points with the UA EDRSR profile: HNSW graph AND
+          # payload indexes on disk (on_disk: true). Payload indexes left in
+          # RAM cost ~9G for PL alone; moved to disk 15.11.2026, measured anon
+          # RSS for both collections 14.4G. 24G = that + optimizer headroom.
+          # Any new payload index here must be created with on_disk: true.
           cpus: "4"
-          memory: 40G
+          memory: 24G
     networks: [lawrider]
 
   # Query embedder for ch_semantic_search. Same image+flags as the UA prod
