@@ -131,6 +131,20 @@ without noticing.
   resolve both at read time (`courtNameSql`, `caseNumberSql` in
   `pl-legal-tools.ts`). Do not backfill the columns with an UPDATE: it is not a
   HOT update and re-inserts every row into the full-text GIN index.
+- **NSA/WSA metadata lives only in `metadata_json`.** hf-pl-nsa (1.9M rows) has
+  empty `judges`/`keywords`/`legal_bases` columns; the bench, organ
+  (`challenged_authority`), NSA symbols (`case_type_description`, an array:
+  `"6110 Podatek od towarów i usług"`, padded with no-break spaces), finality and
+  related cases are JSON keys, read at query time for a decision (`judgesSql`,
+  `authoritySql`, ... in `pl-legal-tools.ts`). Do not filter on them in
+  `pl_court_decisions` itself: `metadata_json` of an NSA row is ~8 KB compressed
+  and sits in TOAST (44 GB of the table), so even with trigram expression
+  indexes every candidate is detoasted on recheck - "odsetki" + organ took 37 s.
+  The search filters go through the narrow materialized view `pl_decision_meta`
+  (migration 273). It is a snapshot: after an import of hf-pl-nsa,
+  hf-pl-court-raw, SAOS or ncourt rows run
+  `REFRESH MATERIALIZED VIEW CONCURRENTLY pl_decision_meta` (the first build took 16 min; a concurrent refresh is longer, one full
+  scan), and refresh it after a schema-only restore, which leaves it empty.
 - **BZP update notices carry no CPV and no order type.** `harvest_bzp.py`
   copies both from another notice of the same `tender_id` after each run
   (`fill_updates`, last 120 days); the 2021-2026 backfill filled 304,005 of

@@ -38,8 +38,8 @@ export async function runQuery(db: any, sql: string, params: unknown[]): Promise
  * passes. Measured on 2.5M decisions: 'zniesienie współwłasności' hit the 20 s timeout that way
  * and took 1.2 s through the GIN index, and the common 'wyrok sądu' took 2.4 s.
  */
-export async function runSearchQuery(db: any, sql: string, params: unknown[]): Promise<any[]> {
-  return inTimedTransaction(db, ['SET LOCAL enable_indexscan = off'], sql, params);
+export async function runSearchQuery(db: any, sql: string, params: unknown[], extra: string[] = []): Promise<any[]> {
+  return inTimedTransaction(db, ['SET LOCAL enable_indexscan = off', ...extra], sql, params);
 }
 
 export const INFLECTED_SEARCH_NOTE = 'Слова запиту шукаються в усіх граматичних формах: umowa знаходить також umowy, umowę, umów. У тексті мають бути всі слова запиту.';
