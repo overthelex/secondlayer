@@ -53,6 +53,56 @@ export const courtNameSql = (t = '') => `coalesce(${t}court_name,
      ${t}metadata_json->>'courtId', ${t}metadata_json->>'court_id')),
   CASE ${t}court_type WHEN 'SUPREME' THEN 'Sąd Najwyższy' WHEN 'CONSTITUTIONAL_TRIBUNAL' THEN 'Trybunał Konstytucyjny'
     WHEN 'NATIONAL_APPEAL_CHAMBER' THEN 'Krajowa Izba Odwoławcza' END)`;
+/**
+ * NSA/WSA metadata. hf-pl-nsa leaves the judges/keywords columns empty and keeps the organ, the
+ * case symbols, the bench, finality and the related cases in metadata_json; hf-pl-court-raw keeps
+ * judges/keywords/thesis there too. A decision's fields are read from it at query time; the search
+ * filters go through the narrow pl_decision_meta (migration 273), because a filter on
+ * metadata_json itself detoasts ~8 KB per candidate row.
+ */
+export const authoritySql = (t = '') => `nullif(btrim(${t}metadata_json->>'challenged_authority'), '')`;
+
+const jsonArray = (expr: string) => `CASE WHEN jsonb_typeof(${expr}) = 'array' THEN ${expr} END`;
+/** The bench as a text array: SAOS/ncourt objects {name, specialRoles}, NSA plain names. */
+export const judgesSql = (t = '') => `CASE
+  WHEN jsonb_typeof(${t}judges) = 'array' AND jsonb_array_length(${t}judges) > 0
+    THEN ARRAY(SELECT coalesce(j->>'name', j #>> '{}') FROM jsonb_array_elements(${t}judges) j)
+  WHEN jsonb_typeof(${t}metadata_json->'judges') = 'array'
+    THEN ARRAY(SELECT jsonb_array_elements_text(${t}metadata_json->'judges'))
+  WHEN ${t}metadata_json->>'presiding_judge' IS NOT NULL THEN ARRAY[${t}metadata_json->>'presiding_judge'] END`;
+export const keywordsSql = (t = '') => `coalesce(nullif(${t}keywords, '{}'),
+  ARRAY(SELECT jsonb_array_elements_text(${jsonArray(`${t}metadata_json->'keywords'`)})))`;
+/** "6110 Podatek od towarów i usług" with the source's runs of spaces and no-break spaces collapsed. */
+export const caseTypeSql = (t = '') => `nullif(ARRAY(SELECT trim(regexp_replace(x, '[\\s\\u00a0]+', ' ', 'g'))
+  FROM jsonb_array_elements_text(${jsonArray(`${t}metadata_json->'case_type_description'`)}) x), '{}')`;
+export const finalSql = (t = '') => `CASE ${t}metadata_json->>'finality' WHEN 'orzeczenie prawomocne' THEN true
+  WHEN 'orzeczenie nieprawomocne' THEN false END`;
+export const relatedCasesSql = (t = '') => `(SELECT jsonb_agg(jsonb_build_object('case_number', r->>'docket_number',
+    'date', left(r->>'judgment_date', 10), 'type', r->>'judgment_type'))
+  FROM jsonb_array_elements(${jsonArray(`${t}metadata_json->'related_docket_numbers'`)}) r)`;
+const NSA_COLS = `${judgesSql()} AS judges_list, ${keywordsSql()} AS keywords_list,
+  ${authoritySql()} AS challenged_authority, ${caseTypeSql()} AS case_type, ${finalSql()} AS final`;
+const NSA_DETAIL_COLS = `${NSA_COLS},
+  metadata_json->>'presiding_judge' AS presiding_judge, metadata_json->>'judge_rapporteur' AS judge_rapporteur,
+  ${relatedCasesSql()} AS related_cases, nullif(trim(metadata_json->>'thesis'), '') AS thesis,
+  nullif(ARRAY(SELECT jsonb_array_elements_text(${jsonArray(`metadata_json->'decision'`)})), '{}') AS outcome,
+  nullif(trim(metadata_json->>'dissenting_opinion'), '') AS dissenting_opinion`;
+
+/** Folds the read-time metadata into the row: judges/keywords replace empty columns, nulls are dropped. */
+export function withMetadata(row: Record<string, any>): Record<string, any> {
+  const { judges_list, keywords_list, ...rest } = row;
+  rest.judges = judges_list?.length ? judges_list : undefined;
+  rest.keywords = keywords_list?.length ? keywords_list : undefined;
+  for (const key of ['judges', 'keywords', 'challenged_authority', 'case_type', 'final', 'presiding_judge',
+    'judge_rapporteur', 'related_cases', 'thesis', 'outcome', 'dissenting_opinion']) {
+    if (rest[key] === null || rest[key] === undefined) delete rest[key];
+  }
+  return rest;
+}
+
+const likeEscape = (s: string) => s.replace(/[\\%_]/g, '\\$&');
+const JUDGE_MIN_WORD = 3;
+
 const DECISION_COLS = `id, ecli, source, court_type, ${courtNameSql()} AS court_name, division,
   ${caseNumberSql()} AS case_number, decision_type, decision_date::text AS decision_date, judge, keywords`;
 const ACT_COLS = `eli, publisher, year, pos, display_address, act_type, title, status, in_force,
@@ -213,13 +263,18 @@ export class PlLegalTools extends BaseToolHandler {
         annotations: { title: 'Пошук судових рішень Польщі', readOnlyHint: true },
         description: `Пошук у 2,5 млн рішень судів Польщі (суди загальної юрисдикції, Верховний суд, адміністративні суди, Конституційний трибунал, KIO), найновіші першими.
 
-Потрібен query (повний текст) або case_number (точна сигнатура, напр. "II CSKP 123/22"). ${INFLECTED_SEARCH_NOTE}
-court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO). Далі: pl_get_court_decision.`,
+Потрібен query (повний текст), case_number (точна сигнатура, напр. "II CSKP 123/22") або один із фільтрів authority, case_symbol, judge. ${INFLECTED_SEARCH_NOTE}
+court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO).
+Фільтри адміністративних судів (NSA і WSA, 1,9 млн рішень): authority (орган, рішення якого оскаржено, напр. "Dyrektor Izby Administracji Skarbowej"), case_symbol (початок символу справи NSA: "611" податки, "6110" ПДВ), final (набрало законної сили). judge шукає за прізвищем у складі суду (NSA, WSA, суди загальної юрисдикції, Верховний суд). Далі: pl_get_court_decision.`,
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Слова для пошуку в тексті' },
             case_number: { type: 'string', description: 'Сигнатура справи' },
+            authority: { type: 'string', description: 'Орган, рішення якого оскаржено (частина назви польською), напр. "Samorządowe Kolegium Odwoławcze"' },
+            case_symbol: { type: 'string', description: 'Початок символу справи NSA, 3-4 цифри: "611", "6110"' },
+            judge: { type: 'string', description: 'Прізвище (та ім’я) судді зі складу суду' },
+            final: { type: 'boolean', description: 'Лише рішення, що набрали законної сили (true), або ще ні (false); відомо лише для NSA і WSA' },
             court_type: { type: 'string', enum: Object.keys(COURT_TYPES), description: 'Вид суду' },
             decision_type: { type: 'string', description: 'Тип рішення, напр. SENTENCE, DECISION, RESOLUTION, REASONS' },
             date_from: { type: 'string', description: 'Від (YYYY-MM-DD)' },
@@ -231,7 +286,9 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       {
         name: 'pl_get_court_decision',
         annotations: { title: 'Судове рішення Польщі', readOnlyHint: true },
-        description: `Рішення суду Польщі за id із pl_search_court_decisions: реквізити і повний текст. Текст віддається вікном до 40 000 символів; наступне вікно задає text_offset.`,
+        description: `Рішення суду Польщі за id із pl_search_court_decisions: реквізити і повний текст. Текст віддається вікном до 40 000 символів; наступне вікно задає text_offset.
+
+Для NSA і WSA також, якщо джерело їх містить: склад суду (judges, presiding_judge, judge_rapporteur), оскаржений орган (challenged_authority), символ справи (case_type), набрання законної сили (final), результат (outcome), теза (thesis), ключові слова, пов’язані справи інших інстанцій (related_cases) та окрема думка.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -376,13 +433,38 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
   private async searchDecisions(args: Record<string, unknown>): Promise<ToolResult> {
     const query = String(args.query ?? '').trim();
     const caseNumber = String(args.case_number ?? '').trim().replace(/\s+/g, ' ');
-    if (!query && !caseNumber) return this.wrapError('Вкажіть query або case_number.');
+    const authority = String(args.authority ?? '').trim().replace(/\s+/g, ' ');
+    const symbol = String(args.case_symbol ?? '').trim();
+    const judge = String(args.judge ?? '').trim();
+    if (!query && !caseNumber && !authority && !symbol && !judge) {
+      return this.wrapError('Вкажіть query, case_number або один із фільтрів authority, case_symbol, judge.');
+    }
+    if (symbol && !/^\d{3,4}$/.test(symbol)) return this.wrapError('case_symbol: 3-4 цифри символу NSA, напр. "611" або "6110".');
+    if (authority && authority.length < 3) return this.wrapError('authority: щонайменше 3 символи назви органу.');
+    const judgeWords = judge.split(/[\s,.-]+/).filter((w) => w.length >= JUDGE_MIN_WORD);
+    if (judge && !judgeWords.length) return this.wrapError(`judge: прізвище щонайменше з ${JUDGE_MIN_WORD} літер.`);
+    if (args.final !== undefined && typeof args.final !== 'boolean') return this.wrapError('final має бути true або false.');
     const params: unknown[] = [];
     const where: string[] = [];
     const add = (sql: (n: number) => string, value: unknown) => {
       params.push(value);
       where.push(sql(params.length));
     };
+    // pl_decision_meta (migration 273): trigram indexes on authority and judges, GIN on the symbol
+    // prefixes ({611, 6110, 658}), btree on final.
+    const meta: string[] = [];
+    const addMeta = (sql: (n: number) => string, value: unknown) => {
+      params.push(value);
+      meta.push(sql(params.length));
+    };
+    // Words in order with anything between them: a few organ names carry double spaces.
+    if (authority) addMeta((n) => `m.authority ILIKE $${n}`, `%${authority.split(' ').map(likeEscape).join('%')}%`);
+    if (symbol) addMeta((n) => `m.symbols @> ARRAY[$${n}::text]`, symbol);
+    // Word by word: NSA writes "Mikosz Ryszard" as well as "Ryszard Mikosz".
+    for (const word of judgeWords) addMeta((n) => `m.judges ILIKE $${n}`, `%${likeEscape(word)}%`);
+    if (typeof args.final === 'boolean') addMeta((n) => `m.final = $${n}`, args.final);
+    if (meta.length) where.push(`id IN (SELECT m.id FROM pl_decision_meta m WHERE ${meta.join(' AND ')})`);
+    if (!query && !caseNumber) where.push('decision_date <= CURRENT_DATE');
     if (query) {
       add((n) => `${COURT_FTS} @@ $${n}::tsquery`, toTsQuery(await wordForms(this.db, query)));
       // Newest-first would otherwise always open with the source's typos (a 3013-12-04 judgment).
@@ -404,30 +486,38 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       add((n) => `decision_date ${op} $${n}::date`, d);
     }
     const page = pageOf(args);
-    const rows = await (query ? runSearchQuery : runQuery)(this.db,
+    // A trigram filter on organ or judge is estimated at a few hundred rows when it can be
+    // thousands, so with a query word the planner checks to_tsvector row by row through a nested
+    // loop: "odsetki" + judge "Dauter" took 16.7 s that way and 0.5 s as a hash join of the two
+    // indexes (measured 16.11.2026).
+    const trigramFilter = Boolean(authority || judgeWords.length);
+    const sql =
       // The page is picked first: a snippet in the sorted query is built from the full text of
       // every match, which is hundreds of thousands of rows for a common word.
       `WITH page AS MATERIALIZED (
          SELECT id FROM pl_court_decisions WHERE ${where.join(' AND ')}
          ORDER BY decision_date DESC, id LIMIT ${page.limit + 1} OFFSET ${page.offset}
        )
-       SELECT ${DECISION_COLS},
+       SELECT ${DECISION_COLS}, ${NSA_COLS},
               left(coalesce(nullif(abstract, ''), full_text), ${SNIPPET_RAW_CHARS}) AS snippet
-       FROM pl_court_decisions JOIN page USING (id)
-       ORDER BY pl_court_decisions.decision_date DESC, id`, params);
+       FROM pl_court_decisions WHERE id = ANY(ARRAY(SELECT id FROM page))
+       ORDER BY decision_date DESC, id`;
+    const rows = query
+      ? await runSearchQuery(this.db, sql, params, trigramFilter ? ['SET LOCAL enable_nestloop = off'] : [])
+      : await runQuery(this.db, sql, params);
     for (const row of rows) row.snippet = plainText(row.snippet ?? '').slice(0, SNIPPET_CHARS);
-    return this.wrapResponse(pageResponse(rows, page));
+    return this.wrapResponse(pageResponse(rows.map(withMetadata), page));
   }
 
   private async getDecision(args: Record<string, unknown>): Promise<ToolResult> {
     const id = String(args.id ?? '').trim();
     if (!id) return this.wrapError('Вкажіть id.');
     const rows = await runQuery(this.db,
-      `SELECT ${DECISION_COLS}, judges, legal_bases,
+      `SELECT ${DECISION_COLS}, ${NSA_DETAIL_COLS}, legal_bases,
               referenced_regulations, parties, abstract, full_text, source_url, enriched_outcome
        FROM pl_court_decisions WHERE id = $1`, [id]);
     if (!rows.length) return this.wrapResponse({ error: 'not_found', id });
-    const { full_text, ...decision } = rows[0];
+    const { full_text, ...decision } = withMetadata(rows[0]);
     return this.wrapResponse({
       ...decision,
       ...sliceText(plainText(full_text ?? ''), Number(args.text_offset) || 0, DECISION_TEXT_CHARS),
