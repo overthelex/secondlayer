@@ -53,6 +53,7 @@ export const V2_TOOL_NAMES = new Set<string>([
   'pl_get_act',
   'pl_get_act_article',
   'pl_get_act_text',
+  'pl_semantic_search',
   'ch_search_court_decisions',
   'ch_get_court_decision',
   'ch_search_legislation',
