@@ -19,6 +19,13 @@ fills the 500 cap, grow (up to a week) while windows come back small.
 pl_bzp_progress.done_until per type is the end of the last complete window,
 so a killed run resumes exactly where it stopped.
 
+NoticeUpdateNotice items carry no orderType and no cpvCode: an update only
+lists what changed. fill_updates() copies both from another notice of the
+same procedure (same tenderId), preferring the notice that opened it. About
+500 updates of 2021-2023 have no other notice of their procedure in the API
+and stay empty, and so do CPV codes of SmallContractNotice procedures, which
+the source never gives.
+
 `contractors` arrives as a JSON list; a Python repr string of one is accepted
 too. Text can carry NUL characters, which Postgres rejects, so they are removed.
 """
@@ -176,6 +183,33 @@ def harvest(ntype, start, until):
     return total
 
 
+# Opening notices first: their CPV and order type describe the whole procedure.
+SOURCE_RANK = """CASE notice_type WHEN 'ContractNotice' THEN 0 WHEN 'CompetitionNotice' THEN 0
+  WHEN 'ConcessionNotice' THEN 0 WHEN 'SmallContractNotice' THEN 1 WHEN 'AgreementIntentionNotice' THEN 2
+  ELSE 3 END"""
+
+
+def fill_updates(since):
+    """Copy order_type / cpv_code into update notices published from `since` on."""
+    out = plprod.psql(f"""
+WITH todo AS (
+  SELECT object_id, tender_id FROM pl_bzp_notices
+  WHERE notice_type = 'NoticeUpdateNotice' AND publication_date >= '{since}'
+    AND (cpv_code IS NULL OR order_type IS NULL) AND tender_id IS NOT NULL),
+src AS (
+  SELECT DISTINCT ON (n.tender_id) n.tender_id, n.cpv_code, n.order_type
+  FROM pl_bzp_notices n
+  WHERE n.tender_id IN (SELECT tender_id FROM todo) AND n.notice_type <> 'NoticeUpdateNotice'
+    AND (n.cpv_code IS NOT NULL OR n.order_type IS NOT NULL)
+  ORDER BY n.tender_id, (n.cpv_code IS NULL), {SOURCE_RANK}, n.publication_date)
+UPDATE pl_bzp_notices u SET cpv_code = coalesce(u.cpv_code, src.cpv_code),
+                            order_type = coalesce(u.order_type, src.order_type)
+FROM todo JOIN src USING (tender_id)
+WHERE u.object_id = todo.object_id""")
+    n = out.strip().split()[-1] if out.strip() else "0"
+    print(f"== NoticeUpdateNotice filled from their procedure: {n}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--types", nargs="+", default=TYPES, choices=TYPES)
@@ -184,6 +218,8 @@ def main():
     # full run then carries on from there.
     ap.add_argument("--from", dest="start", default="2021-01-01T00:00:00")
     ap.add_argument("--until", help="default: today 00:00 UTC")
+    ap.add_argument("--fill-since", default=None,
+                    help="re-fill update notices published since this date (default: 120 days back)")
     a = ap.parse_args()
     with open(MIGRATION, encoding="utf-8") as f:
         r = subprocess.run(plprod._argv(), input=f.read(), capture_output=True,
@@ -197,6 +233,8 @@ def main():
     for t in a.types:
         n = harvest(t, start, until)
         print(f"== {t}: {n} new", flush=True)
+    # 120 days: an update can arrive before its procedure's other notices are harvested
+    fill_updates(a.fill_since or (until - dt.timedelta(days=120)).strftime("%Y-%m-%d"))
     return 0
 
 

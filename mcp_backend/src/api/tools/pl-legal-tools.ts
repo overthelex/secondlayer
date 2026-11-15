@@ -41,8 +41,20 @@ export const COURT_TYPES: Record<string, string[]> = {
 };
 
 const COURT_FTS = `to_tsvector('simple'::regconfig, ((((COALESCE(parties, ''::text) || ' '::text) || COALESCE(abstract, ''::text)) || ' '::text) || COALESCE(full_text, ''::text)))`;
-const DECISION_COLS = `id, ecli, source, court_type, court_name, division, case_number, decision_type,
-  decision_date::text AS decision_date, judge, keywords`;
+/**
+ * Case number and court name of a decision row, filled where the source left the column empty
+ * (migration 271): hf-pl-nsa and hf-pl-court-raw keep the case number in metadata_json, common-court
+ * rows name the court only by the 8-digit code that opens their feed id, and the single-court
+ * types (SN, TK, KIO) mostly come without a name. `t` is the table alias with its dot, or ''.
+ */
+export const caseNumberSql = (t = '') => `coalesce(${t}case_number, ${t}metadata_json->>'docket_number')`;
+export const courtNameSql = (t = '') => `coalesce(${t}court_name,
+  (SELECT cc.name FROM pl_court_codes cc WHERE cc.code = coalesce(substring(${t}source_url FROM 'id=(\\d{8})'),
+     ${t}metadata_json->>'courtId', ${t}metadata_json->>'court_id')),
+  CASE ${t}court_type WHEN 'SUPREME' THEN 'Sąd Najwyższy' WHEN 'CONSTITUTIONAL_TRIBUNAL' THEN 'Trybunał Konstytucyjny'
+    WHEN 'NATIONAL_APPEAL_CHAMBER' THEN 'Krajowa Izba Odwoławcza' END)`;
+const DECISION_COLS = `id, ecli, source, court_type, ${courtNameSql()} AS court_name, division,
+  ${caseNumberSql()} AS case_number, decision_type, decision_date::text AS decision_date, judge, keywords`;
 const ACT_COLS = `eli, publisher, year, pos, display_address, act_type, title, status, in_force,
   announcement_date, entry_into_force, repeal_date, is_consolidation, consolidates_eli,
   amends_count, amended_by_count, snapshot_count, text_html, text_pdf`;
@@ -377,7 +389,8 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
       // Such a row stays reachable by its case number.
       where.push('decision_date <= CURRENT_DATE');
     }
-    if (caseNumber) add((n) => `case_number = $${n}`, caseNumber);
+    // Same expression as idx_pl_court_case_num_any, so the lookup stays an index scan.
+    if (caseNumber) add((n) => `${caseNumberSql()} = $${n}`, caseNumber);
     if (args.court_type) {
       const types = COURT_TYPES[String(args.court_type)];
       if (!types) return this.wrapError(`court_type має бути одним з: ${Object.keys(COURT_TYPES).join(', ')}.`);
@@ -664,7 +677,8 @@ court_type: common, supreme, administrative, constitutional, appeal_chamber (KIO
               (SELECT coalesce(json_agg(x ORDER BY x.year), '[]') FROM
                  (SELECT extract(year FROM decision_date)::int AS year, count(*)::int AS n FROM m GROUP BY 1) x) AS by_year,
               (SELECT coalesce(json_agg(d ORDER BY d.decision_date DESC, d.id), '[]') FROM
-                 (SELECT p.id, p.case_number, p.court_type, p.court_name, p.decision_type,
+                 (SELECT p.id, ${caseNumberSql('p.')} AS case_number, p.court_type,
+                         ${courtNameSql('p.')} AS court_name, p.decision_type,
                          p.decision_date::text AS decision_date
                   FROM pl_court_decisions p
                   JOIN (SELECT id FROM m ORDER BY decision_date DESC, id LIMIT ${PARTY_LATEST}) l USING (id)) d) AS latest`,

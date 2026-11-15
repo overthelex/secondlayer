@@ -24,6 +24,7 @@ PG_DB=secondlayer_prod
 | 3+4 struct + text | `harvest_eli_texts.py` | **done** - 673,735 articles, 5.5M units, 7 unresolved of 39,106 |
 | 5 incremental sync | `sync_eli_changes.py` | daily cron on cthulhu 04:30 |
 | 5b PDF articles | `segment_eli_pdf.py` (parser `pl_pdf_segmenter.py`) | **done** 2026-11-15 - 903 of 3,395 PDF-only snapshots split, 80,369 articles; 2,490 have no `Art.` (rozporządzenia), 2 rejected |
+| 5c PDF article vectors | `vectorize_pdf_articles.py` | 2026-11-15: 117,513 chunks of those articles into `pl_corpus_bge_cls` on CPU TEI (~5 chunks/s); each edition's whole-text `pl_act_text` points are dropped once its articles are in. Not in the cron: new splits stay whole-text until it is re-run |
 | 6 audit | `audit_pl_load.sh` | not written |
 | courts | `harvest_ncourt.py`, `harvest_cbosa.py`, `harvest_sn_tk.py` | not written |
 | legacy repair | `repair_legacy.py` | not written |
@@ -122,6 +123,18 @@ without noticing.
   from parquet row positions so a re-import duplicates rather than updates, and
   it loaded with `ON CONFLICT DO NOTHING` so bad text cannot be repaired. A
   full-table aggregate on it times out at 300 s - shard audits by source/year.
+- **Court names and case numbers are often not in their columns.** hf-pl-nsa and
+  hf-pl-court-raw keep the case number in `metadata_json->>'docket_number'`;
+  426K SAOS common-court rows and every ncourt row have no `court_name`, only the
+  8-digit court code that opens the feed id. `pl_court_codes` (migration 271)
+  maps the code to the name read off the rows that do have both, and the tools
+  resolve both at read time (`courtNameSql`, `caseNumberSql` in
+  `pl-legal-tools.ts`). Do not backfill the columns with an UPDATE: it is not a
+  HOT update and re-inserts every row into the full-text GIN index.
+- **BZP update notices carry no CPV and no order type.** `harvest_bzp.py`
+  copies both from another notice of the same `tender_id` after each run
+  (`fill_updates`, last 120 days); the 2021-2026 backfill filled 304,005 of
+  304,631.
 
 ## Validation rules for article extraction
 
