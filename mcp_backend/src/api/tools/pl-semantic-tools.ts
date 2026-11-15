@@ -21,6 +21,7 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handle
 import { BgeM3Client } from '../../utils/bge-m3-client.js';
 import { logger } from '../../utils/logger.js';
 import { COURT_TYPES } from './pl-legal-tools.js';
+import { plainText } from './pl-tool-utils.js';
 
 const COLLECTION = process.env.PL_BGE_COLLECTION || 'pl_corpus_bge_cls';
 /** Chunks pulled before collapsing — decisions average ~13 windows each. */
@@ -32,7 +33,12 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type Hit = { score?: number; payload?: Record<string, any> | null };
 
-const excerpt = (p: any) => String(p.text || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+/** SAOS chunks are HTML windows: drop a tag cut at the window start, then the markup. */
+const excerpt = (p: any) => {
+  let t = String(p.text || '');
+  if (/<\/?(p|div|span|strong|br|table)\b/i.test(t)) t = plainText(t.replace(/^[^<>]{0,120}?>/, '').replace(/<[^>]*$/, ''));
+  return t.replace(/\s+/g, ' ').trim().slice(0, 500);
+};
 const sim = (s: number) => Number(s.toFixed(3));
 
 /** Keep the best-scoring hit per key, ordered by score. */

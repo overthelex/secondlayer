@@ -8,9 +8,10 @@
  * Two facts make that visible in every answer:
  *
  *  - `amendments_after` counts amendments that took effect after the snapshot.
- *  - The newest editions are often PDF-only. They carry no article rows (and verdict 906 means
- *    extracted text without article segmentation), so an article lookup can only be answered
- *    from an older edition. The response lists the newer editions it had to skip.
+ *  - The newest editions are often PDF-only (verdict 906). Most are split into articles from
+ *    the PDF (scripts/pl/segment_eli_pdf.py, pdf_split = 200); the rest carry no article rows,
+ *    so an article lookup is answered from an older edition and the response lists the newer
+ *    editions it had to skip.
  *
  * A snapshot's text lives in one of two places: segmented HTML editions keep it in
  * pl_act_articles with pl_snapshot_texts.text NULL, everything else in pl_snapshot_texts.text.

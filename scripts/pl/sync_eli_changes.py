@@ -26,6 +26,7 @@ Steps, each idempotent, so a killed run is resumed by running it again:
      were PDF-only on 2026-11-07), so "no html" is a state to re-poll, not a fact
   6. texts pass (harvest_eli_texts.py --mark-no-html, then the fetch pass)
   7. PDF text for what is still PDF-only (harvest_eli_pdf.py)
+  8. articles and headings from those PDFs (segment_eli_pdf.py)
 
 Step 2 runs before step 3 and the worklist is the database, so if the run dies
 after step 2 the next run still refetches those acts even though its own --since
@@ -193,6 +194,12 @@ def main():
 
     # 5. re-poll snapshots whose HTML has appeared since we marked them 903, or
     #    since we took their text from the PDF (906/907)
+    #    The articles/units split from the PDF go with the text row: the HTML pass
+    #    COPYs fresh rows for the snapshot and would collide on the primary key.
+    stale = ("SELECT t.snapshot_eli FROM pl_snapshot_texts t JOIN pl_act_snapshots s "
+             "ON s.snapshot_eli = t.snapshot_eli WHERE t.http_status = 906 AND s.has_html")
+    plprod.psql(f"BEGIN; DELETE FROM pl_act_articles WHERE snapshot_eli IN ({stale}); "
+                f"DELETE FROM pl_act_units WHERE snapshot_eli IN ({stale}); COMMIT;")
     out = plprod.psql(
         "DELETE FROM pl_snapshot_texts t USING pl_act_snapshots s "
         "WHERE s.snapshot_eli = t.snapshot_eli AND t.http_status IN (903, 906, 907) "
@@ -211,6 +218,10 @@ def main():
         r = subprocess.run([sys.executable, os.path.join(HERE, "harvest_eli_pdf.py")])
         if r.returncode != 0:
             return r.returncode
+        # 8. articles from those PDFs (needs PyMuPDF; a missing module is not fatal)
+        r = subprocess.run([sys.executable, os.path.join(HERE, "segment_eli_pdf.py")])
+        if r.returncode != 0:
+            print("WARNING: segment_eli_pdf.py failed, retried next run", file=sys.stderr)
 
     print("after: ", counts_snapshot(), flush=True)
     print(f"sync done in {int(time.time() - t0)} s", flush=True)

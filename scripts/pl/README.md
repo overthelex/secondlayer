@@ -22,12 +22,18 @@ PG_DB=secondlayer_prod
 | 1 register + graph | `harvest_eli_register.py` | **done** - 164,213 acts, 732,983 edges, 0 failures |
 | 2 snapshot chain | `build_pl_snapshots.sql` | **done** - 164,206 snapshots, 154,843 laws, 4,223 with >1 |
 | 3+4 struct + text | `harvest_eli_texts.py` | **done** - 673,735 articles, 5.5M units, 7 unresolved of 39,106 |
-| 5 incremental sync | `sync_eli_changes.py` | not written |
+| 5 incremental sync | `sync_eli_changes.py` | daily cron on cthulhu 04:30 |
+| 5b PDF articles | `segment_eli_pdf.py` (parser `pl_pdf_segmenter.py`) | **done** 2026-11-15 - 903 of 3,395 PDF-only snapshots split, 80,369 articles; 2,490 have no `Art.` (rozporządzenia), 2 rejected |
 | 6 audit | `audit_pl_load.sh` | not written |
 | courts | `harvest_ncourt.py`, `harvest_cbosa.py`, `harvest_sn_tk.py` | not written |
 | legacy repair | `repair_legacy.py` | not written |
 
 Parser: `pl_article_parser.py`, tests `test_pl_article_parser.py` (all passing).
+PDF parser: `pl_pdf_segmenter.py`, tests `test_pl_pdf_segmenter.py` (no PDF needed). It reads
+article numbers from PyMuPDF span flags (bold heading + bracketed superscript), drops footnotes
+by size but appends the ones an article cites (they say which of two printed versions is in
+force), and checks the result against the previous HTML edition; verdict in
+`pl_snapshot_texts.pdf_split` (migration 270).
 Schema: `mcp_backend/src/migrations/190_pl_legislation.sql`, `191_pl_law_texts.sql`
 (applied to prod 2026-08-14; 184/185 were already taken, hence 190/191),
 plus `192_pl_indexes_concurrently.sql` **which the migration runner must not run**

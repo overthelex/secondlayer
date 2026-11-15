@@ -267,9 +267,14 @@ komornicy (судові виконавці), rzecznicy_patentowi (патентн
       params.push(String(args.voivodeship).trim().toLocaleUpperCase('pl'));
       where.push(`voivodeship = $${params.length}`);
     }
+    // Name search: the entity whose name starts with the query and carries the fewest extra
+    // words comes first ("ORLEN" → ORLEN S.A., not "BASELL ORLEN POLYOLEFINS" by alphabet).
+    const nameRank = queryKind === 'name'
+      ? `(upper(regexp_replace(name, '^[^[:alnum:]]+', '')) LIKE upper($1) || '%') DESC, length(name), `
+      : '';
     const rows = await runQuery(this.db,
       `SELECT ${COMPANY_COLS} FROM pl_krs_entities WHERE ${where.join(' AND ')}
-       ORDER BY (status = 'current') DESC, name, krs LIMIT ${page.limit + 1} OFFSET ${page.offset}`, params);
+       ORDER BY (status = 'current') DESC, ${nameRank}name, krs LIMIT ${page.limit + 1} OFFSET ${page.offset}`, params);
     return this.wrapResponse(pageResponse(rows, page, { query_kind: queryKind }));
   }
 
