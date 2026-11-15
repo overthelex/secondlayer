@@ -8,7 +8,7 @@ The UK corpus did **not** move: it stays on GCP (`deployment/lawrider-gcp`).
 Since 2026-11-07 the same stack also serves **lawrider.pl**: `lawrider.pl` /
 `www.lawrider.pl` show the same static site, and `mcp.lawrider.pl` is a second
 instance of the backend image (`app-pl`, container `lawrider-app-pl`) with
-`MCP_TOOLSET=all`, i.e. the full tool registry. The Polish corpus (`pl_acts`,
+`MCP_TOOLSET=pl`, i.e. the Polish `pl_*` tools only (it was `all` until 2026-11-15). The Polish corpus (`pl_acts`,
 `pl_act_articles`, `pl_act_units`, `pl_court_decisions`, ... restored from the
 AWS prod archive) lives in this stack's Postgres, deliberately apart from the
 Ukrainian data in `secondlayer_local`. The three hostnames are extra ingress

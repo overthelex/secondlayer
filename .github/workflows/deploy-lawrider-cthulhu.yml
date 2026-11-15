@@ -180,15 +180,16 @@ jobs:
             echo "::error::non-Swiss tools advertised on the CH box: $stray"
             exit 1
           fi
-          # lawrider-app-pl is the opposite case: it must serve the whole registry
-          # (MCP_TOOLSET=all), so a Swiss-only or empty listing there is the bug.
+          # lawrider-app-pl serves the Polish tools only (MCP_TOOLSET=pl).
           tools_pl=$(docker exec lawrider-app-pl node -e 'require("http").get("http://127.0.0.1:3000/mcp",r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>{const j=JSON.parse(d);const t=(j.tools||(j.result&&j.result.tools)||[]).map(x=>x.name).sort();process.stdout.write(t.join(" "))})})')
           echo "advertised (pl): $tools_pl"
           [ -n "$tools_pl" ] || { echo "::error::lawrider-app-pl advertises no tools at all"; exit 1; }
-          if ! printf '%s\n' $tools_pl | grep -qE '^ch_' || ! printf '%s\n' $tools_pl | grep -qvE '^(ch|uk)_'; then
-            echo "::error::lawrider-app-pl must advertise the full registry (ch_ + ua) but got: $tools_pl"
+          stray_pl=$(printf '%s\n' $tools_pl | grep -vE '^pl_' || true)
+          if [ -n "$stray_pl" ]; then
+            echo "::error::non-Polish tools advertised on mcp.lawrider.pl: $stray_pl"
             exit 1
           fi
+          printf '%s\n' $tools_pl | grep -qx 'pl_semantic_search' || { echo "::error::pl_semantic_search missing on mcp.lawrider.pl"; exit 1; }
           echo "lawrider deploy OK"
 
       - name: legal.org.ua health (after)
