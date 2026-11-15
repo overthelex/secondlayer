@@ -53,7 +53,8 @@ Caps: export stops adding units at --max-chunks expected chunks (default
 40000) and keeps the cursor at the last unit taken; load stops after
 --max-seconds (default 7200) and leaves the rest of the batch for the next run
 (export does not write a new batch while one is pending). TEI is the live
-search embedder (CPU, 3 cores): small batches, two requests in flight.
+search embedder (CPU, 3 cores): one request of 4 texts in flight, so a live
+query waits at most ~3 s behind us (with 2 x 8 in flight TEI queue time was 6-7 s).
 """
 import argparse
 import json
@@ -70,8 +71,8 @@ import pl_chunk_export as X  # noqa: E402
 COLLECTION = os.environ.get("COLLECTION", "pl_corpus_bge_cls")
 QDRANT = os.environ.get("QDRANT_URL", "http://qdrant-lawrider:6333")
 TEI = os.environ.get("TEI_URL", "http://tei-bge-m3-lawrider:80")
-TEI_BATCH = int(os.environ.get("TEI_BATCH", "8"))
-TEI_PARALLEL = int(os.environ.get("TEI_PARALLEL", "2"))
+TEI_BATCH = int(os.environ.get("TEI_BATCH", "4"))
+TEI_PARALLEL = int(os.environ.get("TEI_PARALLEL", "1"))
 
 # The bulk export started here; everything older is in the collection.
 BULK_EXPORT_START = "2026-11-10T17:58:35+00:00"

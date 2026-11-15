@@ -92,7 +92,7 @@ The first cursor is the bulk export start (2026-11-10 17:58 UTC).
 Volume (measured 10-15.11): ~70 ncourt + ~45 SAOS decisions a day at ~19 chunks
 each, ~2,500 BZP notices (one short chunk), Sejm refetches 3-30K objects
 (titles, almost all unchanged). On the live CPU TEI next to other load:
-~1.2 decision chunks/s, so a normal day is 40-60 min.
+~1.2 decision chunks/s (CPU-bound, the same with 1 x 4 or 2 x 8 texts in flight), so a normal day is 40-60 min.
 
 ## Run
 
