@@ -25,6 +25,7 @@ PG_DB=secondlayer_prod
 | 5 incremental sync | `sync_eli_changes.py` | daily cron on cthulhu 04:30 |
 | 5b PDF articles | `segment_eli_pdf.py` (parser `pl_pdf_segmenter.py`) | **done** 2026-11-15 - 903 of 3,395 PDF-only snapshots split, 80,369 articles; 2,490 have no `Art.` (rozporządzenia), 2 rejected |
 | 5c PDF article vectors | `vectorize_pdf_articles.py` | 2026-11-15: 117,513 chunks of those articles into `pl_corpus_bge_cls` on CPU TEI (~5 chunks/s); each edition's whole-text `pl_act_text` points are dropped once its articles are in. Not in the cron: new splits stay whole-text until it is re-run |
+| 5d decision citations | `build_decision_citations.py` (tests `test_build_decision_citations.py`) | **done** 2026-11-16 - 10.2M citations, 2.02M of 2.46M decisions (82 %) cite something, 99.99 % of cited ELIs are in `pl_acts`, 96.6 % of article citations resolve to an article; tool `pl_find_decisions_by_article` |
 | 6 audit | `audit_pl_load.sh` | not written |
 | courts | `harvest_ncourt.py`, `harvest_cbosa.py`, `harvest_sn_tk.py` | not written |
 | legacy repair | `repair_legacy.py` | not written |
@@ -136,6 +137,17 @@ without noticing.
   (`fill_updates`, last 120 days); the 2021-2026 backfill filled 304,005 of
   304,631.
 
+- **Decision citations cite the edition, not the act.** NSA's legal bases point at the
+  consolidated text in force at the time (PPSA is cited as DU/2012/270, DU/2017/1369,
+  DU/2018/1302 ... while the act is DU/2002/1270). `pl_decision_citations.act_eli` folds them
+  onto the base act through `pl_acts.consolidates_eli`; `cited_eli` keeps the edition. A query
+  keyed on the cited ELI finds one edition's slice of the case law and looks complete.
+  SAOS writes superscripts as `393(19)` or run together as `3935` (= 393^5); the run-together
+  form is only resolved when the plain number is not an article of the act and exactly one
+  split is. SAOS writes `journalEntry: 0` for acts it could not place; those are skipped.
+  One regex with an alternation of overlapping whitespace classes under `+` before `$` hung
+  the first full run on a long run of spaces: whitespace is collapsed before parsing.
+
 ## Validation rules for article extraction
 
 - **V1 exact struct coverage.** `extracted == struct declares, in scope`. Not a
@@ -150,3 +162,27 @@ without noticing.
   agree and are both wrong. A non-zero `nonmonotonic` is a finding to surface,
   not a number expected to be zero.
 - **V4 substance**: ≥95 % of articles ≥10 chars.
+
+## Decision citations
+
+`build_decision_citations.py` -> `pl_decision_citations` (migration 272): one row per decision,
+cited edition and article, from the legal bases the sources carry (`hf-pl-nsa`,
+`hf-pl-court-raw`: `metadata_json->'extracted_legal_bases'`; `saos`: `referenced_regulations`).
+ncourt, cbosa, kio and otkzu have no structured legal bases and are not covered. Sharded by
+source and month; a shard is replaced in one transaction and recorded in
+`pl_decision_citation_shards`, so a killed run resumes by running it again (`--redo` rebuilds,
+`--report` prints totals). The two lookup indexes were built with `CREATE INDEX CONCURRENTLY`
+after the first load.
+
+By source (2026-11-16): hf-pl-nsa 79.8 % of decisions with a citation (97.8 % of article
+citations resolved), saos 90.3 % (95.8 %), hf-pl-court-raw 88.8 % (96.1 %; its keys are
+`isap_id` / `art` / `address`). 3.2M rows cite a consolidated text and are folded onto the
+base act. The unresolved articles are mostly real ones our editions do not carry: KPC 393^12,
+385^1 etc. were repealed in 2005, before the oldest segmented consolidation (2014).
+A full rebuild takes about 35 minutes.
+
+Daily cron line (not installed):
+
+```
+30 7 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-citations.lock nice -n 10 /usr/bin/python3 build_decision_citations.py --since $(date -d '-60 days' +\%F) >> /home/vovkes/lawrider/pl-citations.log 2>&1
+```

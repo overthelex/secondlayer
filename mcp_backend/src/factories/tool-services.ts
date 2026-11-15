@@ -41,6 +41,7 @@ import { ChRegistryTools } from '../api/tools/ch-registry-tools.js';
 import { PlRegistryTools } from '../api/tools/pl-registry-tools.js';
 import { PlLegalTools } from '../api/tools/pl-legal-tools.js';
 import { PlSemanticTools } from '../api/tools/pl-semantic-tools.js';
+import { PlCitationTools } from '../api/tools/pl-citation-tools.js';
 import { ChCommentaryTools } from '../api/tools/ch-commentary-tools.js';
 import { ChEchrTools } from '../api/tools/ch-echr-tools.js';
 import { ChMaterialsTools } from '../api/tools/ch-materials-tools.js';
@@ -231,6 +232,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new PlLegalTools(coreServices.db));
   // Semantic layer over the PL corpus (Qdrant pl_corpus_bge_cls, 37.4M chunks)
   toolRegistry.registerHandler(new PlSemanticTools(coreServices.db));
+  // Case law by act and article (pl_decision_citations, migration 272; LEXAI-2241)
+  toolRegistry.registerHandler(new PlCitationTools(coreServices.db));
   // Open-access commentaries on Swiss federal acts (onlinekommentar.ch, CC BY 4.0; LEXAI-2037)
   toolRegistry.registerHandler(new ChCommentaryTools(coreServices.db));
   // Federal Gazette materials: Botschaften, reports, article purpose via provenance (LEXAI-2038)

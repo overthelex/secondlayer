@@ -57,6 +57,7 @@ export const V2_TOOL_NAMES = new Set<string>([
   'pl_get_act_relations',
   'pl_get_act_structure',
   'pl_count_cases_by_party',
+  'pl_find_decisions_by_article',
   'ch_search_court_decisions',
   'ch_get_court_decision',
   'ch_search_legislation',
