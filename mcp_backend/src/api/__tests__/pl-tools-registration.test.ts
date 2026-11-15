@@ -17,9 +17,9 @@ const stubDb = {} as any;
 const defs = [...new PlRegistryTools(stubDb).getToolDefinitions(), ...new PlLegalTools(stubDb).getToolDefinitions()];
 
 describe('PL tool surface', () => {
-  it('exposes 15 uniquely named pl_* tools in the curated set', () => {
-    expect(defs).toHaveLength(15);
-    expect(new Set(defs.map((d) => d.name)).size).toBe(15);
+  it('exposes 18 uniquely named pl_* tools in the curated set', () => {
+    expect(defs).toHaveLength(18);
+    expect(new Set(defs.map((d) => d.name)).size).toBe(18);
     for (const d of defs) {
       expect(d.name.startsWith('pl_')).toBe(true);
       expect(V2_TOOL_NAMES.has(d.name)).toBe(true);
