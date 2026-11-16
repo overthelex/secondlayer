@@ -85,7 +85,7 @@ def isap_eli(link, journal):
     if re.search(r"\bUE\b", j):
         return None  # Dz.U.UE.L: EU journal, not an ELI
     m = JOURNAL.search(j)
-    if m:
+    if m and int(m.group(3)):
         pub = "MP" if m.group(1).upper().startswith("M") else "DU"
         return f"{pub}/{m.group(2)}/{int(m.group(3))}"
     return None
