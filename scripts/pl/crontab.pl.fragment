@@ -1,0 +1,42 @@
+# >>> lawrider.pl data (scripts/pl/crontab.pl.fragment) >>>
+# cthulhu, user vovkes, server local time (EET/EEST; Debian cron ignores CRON_TZ).
+# Runs from the checkout /home/vovkes/SecondLayer-pl (branch main; git pull to update).
+# Absolute paths only, so these lines do not depend on PATH= lines elsewhere in the
+# crontab (the CH fragment sets one and must stay last).
+# Install: crontab -l > ~/lawrider/crontab.bak-$(date +%Y%m%d-%H%M%S), then append
+# the lines that are not there yet (see scripts/pl/README.md "Cron").
+#
+# Already installed before this fragment existed (kept here so the file is the whole schedule):
+30 4 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-eli-sync.lock nice -n 10 /usr/bin/python3 sync_eli_changes.py >> /home/vovkes/lawrider/pl-eli-sync.log 2>&1
+15 5 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-krs.lock nice -n 10 /usr/bin/python3 harvest_krs.py --bulletin --scan >> /home/vovkes/lawrider/pl-krs.log 2>&1
+45 5 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-sejm.lock nice -n 10 /usr/bin/python3 harvest_sejm.py --terms 10 >> /home/vovkes/lawrider/pl-sejm.log 2>&1
+15 6 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-slps.lock nice -n 10 /usr/bin/python3 harvest_slps.py >> /home/vovkes/lawrider/pl-slps.log 2>&1
+45 6 * * * tmux has-session -t plbzp 2>/dev/null || { cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-bzp.lock nice -n 10 /usr/bin/python3 harvest_bzp.py >> /home/vovkes/lawrider/pl-bzp.log 2>&1; }
+15 7 * * * tmux has-session -t plncourt 2>/dev/null || { cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-ncourt.lock nice -n 10 /usr/bin/python3 harvest_ncourt.py --index --load >> /home/vovkes/lawrider/pl-ncourt.log 2>&1; }
+#
+# New (LEXAI-2252): court decisions. psycopg2 harvesters, PG* from pl-env.sh (127.0.0.1:5448).
+# SAOS: judgments modified in the last 3 days (existing ids skipped). Own state file: the
+# backfill's ~/lawrider/pl-saos.state belongs to the full-dump run.
+15 3 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && . /home/vovkes/lawrider/pl-env.sh && flock -n /tmp/pl-saos.lock nice -n 10 /usr/bin/python3 harvest_saos.py --since-days 3 --state-file /home/vovkes/lawrider/pl-saos-daily.state >> /home/vovkes/lawrider/pl-saos.log 2>&1
+# KIO: weeks already done are skipped via ~/lawrider/kio/queue.sqlite; the last 120 days are
+# re-listed every run (the UZP portal publishes about six weeks late).
+30 3 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && . /home/vovkes/lawrider/pl-env.sh && flock -n /tmp/pl-kio.lock nice -n 10 /usr/bin/python3 harvest_kio.py --recheck-days 120 >> /home/vovkes/lawrider/pl-kio.log 2>&1
+# TK (OTK ZU): only through the SOCKS tunnel (tmux "socks", ~/lawrider/socks-mail2.sh); curl
+# reads HTTPS_PROXY. Past years are marked done in ~/lawrider/tk/queue.sqlite; the current
+# year is walked, known positions cost no request.
+0 4 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && . /home/vovkes/lawrider/pl-env.sh && HTTPS_PROXY=socks5h://127.0.0.1:1080 flock -n /tmp/pl-tk.lock nice -n 10 /usr/bin/python3 harvest_tk.py >> /home/vovkes/lawrider/pl-tk.log 2>&1
+# pl_decision_meta (matview of migration 273, search filters): refresh after the court
+# harvesters, weekly (a refresh reads ~44 GB of TOASTed metadata; ~115 new decisions a day);
+# waits for a running ncourt load (its lock), no-op until the view exists.
+50 7 * * 0 flock -w 5400 /tmp/pl-ncourt.lock sh -c '[ "$(docker exec pg-lawrider psql -U secondlayer -d secondlayer_prod -Atc "SELECT 1 FROM pg_matviews WHERE matviewname = '\''pl_decision_meta'\''")" = 1 ] && docker exec pg-lawrider psql -U secondlayer -d secondlayer_prod -v ON_ERROR_STOP=1 -c "SET statement_timeout = '\''3600s'\''" -c "REFRESH MATERIALIZED VIEW CONCURRENTLY pl_decision_meta"' >> /home/vovkes/lawrider/pl-decision-meta.log 2>&1
+# CBOSA (NSA) is NOT scheduled: NSA blocks scraping, harvest_cbosa.py is for manual runs only.
+#
+# New (LEXAI-2252): dane.gov.pl / gov.pl registers. A source whose file sha256 is already loaded
+# is skipped; a changed one replaces that source's rows in one transaction.
+0 3 * * 0 cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-files.lock nice -n 10 /usr/bin/python3 load_pl_files.py mswia_sankcje komornicy kprm_wykaz rzecznicy_patentowi >> /home/vovkes/lawrider/pl-files.log 2>&1
+30 2 1 * * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-files.lock nice -n 10 /usr/bin/python3 load_pl_files.py sady_teleadres sady_lista sady_struktura sady_wlasciwosc >> /home/vovkes/lawrider/pl-files.log 2>&1
+0 2 1 1,4,7,10 * cd /home/vovkes/SecondLayer-pl/scripts/pl && PL_SSH_HOST= PG_CONTAINER=pg-lawrider flock -n /tmp/pl-files.lock nice -n 10 /usr/bin/python3 load_pl_files.py teryt_terc teryt_simc teryt_ulic >> /home/vovkes/lawrider/pl-files.log 2>&1
+#
+# New (LEXAI-2253): incremental vectors into pl_corpus_bge_cls, after every harvester above.
+30 8 * * * flock -n /tmp/pl-vec-incr.lock nice -n 10 /home/vovkes/SecondLayer-pl/scripts/pl/run_vectorize_incremental.sh >> /home/vovkes/lawrider/pl-vec-incr.log 2>&1
+# <<< lawrider.pl data <<<
