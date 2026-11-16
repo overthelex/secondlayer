@@ -22,7 +22,7 @@ import { VpRepository } from '../services/seo/vp-repository.js';
 import { renderCodesIndex, renderCodeToc, renderArticle, renderSitemap, esc } from '../services/seo/zakon-render.js';
 
 const CACHE_TTL_S = 24 * 60 * 60;
-const CACHE_PREFIX = 'zakon:v2:'; // v2: articles list Grand Chamber decisions
+const CACHE_PREFIX = 'zakon:v3:'; // v2: articles list Grand Chamber decisions; v3: sibling articles
 const HTML_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=86400';
 
 type Cache = { get(k: string): Promise<string | null>; set(k: string, v: string, o: { EX: number }): Promise<unknown> };

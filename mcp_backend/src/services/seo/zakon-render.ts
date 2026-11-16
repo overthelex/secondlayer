@@ -4,7 +4,7 @@
  */
 import { ZAKON_CODES, articleSlug, type ZakonCode } from './zakon-codes.js';
 import type { CodeData } from './zakon-repository.js';
-import type { Heading, ParsedArticle } from './zakon-text.js';
+import type { CodeStructure, Heading, ParsedArticle } from './zakon-text.js';
 import { sentenceCase } from './zakon-text.js';
 import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
 import { vpListHtml } from './vp-render.js';
@@ -109,6 +109,44 @@ function pathLine(path: Heading[]): string {
 
 export interface ArticleVp { total: number; items: VpListItem[] }
 
+export interface Siblings { heading: Heading | null; artNos: string[] }
+
+/**
+ * Other articles under the same innermost heading (chapter, section or §) as
+ * `artNo`, in code order. A long chapter is cut to a window of `max` around
+ * the article, so every article links to its neighbours, not only to the
+ * chapter's first ones.
+ */
+export function siblingArticles(structure: CodeStructure, known: Set<string>, artNo: string, max = 12): Siblings {
+  const groups: Array<{ heading: Heading | null; arts: string[] }> = [{ heading: null, arts: [] }];
+  for (const e of structure.entries) {
+    if (e.type === 'heading') groups.push({ heading: e.heading, arts: [] });
+    else if (known.has(e.artNo)) groups[groups.length - 1].arts.push(e.artNo);
+  }
+  const g = groups.find(x => x.arts.includes(artNo));
+  if (!g) return { heading: null, artNos: [] };
+  const others = g.arts.filter(a => a !== artNo);
+  if (others.length <= max) return { heading: g.heading, artNos: others };
+  const at = g.arts.indexOf(artNo);
+  const start = Math.max(0, Math.min(at - Math.floor(max / 2), g.arts.length - max - 1));
+  return { heading: g.heading, artNos: g.arts.slice(start, start + max + 1).filter(a => a !== artNo) };
+}
+
+function siblingsHtml(code: ZakonCode, data: CodeData, artNo: string): string {
+  const { heading, artNos } = siblingArticles(data.structure, new Set(data.index.map(a => a.artNo)), artNo);
+  if (!artNos.length) return '';
+  const heads = new Map(data.index.map(a => [a.artNo, a.head]));
+  const where = heading ? `${heading.label}${heading.title ? `. ${heading.title}` : ''}` : code.name;
+  const items = artNos.map(a => {
+    const head = truncate(heads.get(a) || '', 90);
+    return `<li><a href="/zakon/${code.slug}/${articleSlug(a)}">Стаття ${esc(a)}</a>${head ? `. ${esc(head)}` : ''}</li>`;
+  }).join('');
+  return `<section>
+<h2>Інші статті: ${esc(truncate(where, 120))}</h2>
+<ul class="toc">${items}</ul>
+</section>`;
+}
+
 export function renderArticle(code: ZakonCode, data: CodeData, art: ParsedArticle, repealed: boolean, vp?: ArticleVp): string {
   const i = data.index.findIndex(a => a.artNo === art.artNo);
   const prev = i > 0 ? data.index[i - 1] : null;
@@ -149,6 +187,7 @@ ${repealedNote(code, data, repealed)}
 ${textHtml}
 </div>
 <nav class="pager">${prev ? link(prev, 'prev') : '<span></span>'}<a href="${codePath}">Зміст ${esc(code.abbr)}</a>${next ? link(next, 'next') : '<span></span>'}</nav>
+${siblingsHtml(code, data, art.artNo)}
 ${vp && vp.total ? `<section>
 <h2>Постанови Великої Палати ВС, що застосовують статтю ${esc(art.artNo)} ${esc(code.articleRef)}${vp.total > vp.items.length ? ` (${vp.total})` : ''}</h2>
 ${vpListHtml(vp.items)}

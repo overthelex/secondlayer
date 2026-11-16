@@ -1,5 +1,6 @@
 import { parseArticleBody, parseStructure, sentenceCase } from '../zakon-text.js';
 import { artNoFromSlug, articleSlug, codeBySlug, ZAKON_CODES } from '../zakon-codes.js';
+import { siblingArticles } from '../zakon-render.js';
 
 describe('parseArticleBody', () => {
   it('splits heading and paragraphs, marks amendment notes', () => {
@@ -78,5 +79,26 @@ describe('zakon codes', () => {
     expect(new Set(ZAKON_CODES.map(c => c.slug)).size).toBe(13);
     expect(new Set(ZAKON_CODES.map(c => c.nreg)).size).toBe(13);
     expect(codeBySlug('tsyvilnyi-kodeks')?.nreg).toBe('435-15');
+  });
+});
+
+
+describe('siblingArticles', () => {
+  const text = 'Глава 1. ПЕРША\nСтаття 1. А\nСтаття 2. Б\nСтаття 3. В\nГлава 2. ДРУГА\n' +
+    Array.from({ length: 30 }, (_, i) => `Стаття ${i + 4}. Т`).join('\n');
+  const st = parseStructure(text);
+  const known = new Set(Array.from({ length: 33 }, (_, i) => String(i + 1)));
+  it('lists the other articles of the same chapter', () => {
+    const s = siblingArticles(st, known, '2');
+    expect(s.heading?.label).toBe('Глава 1');
+    expect(s.artNos).toEqual(['1', '3']);
+  });
+  it('cuts a long chapter to a window around the article', () => {
+    expect(siblingArticles(st, known, '20', 6).artNos).toEqual(['17', '18', '19', '21', '22', '23']);
+    expect(siblingArticles(st, known, '4', 6).artNos).toEqual(['5', '6', '7', '8', '9', '10']);
+    expect(siblingArticles(st, known, '33', 6).artNos).toEqual(['27', '28', '29', '30', '31', '32']);
+  });
+  it('returns nothing for an unknown article', () => {
+    expect(siblingArticles(st, known, '99').artNos).toEqual([]);
   });
 });

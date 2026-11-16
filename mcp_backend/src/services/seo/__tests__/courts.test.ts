@@ -1,7 +1,7 @@
 import { subjectOrNull, presidingJudge, shortName } from '../courts-repository.js';
 import { hearingsHtml } from '../courts-render.js';
 import { translit, slugify } from '../translit.js';
-import { statsTable, kindShares, isActive, renderCourt, renderJudge } from '../courts-render.js';
+import { statsTable, kindShares, isActive, renderCourt, renderJudge, colleagueWindow, judgeShareText } from '../courts-render.js';
 import type { Court, Judge, StatRow } from '../courts-repository.js';
 
 describe('translit (KMU 2010)', () => {
@@ -93,5 +93,33 @@ describe('upcoming hearings', () => {
     expect(html).toContain('490/5120/25');
     expect(html).toContain('08.11.2026');
     expect(html).not.toMatch(/Сторони<\/th>|Учасники/);
+  });
+});
+
+describe('judge cross-links', () => {
+  const judges = 'АБВГДЕЖЗИКЛМНОПРСТ'.split('').map((c, i) => ({ slug: `j${i}`, fullName: `${c}енко ${c}.` }));
+  it('lists every colleague when the court is small', () => {
+    expect(colleagueWindow(judges.slice(0, 5), 'j2').map(x => x.slug)).toEqual(['j0', 'j1', 'j3', 'j4']);
+  });
+  it('takes a window around the judge, wrapping, without the judge', () => {
+    const w = colleagueWindow(judges, 'j0', 4).map(x => x.slug);
+    expect(w).toHaveLength(4);
+    expect(w).not.toContain('j0');
+    expect(w).toEqual(expect.arrayContaining(['j1', 'j2', 'j17', 'j16']));
+  });
+  it('states the share of the court decisions and the previous year', () => {
+    const judge = [{ year: 2025, justiceKind: 1, decisions: 120 }, { year: 2025, justiceKind: 2, decisions: 30 }, { year: 2024, justiceKind: 1, decisions: 90 }];
+    const court = [{ year: 2025, justiceKind: 1, decisions: 2000 }, { year: 2025, justiceKind: 2, decisions: 1000 }];
+    const t = judgeShareText(judge, court, new Date('2026-11-16'));
+    expect(t).toBe('За 2025 рік у ЄДРСР 150 рішень судді, це 5% усіх рішень суду за цей рік. У 2024 році: 90.');
+    expect(judgeShareText(judge, court, new Date('2025-06-01'))).toContain('За 2025 рік (станом на 01.06.2025)');
+    expect(judgeShareText([], court)).toBe('');
+  });
+  it('renders colleagues with a link back to the court', () => {
+    const j: Judge = { dossier: '1', slug: 'j3', fullName: 'Генко Г.', courtName: 'Суд', court: { slug: 'sud-a', name: 'Суд А' }, courtCode: 1, judgeKey: 'k', lastSeen: '2026-11-09', registerDate: '2026-11-09' };
+    const html = renderJudge(j, [], [], undefined, { colleagues: judges.slice(0, 5) });
+    expect(html).toContain('<h2>Інші судді: Суд А</h2>');
+    expect(html).toContain('href="/suddia/j0"');
+    expect(html).not.toContain('href="/suddia/j3"');
   });
 });
