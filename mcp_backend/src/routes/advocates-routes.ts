@@ -102,7 +102,14 @@ export function createAdvocatesRoutes(db: BaseDatabase): { lists: Router; profil
     if (!a) return notFound(res);
     const canonical = advocateSlug(a);
     if (canonical !== slug) return void res.redirect(301, `/advokat/${canonical}`);
-    send(res, (await cachedHtml(`adv:v1:${id}`, TTL_S, async () => renderAdvocate(a)))!);
+    send(res, (await cachedHtml(`adv:v2:${id}`, TTL_S, async () => {
+      // the neighbour list is optional: a failure there must not take the profile down
+      const near = await repo.cityNeighbours(a).catch(err => {
+        logger.warn('[advokat] neighbours skipped', { err: (err as Error).message });
+        return [];
+      });
+      return renderAdvocate(a, near);
+    }))!);
   }));
 
   return { lists, profiles };

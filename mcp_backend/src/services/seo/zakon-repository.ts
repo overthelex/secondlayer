@@ -17,6 +17,13 @@ export interface ArticleIndexEntry {
   head: string;
 }
 
+export interface ArticleVersion {
+  /** Date of the first edition with this text (YYYY-MM-DD). */
+  from: string;
+  /** Null for older versions the page lists by date only. */
+  body: string | null;
+}
+
 export interface CodeData {
   edition: EditionInfo;
   index: ArticleIndexEntry[];
@@ -62,6 +69,32 @@ export class ZakonRepository {
       [nreg, edDate, artNo],
     );
     return r.rows[0]?.body ?? null;
+  }
+
+  /**
+   * Every version of one article: the first edition carrying each new text, oldest
+   * first. Whitespace is ignored (scrapes of the same text differ in spacing), and a
+   * text that returns after a change counts as a new version. Includes editions
+   * dated after `currentEd`: amendments not yet in force. Bodies come only for the
+   * versions a page shows in full (the `keep` newest up to `currentEd`, and the
+   * future ones); some ПКУ articles have 80+ versions and 14 MB of text.
+   */
+  async articleVersions(nreg: string, artNo: string, currentEd: string, keep = 6): Promise<ArticleVersion[]> {
+    const r = await this.db.query(
+      `WITH x AS (
+         SELECT a.ed_date, a.body, md5(regexp_replace(a.body, '\s+', ' ', 'g')) AS h
+           FROM npa.article a
+           JOIN npa.edition e ON e.nreg = a.nreg AND e.ed_date = a.ed_date AND e.http_status = 200 AND NOT e.date_suspect
+          WHERE a.nreg = $1 AND a.art_no = $2),
+       r AS (SELECT ed_date, body, h IS DISTINCT FROM lag(h) OVER (ORDER BY ed_date) AS starts FROM x),
+       v AS (SELECT ed_date, body,
+                    CASE WHEN ed_date <= $3::date THEN row_number() OVER (PARTITION BY ed_date <= $3::date ORDER BY ed_date DESC) END AS back
+               FROM r WHERE starts)
+       SELECT to_char(ed_date, 'YYYY-MM-DD') AS ed_date, CASE WHEN (back IS NULL OR back <= $4) AND length(body) <= 150000 THEN body END AS body
+         FROM v ORDER BY ed_date`,
+      [nreg, artNo, currentEd, keep],
+    );
+    return r.rows.map((x: { ed_date: string; body: string | null }) => ({ from: x.ed_date, body: x.body }));
   }
 
   async structure(nreg: string, edDate: string): Promise<CodeStructure> {

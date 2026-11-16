@@ -75,10 +75,16 @@ Disallow: /partner-onepager.html
 # asks what we do to prevent third parties crawling the records or the data we
 # extract from them, and "the routes are disallowed" is a better answer than "they
 # happen to fail". Judgment text is served from /api only.
+Disallow: /api$
 Disallow: /api/
 Disallow: /api/*
 Disallow: /sse
 Disallow: /mcp
+# mcp.legal.org.ua serves this same file; its versioned MCP endpoints answer 401.
+Disallow: /v1/
+Disallow: /v2/
+# OAuth return path, not a page.
+Disallow: /auth/
 # The public landing shares the /mcp prefix; the longer Allow wins.
 Allow: /mcp-dlia-yurystiv
 

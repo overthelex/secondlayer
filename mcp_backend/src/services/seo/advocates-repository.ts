@@ -84,6 +84,27 @@ export class AdvocatesRepository {
     };
   }
 
+  /**
+   * Up to `each` advocates before and after this one in alphabetical order who
+   * practise in the same city: internal links between profiles.
+   */
+  async cityNeighbours(a: Advocate, each = 6): Promise<AdvocateLink[]> {
+    if (!a.city) return [];
+    const CITY = `a.work_address->0->>'workAddressCity'`;
+    const KEY = `(a.family_name, a.name, a.source_id::bigint)`;
+    const r = await this.db.query(
+      `(SELECT ${LINK_COLS} FROM opendata_advocates a
+         WHERE ${PUBLISHABLE} AND ${CITY} = $1 AND ${KEY} < ($2, $3, $4::bigint)
+         ORDER BY a.family_name DESC, a.name DESC, a.source_id::bigint DESC LIMIT $5)
+       UNION ALL
+       (SELECT ${LINK_COLS} FROM opendata_advocates a
+         WHERE ${PUBLISHABLE} AND ${CITY} = $1 AND ${KEY} > ($2, $3, $4::bigint)
+         ORDER BY a.family_name, a.name, a.source_id::bigint LIMIT $5)`,
+      [a.city, a.familyName, a.name, a.id, each],
+    );
+    return r.rows.map(toLink);
+  }
+
   async sitemap(): Promise<{ items: AdvocateLink[]; lastmod: string | null }> {
     const r = await this.db.query(
       `SELECT ${LINK_COLS} FROM opendata_advocates a WHERE ${PUBLISHABLE} ORDER BY a.source_id::bigint LIMIT 49000`,

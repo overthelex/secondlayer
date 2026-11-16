@@ -88,18 +88,20 @@ export function createCourtsRoutes(db: BaseDatabase): { courts: Router; judges: 
   judges.get('/:slug', wrap(async (req, res) => {
     const slug = String(req.params.slug);
     if (!SLUG.test(slug)) return notFound(res);
-    const html = await cachedHtml(`suddia:v2:${slug}`, TTL_S, async () => {
+    const html = await cachedHtml(`suddia:v3:${slug}`, TTL_S, async () => {
       const j = await repo.judgeBySlug(slug);
       if (!j) return null;
       const listed = j.lastSeen !== null && j.lastSeen === j.registerDate;
       const short = shortName(j.fullName);
       const courtName = j.court?.name ?? j.courtName;
-      const [career, stats, hearings] = await Promise.all([
+      const [career, stats, hearings, courtStats, colleagues] = await Promise.all([
         repo.judgeCareer(j.dossier),
         j.courtCode !== null && j.judgeKey ? repo.judgeStats(j.courtCode, j.judgeKey) : Promise.resolve([]),
         listed && short && courtName ? hearingsOf(courtName, short) : Promise.resolve(NO_HEARINGS),
+        j.courtCode !== null ? repo.courtStats(j.courtCode) : Promise.resolve([]),
+        j.courtCode !== null ? repo.courtJudges(j.courtCode) : Promise.resolve([]),
       ]);
-      return renderJudge(j, career, stats, hearings);
+      return renderJudge(j, career, stats, hearings, { courtStats, colleagues });
     });
     if (!html) return notFound(res);
     send(res, html);
