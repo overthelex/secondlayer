@@ -42,6 +42,9 @@ function fakeDb(statusCode = 5) {
       if (sql.includes('FROM npa.edition_text')) return { rows: [{ body: law ? LAW_EDITION : EDITION }] };
       if (sql.includes('seo_vp_articles') && law) return { rows: [] };
       if (sql.includes('seo_vp_articles')) return { rows: [{ slug: '911-952-22-2024-10-15', cause_num: '911/952/22', d: '2024-10-15', category: null, total: 1 }] };
+      if (sql.includes('seo_cassation_articles')) return { rows: params[1] === '625' ? [
+        { slug: '910-1-20-2021-03-02', court_code: 9911, cause_num: '910/1/20', d: '2021-03-02', category: null, cited_by: 412, total: 37 },
+      ] : [] };
       throw new Error(`unexpected SQL: ${sql}`);
     }),
   };
@@ -151,5 +154,14 @@ describe('/zakon routes', () => {
     const res = await request(app()).get('/zakon/tsyvilnyi-kodeks/stattia-626');
     expect(res.text).toContain('Редакція від 01.01.2010 до 01.01.2020');
     expect(res.text).toContain('<li>від 01.01.2001 до 01.01.2010</li>');
+  });
+  it('lists cassation decisions applying the article, most cited first', async () => {
+    const res = await request(app()).get('/zakon/tsyvilnyi-kodeks/stattia-625');
+    expect(res.text).toContain('Постанови касаційних судів ВС, що застосовують статтю 625 ЦК України (37)');
+    expect(res.text).toContain('href="/praktyka-vs/910-1-20-2021-03-02"');
+    expect(res.text).toContain('посилаються 412 рішень');
+    expect(res.text).toContain('href="/praktyka-vs">Усі постанови касаційних судів</a>');
+    const other = await request(app()).get('/zakon/tsyvilnyi-kodeks/stattia-624');
+    expect(other.text).not.toContain('Постанови касаційних судів');
   });
 });

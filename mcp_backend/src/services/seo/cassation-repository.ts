@@ -147,6 +147,20 @@ export class CassationRepository {
     return r.rows.map(toItem);
   }
 
+  /** Cassation decisions applying one article, most cited first, and their total. */
+  async forArticle(nreg: string, artNo: string, limit: number): Promise<{ total: number; items: CassationListItem[] }> {
+    const r = await this.db.query(
+      `SELECT ${LIST_COLS}, count(*) OVER () AS total
+         FROM seo_cassation_articles a
+         JOIN seo_cassation_decisions s ON s.doc_id = a.doc_id
+         LEFT JOIN edrsr_cause_categories cc ON cc.category_code = s.category_code
+        WHERE a.nreg = $1 AND a.art_no = $2
+        ORDER BY s.cited_by DESC, s.adj_date DESC LIMIT $3`,
+      [nreg, artNo, limit],
+    );
+    return { total: r.rows.length ? Number(r.rows[0].total) : 0, items: r.rows.map(toItem) };
+  }
+
   async sitemap(): Promise<Array<{ slug: string; lastmod: string }>> {
     const r = await this.db.query(
       `SELECT slug, to_char(adj_date, 'YYYY-MM-DD') AS lastmod FROM seo_cassation_decisions ORDER BY cited_by DESC, adj_date DESC`,

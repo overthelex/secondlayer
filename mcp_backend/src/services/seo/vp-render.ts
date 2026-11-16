@@ -1,13 +1,13 @@
 /** HTML for /pozytsiia-vs: Grand Chamber decisions, official ЄДРСР text only. */
 import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
-import { ZAKON_CODES, articleSlug } from './zakon-codes.js';
+import { ZAKON_ACTS, articleSlug } from './zakon-codes.js';
 import type { VpDecision, VpListItem, VpArticle } from './vp-repository.js';
 import { parseVpText, leadText } from './vp-text.js';
 import { COURT_BY_CODE, type LinkedDecision } from './cassation-repository.js';
 
 const SOURCE = 'Тексти постанов: Єдиний державний реєстр судових рішень (reyestr.court.gov.ua), персональні дані знеособлено в реєстрі. Текст наведено без змін.';
 const ROOT: Crumb[] = [{ name: 'LEX', href: '/product' }, { name: 'Постанови Великої Палати ВС', href: '/pozytsiia-vs' }];
-const CODE_BY_NREG = new Map(ZAKON_CODES.map(c => [c.nreg, c]));
+const CODE_BY_NREG = new Map(ZAKON_ACTS.map(c => [c.nreg, c]));
 
 export const vpTitle = (d: { date: string; causeNum: string }) =>
   `Постанова Великої Палати Верховного Суду від ${uaDate(d.date)} у справі № ${d.causeNum}`;

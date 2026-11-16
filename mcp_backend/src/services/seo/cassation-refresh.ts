@@ -18,7 +18,7 @@
  */
 import type { BaseDatabase } from '@secondlayer/shared';
 import { logger } from '../../utils/logger.js';
-import { ZAKON_CODES } from './zakon-codes.js';
+import { ZAKON_ACTS } from './zakon-codes.js';
 import { slugify } from './translit.js';
 
 export const CASSATION_COURTS = [9911, 9921, 9931, 9941];
@@ -180,7 +180,7 @@ export class CassationRefresh {
            RETURNING 1
          )
          SELECT (SELECT count(*) FROM ins)::int AS n, (SELECT count(*) FROM upd)::int AS docs`,
-        [ZAKON_CODES.map(c => c.nreg), BATCH],
+        [ZAKON_ACTS.map(c => c.nreg), BATCH],
       );
       total += r.rows[0].n;
       if (r.rows[0].docs < BATCH) return total;

@@ -9,6 +9,8 @@ import type { CodeStructure, Heading, ParsedArticle } from './zakon-text.js';
 import { sentenceCase, parseArticleBody } from './zakon-text.js';
 import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
 import { vpListHtml } from './vp-render.js';
+import { cassationListHtml } from './cassation-render.js';
+import type { CassationListItem } from './cassation-repository.js';
 import type { VpListItem } from './vp-repository.js';
 
 export { SITE, esc } from './seo-page.js';
@@ -113,6 +115,7 @@ function pathLine(path: Heading[]): string {
 }
 
 export interface ArticleVp { total: number; items: VpListItem[] }
+export interface ArticleCassation { total: number; items: CassationListItem[] }
 
 export interface Siblings { heading: Heading | null; artNos: string[] }
 
@@ -218,7 +221,7 @@ function siblingsHtml(code: ZakonCode, data: CodeData, artNo: string): string {
 </section>`;
 }
 
-export function renderArticle(code: ZakonCode, data: CodeData, art: ParsedArticle, repealed: boolean, vp?: ArticleVp, versions: ArticleVersion[] = []): string {
+export function renderArticle(code: ZakonCode, data: CodeData, art: ParsedArticle, repealed: boolean, vp?: ArticleVp, versions: ArticleVersion[] = [], cass?: ArticleCassation): string {
   const i = data.index.findIndex(a => a.artNo === art.artNo);
   const prev = i > 0 ? data.index[i - 1] : null;
   const next = i >= 0 && i < data.index.length - 1 ? data.index[i + 1] : null;
@@ -265,6 +268,11 @@ ${siblingsHtml(code, data, art.artNo)}
 ${vp && vp.total ? `<section>
 <h2>Постанови Великої Палати ВС, що застосовують статтю ${esc(art.artNo)} ${esc(code.articleRef)}${vp.total > vp.items.length ? ` (${vp.total})` : ''}</h2>
 ${vpListHtml(vp.items)}
+</section>` : ''}
+${cass && cass.total ? `<section>
+<h2>Постанови касаційних судів ВС, що застосовують статтю ${esc(art.artNo)} ${esc(code.articleRef)}${cass.total > cass.items.length ? ` (${cass.total})` : ''}</h2>
+${cassationListHtml(cass.items)}
+${cass.total > cass.items.length ? `<p class="meta">Показано ${cass.items.length} найцитованіших. <a href="/praktyka-vs">Усі постанови касаційних судів</a></p>` : ''}
 </section>` : ''}
 <section class="cta">
 <h2>Судова практика за статтею ${esc(art.artNo)} ${esc(code.articleRef)}</h2>
