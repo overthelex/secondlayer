@@ -51,7 +51,7 @@ header .logo{font-weight:700;text-decoration:none;color:var(--fg);letter-spacing
 nav.crumbs{font-size:14px;color:var(--muted);margin:20px 0 8px}nav.crumbs a{color:var(--muted)}
 h1{font-size:1.6rem;line-height:1.3;margin:8px 0 12px}h2{font-size:1.15rem;margin:28px 0 8px}h3{font-size:1.02rem;margin:20px 0 6px}h4{font-size:.95rem;margin:16px 0 4px;color:var(--muted)}
 .meta{font-size:14px;color:var(--muted);margin-bottom:20px}.path{font-size:14px;color:var(--muted);margin:0 0 16px}
-.text p{margin:0 0 12px}.text p.note{font-size:14px;color:var(--note);font-style:italic}
+.text p{margin:0 0 12px}.text p.note{font-size:14px;color:var(--note);font-style:italic}.text p.chg{background:var(--warn-bg);padding:2px 6px;border-radius:4px}
 .warn{background:var(--warn-bg);color:var(--warn-fg);padding:12px 16px;border-radius:8px;margin:16px 0;font-size:15px}
 .cta{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin:32px 0}
 .cta h2{margin-top:0}.cta a.btn{display:inline-block;background:var(--accent);color:var(--accent-fg);padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600}

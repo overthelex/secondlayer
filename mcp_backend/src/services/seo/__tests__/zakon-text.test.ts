@@ -1,6 +1,6 @@
 import { parseArticleBody, parseStructure, sentenceCase } from '../zakon-text.js';
 import { artNoFromSlug, articleSlug, codeBySlug, ZAKON_CODES } from '../zakon-codes.js';
-import { siblingArticles } from '../zakon-render.js';
+import { siblingArticles, versionSpans, timesWord } from '../zakon-render.js';
 
 describe('parseArticleBody', () => {
   it('splits heading and paragraphs, marks amendment notes', () => {
@@ -100,5 +100,18 @@ describe('siblingArticles', () => {
   });
   it('returns nothing for an unknown article', () => {
     expect(siblingArticles(st, known, '99').artNos).toEqual([]);
+  });
+});
+
+describe('edition history helpers', () => {
+  it('declines раз', () => {
+    expect([1, 2, 4, 5, 11, 12, 21, 22, 25, 42].map(timesWord)).toEqual(['раз', 'рази', 'рази', 'разів', 'разів', 'разів', 'раз', 'рази', 'разів', 'рази']);
+  });
+  it('splits versions around the current edition', () => {
+    const v = [{ from: '2004-01-01', body: 'a' }, { from: '2010-05-01', body: 'b' }, { from: '2020-01-01', body: 'c' }, { from: '2028-01-01', body: 'd' }];
+    const s = versionSpans(v, '2026-08-05');
+    expect(s.current).toEqual({ from: '2020-01-01', to: '2028-01-01', body: 'c' });
+    expect(s.past.map(x => [x.from, x.to])).toEqual([['2010-05-01', '2020-01-01'], ['2004-01-01', '2010-05-01']]);
+    expect(s.future.map(x => x.from)).toEqual(['2028-01-01']);
   });
 });
