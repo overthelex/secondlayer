@@ -144,7 +144,7 @@ without noticing.
   keyed on the cited ELI finds one edition's slice of the case law and looks complete.
   SAOS writes superscripts as `393(19)` or run together as `3935` (= 393^5); the run-together
   form is only resolved when the plain number is not an article of the act and exactly one
-  split is. SAOS writes `journalEntry: 0` for acts it could not place; those are skipped.
+  split is. SAOS (`journalEntry: 0`) and ISAP (`WDU19910000000`) write position 0 for acts they could not place; those are skipped.
   One regex with an alternation of overlapping whitespace classes under `+` before `$` hung
   the first full run on a long run of spaces: whitespace is collapsed before parsing.
 

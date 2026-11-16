@@ -79,7 +79,7 @@ LIST_SEP = re.compile(r"\s*(?:,|\bi\b|\boraz\b)\s*")
 def isap_eli(link, journal):
     """ELI of an hf legal basis: the ISAP id in the link, else the journal string."""
     m = ISAP_ID.search(link or "")
-    if m:
+    if m and int(m.group(4)):  # position 0: ISAP id of an act ISAP could not place
         return f"{m.group(1)}/{m.group(2)}/{int(m.group(4))}"
     j = journal or ""
     if re.search(r"\bUE\b", j):

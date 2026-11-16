@@ -29,6 +29,7 @@ class Eli(unittest.TestCase):
 
     def test_journal_fallback_and_eu(self):
         self.assertEqual(B.isap_eli(None, "Dz.U. 2004 nr 29 poz 257"), "DU/2004/257")
+        self.assertIsNone(B.isap_eli("http://isap.sejm.gov.pl/DetailsServlet?id=WDU19910000000", ""))
         self.assertIsNone(B.isap_eli(None, "Dz.U.UE.L 1995 nr 312 poz 1 art. 1 ust.1"))
 
     def test_saos(self):
