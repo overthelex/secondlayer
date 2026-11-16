@@ -26,8 +26,9 @@
 # year is walked, known positions cost no request.
 0 4 * * * cd /home/vovkes/SecondLayer-pl/scripts/pl && . /home/vovkes/lawrider/pl-env.sh && HTTPS_PROXY=socks5h://127.0.0.1:1080 flock -n /tmp/pl-tk.lock nice -n 10 /usr/bin/python3 harvest_tk.py >> /home/vovkes/lawrider/pl-tk.log 2>&1
 # pl_decision_meta (matview of migration 273, search filters): refresh after the court
-# harvesters; waits for a running ncourt load (its lock), no-op until the view exists.
-50 7 * * * flock -w 5400 /tmp/pl-ncourt.lock sh -c '[ "$(docker exec pg-lawrider psql -U secondlayer -d secondlayer_prod -Atc "SELECT 1 FROM pg_matviews WHERE matviewname = '\''pl_decision_meta'\''")" = 1 ] && docker exec pg-lawrider psql -U secondlayer -d secondlayer_prod -v ON_ERROR_STOP=1 -c "SET statement_timeout = '\''3600s'\''" -c "REFRESH MATERIALIZED VIEW CONCURRENTLY pl_decision_meta"' >> /home/vovkes/lawrider/pl-decision-meta.log 2>&1
+# harvesters, weekly (a refresh reads ~44 GB of TOASTed metadata; ~115 new decisions a day);
+# waits for a running ncourt load (its lock), no-op until the view exists.
+50 7 * * 0 flock -w 5400 /tmp/pl-ncourt.lock sh -c '[ "$(docker exec pg-lawrider psql -U secondlayer -d secondlayer_prod -Atc "SELECT 1 FROM pg_matviews WHERE matviewname = '\''pl_decision_meta'\''")" = 1 ] && docker exec pg-lawrider psql -U secondlayer -d secondlayer_prod -v ON_ERROR_STOP=1 -c "SET statement_timeout = '\''3600s'\''" -c "REFRESH MATERIALIZED VIEW CONCURRENTLY pl_decision_meta"' >> /home/vovkes/lawrider/pl-decision-meta.log 2>&1
 # CBOSA (NSA) is NOT scheduled: NSA blocks scraping, harvest_cbosa.py is for manual runs only.
 #
 # New (LEXAI-2252): dane.gov.pl / gov.pl registers. A source whose file sha256 is already loaded

@@ -33,7 +33,7 @@ PG_DB=secondlayer_prod
 | courts: TK | `harvest_tk.py` (OTK ZU, via SOCKS) | daily cron 04:00; backfill done 09.11 (4,299) |
 | courts: NSA | `harvest_cbosa.py` | **manual only, never in cron**: NSA blocks scraping (policy) |
 | registers | `load_pl_files.py` | weekly Sun 03:00 (mswia_sankcje, komornicy, kprm_wykaz, rzecznicy_patentowi), monthly 1st 02:30 (sady_*), quarterly (teryt_*); unchanged files are skipped by sha256 |
-| matview | `pl_decision_meta` (migration 273) | daily 07:50 `REFRESH ... CONCURRENTLY` after the court harvesters (waits for the ncourt lock); no-op until the view exists |
+| matview | `pl_decision_meta` (migration 273) | Sundays 07:50 `REFRESH ... CONCURRENTLY` after the court harvesters (waits for the ncourt lock); no-op until the view exists |
 | legacy repair | `repair_legacy.py` | not written |
 
 Parser: `pl_article_parser.py`, tests `test_pl_article_parser.py` (all passing).
@@ -60,7 +60,7 @@ Python is `/usr/bin/python3` with requests/openpyxl in the *user* site-packages,
 so never `python3 -I`.
 
 Order: SAOS 03:15, KIO 03:30, TK 04:00, ELI 04:30, KRS 05:15, Sejm 05:45,
-SLPS 06:15, BZP 06:45, ncourt 07:15, pl_decision_meta 07:50, vectors 08:30.
+SLPS 06:15, BZP 06:45, ncourt 07:15, pl_decision_meta Sun 07:50, vectors 08:30.
 
 ## Incremental vectors
 
@@ -190,6 +190,20 @@ without noticing.
   `~/lawrider/kio/raw` (the default now).
 - **TK needs the SOCKS tunnel**: if tmux `socks` is down the TK cron logs curl
   retries and gives up; restart with `tmux new -d -s socks ~/lawrider/socks-mail2.sh`.
+- **NSA/WSA metadata lives only in `metadata_json`.** hf-pl-nsa (1.9M rows) has
+  empty `judges`/`keywords`/`legal_bases` columns; the bench, organ
+  (`challenged_authority`), NSA symbols (`case_type_description`, an array:
+  `"6110 Podatek od towarów i usług"`, padded with no-break spaces), finality and
+  related cases are JSON keys, read at query time for a decision (`judgesSql`,
+  `authoritySql`, ... in `pl-legal-tools.ts`). Do not filter on them in
+  `pl_court_decisions` itself: `metadata_json` of an NSA row is ~8 KB compressed
+  and sits in TOAST (44 GB of the table), so even with trigram expression
+  indexes every candidate is detoasted on recheck - "odsetki" + organ took 37 s.
+  The search filters go through the narrow materialized view `pl_decision_meta`
+  (migration 273). It is a snapshot: after an import of hf-pl-nsa,
+  hf-pl-court-raw, SAOS or ncourt rows run
+  `REFRESH MATERIALIZED VIEW CONCURRENTLY pl_decision_meta` (the first build took 16 min; a concurrent refresh is longer, one full
+  scan), and refresh it after a schema-only restore, which leaves it empty.
 - **BZP update notices carry no CPV and no order type.** `harvest_bzp.py`
   copies both from another notice of the same `tender_id` after each run
   (`fill_updates`, last 120 days); the 2021-2026 backfill filled 304,005 of
