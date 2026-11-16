@@ -26,6 +26,8 @@ Allow: /sud/*
 Allow: /suddia/*
 Allow: /pozytsiia-vs
 Allow: /pozytsiia-vs/*
+Allow: /praktyka-vs
+Allow: /praktyka-vs/*
 Allow: /advokaty
 Allow: /advokaty/*
 Allow: /advokat/*

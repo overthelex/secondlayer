@@ -33,7 +33,7 @@ import sys
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 
-SECTIONS = ['zakon', 'sud', 'suddia', 'pozytsiia-vs', 'advokaty', 'advokat', 'pricing', 'sudova-praktyka',
+SECTIONS = ['zakon', 'sud', 'suddia', 'pozytsiia-vs', 'praktyka-vs', 'advokaty', 'advokat', 'pricing', 'sudova-praktyka',
             'perevirka-kontragenta', 'dlia-advokativ', 'mcp-dlia-yurystiv', 'blog', 'product', 'about',
             'developer', 'ua', 'en']
 LINE = re.compile(r'\[(\d{2})/(\w{3})/(\d{4}):[^\]]+\] "(\S+) (\S+)[^"]*" (\d{3}) \S+ "([^"]*)" "([^"]*)"')
