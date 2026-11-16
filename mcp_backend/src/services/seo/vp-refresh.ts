@@ -7,7 +7,7 @@
  */
 import type { BaseDatabase } from '@secondlayer/shared';
 import { logger } from '../../utils/logger.js';
-import { ZAKON_CODES } from './zakon-codes.js';
+import { ZAKON_ACTS } from './zakon-codes.js';
 import { slugify } from './translit.js';
 
 const VP_COURT = 9951;
@@ -96,7 +96,7 @@ export class VpRefresh {
          UPDATE seo_vp_decisions SET articles_checked_at = now() WHERE doc_id IN (SELECT doc_id FROM todo)
        )
        SELECT count(*)::int AS n FROM ins`,
-      [ZAKON_CODES.map(c => c.nreg)],
+      [ZAKON_ACTS.map(c => c.nreg)],
     );
     return r.rows[0].n;
   }

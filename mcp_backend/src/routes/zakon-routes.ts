@@ -20,10 +20,11 @@ import { ownArticles } from '../services/seo/zakon-laws.js';
 import { ZakonRepository, ZakonDataCache, type CodeData, type ArticleIndexEntry } from '../services/seo/zakon-repository.js';
 import { parseArticleBody } from '../services/seo/zakon-text.js';
 import { VpRepository } from '../services/seo/vp-repository.js';
+import { CassationRepository } from '../services/seo/cassation-repository.js';
 import { renderCodesIndex, renderCodeToc, renderArticle, renderSitemap, esc } from '../services/seo/zakon-render.js';
 
 const CACHE_TTL_S = 24 * 60 * 60;
-const CACHE_PREFIX = 'zakon:v4:'; // v2: Grand Chamber decisions; v3: sibling articles; v4: edition history
+const CACHE_PREFIX = 'zakon:v5:'; // v2: Grand Chamber decisions; v3: sibling articles; v4: edition history; v5: cassation decisions
 const HTML_CACHE_CONTROL = 'public, max-age=600, stale-while-revalidate=86400';
 
 type Cache = { get(k: string): Promise<string | null>; set(k: string, v: string, o: { EX: number }): Promise<unknown> };
@@ -52,6 +53,7 @@ export function createZakonRoutes(db: BaseDatabase): Router {
   const repo = new ZakonRepository(db);
   const data = new ZakonDataCache(repo);
   const vp = new VpRepository(db);
+  const cass = new CassationRepository(db);
 
   const wrap = (fn: (req: Request, res: Response) => Promise<void>) => (req: Request, res: Response, next: NextFunction) =>
     fn(req, res).catch(err => {
@@ -120,7 +122,11 @@ export function createZakonRoutes(db: BaseDatabase): Router {
         logger.warn('[zakon] edition history skipped', { err: (err as Error).message });
         return [];
       });
-      return renderArticle(code, d, parsed, isRepealed(d), related, versions);
+      const cassation = await cass.forArticle(code.nreg, artNo, 10).catch(err => {
+        logger.warn('[zakon] cassation list skipped', { err: (err as Error).message });
+        return undefined;
+      });
+      return renderArticle(code, d, parsed, isRepealed(d), related, versions, cassation);
     });
     if (!html) return notFound(res, 'Статтю не знайдено');
     sendHtml(res, html);

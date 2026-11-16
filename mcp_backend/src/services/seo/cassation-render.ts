@@ -4,7 +4,7 @@
  * the code articles applied and links between published decisions.
  */
 import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo-page.js';
-import { ZAKON_CODES, articleSlug } from './zakon-codes.js';
+import { ZAKON_ACTS, articleSlug } from './zakon-codes.js';
 import type { VpArticle } from './vp-repository.js';
 import {
   CASSATION_COURT_INFO, COURT_BY_CODE,
@@ -14,7 +14,7 @@ import { parseVpText, leadText } from './vp-text.js';
 
 const SOURCE = 'Тексти постанов: Єдиний державний реєстр судових рішень (reyestr.court.gov.ua), персональні дані знеособлено в реєстрі. Текст наведено без змін. Кількість посилань підраховано за текстами рішень у ЄДРСР.';
 const ROOT: Crumb[] = [{ name: 'LEX', href: '/product' }, { name: 'Практика Верховного Суду', href: '/praktyka-vs' }];
-const CODE_BY_NREG = new Map(ZAKON_CODES.map(c => [c.nreg, c]));
+const CODE_BY_NREG = new Map(ZAKON_ACTS.map(c => [c.nreg, c]));
 const nf = new Intl.NumberFormat('uk-UA');
 
 const courtName = (code: number) => COURT_BY_CODE.get(code)?.name ?? 'Касаційний суд';
