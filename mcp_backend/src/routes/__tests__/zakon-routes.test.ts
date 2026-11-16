@@ -17,6 +17,15 @@ function fakeDb(statusCode = 5) {
     query: jest.fn(async (sql: string, params: unknown[]) => {
       if (sql.includes('FROM npa.act')) return { rows: params[0] === '435-15' || params[0] === '436-15' ? [{ ed_date: '2026-08-05', status_code: params[0] === '436-15' ? 1 : statusCode }] : [] };
       if (sql.includes('split_part')) return { rows: Object.entries(ARTICLES).map(([art_no, body]) => ({ art_no, first_line: body.split('\n')[0] })) };
+      if (sql.includes('lag(h)')) return { rows: params[1] === '625' ? [
+        { ed_date: '2004-01-01', body: 'Стаття 625. Відповідальність\n1. Старий текст.' },
+        { ed_date: '2026-08-05', body: ARTICLES['625'] },
+        { ed_date: '2027-01-01', body: 'Стаття 625. Відповідальність\n1. Майбутній текст.' },
+      ] : params[1] === '626' ? [
+        { ed_date: '2001-01-01', body: null },
+        { ed_date: '2010-01-01', body: 'Стаття 626. Поняття договору\n1. Інший текст.' },
+        { ed_date: '2020-01-01', body: ARTICLES['626'] },
+      ] : [] };
       if (sql.includes('FROM npa.article')) return { rows: ARTICLES[params[2] as string] ? [{ body: ARTICLES[params[2] as string] }] : [] };
       if (sql.includes('FROM npa.edition_text')) return { rows: [{ body: EDITION }] };
       if (sql.includes('seo_vp_articles')) return { rows: [{ slug: '911-952-22-2024-10-15', cause_num: '911/952/22', d: '2024-10-15', category: null, total: 1 }] };
@@ -74,5 +83,24 @@ describe('/zakon routes', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('<loc>https://legal.org.ua/zakon</loc>');
     expect(res.text).toContain('<loc>https://legal.org.ua/zakon/tsyvilnyi-kodeks/stattia-625</loc><lastmod>2026-08-05</lastmod>');
+  });
+
+  it('shows the edition history with past and future versions', async () => {
+    const res = await request(app()).get('/zakon/tsyvilnyi-kodeks/stattia-625');
+    expect(res.text).toContain('Історія змін статті 625 ЦК України');
+    expect(res.text).toContain('змінювався 2 рази');
+    expect(res.text).toContain('Редакція від 01.01.2004 до 05.08.2026');
+    expect(res.text).toContain('Нова редакція з 01.01.2027 (ще не набрала чинності)');
+    expect(res.text).toContain('<p class="chg">1. Старий текст.</p>');
+    expect(res.text).toContain('"legislationDateVersion":"2026-08-05"');
+  });
+  it('has no history block for an article that never changed', async () => {
+    const res = await request(app()).get('/zakon/tsyvilnyi-kodeks/stattia-624');
+    expect(res.text).not.toContain('Історія змін');
+  });
+  it('lists older versions by date when their text is not loaded', async () => {
+    const res = await request(app()).get('/zakon/tsyvilnyi-kodeks/stattia-626');
+    expect(res.text).toContain('Редакція від 01.01.2010 до 01.01.2020');
+    expect(res.text).toContain('<li>від 01.01.2001 до 01.01.2010</li>');
   });
 });
