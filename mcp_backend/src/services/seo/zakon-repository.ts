@@ -74,16 +74,20 @@ export class ZakonRepository {
 }
 
 /**
- * Per-process memo of the per-code data (13 codes; the parsed structure of
- * the largest, ПКУ, comes from a ~7 MB text, so it is parsed at most once
- * per edition). The current edition date is re-checked every `ttlMs`.
+ * Per-process memo of the per-act data (13 codes and 100 laws; the parsed
+ * structure of the largest, ПКУ, comes from a ~7 MB text, so it is parsed at
+ * most once per edition). Filled lazily, one act at a time, on the first
+ * request for that act; a parsed act keeps only the article index and the
+ * heading tree, not the text. The current edition date is re-checked every
+ * `ttlMs`. `trimIndex` (the same for a given nreg on every call) drops
+ * index entries that are not the act's own articles.
  */
 export class ZakonDataCache {
   private readonly entries = new Map<string, { at: number; data: CodeData }>();
 
   constructor(private readonly repo: ZakonRepository, private readonly ttlMs = 60 * 60 * 1000) {}
 
-  async get(nreg: string): Promise<CodeData | null> {
+  async get(nreg: string, trimIndex?: (index: ArticleIndexEntry[]) => ArticleIndexEntry[]): Promise<CodeData | null> {
     const hit = this.entries.get(nreg);
     if (hit && Date.now() - hit.at < this.ttlMs) return hit.data;
 
@@ -98,7 +102,7 @@ export class ZakonDataCache {
       this.repo.articleIndex(nreg, edition.edDate),
       this.repo.structure(nreg, edition.edDate),
     ]);
-    const data = { edition, index, structure };
+    const data = { edition, index: trimIndex ? trimIndex(index) : index, structure };
     this.entries.set(nreg, { at: Date.now(), data });
     return data;
   }
