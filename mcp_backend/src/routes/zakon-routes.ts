@@ -1,8 +1,8 @@
 /**
- * Public, server-rendered SEO pages for the main codes of Ukraine.
+ * Public, server-rendered SEO pages for the main codes and laws of Ukraine.
  *
- *   GET /zakon                               list of codes
- *   GET /zakon/:code                         table of contents
+ *   GET /zakon                               list of codes and laws
+ *   GET /zakon/:code                         table of contents (a code or a law)
  *   GET /zakon/:code/stattia-:n              one article (current edition)
  *   GET /zakon/sitemap.xml                   sitemap for all of the above
  *
@@ -15,8 +15,9 @@ import type { BaseDatabase } from '@secondlayer/shared';
 import { cachedHtml } from '../services/seo/seo-cache.js';
 import { logger } from '../utils/logger.js';
 import { NPA_REPEALED_CODES } from '../api/tools/npa-dicts.js';
-import { ZAKON_CODES, codeBySlug, artNoFromSlug, articleSlug, type ZakonCode } from '../services/seo/zakon-codes.js';
-import { ZakonRepository, ZakonDataCache, type CodeData } from '../services/seo/zakon-repository.js';
+import { ZAKON_ACTS, codeBySlug, artNoFromSlug, articleSlug, type ZakonCode } from '../services/seo/zakon-codes.js';
+import { ownArticles } from '../services/seo/zakon-laws.js';
+import { ZakonRepository, ZakonDataCache, type CodeData, type ArticleIndexEntry } from '../services/seo/zakon-repository.js';
 import { parseArticleBody } from '../services/seo/zakon-text.js';
 import { VpRepository } from '../services/seo/vp-repository.js';
 import { renderCodesIndex, renderCodeToc, renderArticle, renderSitemap, esc } from '../services/seo/zakon-render.js';
@@ -32,7 +33,7 @@ const cached = (key: string, build: () => Promise<string | null>) => cachedHtml(
 function notFound(res: Response, message = 'Сторінку не знайдено'): void {
   res.status(404).type('html').set('Cache-Control', 'public, max-age=300').send(
     `<!doctype html><html lang="uk"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>${esc(message)} | LEX</title></head>` +
-      `<body style="font-family:system-ui;max-width:640px;margin:60px auto;padding:0 16px"><h1>${esc(message)}</h1><p><a href="/zakon">Кодекси України</a></p></body></html>`,
+      `<body style="font-family:system-ui;max-width:640px;margin:60px auto;padding:0 16px"><h1>${esc(message)}</h1><p><a href="/zakon">Кодекси і закони України</a></p></body></html>`,
   );
 }
 
@@ -41,6 +42,10 @@ function sendHtml(res: Response, html: string): void {
 }
 
 const isRepealed = (d: CodeData) => d.edition.statusCode !== null && NPA_REPEALED_CODES.includes(d.edition.statusCode);
+
+/** Laws list amending articles for other acts in npa.article; those get no page. */
+const trimFor = (code: ZakonCode): ((index: ArticleIndexEntry[]) => ArticleIndexEntry[]) | undefined =>
+  code.kind === 'law' ? ownArticles : undefined;
 
 export function createZakonRoutes(db: BaseDatabase): Router {
   const router = Router();
@@ -62,12 +67,15 @@ export function createZakonRoutes(db: BaseDatabase): Router {
     const xml = await cached('sitemap', async () => {
       const entries: Array<{ path: string; lastmod: string }> = [];
       const latest: string[] = [];
-      for (const code of ZAKON_CODES) {
-        const d = await data.get(code.nreg);
-        if (!d) continue;
-        latest.push(d.edition.edDate);
-        entries.push({ path: `/zakon/${code.slug}`, lastmod: d.edition.edDate });
-        for (const a of d.index) entries.push({ path: `/zakon/${code.slug}/${articleSlug(a.artNo)}`, lastmod: d.edition.edDate });
+      for (const code of ZAKON_ACTS) {
+        // edition + article index only: the sitemap must not parse the full text of every act
+        const edition = await repo.currentEdition(code.nreg);
+        if (!edition) continue;
+        const raw = await repo.articleIndex(code.nreg, edition.edDate);
+        const index = trimFor(code)?.(raw) ?? raw;
+        latest.push(edition.edDate);
+        entries.push({ path: `/zakon/${code.slug}`, lastmod: edition.edDate });
+        for (const a of index) entries.push({ path: `/zakon/${code.slug}/${articleSlug(a.artNo)}`, lastmod: edition.edDate });
       }
       entries.unshift({ path: '/zakon', lastmod: latest.sort().pop() || new Date().toISOString().slice(0, 10) });
       return renderSitemap(entries);
@@ -78,7 +86,7 @@ export function createZakonRoutes(db: BaseDatabase): Router {
   const loadCode = async (req: Request, res: Response): Promise<{ code: ZakonCode; d: CodeData } | null> => {
     const code = codeBySlug(String(req.params.code));
     if (!code) { notFound(res); return null; }
-    const d = await data.get(code.nreg);
+    const d = await data.get(code.nreg, trimFor(code));
     if (!d) { notFound(res); return null; }
     return { code, d };
   };
@@ -97,6 +105,7 @@ export function createZakonRoutes(db: BaseDatabase): Router {
     const loaded = await loadCode(req, res);
     if (!loaded) return;
     const { code, d } = loaded;
+    if (code.kind === 'law' && !d.index.some(a => a.artNo === artNo)) return notFound(res, 'Статтю не знайдено');
     const html = await cached(`art:${code.slug}:${artNo}:${d.edition.edDate}`, async () => {
       const body = await repo.articleBody(code.nreg, d.edition.edDate, artNo);
       const parsed = body ? parseArticleBody(body, code.articleTitles) : null;

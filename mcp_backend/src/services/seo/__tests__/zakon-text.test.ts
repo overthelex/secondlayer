@@ -1,5 +1,6 @@
 import { parseArticleBody, parseStructure, sentenceCase } from '../zakon-text.js';
-import { artNoFromSlug, articleSlug, codeBySlug, ZAKON_CODES } from '../zakon-codes.js';
+import { artNoFromSlug, articleSlug, codeBySlug, ZAKON_CODES, ZAKON_ACTS } from '../zakon-codes.js';
+import { ZAKON_LAWS, ownArticles } from '../zakon-laws.js';
 import { siblingArticles, versionSpans, timesWord } from '../zakon-render.js';
 
 describe('parseArticleBody', () => {
@@ -82,6 +83,42 @@ describe('zakon codes', () => {
   });
 });
 
+describe('zakon laws', () => {
+  it('has 100 laws with unique slugs and Rada numbers, none shared with a code', () => {
+    expect(ZAKON_LAWS).toHaveLength(100);
+    expect(new Set(ZAKON_ACTS.map(c => c.slug)).size).toBe(ZAKON_ACTS.length);
+    expect(new Set(ZAKON_ACTS.map(c => c.nreg)).size).toBe(ZAKON_ACTS.length);
+    for (const l of ZAKON_LAWS) {
+      expect(l.kind).toBe('law');
+      expect(l.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+      expect(l.slug.length).toBeLessThanOrEqual(90);
+    }
+    expect(ZAKON_CODES.every(c => c.kind === undefined)).toBe(true);
+  });
+  it('names laws in headings as "Закону України «…»"', () => {
+    const l = codeBySlug('pro-advokaturu-ta-advokatsku-diialnist')!;
+    expect(l.nreg).toBe('5076-17');
+    expect(l.name).toBe('Закон України «Про адвокатуру та адвокатську діяльність»');
+    expect(l.articleRef).toBe('Закону України «Про адвокатуру та адвокатську діяльність»');
+    expect(codeBySlug('osnovy-zakonodavstva-pro-okhoronu-zdorovia')!.articleRef).toBe('Основ законодавства України про охорону здоров’я');
+  });
+});
+
+describe('ownArticles', () => {
+  const idx = (...nos: string[]) => nos.map(artNo => ({ artNo }));
+  const nos = (xs: Array<{ artNo: string }>) => xs.map(x => x.artNo);
+  it('keeps a law whose articles run in order, with inserted and repealed ones', () => {
+    expect(nos(ownArticles(idx('1', '2', '2-1', '3', '7', '8')))).toEqual(['1', '2', '2-1', '3', '7', '8']);
+  });
+  it('cuts at the articles of other acts in the final provisions', () => {
+    // «Про виконавче провадження»: КУпАП 188-13, then 121-2 of another act
+    expect(nos(ownArticles(idx('1', '2', '3', '188-13', '244-21', '121-2')))).toEqual(['1', '2', '3']);
+    // condominium law: ЦК 385, then restated articles 14, 15 of the ОСББ law
+    expect(nos(ownArticles(idx('1', '2', '3', '4', '385', '14', '15')))).toEqual(['1', '2', '3', '4']);
+    // an article number that goes backwards
+    expect(nos(ownArticles(idx('1', '2', '3', '2-1')))).toEqual(['1', '2', '3']);
+  });
+});
 
 describe('siblingArticles', () => {
   const text = 'Глава 1. ПЕРША\nСтаття 1. А\nСтаття 2. Б\nСтаття 3. В\nГлава 2. ДРУГА\n' +

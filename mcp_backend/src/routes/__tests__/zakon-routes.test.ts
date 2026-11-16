@@ -12,11 +12,23 @@ const ARTICLES: Record<string, string> = {
   '626': 'Стаття 626. Поняття договору\n1. Текст.',
 };
 
+// Закон «Про нотаріат»: npa.article also holds an article of another act that
+// its final provisions amend (here ЦК 1248), which must not get a page.
+const LAW = '3425-12';
+const LAW_EDITION = 'Розділ I\nЗАГАЛЬНІ ПОЛОЖЕННЯ\nСтаття 1. Нотаріат\nСтаття 2. Законодавство\nРозділ X\nПРИКІНЦЕВІ ПОЛОЖЕННЯ\n"Стаття 1248. Нотаріальне посвідчення';
+const LAW_ARTICLES: Record<string, string> = {
+  '1': 'Стаття 1. Нотаріат в Україні\n1. Нотаріат в Україні - це система органів.',
+  '2': 'Стаття 2. Законодавство України про нотаріат\n1. Текст.',
+  '1248': 'Стаття 1248. Нотаріальне посвідчення заповіту\n1. Текст ЦК.',
+};
+
 function fakeDb(statusCode = 5) {
   return {
     query: jest.fn(async (sql: string, params: unknown[]) => {
-      if (sql.includes('FROM npa.act')) return { rows: params[0] === '435-15' || params[0] === '436-15' ? [{ ed_date: '2026-08-05', status_code: params[0] === '436-15' ? 1 : statusCode }] : [] };
-      if (sql.includes('split_part')) return { rows: Object.entries(ARTICLES).map(([art_no, body]) => ({ art_no, first_line: body.split('\n')[0] })) };
+      const law = params[0] === LAW;
+      const arts = law ? LAW_ARTICLES : ARTICLES;
+      if (sql.includes('FROM npa.act')) return { rows: params[0] === '435-15' || params[0] === '436-15' || law ? [{ ed_date: '2026-08-05', status_code: params[0] === '436-15' ? 1 : statusCode }] : [] };
+      if (sql.includes('split_part')) return { rows: Object.entries(arts).map(([art_no, body]) => ({ art_no, first_line: body.split('\n')[0] })) };
       if (sql.includes('lag(h)')) return { rows: params[1] === '625' ? [
         { ed_date: '2004-01-01', body: 'Стаття 625. Відповідальність\n1. Старий текст.' },
         { ed_date: '2026-08-05', body: ARTICLES['625'] },
@@ -26,8 +38,9 @@ function fakeDb(statusCode = 5) {
         { ed_date: '2010-01-01', body: 'Стаття 626. Поняття договору\n1. Інший текст.' },
         { ed_date: '2020-01-01', body: ARTICLES['626'] },
       ] : [] };
-      if (sql.includes('FROM npa.article')) return { rows: ARTICLES[params[2] as string] ? [{ body: ARTICLES[params[2] as string] }] : [] };
-      if (sql.includes('FROM npa.edition_text')) return { rows: [{ body: EDITION }] };
+      if (sql.includes('FROM npa.article')) return { rows: arts[params[2] as string] ? [{ body: arts[params[2] as string] }] : [] };
+      if (sql.includes('FROM npa.edition_text')) return { rows: [{ body: law ? LAW_EDITION : EDITION }] };
+      if (sql.includes('seo_vp_articles') && law) return { rows: [] };
       if (sql.includes('seo_vp_articles')) return { rows: [{ slug: '911-952-22-2024-10-15', cause_num: '911/952/22', d: '2024-10-15', category: null, total: 1 }] };
       throw new Error(`unexpected SQL: ${sql}`);
     }),
@@ -83,6 +96,42 @@ describe('/zakon routes', () => {
     expect(res.status).toBe(200);
     expect(res.text).toContain('<loc>https://legal.org.ua/zakon</loc>');
     expect(res.text).toContain('<loc>https://legal.org.ua/zakon/tsyvilnyi-kodeks/stattia-625</loc><lastmod>2026-08-05</lastmod>');
+    expect(res.text).toContain('<loc>https://legal.org.ua/zakon/pro-notariat</loc>');
+    expect(res.text).toContain('<loc>https://legal.org.ua/zakon/pro-notariat/stattia-2</loc>');
+    expect(res.text).not.toContain('pro-notariat/stattia-1248');
+  });
+
+  it('renders a law article with the law in its heading', async () => {
+    const res = await request(app()).get('/zakon/pro-notariat/stattia-1');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<link rel="canonical" href="https://legal.org.ua/zakon/pro-notariat/stattia-1">');
+    expect(res.text).toContain('<h1>Стаття 1 Закону України «Про нотаріат». Нотаріат в Україні</h1>');
+    expect(res.text).toContain('Закон України «Про нотаріат» · редакція від');
+    expect(res.text).toContain('href="/zakon/pro-notariat/stattia-2"');
+    expect(res.text).toContain('>Зміст закону</a>');
+    expect(res.text).toContain('Кодекси і закони України');
+  });
+
+  it("lists only the law's own articles and 404s the ones it inserts into other acts", async () => {
+    const toc = await request(app()).get('/zakon/pro-notariat');
+    expect(toc.status).toBe(200);
+    expect(toc.text).toContain('<h1>Закон України «Про нотаріат»</h1>');
+    expect(toc.text).toContain('href="/zakon/pro-notariat/stattia-2"');
+    expect(toc.text).not.toContain('stattia-1248');
+    const res = await request(app()).get('/zakon/pro-notariat/stattia-1248');
+    expect(res.status).toBe(404);
+    expect(res.text).toContain('noindex');
+  });
+
+  it('lists codes and laws in separate sections of the index', async () => {
+    const res = await request(app()).get('/zakon');
+    expect(res.status).toBe(200);
+    const codes = res.text.indexOf('<h2>Кодекси</h2>');
+    const laws = res.text.indexOf('<h2>Закони</h2>');
+    expect(codes).toBeGreaterThan(0);
+    expect(laws).toBeGreaterThan(codes);
+    expect(res.text.indexOf('href="/zakon/tsyvilnyi-kodeks"')).toBeLessThan(laws);
+    expect(res.text.indexOf('href="/zakon/pro-notariat"')).toBeGreaterThan(laws);
   });
 
   it('shows the edition history with past and future versions', async () => {

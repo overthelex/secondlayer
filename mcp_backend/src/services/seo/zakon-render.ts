@@ -3,6 +3,7 @@
  * Every interpolated value goes through esc().
  */
 import { ZAKON_CODES, articleSlug, type ZakonCode } from './zakon-codes.js';
+import { ZAKON_LAWS } from './zakon-laws.js';
 import type { ArticleVersion, CodeData } from './zakon-repository.js';
 import type { CodeStructure, Heading, ParsedArticle } from './zakon-text.js';
 import { sentenceCase, parseArticleBody } from './zakon-text.js';
@@ -16,7 +17,7 @@ export function radaUrl(code: ZakonCode): string {
   return `https://zakon.rada.gov.ua/laws/show/${encodeURIComponent(code.nreg)}`;
 }
 
-const ROOT: Crumb[] = [{ name: 'LEX', href: '/product' }, { name: 'Кодекси України', href: '/zakon' }];
+const ROOT: Crumb[] = [{ name: 'LEX', href: '/product' }, { name: 'Кодекси і закони України', href: '/zakon' }];
 
 function repealedNote(code: ZakonCode, data: CodeData, repealed: boolean): string {
   if (!repealed) return '';
@@ -24,16 +25,20 @@ function repealedNote(code: ZakonCode, data: CodeData, repealed: boolean): strin
 }
 
 export function renderCodesIndex(): string {
-  const items = ZAKON_CODES.map(c => `<li><a href="/zakon/${c.slug}">${esc(c.name)}</a></li>`).join('\n');
+  const list = (acts: ZakonCode[]) => acts.map(c => `<li><a href="/zakon/${c.slug}">${esc(c.name)}</a></li>`).join('\n');
+  const laws = [...ZAKON_LAWS].sort((a, b) => a.name.localeCompare(b.name, 'uk'));
   return page({
-    title: 'Кодекси України: актуальні тексти статей | LEX',
-    description: 'Чинні редакції основних кодексів України: Конституція, ЦК, ЦПК, КК, КПК, ГПК, КАС, КЗпП, ПКУ, СК, ЗК, КУпАП. Текст кожної статті з навігацією за розділами й главами.',
+    title: 'Кодекси і закони України: актуальні тексти статей | LEX',
+    description: `Чинні редакції Конституції, основних кодексів (ЦК, ЦПК, КК, КПК, ГПК, КАС, КЗпП, ПКУ, КУпАП) і ${ZAKON_LAWS.length} законів України. Текст кожної статті з навігацією за розділами й главами.`,
     path: '/zakon',
     crumbs: ROOT,
     jsonLd: [],
-    body: `<h1>Кодекси України</h1>
-<p class="meta">Актуальні редакції за даними Верховної Ради України. Оберіть кодекс, щоб переглянути зміст і текст статей.</p>
-<ul class="codes">${items}</ul>`,
+    body: `<h1>Кодекси і закони України</h1>
+<p class="meta">Актуальні редакції за даними Верховної Ради України. Оберіть кодекс або закон, щоб переглянути зміст і текст статей.</p>
+<h2>Кодекси</h2>
+<ul class="codes">${list(ZAKON_CODES)}</ul>
+<h2>Закони</h2>
+<ul class="codes">${list(laws)}</ul>`,
   });
 }
 
@@ -255,7 +260,7 @@ ${repealedNote(code, data, repealed)}
 ${textHtml}
 </div>
 ${historyHtml(code, art, versions, data.edition.edDate)}
-<nav class="pager">${prev ? link(prev, 'prev') : '<span></span>'}<a href="${codePath}">Зміст ${esc(code.abbr)}</a>${next ? link(next, 'next') : '<span></span>'}</nav>
+<nav class="pager">${prev ? link(prev, 'prev') : '<span></span>'}<a href="${codePath}">${code.kind === 'law' ? 'Зміст закону' : `Зміст ${esc(code.abbr)}`}</a>${next ? link(next, 'next') : '<span></span>'}</nav>
 ${siblingsHtml(code, data, art.artNo)}
 ${vp && vp.total ? `<section>
 <h2>Постанови Великої Палати ВС, що застосовують статтю ${esc(art.artNo)} ${esc(code.articleRef)}${vp.total > vp.items.length ? ` (${vp.total})` : ''}</h2>
