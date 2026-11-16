@@ -86,7 +86,7 @@ export function renderLetter(council: string, letter: string, list: AdvocateLink
   });
 }
 
-export function renderAdvocate(a: Advocate): string {
+export function renderAdvocate(a: Advocate, neighbours: AdvocateLink[] = []): string {
   const name = fullName(a);
   const path = `/advokat/${advocateSlug(a)}`;
   const place = [a.city, a.region && a.city !== a.region ? `${a.region} обл.` : null].filter(Boolean).join(', ');
@@ -119,6 +119,7 @@ export function renderAdvocate(a: Advocate): string {
 <p class="meta">Адвокат${a.importedAt ? ` · за даними ЄРАУ станом на ${uaDate(a.importedAt)}` : ''}</p>
 <div class="scroll"><table class="stats">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table></div>
 <p class="meta">Сторінка містить лише відкриті відомості Єдиного реєстру адвокатів України (ст. 17 Закону України «Про адвокатуру та адвокатську діяльність»), без контактних даних. Щоб прибрати її з legal.org.ua, напишіть на <a href="mailto:${REMOVAL_EMAIL}">${REMOVAL_EMAIL}</a>, вказавши номер свідоцтва.</p>
+${neighbours.length ? `<h2>Інші адвокати: ${esc(a.city ?? '')}</h2><ul class="cols">${[...neighbours].sort((x, y) => fullName(x).localeCompare(fullName(y), 'uk')).map(x => `<li><a href="/advokat/${esc(advocateSlug(x))}">${esc(fullName(x))}</a></li>`).join('')}</ul>` : ''}
 <section class="cta"><h2>LEX для адвокатів</h2><p>Пошук судової практики й позицій Верховного Суду, аналіз документів і реєстрів в одному місці, з посиланнями на джерела.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p></section>`,
   });
 }

@@ -1,6 +1,7 @@
 import { parseArticleBody, parseStructure, sentenceCase } from '../zakon-text.js';
 import { artNoFromSlug, articleSlug, codeBySlug, ZAKON_CODES, ZAKON_ACTS } from '../zakon-codes.js';
 import { ZAKON_LAWS, ownArticles } from '../zakon-laws.js';
+import { siblingArticles, versionSpans, timesWord } from '../zakon-render.js';
 
 describe('parseArticleBody', () => {
   it('splits heading and paragraphs, marks amendment notes', () => {
@@ -116,5 +117,38 @@ describe('ownArticles', () => {
     expect(nos(ownArticles(idx('1', '2', '3', '4', '385', '14', '15')))).toEqual(['1', '2', '3', '4']);
     // an article number that goes backwards
     expect(nos(ownArticles(idx('1', '2', '3', '2-1')))).toEqual(['1', '2', '3']);
+  });
+});
+
+describe('siblingArticles', () => {
+  const text = 'Глава 1. ПЕРША\nСтаття 1. А\nСтаття 2. Б\nСтаття 3. В\nГлава 2. ДРУГА\n' +
+    Array.from({ length: 30 }, (_, i) => `Стаття ${i + 4}. Т`).join('\n');
+  const st = parseStructure(text);
+  const known = new Set(Array.from({ length: 33 }, (_, i) => String(i + 1)));
+  it('lists the other articles of the same chapter', () => {
+    const s = siblingArticles(st, known, '2');
+    expect(s.heading?.label).toBe('Глава 1');
+    expect(s.artNos).toEqual(['1', '3']);
+  });
+  it('cuts a long chapter to a window around the article', () => {
+    expect(siblingArticles(st, known, '20', 6).artNos).toEqual(['17', '18', '19', '21', '22', '23']);
+    expect(siblingArticles(st, known, '4', 6).artNos).toEqual(['5', '6', '7', '8', '9', '10']);
+    expect(siblingArticles(st, known, '33', 6).artNos).toEqual(['27', '28', '29', '30', '31', '32']);
+  });
+  it('returns nothing for an unknown article', () => {
+    expect(siblingArticles(st, known, '99').artNos).toEqual([]);
+  });
+});
+
+describe('edition history helpers', () => {
+  it('declines раз', () => {
+    expect([1, 2, 4, 5, 11, 12, 21, 22, 25, 42].map(timesWord)).toEqual(['раз', 'рази', 'рази', 'разів', 'разів', 'разів', 'раз', 'рази', 'разів', 'рази']);
+  });
+  it('splits versions around the current edition', () => {
+    const v = [{ from: '2004-01-01', body: 'a' }, { from: '2010-05-01', body: 'b' }, { from: '2020-01-01', body: 'c' }, { from: '2028-01-01', body: 'd' }];
+    const s = versionSpans(v, '2026-08-05');
+    expect(s.current).toEqual({ from: '2020-01-01', to: '2028-01-01', body: 'c' });
+    expect(s.past.map(x => [x.from, x.to])).toEqual([['2010-05-01', '2020-01-01'], ['2004-01-01', '2010-05-01']]);
+    expect(s.future.map(x => x.from)).toEqual(['2028-01-01']);
   });
 });

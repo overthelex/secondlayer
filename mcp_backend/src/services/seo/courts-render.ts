@@ -144,7 +144,43 @@ ${cta('Практика цього суду в LEX', 'LEX шукає рішен�
   });
 }
 
-export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[], hearings: Hearings = EMPTY): string {
+/**
+ * Up to `max` colleagues around the judge in alphabetical order (wrapping), so a
+ * court's judges link to each other evenly rather than all to the first names.
+ */
+export function colleagueWindow(judges: JudgeLink[], selfSlug: string, max = 12): JudgeLink[] {
+  const sorted = [...judges].sort((a, b) => a.fullName.localeCompare(b.fullName, 'uk'));
+  const others = sorted.filter(x => x.slug !== selfSlug);
+  if (others.length <= max) return others;
+  const at = Math.max(0, sorted.findIndex(x => x.slug === selfSlug));
+  const out: JudgeLink[] = [];
+  for (let k = 1; out.length < max; k++) {
+    for (const i of [at + k, at - k]) {
+      const x = sorted[((i % sorted.length) + sorted.length) % sorted.length];
+      if (out.length < max && x.slug !== selfSlug && !out.includes(x)) out.push(x);
+    }
+  }
+  return out.sort((a, b) => a.fullName.localeCompare(b.fullName, 'uk'));
+}
+
+/** "За 2025 рік у ЄДРСР 1 234 рішення судді, 6% усіх рішень суду за цей рік (у 2024: 1 100)." */
+export function judgeShareText(judge: StatRow[], court: StatRow[], today = new Date()): string {
+  if (!judge.length) return '';
+  const y = Math.max(...judge.map(s => s.year));
+  const mine = yearTotal(judge, y);
+  if (!mine) return '';
+  const all = yearTotal(court, y);
+  const pct = all ? Math.round((mine / all) * 1000) / 10 : 0;
+  const prev = yearTotal(judge, y - 1);
+  const partial = y === today.getFullYear() ? ` (станом на ${uaDate(today.toISOString().slice(0, 10))})` : '';
+  return `За ${y} рік${partial} у ЄДРСР ${n(mine)} рішень судді` +
+    (pct >= 0.1 ? `, це ${String(pct).replace('.', ',')}% усіх рішень суду за цей рік` : '') +
+    (prev ? `. У ${y - 1} році: ${n(prev)}.` : '.');
+}
+
+export interface JudgeExtras { colleagues?: JudgeLink[]; courtStats?: StatRow[]; today?: Date }
+
+export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[], hearings: Hearings = EMPTY, extras: JudgeExtras = {}): string {
   const path = `/suddia/${j.slug}`;
   const listed = j.lastSeen !== null && j.lastSeen === j.registerDate;
   const courtName = j.court?.name ?? j.courtName ?? '';
@@ -157,8 +193,13 @@ export function renderJudge(j: Judge, career: CareerRow[], stats: StatRow[], hea
     : '';
   const lastYear = stats.length ? Math.max(...stats.map(s => s.year)) : null;
   const shares = kindShares(stats);
+  const share = judgeShareText(stats, extras.courtStats ?? [], extras.today);
   const statsHtml = j.court
-    ? `<h2>Рішення судді в ЄДРСР (${esc(j.court.name)})</h2>${statsTable(stats)}<p class="meta">Рішення пов’язано за прізвищем та ініціалами в межах суду.</p>`
+    ? `<h2>Рішення судді в ЄДРСР (${esc(j.court.name)})</h2>${share ? `<p>${esc(share)}</p>` : ''}${statsTable(stats)}<p class="meta">Рішення пов’язано за прізвищем та ініціалами в межах суду.</p>`
+    : '';
+  const colleagues = j.court ? colleagueWindow(extras.colleagues ?? [], j.slug) : [];
+  const colleaguesHtml = colleagues.length
+    ? `<h2>Інші судді: ${esc(j.court!.name)}</h2><ul class="cols">${colleagues.map(c => `<li><a href="/suddia/${esc(c.slug)}">${esc(c.fullName)}</a></li>`).join('')}</ul><p class="meta"><a href="/sud/${esc(j.court!.slug)}">Усі судді та статистика суду</a></p>`
     : '';
   const descr = `${j.fullName}, суддя${courtName ? ` (${courtName})` : ''}.` +
     (lastYear ? ` ${n(yearTotal(stats, lastYear))} рішень у ЄДРСР за ${lastYear} рік.` : '') +
@@ -184,6 +225,7 @@ ${shares ? `<p>Структура справ за останні три роки
 ${statsHtml}
 ${hearingsHtml(hearings, false)}
 ${careerHtml}
+${colleaguesHtml}
 ${cta('Практика цього судді в LEX', 'LEX знаходить рішення цього судді за суттю спору, показує типові результати розгляду та їх долю в апеляції й касації.')}`,
   });
 }

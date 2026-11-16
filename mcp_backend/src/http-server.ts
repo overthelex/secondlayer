@@ -90,6 +90,7 @@ import { createVpRoutes } from './routes/vp-routes.js';
 import { createAdvocatesRoutes } from './routes/advocates-routes.js';
 import { createMarketingRoutes } from './routes/marketing-routes.js';
 import { VpRefresh } from './services/seo/vp-refresh.js';
+import { IndexNowSubmitter, INDEXNOW_SITE } from './services/seo/indexnow.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
 import { createSessionReplayRoutes, createAdminSessionReplayRoutes } from './routes/session-replay-routes.js';
@@ -203,6 +204,18 @@ class HTTPMCPServer {
       vpRefresh.isEmpty().then(empty => { if (empty) void runVpRefresh(); }).catch(err => {
         logger.warn('[Cron] SEO Grand Chamber refresh check skipped', { error: (err as Error).message });
       });
+    }
+
+    // Cron: announce new and changed public pages to IndexNow (Bing, Yandex), daily
+    // at 05:40 Kyiv, after the 04:40 SEO refresh. Only the legal.org.ua deployment
+    // submits: the key file and the sitemaps belong to that host.
+    if (process.env.PUBLIC_URL === INDEXNOW_SITE) {
+      const indexNow = new IndexNowSubmitter(this.services.db);
+      cron.schedule('40 5 * * *', () => {
+        indexNow.run().catch(err => {
+          logger.error('[Cron] IndexNow submission failed', { error: (err as Error).message });
+        });
+      }, { timezone: 'Europe/Kyiv' });
     }
 
     // Cron: check legislation changes daily at 06:00 Kyiv time

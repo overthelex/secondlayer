@@ -16,6 +16,7 @@ function app() {
   const db = {
     query: jest.fn(async (sql: string, params: unknown[] = []) => {
       if (sql.includes('a.source_id = $1')) return { rows: params[0] === '8317' ? [ADV] : [] };
+      if (sql.includes('UNION ALL')) return { rows: [{ id: '9001', family_name: 'Литвин', name: 'Іван', additional_name: null }] };
       if (sql.includes('GROUP BY 1 ORDER BY 1') && sql.includes('ra_name) AS council')) return { rows: [{ council: 'Рада адвокатів міста Києва', count: 1 }] };
       if (sql.includes('upper(left(btrim(a.family_name), 1)) AS letter')) return { rows: [{ letter: 'К', count: 1 }] };
       if (sql.includes('upper(left(btrim(a.family_name), 1)) = $2')) return { rows: params[1] === 'К' ? [{ id: '8317', family_name: 'Крупнік', name: 'Олена', additional_name: 'Михайлівна' }] : [] };
@@ -56,6 +57,10 @@ describe('/advokaty and /advokat routes', () => {
     expect(res.text).toContain('<link rel="canonical" href="https://legal.org.ua/advokat/krupnik-olena-mykhailivna-8317">');
   });
 
+  it('links other advocates of the same city', async () => {
+    const res = await request(app()).get('/advokat/krupnik-olena-mykhailivna-8317');
+    expect(res.text).toContain('href="/advokat/lytvyn-ivan-9001"');
+  });
   it('redirects a stale name part to the current slug', async () => {
     const res = await request(app()).get('/advokat/stare-prizvyshche-8317');
     expect(res.status).toBe(301);
