@@ -15,6 +15,7 @@ import { cachedHtml } from '../services/seo/seo-cache.js';
 import { esc } from '../services/seo/seo-page.js';
 import { renderSitemap } from '../services/seo/zakon-render.js';
 import { VpRepository } from '../services/seo/vp-repository.js';
+import { CassationRepository } from '../services/seo/cassation-repository.js';
 import { renderVpDecision, renderVpIndex, renderVpYear } from '../services/seo/vp-render.js';
 
 const TTL_S = 12 * 60 * 60;
@@ -33,6 +34,7 @@ const send = (res: Response, html: string) =>
 
 export function createVpRoutes(db: BaseDatabase): Router {
   const repo = new VpRepository(db);
+  const cassation = new CassationRepository(db);
   const router = Router();
   const wrap = (fn: (req: Request, res: Response) => Promise<void>) => (req: Request, res: Response, next: NextFunction) =>
     fn(req, res).catch(err => {
@@ -41,7 +43,7 @@ export function createVpRoutes(db: BaseDatabase): Router {
     });
 
   router.get('/', wrap(async (_req, res) => {
-    const html = await cachedHtml('vp:v1:index', TTL_S, async () => renderVpIndex(await repo.years(), await repo.latest(30)));
+    const html = await cachedHtml('vp:v2:index', TTL_S, async () => renderVpIndex(await repo.years(), await repo.latest(30)));
     send(res, html!);
   }));
 
@@ -71,9 +73,11 @@ export function createVpRoutes(db: BaseDatabase): Router {
       return html ? void send(res, html) : notFound(res);
     }
     if (!SLUG.test(slug)) return notFound(res);
-    const html = await cachedHtml(`vp:v1:doc:${slug}`, TTL_S, async () => {
+    const html = await cachedHtml(`vp:v2:doc:${slug}`, TTL_S, async () => {
       const d = await repo.bySlug(slug);
-      return d ? renderVpDecision(d, await repo.articles(slug)) : null;
+      if (!d) return null;
+      const [arts, citedBy] = await Promise.all([repo.articles(slug), cassation.citedBy(d.causeNum, d.docId)]);
+      return renderVpDecision(d, arts, citedBy);
     });
     if (!html) return notFound(res);
     send(res, html);

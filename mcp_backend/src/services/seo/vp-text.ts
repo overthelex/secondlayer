@@ -18,8 +18,10 @@ export interface VpDoc {
   resolutiveAt: number | null;
 }
 
-const OPERATIVE = /^п\s*о\s*с\s*т\s*а\s*н\s*о\s*в\s*и\s*л\s*[аи]\s*:?$/iu;
-const ESTABLISHED = /^(?:у|в)\s*с\s*т\s*а\s*н\s*о\s*в\s*и\s*л\s*[аи]\s*:?$/iu;
+// «ПОСТАНОВИЛА» (Grand Chamber, colleges) or «ПОСТАНОВИВ» (a cassation court's panel).
+const OPERATIVE = /^п\s*о\s*с\s*т\s*а\s*н\s*о\s*в\s*и\s*(?:л\s*[аи]|в)\s*:?$/iu;
+const ESTABLISHED = /^(?:у|в)\s*с\s*т\s*а\s*н\s*о\s*в\s*и\s*(?:л\s*[аи]|в)\s*:?$/iu;
+const MASCULINE = /в\s*:?$/iu;
 const TITLE = /^(?:(?:додаткова\s+)?п\s*о\s*с\s*т\s*а\s*н\s*о\s*в\s*а|і\s*м\s*е\s*н\s*е\s*м\s+у\s*к\s*р\s*а\s*ї\s*н\s*и)$/iu;
 const NAMED_HEADING = /^(?:\d+(?:\.\d+)*\.?\s*)?(?:вступ|історія справи|короткий зміст|стислий виклад|позиція|висновки?|оцінка|аргументи|доводи|рух справи|обставини|релевантні|мотиви|щодо|судові витрати|джерела права|фактичні обставини|встановлені)(?!\p{L})/iu;
 const REASONING = /^(?:\d+(?:\.\d+)*\.?\s*)?(?:позиція|оцінка|висновки?|мотиви)(?!\p{L}).*(?:велик\S* палат|верховн\S* суд|колегі|суд\S* касаційн)/iu;
@@ -57,7 +59,7 @@ export function parseVpText(fullText: string): VpDoc {
     if (isHeading(line)) {
       if (OPERATIVE.test(line) && resolutiveAt === null) {
         resolutiveAt = blocks.length;
-        blocks.push({ kind: 'heading', text: 'Постановила', id: 'postanovyla' });
+        blocks.push({ kind: 'heading', text: MASCULINE.test(line) ? 'Постановив' : 'Постановила', id: 'postanovyla' });
         continue;
       }
       if (reasoningAt === null && REASONING.test(line)) {
@@ -65,7 +67,7 @@ export function parseVpText(fullText: string): VpDoc {
         blocks.push({ kind: 'heading', text: line, id: 'pozytsiia' });
         continue;
       }
-      blocks.push({ kind: 'heading', text: ESTABLISHED.test(line) ? 'Установила' : line });
+      blocks.push({ kind: 'heading', text: ESTABLISHED.test(line) ? (MASCULINE.test(line) ? 'Установив' : 'Установила') : line });
     } else {
       blocks.push({ kind: 'para', text: line });
     }

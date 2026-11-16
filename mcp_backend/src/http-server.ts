@@ -90,6 +90,8 @@ import { createVpRoutes } from './routes/vp-routes.js';
 import { createAdvocatesRoutes } from './routes/advocates-routes.js';
 import { createMarketingRoutes } from './routes/marketing-routes.js';
 import { VpRefresh } from './services/seo/vp-refresh.js';
+import { CassationRefresh } from './services/seo/cassation-refresh.js';
+import { createCassationRoutes } from './routes/cassation-routes.js';
 import { createLegislationMonitoringRoutes } from './routes/legislation-monitoring-routes.js';
 import { createUsageRoutes } from './routes/usage-routes.js';
 import { createSessionReplayRoutes, createAdminSessionReplayRoutes } from './routes/session-replay-routes.js';
@@ -202,6 +204,18 @@ class HTTPMCPServer {
       });
       vpRefresh.isEmpty().then(empty => { if (empty) void runVpRefresh(); }).catch(err => {
         logger.warn('[Cron] SEO Grand Chamber refresh check skipped', { error: (err as Error).message });
+      });
+
+      // /praktyka-vs: most cited cassation decisions. Weekly (Monday 05:10 Kyiv):
+      // the ranking reads every edrsr_documents partition since 2018 (≈3-5 min),
+      // and the citation edges behind it are rebuilt rarely.
+      const cassationRefresh = new CassationRefresh(this.services.db);
+      const runCassationRefresh = () => cassationRefresh.run().catch(err => {
+        logger.error('[Cron] SEO cassation refresh failed', { error: (err as Error).message });
+      });
+      cron.schedule('10 5 * * 1', () => { void runCassationRefresh(); }, { timezone: 'Europe/Kyiv' });
+      cassationRefresh.isEmpty().then(empty => { if (empty) void runCassationRefresh(); }).catch(err => {
+        logger.warn('[Cron] SEO cassation refresh check skipped', { error: (err as Error).message });
       });
     }
 
@@ -696,6 +710,8 @@ class HTTPMCPServer {
     logger.info('Public court/judge pages registered at /sud, /suddia');
     this.app.use('/pozytsiia-vs', createVpRoutes(this.services.db));
     logger.info('Public Grand Chamber pages registered at /pozytsiia-vs');
+    this.app.use('/praktyka-vs', createCassationRoutes(this.services.db));
+    logger.info('Public cassation decision pages registered at /praktyka-vs');
     const seoAdvocates = createAdvocatesRoutes(this.services.db);
     this.app.use('/advokaty', seoAdvocates.lists);
     this.app.use('/advokat', seoAdvocates.profiles);

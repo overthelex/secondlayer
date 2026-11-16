@@ -50,3 +50,12 @@ describe('parseVpText', () => {
     expect(d.blocks[0].kind).toBe('para');
   });
 });
+
+describe('parseVpText on a cassation court panel', () => {
+  it('recognises «УСТАНОВИВ» and «ПОСТАНОВИВ»', () => {
+    const d = parseVpText('справа № 1/2/3\nУСТАНОВИВ:\n1. Позивач звернувся до суду.\nП О С Т А Н О В И В:\nСкаргу залишити без задоволення.');
+    const heads = d.blocks.filter(b => b.kind === 'heading').map(b => b.text);
+    expect(heads).toEqual(['Установив', 'Постановив']);
+    expect(d.blocks[d.resolutiveAt!]).toMatchObject({ id: 'postanovyla' });
+  });
+});

@@ -3,6 +3,7 @@ import { SITE, esc, uaDate, truncate, page, BONUS_NOTE, type Crumb } from './seo
 import { ZAKON_CODES, articleSlug } from './zakon-codes.js';
 import type { VpDecision, VpListItem, VpArticle } from './vp-repository.js';
 import { parseVpText, leadText } from './vp-text.js';
+import { COURT_BY_CODE, type LinkedDecision } from './cassation-repository.js';
 
 const SOURCE = 'Тексти постанов: Єдиний державний реєстр судових рішень (reyestr.court.gov.ua), персональні дані знеособлено в реєстрі. Текст наведено без змін.';
 const ROOT: Crumb[] = [{ name: 'LEX', href: '/product' }, { name: 'Постанови Великої Палати ВС', href: '/pozytsiia-vs' }];
@@ -24,7 +25,17 @@ function articleLinks(arts: VpArticle[]): string {
   return links.length ? `<p class="path">Застосовані норми: ${links.join(', ')}</p>` : '';
 }
 
-export function renderVpDecision(d: VpDecision, arts: VpArticle[]): string {
+/** Published Supreme Court pages (/praktyka-vs, /pozytsiia-vs) citing this case. */
+function citedByHtml(causeNum: string, citedBy?: { total: number; items: LinkedDecision[] }): string {
+  if (!citedBy?.items.length) return '';
+  const more = citedBy.total > citedBy.items.length ? ` (${citedBy.items.length} з ${citedBy.total}, новіші)` : '';
+  return `<section><h2 id="tsytuiut">Цитують цю справу</h2>
+<p class="meta">Опубліковані на LEX постанови Верховного Суду, що посилаються на справу № ${esc(causeNum)}${more}.</p>
+<ul class="toc">${citedBy.items.map(i =>
+    `<li><a href="${esc(i.href)}">${i.court === 'vp' ? 'ВП ВС' : esc(COURT_BY_CODE.get(i.court)?.abbr ?? 'ВС')}, ${uaDate(i.date)}, справа № ${esc(i.causeNum)}</a></li>`).join('')}</ul></section>`;
+}
+
+export function renderVpDecision(d: VpDecision, arts: VpArticle[], citedBy?: { total: number; items: LinkedDecision[] }): string {
   const doc = parseVpText(d.fullText);
   const path = `/pozytsiia-vs/${d.slug}`;
   const h1 = vpTitle(d);
@@ -61,6 +72,7 @@ ${doc.header.length ? `<div class="text">${doc.header.map(l => `<p class="note">
 <div class="text">
 ${body}
 </div>
+${citedByHtml(d.causeNum, citedBy)}
 <section class="cta"><h2>Схожа практика в LEX</h2><p>LEX знаходить постанови Верховного Суду з тих самих питань, показує, чи не відступили від висновку пізніше, і дає посилання на тексти рішень.</p><a class="btn" href="/login">Спробувати LEX безкоштовно</a><p class="meta">${esc(BONUS_NOTE)}</p></section>`,
   });
 }
@@ -75,7 +87,7 @@ export function renderVpIndex(years: Array<{ year: number; count: number }>, lat
     jsonLd: [],
     source: SOURCE,
     body: `<h1>Постанови Великої Палати Верховного Суду</h1>
-<p class="meta">${total} постанов з повним текстом. Суди враховують висновки Верховного Суду щодо застосування норм права (ч. 4 ст. 263 ЦПК, ч. 4 ст. 236 ГПК, ч. 5 ст. 242 КАС).</p>
+<p class="meta">${total} постанов з повним текстом. Суди враховують висновки Верховного Суду щодо застосування норм права (ч. 4 ст. 263 ЦПК, ч. 4 ст. 236 ГПК, ч. 5 ст. 242 КАС). Найцитованіші постанови касаційних судів: <a href="/praktyka-vs">практика Верховного Суду</a>.</p>
 <h2>За роками</h2>
 <ul class="toc">${years.map(y => `<li><a href="/pozytsiia-vs/rik-${y.year}">${y.year}</a> · ${y.count}</li>`).join('')}</ul>
 <h2>Нові постанови</h2>
