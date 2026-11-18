@@ -218,7 +218,7 @@ async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields
              first_seen = LEAST(edr_hist.${table}.first_seen, EXCLUDED.first_seen),
              last_seen = GREATEST(edr_hist.${table}.last_seen, EXCLUDED.last_seen)`, a);
       }
-      await foldHistory(c, kind, S, chunk('t.edrpou', lo, hi), chunk('h.edrpou', lo, hi));
+      await foldHistory(c, kind, S, alias => chunk(`${alias}.edrpou`, lo, hi));
       if (i % 20 === 19) log(`  ${kind}: chunk ${i + 1}/${BOUNDS.length - 1}`);
     }
     await c.query(
@@ -232,21 +232,26 @@ async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields
   }
 }
 
-/** The five fold steps for one chunk of codes (wt / wh: chunk predicates on t / h). */
-export async function foldHistory(c: PoolClient, kind: string, S: string, wt: string, wh: string): Promise<void> {
+/**
+ * The five fold steps for one chunk of codes. `w(alias)` is the chunk predicate on that alias:
+ * every relation, including the anti-join subqueries, is bounded to the chunk explicitly, because
+ * the planner does not carry a range on t.edrpou over to the joined side and would otherwise scan
+ * (or hash) the whole history table once per chunk.
+ */
+export async function foldHistory(c: PoolClient, kind: string, S: string, w: (alias: string) => string): Promise<void> {
   const a = [S, kind];
   // a. values gone in this snapshot: a run that spans it is split around it
   await c.query(
     `WITH sp AS (
        SELECT h.edrpou, h.field, h.value_hash, h.value, h.kind, h.first_snapshot, h.last_snapshot, n.prev, n.next
        FROM edr_hist.history h JOIN stg_nb n ON n.field = h.field AND n.carried
-       WHERE h.kind = $2 AND ${wh} AND h.first_snapshot < $1::date AND h.last_snapshot > $1::date
-         AND NOT EXISTS (SELECT 1 FROM stg_h t WHERE ${KEY})),
+       WHERE h.kind = $2 AND ${w('h')} AND h.first_snapshot < $1::date AND h.last_snapshot > $1::date
+         AND NOT EXISTS (SELECT 1 FROM stg_h t WHERE ${KEY} AND ${w('t')})),
      ins AS (INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
              SELECT edrpou, field, value_hash, value, kind, next, last_snapshot FROM sp)
      UPDATE edr_hist.history h SET last_snapshot = sp.prev FROM sp
      WHERE h.edrpou = sp.edrpou AND h.field = sp.field AND h.value_hash = sp.value_hash
-       AND h.first_snapshot = sp.first_snapshot`, a);
+       AND h.first_snapshot = sp.first_snapshot AND ${w('h')}`, a);
   // b. present, not yet covered: join the runs that end at prev and start at next
   await c.query(
     `WITH pairs AS (
@@ -254,28 +259,29 @@ export async function foldHistory(c: PoolClient, kind: string, S: string, wt: st
        FROM stg_h t JOIN stg_nb n USING (field)
        JOIN edr_hist.history p ON p.edrpou = t.edrpou AND p.field = t.field AND p.value_hash = t.value_hash AND p.last_snapshot = n.prev
        JOIN edr_hist.history x ON x.edrpou = t.edrpou AND x.field = t.field AND x.value_hash = t.value_hash AND x.first_snapshot = n.next
-       WHERE ${wt}),
+       WHERE ${w('t')} AND ${w('p')} AND ${w('x')}),
      del AS (DELETE FROM edr_hist.history h USING pairs q
-             WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.xf)
+             WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.xf AND ${w('h')})
      UPDATE edr_hist.history h SET last_snapshot = q.xl FROM pairs q
-     WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.pf`);
+     WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.pf AND ${w('h')}`);
   const notCovered = `NOT EXISTS (SELECT 1 FROM edr_hist.history y WHERE y.edrpou = t.edrpou AND y.field = t.field
-                       AND y.value_hash = t.value_hash AND y.first_snapshot <= $1::date AND y.last_snapshot >= $1::date)`;
+                       AND y.value_hash = t.value_hash AND y.first_snapshot <= $1::date AND y.last_snapshot >= $1::date
+                       AND ${w('y')})`;
   // c. extend the run that ends at prev
   await c.query(
     `UPDATE edr_hist.history h SET last_snapshot = $1::date, value = t.value
      FROM stg_h t JOIN stg_nb n USING (field)
-     WHERE ${KEY} AND ${wt} AND h.kind = $2 AND h.last_snapshot = n.prev AND ${notCovered}`, a);
+     WHERE ${KEY} AND ${w('t')} AND ${w('h')} AND h.kind = $2 AND h.last_snapshot = n.prev AND ${notCovered}`, a);
   // d. or the run that starts at next
   await c.query(
     `UPDATE edr_hist.history h SET first_snapshot = $1::date
      FROM stg_h t JOIN stg_nb n USING (field)
-     WHERE ${KEY} AND ${wt} AND h.kind = $2 AND h.first_snapshot = n.next AND ${notCovered}`, a);
+     WHERE ${KEY} AND ${w('t')} AND ${w('h')} AND h.kind = $2 AND h.first_snapshot = n.next AND ${notCovered}`, a);
   // e. otherwise a new run of one snapshot
   await c.query(
     `INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
      SELECT t.edrpou, t.field, t.value_hash, t.value, $2, $1::date, $1::date FROM stg_h t
-     WHERE ${wt} AND ${notCovered}`, a);
+     WHERE ${w('t')} AND ${notCovered}`, a);
 }
 
 export function md5File(file: string): Promise<string> {
