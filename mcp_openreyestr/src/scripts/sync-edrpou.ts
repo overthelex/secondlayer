@@ -31,6 +31,8 @@ import { execFileSync } from 'child_process';
 import { createGzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import unzipper from 'unzipper';
+import iconv from 'iconv-lite';
+import { Readable } from 'stream';
 import { StreamingXMLParser } from '../services/streaming-xml-parser.js';
 import { DatabaseImporter, ImportStats } from '../services/database-importer.js';
 import { DownloadService } from '../services/download-service.js';
@@ -204,6 +206,28 @@ async function updateRegistryMetadata(pool: Pool, registryName: string, recordCo
   );
 }
 
+// --- XML stream ---
+
+/**
+ * Open the XML file as a decoded text stream. The data.gov.ua archives declare
+ * encoding="windows-1251"; sax (strict) rejects a Buffer stream whose declaration
+ * does not match its UTF-8 detection, and decoding cp1251 as UTF-8 garbles text.
+ * Decode by the declared encoding and hand sax strings instead.
+ */
+function openXmlStream(xmlPath: string): Readable {
+  const fd = fs.openSync(xmlPath, 'r');
+  const head = Buffer.alloc(200);
+  const n = fs.readSync(fd, head, 0, head.length, 0);
+  fs.closeSync(fd);
+  const m = head.subarray(0, n).toString('latin1').match(/<\?xml[^>]*encoding\s*=\s*['"]([^'"]+)['"]/i);
+  const encoding = (m?.[1] || 'utf-8').toLowerCase();
+  if (!iconv.encodingExists(encoding)) {
+    throw new Error(`Unsupported XML encoding: ${encoding}`);
+  }
+  console.log(`XML encoding: ${encoding}`);
+  return fs.createReadStream(xmlPath).pipe(iconv.decodeStream(encoding)) as unknown as Readable;
+}
+
 // --- Archive ---
 
 async function archiveFile(filePath: string): Promise<string> {
@@ -250,7 +274,7 @@ async function importEntityType(
   const totalStats: ImportStats = { imported: 0, skipped: 0, errors: 0, unchanged: 0 };
   const inflightPromises: Promise<void>[] = [];
 
-  const stream = fs.createReadStream(xmlPath);
+  const stream = openXmlStream(xmlPath);
 
   progress.start();
 
