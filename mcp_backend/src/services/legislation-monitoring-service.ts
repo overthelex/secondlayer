@@ -142,9 +142,9 @@ export class LegislationMonitoringService {
     // Get current articles from DB
     const currentResult = await this.db.query(
       `SELECT article_number, full_text FROM legislation_articles
-       WHERE LOWER(rada_id) = LOWER($1) AND is_current = true
+       WHERE legislation_id = $1 AND is_current = true
        ORDER BY article_number`,
-      [radaId]
+      [legislationId]
     );
     const currentArticles = new Map<string, string>();
     for (const row of currentResult.rows) {
@@ -224,8 +224,8 @@ export class LegislationMonitoringService {
 
     // Update DB articles: mark old as not current, save fresh via adapter
     await this.db.query(
-      `UPDATE legislation_articles SET is_current = false WHERE LOWER(rada_id) = LOWER($1) AND is_current = true`,
-      [radaId]
+      `UPDATE legislation_articles SET is_current = false WHERE legislation_id = $1 AND is_current = true`,
+      [legislationId]
     );
     await this.adapter.saveLegislationToDatabase(freshData.metadata, freshData.articles);
 
