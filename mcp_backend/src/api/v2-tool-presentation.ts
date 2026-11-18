@@ -95,6 +95,7 @@ export const V2_ANNOTATION_OVERRIDES: Record<string, ToolAnnotations> = {
   openreyestr_get_entity_details: { title: 'ЄДР: повні відомості про суб\'єкт', ...RO },
   openreyestr_search_entities: { title: 'ЄДР: пошук суб\'єктів господарювання', ...RO },
   openreyestr_search_beneficiaries: { title: 'ЄДР: пошук бенефіціарів', ...RO },
+  openreyestr_search_founders: { title: 'ЄДР: зворотний пошук за засновниками', ...RO },
   openreyestr_search_debtors: { title: 'Єдиний реєстр боржників', ...RO },
   openreyestr_search_enforcement_proceedings: { title: 'Виконавчі провадження', ...RO },
   openreyestr_search_bankruptcy_cases: { title: 'Справи про банкрутство', ...RO },

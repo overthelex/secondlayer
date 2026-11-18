@@ -403,6 +403,7 @@ export class ToolRegistry {
       { clientName: 'openreyestr_search_entities', serviceName: 'search_entities' },
       { clientName: 'openreyestr_get_entity_details', serviceName: 'get_entity_details' },
       { clientName: 'openreyestr_search_beneficiaries', serviceName: 'search_beneficiaries' },
+      { clientName: 'openreyestr_search_founders', serviceName: 'search_founders' },
       { clientName: 'openreyestr_get_by_edrpou', serviceName: 'get_by_edrpou' },
       { clientName: 'openreyestr_get_statistics', serviceName: 'get_statistics' },
       { clientName: 'openreyestr_search_notaries', serviceName: 'search_notaries' },

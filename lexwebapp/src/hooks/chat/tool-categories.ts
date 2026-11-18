@@ -98,6 +98,7 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'openreyestr_search_entities', label: 'Пошук юросіб' },
       { name: 'openreyestr_get_entity_details', label: 'Деталі юрособи' },
       { name: 'openreyestr_search_beneficiaries', label: 'Бенефіціари' },
+      { name: 'openreyestr_search_founders', label: 'Засновники' },
       { name: 'openreyestr_get_by_edrpou', label: 'За ЄДРПОУ' },
       { name: 'openreyestr_get_statistics', label: 'Статистика' },
       { name: 'openreyestr_search_enforcement_proceedings', label: 'Виконавчі провадження' },

@@ -5,6 +5,7 @@ const REGISTRY_TOOLS = [
   'openreyestr_search_entities',
   'openreyestr_get_entity_details',
   'openreyestr_search_beneficiaries',
+  'openreyestr_search_founders',
   'openreyestr_get_by_edrpou',
   'openreyestr_get_statistics',
   'openreyestr_search_enforcement_proceedings',
