@@ -397,6 +397,12 @@ async function main() {
           }
           console.log(`Downloading ${entityType} from data.gov.ua...`);
           if (!args.dryRun) {
+            // A zip left by an earlier run that failed after downloading is last
+            // week's file: resuming it makes the server answer 416 (range past
+            // the end) on every attempt, or would splice two versions. Start
+            // clean; retries inside download() still resume within this run.
+            fs.rmSync(zipPath, { force: true });
+            fs.rmSync(extractDir, { recursive: true, force: true });
             const result = await downloader.download(url, zipPath, {
               onProgress: (mb, total) => {
                 const totalStr = total ? `/${total}MB` : '';
