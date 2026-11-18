@@ -6,7 +6,7 @@ This guide explains how to set up and use the OPENREYESTR database with Docker.
 
 - Docker installed
 - Docker Compose installed
-- OPENREYESTR data ZIP file downloaded from https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10
+- OPENREYESTR data ZIP file downloaded from https://data.gov.ua/dataset/a1799820-195b-4982-8141-6e84f58103e7
 
 ## Quick Start
 

@@ -41,12 +41,47 @@ const DATA_DIR = process.env.EDRPOU_DATA_DIR || path.join(__dirname, '../../data
 const BATCH_SIZE = parseInt(process.env.IMPORT_BATCH_SIZE || '500');
 const WORKER_COUNT = parseInt(process.env.IMPORT_WORKERS || '10');
 
-// Default data.gov.ua URLs — override with env vars if they change
-const DATASET_URLS: Record<string, string> = {
-  UO: process.env.EDRPOU_UO_URL || 'https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10/resource/b2d3b3a3-8555-44e7-869f-f81042b97aa2/download/uo.zip',
-  FOP: process.env.EDRPOU_FOP_URL || 'https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10/resource/e1c7d5b5-f0c5-4f5e-8e0a-7e65f7e48e9c/download/fop.zip',
-  FSU: process.env.EDRPOU_FSU_URL || 'https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10/resource/7db8eb53-4e2e-4e92-a504-0f9cf086d25a/download/fsu.zip',
+// data.gov.ua dataset "Єдиний державний реєстр юридичних осіб, фізичних осіб-підприємців
+// та громадських формувань" (weekly). The previous dataset 1c7f3815-... was removed in 2026.
+const EDRPOU_DATASET_ID = process.env.EDRPOU_DATASET_ID || 'a1799820-195b-4982-8141-6e84f58103e7';
+const CKAN_PACKAGE_SHOW = 'https://data.gov.ua/api/3/action/package_show?id=';
+
+// Fallback URLs (used when the CKAN API is unreachable); env vars override everything.
+const DEFAULT_URLS: Record<string, string> = {
+  UO: 'https://data.gov.ua/dataset/03cc1239-3988-4451-aa0d-aadb77448714/resource/d40cc921-39bb-44fd-be06-dc02589f45c6/download/uo.zip',
+  FOP: 'https://data.gov.ua/dataset/03cc1239-3988-4451-aa0d-aadb77448714/resource/c262938f-cce7-4489-a805-2fd7c5a44e0b/download/fop.zip',
+  FSU: 'https://data.gov.ua/dataset/03cc1239-3988-4451-aa0d-aadb77448714/resource/2b7eeee3-6c29-4ba8-8c35-1618974830eb/download/fsu.zip',
 };
+
+const ENV_URLS: Record<string, string | undefined> = {
+  UO: process.env.EDRPOU_UO_URL,
+  FOP: process.env.EDRPOU_FOP_URL,
+  FSU: process.env.EDRPOU_FSU_URL,
+};
+
+/**
+ * Resolve download URLs: env override > CKAN package_show (resource "UO.zip" etc.,
+ * so rotated resource IDs are picked up) > hardcoded fallback.
+ */
+async function resolveDatasetUrls(): Promise<Record<string, string>> {
+  const urls: Record<string, string> = { ...DEFAULT_URLS };
+  try {
+    const res = await fetch(CKAN_PACKAGE_SHOW + EDRPOU_DATASET_ID, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json() as { result?: { resources?: { name?: string; url?: string }[] } };
+    for (const r of body.result?.resources || []) {
+      const key = (r.name || '').toUpperCase().replace(/\.ZIP$/, '');
+      if (key in DEFAULT_URLS && r.url) urls[key] = r.url;
+    }
+    console.log(`Resolved download URLs via CKAN dataset ${EDRPOU_DATASET_ID}`);
+  } catch (err) {
+    console.warn(`CKAN lookup failed (${(err as Error).message}); using fallback URLs`);
+  }
+  for (const [key, val] of Object.entries(ENV_URLS)) {
+    if (val) urls[key] = val;
+  }
+  return urls;
+}
 
 const XML_FILE_NAMES: Record<string, string[]> = {
   UO: ['UO_FULL_out.xml', 'UO.xml'],
@@ -300,6 +335,7 @@ async function main() {
   });
 
   const downloader = new DownloadService();
+  const datasetUrls = args.skipDownload ? {} as Record<string, string> : await resolveDatasetUrls();
   const results: { type: string; status: string; stats?: ImportStats; error?: string }[] = [];
 
   try {
@@ -314,7 +350,7 @@ async function main() {
       try {
         // Step 1: Download
         if (!args.skipDownload) {
-          const url = DATASET_URLS[entityType];
+          const url = datasetUrls[entityType];
           if (!url) {
             console.warn(`No download URL configured for ${entityType}, skipping`);
             results.push({ type: entityType, status: 'skipped', error: 'No URL' });
