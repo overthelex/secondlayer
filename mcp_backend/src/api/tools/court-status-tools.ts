@@ -15,6 +15,8 @@ import { createHash } from 'crypto';
 import { logger } from '../../utils/logger.js';
 import {
   buildTsQuery,
+  stemQuery,
+  type PartyQuery,
   matchParticipants,
   parsePartyQuery,
   resolveRegion,
@@ -196,7 +198,7 @@ export function caseKey(court: string | null | undefined, caseNumber: string): s
   return `${courtKey(court)}|${baseCaseNumber(caseNumber)}`;
 }
 
-/** Spellings to look a case up by in court_sessions (raw b-tree equality on case_number). */
+/** Spellings to look a case up by in court_sessions; callers normalise them (idx_court_sessions_case_norm, migration 279). */
 export function caseNumberVariants(raw: string, known: string[] = []): string[] {
   const out = new Set<string>();
   const add = (v: string) => { const t = v.trim(); if (t) out.add(t); };
@@ -690,7 +692,7 @@ export class CourtStatusTools extends BaseToolHandler {
     if (party.length < 3) {
       return this.wrapError('Вкажіть сторону справи (party): прізвище, ПІБ, прізвище з ініціалами або назву юрособи, щонайменше 3 символи');
     }
-    const q = parsePartyQuery(party);
+    let q: PartyQuery = parsePartyQuery(party);
     if (q.words.length === 0 || q.words.join('').length < 3) {
       return this.wrapError('У запиті party має бути прізвище або назва (щонайменше 3 літери), а не лише ініціали');
     }
@@ -727,70 +729,86 @@ export class CourtStatusTools extends BaseToolHandler {
       logger.error('search_case_status_by_party source check failed', { error: error.message });
       return this.wrapError(`Помилка бази даних: ${dbErrorText(error)}`);
     }
-    const tsq = buildTsQuery(q);
+    const runSearch = async (qq: PartyQuery) => {
+      const tsq = buildTsQuery(qq);
 
-    // --- status rows ---
-    const sc: string[] = [PARTICIPANTS_MATCH_SQL(1)];
-    const sv: unknown[] = [tsq];
-    const push = (list: string[], vals: unknown[], sql: (p: number) => string, v: unknown) => {
-      vals.push(v);
-      list.push(sql(vals.length));
+      // --- status rows ---
+      const sc: string[] = [PARTICIPANTS_MATCH_SQL(1)];
+      const sv: unknown[] = [tsq];
+      const push = (list: string[], vals: unknown[], sql: (p: number) => string, v: unknown) => {
+        vals.push(v);
+        list.push(sql(vals.length));
+      };
+      if (region) push(sc, sv, (p) => `court_name ILIKE ANY($${p}::text[])`, region.patterns);
+      if (courtName) push(sc, sv, (p) => `court_name ILIKE $${p}`, `%${escapeLike(courtName)}%`);
+      if (caseNumber) push(sc, sv, (p) => `${CASE_NUMBER_NORM_SQL} LIKE $${p}`, `${escapeLike(caseNumber)}%`);
+      if (procNumber) push(sc, sv, (p) => `regexp_replace(COALESCE(case_proc, ''), '\\s+', '', 'g') ILIKE $${p}`, `${escapeLike(procNumber)}%`);
+      if (src === HISTORY_SOURCE) {
+        if (dateFrom) push(sc, sv, (p) => `registration_date >= $${p}::date`, dateFrom);
+        if (dateTo) push(sc, sv, (p) => `registration_date <= $${p}::date`, dateTo);
+      } else {
+        if (dateFrom) push(sc, sv, (p) => `${src.regKey} >= $${p}`, dateFrom.replace(/-/g, ''));
+        if (dateTo) push(sc, sv, (p) => `${src.regKey} <= $${p}`, dateTo.replace(/-/g, ''));
+      }
+      sv.push(STATUS_ROW_CAP);
+      const statusSql = `${statusSelect(src)}
+        WHERE ${sc.join(' AND ')}
+        ORDER BY ${src.orderDesc}
+        LIMIT $${sv.length}`;
+
+      // --- archive sessions found by party (no proceeding number there, so skipped when one is given) ---
+      const searchSessions = includeSessions && !procNumber;
+      const xc: string[] = [SESSIONS_MATCH_SQL(1)];
+      const xv: unknown[] = [tsq];
+      if (region) push(xc, xv, (p) => `court_name ILIKE ANY($${p}::text[])`, region.patterns);
+      if (courtName) push(xc, xv, (p) => `court_name ILIKE $${p}`, `%${escapeLike(courtName)}%`);
+      if (caseNumber) push(xc, xv, (p) => `${CASE_NUMBER_NORM_SQL} LIKE $${p}`, `${escapeLike(caseNumber)}%`);
+      if (dateFrom) push(xc, xv, (p) => `session_date >= $${p}::date`, dateFrom);
+      if (dateTo) push(xc, xv, (p) => `session_date <= $${p}::date`, dateTo);
+      xv.push(SESSION_ROW_CAP);
+      const sessionsSql = `SELECT ${SESSION_COLUMNS}, involved_parties
+        FROM court_sessions
+        WHERE ${xc.join(' AND ')}
+        ORDER BY session_date DESC NULLS LAST
+        LIMIT $${xv.length}`;
+
+      // A common name looks frequent to the planner, so it walks the session_date index and
+      // recomputes to_tsvector on every row it passes (7 s for «приватбанк» + Київ); the GIN
+      // bitmap plus a top-N sort does the same in ~0.5 s. Same remedy as runSearchQuery (PL).
+      const noIndexScan = ['SET LOCAL enable_indexscan = off'];
+      const [statusRes, sessionRes] = await Promise.allSettled([
+        timedQuery(this.db, statusSql, sv, noIndexScan),
+        searchSessions ? timedQuery(this.db, sessionsSql, xv, noIndexScan) : Promise.resolve([]),
+      ]);
+
+      const warnings: string[] = [];
+      if (statusRes.status === 'rejected') {
+        logger.error('search_case_status_by_party status query failed', { error: statusRes.reason?.message });
+        warnings.push(`Стан розгляду справ тимчасово недоступний: ${dbErrorText(statusRes.reason)}`);
+      }
+      if (sessionRes.status === 'rejected') {
+        logger.error('search_case_status_by_party sessions query failed', { error: sessionRes.reason?.message });
+        warnings.push(`Архів засідань тимчасово недоступний: ${dbErrorText(sessionRes.reason)}`);
+      }
+      const statusRows = statusRes.status === 'fulfilled' ? statusRes.value : [];
+      const sessionRows = sessionRes.status === 'fulfilled' ? sessionRes.value : [];
+
+      const { groups, rejected } = groupPartyRows(statusRows, sessionRows, qq);
+      return { groups, rejected, statusRows, sessionRows, warnings, sc, sv: sv.slice(0, -1), xc, xv: xv.slice(0, -1), searchSessions };
     };
-    if (region) push(sc, sv, (p) => `court_name ILIKE ANY($${p}::text[])`, region.patterns);
-    if (courtName) push(sc, sv, (p) => `court_name ILIKE $${p}`, `%${escapeLike(courtName)}%`);
-    if (caseNumber) push(sc, sv, (p) => `${CASE_NUMBER_NORM_SQL} LIKE $${p}`, `${escapeLike(caseNumber)}%`);
-    if (procNumber) push(sc, sv, (p) => `regexp_replace(COALESCE(case_proc, ''), '\\s+', '', 'g') ILIKE $${p}`, `${escapeLike(procNumber)}%`);
-    if (src === HISTORY_SOURCE) {
-      if (dateFrom) push(sc, sv, (p) => `registration_date >= $${p}::date`, dateFrom);
-      if (dateTo) push(sc, sv, (p) => `registration_date <= $${p}::date`, dateTo);
-    } else {
-      if (dateFrom) push(sc, sv, (p) => `${src.regKey} >= $${p}`, dateFrom.replace(/-/g, ''));
-      if (dateTo) push(sc, sv, (p) => `${src.regKey} <= $${p}`, dateTo.replace(/-/g, ''));
+
+    let run = await runSearch(q);
+    // The source writes names in the nominative; an inflected query («Яворської», «Шевченка») finds
+    // nothing. Retry once with word stems as prefixes, and mark those matches.
+    let stemmed = false;
+    if (run.groups.length === 0 && run.warnings.length === 0) {
+      const sq = stemQuery(q);
+      if (sq) {
+        const retry = await runSearch(sq);
+        if (retry.groups.length > 0 || retry.warnings.length > 0) { run = retry; q = sq; stemmed = true; }
+      }
     }
-    sv.push(STATUS_ROW_CAP);
-    const statusSql = `${statusSelect(src)}
-      WHERE ${sc.join(' AND ')}
-      ORDER BY ${src.orderDesc}
-      LIMIT $${sv.length}`;
-
-    // --- archive sessions found by party (no proceeding number there, so skipped when one is given) ---
-    const searchSessions = includeSessions && !procNumber;
-    const xc: string[] = [SESSIONS_MATCH_SQL(1)];
-    const xv: unknown[] = [tsq];
-    if (region) push(xc, xv, (p) => `court_name ILIKE ANY($${p}::text[])`, region.patterns);
-    if (courtName) push(xc, xv, (p) => `court_name ILIKE $${p}`, `%${escapeLike(courtName)}%`);
-    if (caseNumber) push(xc, xv, (p) => `${CASE_NUMBER_NORM_SQL} LIKE $${p}`, `${escapeLike(caseNumber)}%`);
-    if (dateFrom) push(xc, xv, (p) => `session_date >= $${p}::date`, dateFrom);
-    if (dateTo) push(xc, xv, (p) => `session_date <= $${p}::date`, dateTo);
-    xv.push(SESSION_ROW_CAP);
-    const sessionsSql = `SELECT ${SESSION_COLUMNS}, involved_parties
-      FROM court_sessions
-      WHERE ${xc.join(' AND ')}
-      ORDER BY session_date DESC NULLS LAST
-      LIMIT $${xv.length}`;
-
-    // A common name looks frequent to the planner, so it walks the session_date index and
-    // recomputes to_tsvector on every row it passes (7 s for «приватбанк» + Київ); the GIN
-    // bitmap plus a top-N sort does the same in ~0.5 s. Same remedy as runSearchQuery (PL).
-    const noIndexScan = ['SET LOCAL enable_indexscan = off'];
-    const [statusRes, sessionRes] = await Promise.allSettled([
-      timedQuery(this.db, statusSql, sv, noIndexScan),
-      searchSessions ? timedQuery(this.db, sessionsSql, xv, noIndexScan) : Promise.resolve([]),
-    ]);
-
-    const warnings: string[] = [];
-    if (statusRes.status === 'rejected') {
-      logger.error('search_case_status_by_party status query failed', { error: statusRes.reason?.message });
-      warnings.push(`Стан розгляду справ тимчасово недоступний: ${dbErrorText(statusRes.reason)}`);
-    }
-    if (sessionRes.status === 'rejected') {
-      logger.error('search_case_status_by_party sessions query failed', { error: sessionRes.reason?.message });
-      warnings.push(`Архів засідань тимчасово недоступний: ${dbErrorText(sessionRes.reason)}`);
-    }
-    const statusRows = statusRes.status === 'fulfilled' ? statusRes.value : [];
-    const sessionRows = sessionRes.status === 'fulfilled' ? sessionRes.value : [];
-
-    const { groups, rejected } = groupPartyRows(statusRows, sessionRows, q);
+    const { groups, rejected, statusRows, sessionRows, warnings } = run;
     if (warnings.length > 0 && groups.length === 0) {
       // Never an empty list for a failed lookup: that would read as "no cases".
       return this.wrapError(`Пошук не виконано через помилку бази даних. ${warnings.join(' ')}`);
@@ -799,10 +817,10 @@ export class CourtStatusTools extends BaseToolHandler {
     const page = groups.slice(offset, offset + limit);
     const today = kyivToday();
     if (includeSessions && page.length > 0) {
-      const numbers = [...new Set(page.flatMap((g) => caseNumberVariants(g.case_number, [...g.caseNumbers])))];
+      const numbers = [...new Set(page.flatMap((g) => caseNumberVariants(g.case_number, [...g.caseNumbers]).map(normalizeCaseNumber)))];
       try {
         const rows = await timedQuery(this.db,
-          `SELECT ${SESSION_COLUMNS} FROM court_sessions WHERE case_number = ANY($1::text[])
+          `SELECT ${SESSION_COLUMNS} FROM court_sessions WHERE ${CASE_NUMBER_NORM_SQL} = ANY($1::text[])
             ORDER BY session_date DESC NULLS LAST LIMIT 5000`, [numbers]);
         attachHearings(page, rows);
       } catch (error: any) {
@@ -812,6 +830,15 @@ export class CourtStatusTools extends BaseToolHandler {
     }
 
     const capped = statusRows.length >= STATUS_ROW_CAP || sessionRows.length >= SESSION_ROW_CAP;
+    // Past the row cap only the newest records are read; count every matching case in one pass.
+    // SQL matches words anywhere in the field (not within one party), so this is an upper estimate.
+    let estimatedTotal: number | null = null;
+    if (capped) {
+      estimatedTotal = await this.countPartyCases(src, run).catch((error: any) => {
+        logger.warn('search_case_status_by_party count failed', { error: error.message });
+        return null;
+      });
+    }
     const narrowed = Boolean(region || courtName || caseNumber || procNumber || dateFrom || dateTo);
     const tooBroad = capped || (q.words.length === 1 && q.initials.length === 0 && !narrowed && groups.length > BROAD_CASES);
 
@@ -848,6 +875,7 @@ export class CourtStatusTools extends BaseToolHandler {
     } else if (tooBroad) {
       status = 'too_broad';
       message = `Запит дуже широкий: знайдено ${capped ? 'понад ' : ''}${groups.length} справ` +
+        (estimatedTotal !== null ? ` (усього у джерелах близько ${estimatedTotal} справ із цими словами)` : '') +
         (capped ? ' (прочитано лише найновіші записи, тому повний перелік недоступний)' : '') +
         '. Уточніть пошук: додайте ініціали або повне ПІБ, регіон (region), суд, номер справи чи період. Нижче — перша сторінка найновіших справ.';
     } else {
@@ -859,6 +887,7 @@ export class CourtStatusTools extends BaseToolHandler {
       message,
       total_found: groups.length,
       total_is_lower_bound: capped,
+      ...(estimatedTotal !== null ? { estimated_total_cases: estimatedTotal } : {}),
       returned: results.length,
       offset,
       limit,
@@ -866,6 +895,7 @@ export class CourtStatusTools extends BaseToolHandler {
       results,
       query: {
         party_words: q.words,
+        ...(stemmed ? { inflection_fallback: true } : {}),
         ...(q.initials.length ? { initials: q.initials } : {}),
         ...(q.droppedForms.length ? { ignored_legal_forms: q.droppedForms } : {}),
         ...(region ? { region: region.name } : {}),
@@ -878,6 +908,7 @@ export class CourtStatusTools extends BaseToolHandler {
       },
       matching_note: 'Сторону знайдено, якщо всі слова запиту стоять в імені однієї сторони (ПІБ у називному відмінку, як у джерелі); ' +
         'ініціали перевіряються за порядком імені та по батькові. match_variant показує тип збігу, role — процесуальну роль.' +
+        (stemmed ? ' Точного збігу не було, тому пошук повторено за основою слів (інша форма / відмінок): перевірте, що знайдена сторона — та сама особа.' : '') +
         (rejected > 0 ? ` Відкинуто записів, де слова запиту належать різним сторонам або ініціали не збіглися: ${rejected}.` : '') +
         (procNumber && includeSessions ? ' В архіві засідань немає номера провадження, тому з фільтром proceeding_number справи шукаються лише в стані розгляду.' : ''),
       source: this.sourceBlock(src, includeSessions),
@@ -886,6 +917,24 @@ export class CourtStatusTools extends BaseToolHandler {
       verify: { url: FAIR_URL, note: VERIFY_NOTE },
       ...(warnings.length ? { warnings, incomplete: true } : {}),
     });
+  }
+
+  /** Distinct (court, case number) across both sources for the same filters, without the row cap. */
+  private async countPartyCases(src: StatusSource, run: {
+    sc: string[]; sv: unknown[]; xc: string[]; xv: unknown[]; searchSessions: boolean;
+  }): Promise<number> {
+    const vals = [...run.sv];
+    let sql = `SELECT court_name, ${CASE_NUMBER_NORM_SQL} AS cn FROM ${src.table} WHERE ${run.sc.join(' AND ')}`;
+    if (run.searchSessions) {
+      // Session conditions are numbered from $1 too; shift them past the status parameters.
+      const shift = vals.length;
+      const where = run.xc.join(' AND ').replace(/\$(\d+)/gu, (_m, n) => `$${Number(n) + shift}`);
+      sql += ` UNION SELECT court_name, ${CASE_NUMBER_NORM_SQL} AS cn FROM court_sessions WHERE ${where}`;
+      vals.push(...run.xv);
+    }
+    const rows = await timedQuery(this.db, `SELECT count(*)::int AS n FROM (${sql}) u`, vals,
+      ['SET LOCAL enable_indexscan = off']);
+    return Number(rows[0]?.n ?? 0);
   }
 
   private async caseDetails(args: Record<string, unknown>): Promise<ToolResult> {
@@ -925,11 +974,11 @@ export class CourtStatusTools extends BaseToolHandler {
     let hearingRows: any[] = [];
     const warnings: string[] = [];
     try {
-      const vals: unknown[] = [caseNumberVariants(raw, known)];
+      const vals: unknown[] = [[...new Set(caseNumberVariants(raw, known).map(normalizeCaseNumber))]];
       let extra = '';
       if (courtName) { vals.push(`%${escapeLike(courtName)}%`); extra = ` AND court_name ILIKE $2`; }
       hearingRows = await timedQuery(this.db,
-        `SELECT ${SESSION_COLUMNS} FROM court_sessions WHERE case_number = ANY($1::text[])${extra}
+        `SELECT ${SESSION_COLUMNS} FROM court_sessions WHERE ${CASE_NUMBER_NORM_SQL} = ANY($1::text[])${extra}
           ORDER BY session_date ASC NULLS LAST, session_time ASC LIMIT 1000`, vals);
     } catch (error: any) {
       logger.error('get_case_status_details hearings query failed', { error: error.message });

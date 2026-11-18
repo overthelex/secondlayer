@@ -17,6 +17,7 @@ import {
   parsePartyQuery,
   resolveRegion,
   splitParticipants,
+  stemQuery,
   REGIONS,
 } from '../tools/court-party-match';
 import {
@@ -85,6 +86,24 @@ describe('participants parsing and matching', () => {
 
   it('rejects words spread across different parties', () => {
     expect(matchParticipants(P1, parsePartyQuery('Яворська Федір'))).toEqual([]);
+  });
+});
+
+describe('inflected names (stem fallback)', () => {
+  it('cuts long words to a prefix stem, leaves short ones and numbers', () => {
+    expect(stemQuery(parsePartyQuery('Яворської Л.Г.'))).toEqual({ words: ['яворськ'], initials: ['л', 'г'], droppedForms: [], prefix: true });
+    // «Тараса» → «тара» would be shorter than 5 letters, so it stays whole.
+    expect(stemQuery(parsePartyQuery('Шевченка Тараса'))!.words).toEqual(['шевчен', 'тараса']);
+    expect(stemQuery(parsePartyQuery('Іванов'))).toBeNull();
+    expect(buildTsQuery(stemQuery(parsePartyQuery('Приватбанку'))!)).toBe("'приватбан':*");
+  });
+
+  it('matches the nominative form and tags the variant', () => {
+    const m = matchParticipants(P1, stemQuery(parsePartyQuery('Яворської Л.Г.'))!);
+    expect(m).toHaveLength(1);
+    expect(m[0].name).toBe('Яворська Лариса Григорівна');
+    expect(m[0].match_variant).toBe('інша форма слова (відмінок)');
+    expect(matchParticipants(P1, stemQuery(parsePartyQuery('Яворської О.Г.'))!)).toEqual([]);
   });
 });
 
@@ -169,7 +188,7 @@ const statusRow = (o: Partial<any> = {}) => ({
 const parse = (r: any) => JSON.parse(r.content[0].text);
 const isStatusSql = (sql: string) => sql.includes('participants IS NOT NULL') || /FROM (court_case_status_history|opendata_court_case_status)/.test(sql);
 const isPartySessions = (sql: string) => sql.includes("to_tsvector('simple', involved_parties)");
-const isHearingLookup = (sql: string) => sql.includes('case_number = ANY');
+const isHearingLookup = (sql: string) => sql.includes("'g')) = ANY($1::text[])");
 
 describe('search_case_status_by_party', () => {
   beforeEach(() => { jest.clearAllMocks(); });
@@ -256,10 +275,21 @@ describe('search_case_status_by_party', () => {
 
   it('flags a capped result set as too broad but still returns the first page', async () => {
     const rows = Array.from({ length: STATUS_ROW_CAP }, (_, i) => statusRow({ case_number: `533/${i}/15-ц` }));
-    const { db } = makeDb((sql) => (isStatusSql(sql) ? rows : []));
-    const res = parse(await new CourtStatusTools(db).executeTool('search_case_status_by_party', { party: 'Приватбанк', limit: 10, offset: 20 }));
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('count(*)::int AS n')) return [{ n: 16734 }];
+      return isStatusSql(sql) ? rows : [];
+    });
+    const res = parse(await new CourtStatusTools(db).executeTool('search_case_status_by_party', { party: 'Приватбанк', region: 'Полтавська', limit: 10, offset: 20 }));
     expect(res.status).toBe('too_broad');
     expect(res.total_is_lower_bound).toBe(true);
+    expect(res.estimated_total_cases).toBe(16734);
+    expect(res.message).toContain('близько 16734');
+    // One count over both sources; session placeholders shifted past the status ones.
+    const count = calls.find((c) => c.sql.includes('count(*)::int AS n'))!;
+    expect(count.sql).toContain('UNION SELECT court_name');
+    expect(count.sql).toContain('$3');
+    expect(count.sql).not.toMatch(/LIMIT/);
+    expect(count.values).toHaveLength(4);
     expect(res.returned).toBe(10);
     expect(res.offset).toBe(20);
     expect(res.has_more).toBe(true);
@@ -272,6 +302,21 @@ describe('search_case_status_by_party', () => {
     expect(res.status).toBe('no_results');
     expect(res.results).toEqual([]);
     expect(res.message).toContain('НЕ означає');
+  });
+
+  it('retries with stems when the inflected query finds nothing', async () => {
+    const { db, calls } = makeDb((sql, values) => {
+      if (!isStatusSql(sql)) return [];
+      return String(values[0]).includes(':*') && String(values[0]).includes('яворськ')
+        ? [statusRow({ participants: P1, case_number: '127/1/24' })] : [];
+    });
+    const res = parse(await new CourtStatusTools(db).executeTool('search_case_status_by_party', { party: 'Яворської' }));
+    expect(res.status).toBe('ok');
+    expect(res.query.inflection_fallback).toBe(true);
+    expect(res.results[0].matched_parties[0].match_variant).toBe('інша форма слова (відмінок)');
+    expect(res.matching_note).toContain('відмінок');
+    expect(calls.filter((c) => isStatusSql(c.sql) && typeof c.values[0] === 'string').map((c) => c.values[0]))
+      .toEqual(["'яворської'", "'яворськ':*"]);
   });
 
   it('a DB error is an explicit error, never an empty list', async () => {
@@ -328,7 +373,9 @@ describe('get_case_status_details', () => {
     expect(st.sql).toContain("lower(regexp_replace(case_number, '\\s+', '', 'g')) LIKE $2");
     expect(st.sql).toContain('ORDER BY stage_date ASC');
     const hl = calls.find((c) => isHearingLookup(c.sql))!;
+    // Normalised (lower case, no whitespace): idx_court_sessions_case_norm, migration 279.
     expect(hl.values[0]).toEqual(['533/318/15', '533/318/15-ц']);
+    expect(hl.sql).toContain("lower(regexp_replace(case_number, '\\s+', '', 'g')) = ANY($1::text[])");
 
     expect(res.status).toBe('found');
     expect(res.cases).toHaveLength(1);

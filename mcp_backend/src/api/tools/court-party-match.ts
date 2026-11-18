@@ -25,6 +25,8 @@ export interface PartyQuery {
   initials: string[];
   /** Legal-form abbreviations dropped from the required words. */
   droppedForms: string[];
+  /** Words are stems: match any word that starts with them (fallback for inflected names). */
+  prefix?: boolean;
 }
 
 /** Lexeme-like tokens, the way the 'simple' text-search parser splits Cyrillic text. */
@@ -44,7 +46,7 @@ export function parsePartyQuery(raw: string): PartyQuery {
 
 /** to_tsquery('simple', …) text. Tokens are letters/digits only, so quoting is enough. */
 export function buildTsQuery(q: PartyQuery): string {
-  return [...q.words.map((w) => `'${w}'`), ...[...new Set(q.initials)].map((i) => `'${i}':*`)].join(' & ');
+  return [...q.words.map((w) => (q.prefix ? `'${w}':*` : `'${w}'`)), ...[...new Set(q.initials)].map((i) => `'${i}':*`)].join(' & ');
 }
 
 export interface PartySegment { label: string | null; name: string }
@@ -93,7 +95,30 @@ export const MATCH_VARIANT = {
   full: 'повний збіг',
   initials: 'прізвище + ініціали',
   tokens: 'усі слова запиту',
+  stem: 'інша форма слова (відмінок)',
 } as const;
+
+/** Shortest stem kept: shorter ones ("іван") would match unrelated surnames. */
+const MIN_STEM = 5;
+
+/**
+ * Fallback for inflected input ("Яворської", "Шевченка", "Петренку"): the source writes names
+ * in the nominative, so each word of 6+ letters is cut by its last two letters and matched as a
+ * prefix. Returns null when no word can be shortened (nothing new to try).
+ */
+export function stemQuery(q: PartyQuery): PartyQuery | null {
+  let changed = false;
+  const words = q.words.map((w) => {
+    if (/\p{N}/u.test(w) || w.length - 2 < MIN_STEM) return w;
+    changed = true;
+    return w.slice(0, -2);
+  });
+  return changed ? { ...q, words: [...new Set(words)], prefix: true } : null;
+}
+
+function wordMatches(token: string, w: string, prefix?: boolean): boolean {
+  return prefix ? token.startsWith(w) : token === w;
+}
 
 export type MatchVariant = (typeof MATCH_VARIANT)[keyof typeof MATCH_VARIANT];
 
@@ -123,9 +148,9 @@ function hasInitials(segmentName: string, q: PartyQuery): boolean {
   for (let i = 0; i < ws.length; i++) {
     const parts = tokenize(ws[i]);
     // Participants are "Прізвище Ім'я По-батькові": initials after the surname.
-    if (parts.includes(last) && initialsFollow(ws, i + 1, q.initials)) return true;
+    if (parts.some((t) => wordMatches(t, last, q.prefix)) && initialsFollow(ws, i + 1, q.initials)) return true;
     // "Л.Г. Яворська" style written in the source.
-    if (parts.includes(first) && initialsFollow(ws, i - q.initials.length, q.initials)) return true;
+    if (parts.some((t) => wordMatches(t, first, q.prefix)) && initialsFollow(ws, i - q.initials.length, q.initials)) return true;
   }
   return false;
 }
@@ -142,9 +167,12 @@ export function matchSegment(segment: PartySegment, q: PartyQuery): PartyMatch |
   if (q.words.length === 0) return null;
   const toks = tokenize(segment.name);
   const set = new Set(toks);
-  if (!q.words.every((w) => set.has(w))) return null;
+  if (!q.words.every((w) => (q.prefix ? toks.some((t) => t.startsWith(w)) : set.has(w)))) return null;
   let variant: MatchVariant;
-  if (q.initials.length > 0) {
+  if (q.prefix) {
+    if (q.initials.length > 0 && !hasInitials(segment.name, q)) return null;
+    variant = MATCH_VARIANT.stem;
+  } else if (q.initials.length > 0) {
     if (!hasInitials(segment.name, q)) return null;
     variant = MATCH_VARIANT.initials;
   } else {
