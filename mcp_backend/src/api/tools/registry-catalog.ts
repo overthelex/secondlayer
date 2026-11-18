@@ -13,6 +13,7 @@
 // @secondlayer/shared/query-ir so registry AND EDRSR share one definition.
 import { JUDGMENT_ATTRIBUTION, JUDGMENT_COVERAGE, JUDGMENT_MACHINE_GENERATED } from './uk-judgment-notices.js';
 import type { MatchType, FieldDef } from '@secondlayer/shared';
+import { financialStatementRow } from './financial-statement-figures.js';
 export type { MatchType, FieldDef };
 
 export interface RegistryDef {
@@ -76,6 +77,12 @@ export interface RegistryDef {
    * Law, the machine-generated label and the coverage limits the licence requires.
    */
   notices?: Record<string, string>;
+  /**
+   * Per-row post-processing after the query, for values that are cheaper to derive in
+   * TypeScript from the few rows returned than to store (financial statements: key
+   * figures parsed from the filing XML). It must drop any raw column it reads.
+   */
+  transformRow?: (row: any) => any;
 }
 
 // opendata_advocates keeps contacts inside jsonb. These expressions flatten them
@@ -525,10 +532,13 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
 
   financial_statements: {
     title: 'Фінансова звітність',
-    description: 'Пошук фінансової звітності підприємств за ЄДРПОУ (Держстат)\n\n504K XML-звітів. Баланси, звіти про фінрезультати (Форми 1-6) за ЄДРПОУ та рік.',
+    description: 'Пошук фінансової звітності підприємств за ЄДРПОУ (ДПС, відкриті дані)\n\n1,2 млн звітів за 2021-2026 роки: Форми 1-6, а також 1-м/2-м (мале підприємство) і 1-мс/2-мс (мікропідприємство).\n\nДля балансу (Форма 1, 1-м, 1-мс) і звіту про фінрезультати (Форма 2, 2-м, 2-мс) кожен рядок містить figures: ключові показники з кодом рядка форми, current і prior (значення стовпців пояснює columns), у тис. грн. Баланс: активи (1300), необоротні (1095) й оборотні (1195) активи, власний капітал (1495), довгострокові (1595) і поточні (1695) зобов’язання. Фінрезультати: чистий дохід (2000), валовий прибуток (2090 мінус збиток 2095, лише Форма 2), фінрезультат до оподаткування (2290/2295), чистий прибуток або збиток (2350/2355; у формах 2-м і 2-мс один рядок 2350 зі знаком). balance_check показує, чи збігається актив (1300) з пасивом (1900).',
     table: 'opendata_financial_statements',
-    selectColumns: 'tin, c_doc, c_doc_sub, c_doc_ver, period_year, period_month, period_type, c_reg, c_raj, form_type',
-    orderBy: 'period_year DESC, form_type',
+    // raw_xml is read only for the forms whose figures are parsed, and transformRow
+    // drops it: the XML never reaches the caller.
+    selectColumns: "tin, c_doc, c_doc_sub, c_doc_ver, period_year, period_month, period_type, c_reg, c_raj, form_type, CASE WHEN c_doc_sub IN ('001', '002', '100', '110') THEN raw_xml END AS raw_xml",
+    orderBy: 'period_year DESC, period_month DESC, form_type',
+    transformRow: financialStatementRow,
     emptyMessage: 'Фінансову звітність не знайдено',
     defaultLimit: 20,
     maxLimit: 50,
@@ -536,7 +546,7 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     fields: [
       { name: 'tin', description: 'ЄДРПОУ / ІПН підприємства', match: 'exact', columns: ['tin'] },
       { name: 'period_year', description: 'Рік звітності (2021-2025)', match: 'exact', columns: ['period_year'], type: 'number' },
-      { name: 'form_type', description: 'Тип форми (S0100115 = Форма 1 тощо)', match: 'ilike', columns: ['form_type'] },
+      { name: 'form_type', description: 'Код форми або його початок: S01001 = Форма 1, S01002 = Форма 2, S01003 = Форма 3, S01100 = 1-м/2-м, S01110 = 1-мс/2-мс', match: 'ilike', columns: ['form_type'] },
     ],
   },
 

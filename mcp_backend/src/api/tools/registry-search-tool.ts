@@ -168,11 +168,12 @@ ${registryDescriptions}
           : def.emptyMessage);
       }
       const totalCount = parseInt(countResult.rows[0]?.total ?? '0', 10);
-      dataResult.rows.forEach((r: any) => { r._total_count = totalCount; });
+      const rows = def.transformRow ? dataResult.rows.map((r: any) => def.transformRow!(r)) : dataResult.rows;
+      rows.forEach((r: any) => { r._total_count = totalCount; });
       // Licence acknowledgement travels with the results, not only in the
       // documentation: a caller that ever only sees tool output would otherwise
       // never see it.
-      return this.withNotices(def, this.wrapSearchResults(dataResult.rows, lim, 0, def.attribution));
+      return this.withNotices(def, this.wrapSearchResults(rows, lim, 0, def.attribution));
     } catch (error: any) {
       logger.error(`search_registry[${registry}] error`, { error: error.message });
       return this.wrapError(`Помилка пошуку: ${error.message}`);
