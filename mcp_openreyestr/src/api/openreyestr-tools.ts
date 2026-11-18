@@ -73,6 +73,11 @@ export function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, '\\$&');
 }
 
+/** Escape POSIX regex metacharacters so user input matches literally in ~ / ~*. */
+export function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * SQL expression normalising an organisation name for exact comparison:
  * typographic quotes → ", whitespace runs → one space, trimmed, upper-cased.
@@ -749,6 +754,88 @@ export class OpenReyestrTools {
       [query, limit]
     );
 
+    return result.rows;
+  }
+
+  /**
+   * Reverse search over founders (засновники): find every entity that a given
+   * person or company founded, or every entity with founders from a given
+   * country. founder_info is the ЄДР text line, e.g.
+   *   "НАВТЕК ГМБХ; резиденство: Німеччина; розмір частки - 1121760,00 грн."
+   * Companies carry "резиденство:", natural persons "громадянство:".
+   * Current state of the register only: former founders are not in the dump.
+   */
+  async searchFounders(params: {
+    query?: string;
+    country?: string;
+    foreign_only?: boolean;
+    entity_type?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<any[]> {
+    const query = params.query?.trim() || '';
+    const country = params.country?.trim() || '';
+    const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 100);
+    const offset = Math.max(Number(params.offset) || 0, 0);
+
+    // The trigram index needs at least 3 characters to narrow anything down;
+    // a country alone is selective enough (an exact marker + name).
+    if (query.length < 3 && country.length < 2) {
+      return [{
+        found: false,
+        message: 'Вкажіть query (щонайменше 3 символи: назва або ПІБ засновника) або country (країна резиденства/громадянства).',
+      }];
+    }
+
+    const conditions: string[] = [];
+    const values: any[] = [];
+    let i = 1;
+
+    if (query) {
+      conditions.push(`f.founder_info ILIKE $${i++}`);
+      values.push(`%${escapeLike(query)}%`);
+    }
+    if (country) {
+      conditions.push(`f.founder_info ~* $${i++}`);
+      values.push(`(резиденство|громадянство): [^;]*${escapeRegex(country)}`);
+    }
+    if (params.foreign_only) {
+      conditions.push(`f.founder_info ~ '(резиденство|громадянство): '`);
+      conditions.push(`f.founder_info !~ '(резиденство|громадянство): Україна'`);
+    }
+    if (params.entity_type === 'UO' || params.entity_type === 'FSU') {
+      conditions.push(`f.entity_type = $${i++}`);
+      values.push(params.entity_type);
+    }
+    values.push(limit, offset);
+
+    const result = await this.pool.query(
+      `SELECT f.entity_type,
+              f.entity_record,
+              f.founder_info,
+              substring(f.founder_info from '^([^;]+)') AS founder_name,
+              substring(f.founder_info from '(?:резиденство|громадянство): ([^;]+)') AS founder_country,
+              substring(f.founder_info from 'розмір частки - ([0-9]+(?:,[0-9]+)?) грн') AS share_uah,
+              COALESCE(le.name, pa.name) AS entity_name,
+              COALESCE(le.edrpou, pa.edrpou) AS edrpou,
+              COALESCE(le.stan, pa.stan) AS entity_status
+       FROM founders f
+       LEFT JOIN legal_entities le ON f.entity_type = 'UO' AND le.record = f.entity_record
+       LEFT JOIN public_associations pa ON f.entity_type = 'FSU' AND pa.record = f.entity_record
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY f.id
+       LIMIT $${i} OFFSET $${i + 1}`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return [{
+        found: false,
+        query: query || undefined,
+        country: country || undefined,
+        message: 'Засновників не знайдено. Назви країн у ЄДР українською (напр. «Кіпр», «Сполучене Королівство», «Британські Віргінські Острови»). Реєстр показує лише поточний склад засновників.',
+      }];
+    }
     return result.rows;
   }
 

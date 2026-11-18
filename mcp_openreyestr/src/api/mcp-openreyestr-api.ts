@@ -92,6 +92,40 @@ export class MCPOpenReyestrAPI {
         },
       },
       {
+        name: 'search_founders',
+        description: `Зворотний пошук за засновниками (учасниками) у ЄДР
+
+Знаходить усі юрособи, де засновником є вказана особа чи компанія, зокрема іноземна,
+або всі юрособи із засновниками з певної країни. Повертає назву засновника, країну
+резиденства/громадянства, розмір частки та юрособу (назва, ЄДРПОУ, стан).
+Лише поточний склад засновників: колишніх учасників у відкритих даних ЄДР немає.
+Назви країн українською, як у реєстрі: «Кіпр», «Сполучене Королівство», «Британські Віргінські Острови».`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Назва компанії-засновника або ПІБ (частина, щонайменше 3 символи), напр. «ЛІМІТЕД», «НАВТЕК ГМБХ»',
+            },
+            country: {
+              type: 'string',
+              description: 'Країна резиденства (компанія) або громадянства (фізособа) українською, напр. «Кіпр»',
+            },
+            foreign_only: {
+              type: 'boolean',
+              description: 'Лише іноземні засновники (країна вказана і не Україна)',
+            },
+            entity_type: {
+              type: 'string',
+              enum: ['UO', 'FSU'],
+              description: 'UO = юрособи, FSU = громадські формування',
+            },
+            limit: { type: 'number', default: 50, minimum: 1, maximum: 100, description: 'Кількість результатів (1-100)' },
+            offset: { type: 'number', default: 0, minimum: 0, description: 'Зсув для пагінації' },
+          },
+        },
+      },
+      {
         name: 'search_beneficiaries',
         description: `Пошук кінцевих бенефіціарних власників (контролерів) компаній
 
@@ -613,6 +647,9 @@ status — стан заходу АРМА (null, якщо заходу не бу
           break;
         case 'search_beneficiaries':
           result = await this.tools.searchBeneficiaries(args.query, args.limit);
+          break;
+        case 'search_founders':
+          result = await this.tools.searchFounders(args);
           break;
         case 'get_by_edrpou':
           result = await this.tools.getByEdrpou(args.edrpou);

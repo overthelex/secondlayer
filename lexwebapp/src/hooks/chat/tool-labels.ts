@@ -45,6 +45,7 @@ export const TOOL_LABELS: Record<string, string> = {
   openreyestr_search_entities: 'Пошук юросіб',
   openreyestr_get_entity_details: 'Деталі юрособи',
   openreyestr_search_beneficiaries: 'Пошук бенефіціарів',
+  openreyestr_search_founders: 'Пошук за засновниками',
   openreyestr_get_by_edrpou: 'Пошук за ЄДРПОУ',
   openreyestr_get_statistics: 'Статистика реєстру',
   openreyestr_search_enforcement_proceedings: 'Виконавчі провадження',

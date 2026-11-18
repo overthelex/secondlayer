@@ -123,6 +123,7 @@ export const V2_TOOL_NAMES = new Set<string>([
   'openreyestr_get_entity_details',
   'openreyestr_search_entities',
   'openreyestr_search_beneficiaries',
+  'openreyestr_search_founders',
   'openreyestr_search_debtors',
   'openreyestr_search_enforcement_proceedings',
   'openreyestr_search_bankruptcy_cases',
