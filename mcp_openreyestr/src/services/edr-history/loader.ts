@@ -246,7 +246,7 @@ export async function foldHistory(c: PoolClient, kind: string, S: string, w: (al
        SELECT h.edrpou, h.field, h.value_hash, h.value, h.kind, h.first_snapshot, h.last_snapshot, n.prev, n.next
        FROM edr_hist.history h JOIN stg_nb n ON n.field = h.field AND n.carried
        WHERE h.kind = $2 AND ${w('h')} AND h.first_snapshot < $1::date AND h.last_snapshot > $1::date
-         AND NOT EXISTS (SELECT 1 FROM stg_h t WHERE ${KEY} AND ${w('t')})),
+         AND (SELECT 1 FROM stg_h t WHERE ${KEY} LIMIT 1) IS NULL),
      ins AS (INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
              SELECT edrpou, field, value_hash, value, kind, next, last_snapshot FROM sp)
      UPDATE edr_hist.history h SET last_snapshot = sp.prev FROM sp
@@ -264,9 +264,13 @@ export async function foldHistory(c: PoolClient, kind: string, S: string, w: (al
              WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.xf AND ${w('h')})
      UPDATE edr_hist.history h SET last_snapshot = q.xl FROM pairs q
      WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.pf AND ${w('h')}`);
-  const notCovered = `NOT EXISTS (SELECT 1 FROM edr_hist.history y WHERE y.edrpou = t.edrpou AND y.field = t.field
+  // A scalar subquery with LIMIT is not pulled up into an anti-join: it runs per staged row as a
+  // primary-key probe. As NOT EXISTS the planner hashed the whole chunk of history, or, when the
+  // date lay outside the column statistics (a 2018 snapshot into 2021+ history), estimated no
+  // matches and chose a nested loop over the whole chunk per row (hours per chunk).
+  const notCovered = `(SELECT 1 FROM edr_hist.history y WHERE y.edrpou = t.edrpou AND y.field = t.field
                        AND y.value_hash = t.value_hash AND y.first_snapshot <= $1::date AND y.last_snapshot >= $1::date
-                       AND ${w('y')})`;
+                       LIMIT 1) IS NULL`;
   // c. extend the run that ends at prev
   await c.query(
     `UPDATE edr_hist.history h SET last_snapshot = $1::date, value = t.value
