@@ -4,8 +4,10 @@
  * Backend sources: triggers start_import via /api/tools/start_import
  * OpenReyestr sources: triggers registry sync via /api/admin/sync-registry/:name
  * ECHR sources: triggers ECHR sync via /api/admin/sync-echr
+ * Script sources: runs source.command as a child process of this container
  */
 
+import { spawn } from 'child_process';
 import http from 'http';
 import https from 'https';
 import { DataSourceSchedule, ServiceConfig } from './config.js';
@@ -268,6 +270,61 @@ async function triggerEchrSync(
   }
 }
 
+const runningScripts = new Set<string>();
+
+/**
+ * Run a script source (e.g. a Python loader baked into the image) and wait for it.
+ * stdout/stderr go to the container log; the last output line becomes the result message.
+ * A run that is still going when the next cron tick fires is not started twice.
+ */
+/** Timeout of a script source that sets no timeoutMs. */
+const DEFAULT_SCRIPT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+
+async function runScript(source: DataSourceSchedule): Promise<SyncResult> {
+  const start = Date.now();
+  const startedAt = new Date().toISOString();
+  const finish = (success: boolean, message: string): SyncResult => ({
+    source: source.name, success, message, durationMs: Date.now() - start, startedAt,
+  });
+
+  if (!source.command?.length) return finish(false, 'Не задано command для script-джерела');
+  if (runningScripts.has(source.name)) return finish(false, 'Попередній запуск ще триває, пропущено');
+  runningScripts.add(source.name);
+
+  try {
+    return await new Promise<SyncResult>((resolve) => {
+      const [cmd, ...args] = source.command!;
+      const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], env: process.env });
+      let lastLine = '';
+      const forward = (chunk: Buffer, stream: NodeJS.WriteStream) => {
+        const text = chunk.toString();
+        stream.write(text.replace(/^(?=.)/gm, `[${source.name}] `));
+        const lines = text.trim().split('\n');
+        if (lines[lines.length - 1]) lastLine = lines[lines.length - 1];
+      };
+      child.stdout.on('data', (c: Buffer) => forward(c, process.stdout));
+      child.stderr.on('data', (c: Buffer) => forward(c, process.stderr));
+      const timeoutMs = source.timeoutMs ?? DEFAULT_SCRIPT_TIMEOUT_MS;
+      const timer = setTimeout(() => {
+        child.kill('SIGTERM');
+        lastLine = `таймаут ${Math.round(timeoutMs / 60000)} хв, процес зупинено`;
+      }, timeoutMs);
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        resolve(finish(false, `Не вдалося запустити ${cmd}: ${err.message}`));
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        resolve(finish(code === 0, code === 0
+          ? `Скрипт завершено: ${lastLine.slice(0, 200)}`
+          : `Скрипт завершився з кодом ${code}: ${lastLine.slice(0, 200)}`));
+      });
+    });
+  } finally {
+    runningScripts.delete(source.name);
+  }
+}
+
 /**
  * Run a single source sync.
  */
@@ -282,6 +339,8 @@ export async function runSync(
     result = await triggerBackendImport(config, source);
   } else if (source.target === 'echr') {
     result = await triggerEchrSync(config, source);
+  } else if (source.target === 'script') {
+    result = await runScript(source);
   } else {
     result = await triggerOpenreyestrSync(config, source);
   }
@@ -313,6 +372,7 @@ export async function runAllOnce(
   const backendSources = sources.filter((s) => s.target === 'backend' && s.enabled);
   const openreyestrSources = sources.filter((s) => s.target === 'openreyestr' && s.enabled);
   const echrSources = sources.filter((s) => s.target === 'echr' && s.enabled);
+  const scriptSources = sources.filter((s) => s.target === 'script' && s.enabled);
 
   console.log(
     `[SYNC] Разовий запуск: ${backendSources.length} backend + ${openreyestrSources.length} openreyestr + ${echrSources.length} echr джерел`,
@@ -338,6 +398,10 @@ export async function runAllOnce(
     const result = await runSync(config, source);
     results.push(result);
     await new Promise((r) => setTimeout(r, 10_000));
+  }
+
+  for (const source of scriptSources) {
+    results.push(await runSync(config, source));
   }
 
   return results;

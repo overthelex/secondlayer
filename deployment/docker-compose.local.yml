@@ -1445,6 +1445,9 @@ services:
       OPENREYESTR_API_KEY: ${OPENREYESTR_API_KEYS:-}
       HEALTH_PORT: "3010"
       TZ: Europe/Kiev
+      # court_case_status_history script source (scripts/court-status/load_case_status.py)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-secondlayer}:${POSTGRES_PASSWORD:-local_dev_password}@postgres-local:5432/${POSTGRES_DB:-secondlayer_local}
+      CCSH_WORK_DIR: /work
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3010/health', r => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]
       interval: 30s
@@ -1452,12 +1455,16 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    volumes:
+      # ~0.9 GB daily ZIP is downloaded here and deleted after a successful load
+      - opendata_sync_work:/work
     networks:
       - secondlayer-local
     deploy:
       resources:
         limits:
-          memory: 256M
+          # node scheduler + load_case_status.py (streams rows to psql, ~30 MB RSS)
+          memory: 384M
         reservations:
           memory: 64M
 
@@ -1466,6 +1473,8 @@ services:
   # /etc/turnserver.conf (apt coturn), адрес — TURN_SERVER_URL в .env.local.
 
 volumes:
+  opendata_sync_work:
+    driver: local
   postgres_local_data:
     driver: local
   qdrant_local_data:
