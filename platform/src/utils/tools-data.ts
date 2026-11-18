@@ -104,6 +104,8 @@ export const tools: Tool[] = [
   },
   { name: 'count_cases_by_party', category: 'Analysis', description: 'Кількість справ за назвою сторони', cost: '$0.002–$0.005' },
   { name: 'search_court_case_status', category: 'Analysis', description: 'Пошук статусу судової справи', cost: '$0.002–$0.005' },
+  { name: 'search_case_status_by_party', category: 'Analysis', description: 'Справи за стороною (ПІБ або назва): стадії розгляду та засідання', cost: '₴1' },
+  { name: 'get_case_status_details', category: 'Analysis', description: 'Картка справи: усі стадії розгляду, сторони, засідання', cost: '₴1' },
 
   // ========== Documents ==========
   {

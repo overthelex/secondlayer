@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS court_case_status_history (
   first_seen        DATE NOT NULL,
   last_seen         DATE NOT NULL,
   source_snapshot   TEXT                    -- e.g. stan-rozglyadu-sprav-vid-17-11-2026.zip
-);
+)
+-- Every daily load rewrites last_seen of all ~1.5M events in the snapshot; free space on each page
+-- lets those updates stay HOT (no indexed column changes) instead of growing every index daily.
+WITH (fillfactor = 85);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ccsh_event_key ON court_case_status_history (event_key);
 

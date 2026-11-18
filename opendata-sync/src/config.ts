@@ -5,7 +5,7 @@
  * Frequencies use node-cron syntax: second(opt) minute hour day month weekday
  */
 
-export type SyncTarget = 'backend' | 'openreyestr' | 'echr';
+export type SyncTarget = 'backend' | 'openreyestr' | 'echr' | 'script';
 
 export interface DataSourceSchedule {
   name: string;
@@ -18,6 +18,10 @@ export interface DataSourceSchedule {
   sourceName: string;
   /** Whether this source is enabled */
   enabled: boolean;
+  /** For target 'script': argv run inside this container (exit code 0 = success) */
+  command?: string[];
+  /** For target 'script': kill the process after this many ms (default 4h) */
+  timeoutMs?: number;
 }
 
 // ─── Backend data sources (import via /api/tools/start_import) ──────────
@@ -157,9 +161,11 @@ const backendWeeklySources: DataSourceSchedule[] = [
     sourceName: 'advocates',
     enabled: true,
   },
-  // LEXAI-2173: the old data.gov.ua dataset is gone (every run since 19.04.2026 failed with
-  // «Cannot download JSON»). The ДСА replacement is a ~0.9 GB ZIP of TSV files, which
-  // start_import cannot load; it is reloaded by mcp_backend/src/scripts/import-court-case-status.ts.
+  // LEXAI-2173: DISABLED — the catalog URL of this source (dataset af2a2498-…) is gone from
+  // data.gov.ua (CKAN 404, download 403; every run since 19.04.2026 failed with «Cannot download
+  // JSON»). The ДСА replacement is a ~0.9 GB ZIP of TSV files, which start_import cannot load:
+  // opendata_court_case_status is reloaded by mcp_backend/src/scripts/import-court-case-status.ts,
+  // and the accumulating history by the `court_case_status_history` script source below.
   {
     name: 'court_case_status',
     title: 'Судова влада — Стан розгляду справ',
@@ -343,6 +349,26 @@ const openreyestrFeedSources: DataSourceSchedule[] = [
     cron: '30 1 * * *', // 01:30 daily
     target: 'openreyestr',
     sourceName: 'prozorro',
+    enabled: true,
+  },
+];
+
+// ─── Scripts run inside this container ─────────────────────────────
+
+const scriptSources: DataSourceSchedule[] = [
+  {
+    // ДСА «Стан розгляду справ» (data.gov.ua 0ad60ea9-…): a daily ZIP with only the latest ~1.5M
+    // stage events. load_case_status.py upserts it into court_case_status_history (migration 278)
+    // so events that fall out of later snapshots are kept. The ZIP of day D is published around
+    // noon of D+1; the 20:00 run is a retry. A snapshot already in court_case_status_snapshots is
+    // skipped, so the second run is a no-op on a normal day.
+    name: 'court_case_status_history',
+    title: 'Судова влада — Стан розгляду справ (накопичення історії)',
+    cron: '0 14,20 * * *', // 14:00 and 20:00 daily
+    target: 'script',
+    sourceName: 'court_case_status_history',
+    command: ['python3', '-I', '/app/scripts/load_case_status.py', '--latest'],
+    timeoutMs: 3 * 60 * 60 * 1000,
     enabled: true,
   },
 ];
@@ -737,6 +763,7 @@ export const ALL_SOURCES: DataSourceSchedule[] = [
   ...naisWeeklySources,
   ...openreyestrFeedSources,
   ...echrWeeklySources,
+  ...scriptSources,
 ];
 
 // ─── Environment config ────────────────────────────────────────────

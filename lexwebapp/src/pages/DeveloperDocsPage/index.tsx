@@ -63,6 +63,8 @@ const toolGroups: ToolGroup[] = [
       { name: 'check_precedent_status', description: 'Чи не скасовано рішення вищою інстанцією', params: [{ name: 'case_id' }, { name: 'case_number' }, { name: 'doc_id' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'get_citation_graph', description: 'Граф цитувань рішення: на які статті законодавства воно посилається', params: [{ name: 'case_id', required: true }, { name: 'depth' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'search_court_case_status', description: 'Статус судової справи за номером, суддею або судом', params: [{ name: 'case_number' }, { name: 'judge' }, { name: 'description' }, { name: 'court_name' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'search_case_status_by_party', description: 'Справи за стороною (ПІБ або назва юрособи): стадії розгляду, судді, засідання', params: [{ name: 'party', required: true }, { name: 'region' }, { name: 'court_name' }, { name: 'case_number' }, { name: 'proceeding_number' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'include_sessions' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1' },
+      { name: 'get_case_status_details', description: 'Картка справи: усі стадії розгляду, сторони, судді, засідання', params: [{ name: 'case_number', required: true }, { name: 'court_name' }], cost: '₴1' },
       { name: 'analyze_data', description: 'Read-only SQL для аналітики: GROUP BY, COUNT, агрегати, JOIN (таймаут 45с)', params: [{ name: 'sql', required: true }], cost: '₴0' },
     ],
   },
