@@ -19,6 +19,10 @@
  *   EDRPOU_UO_URL         — Download URL for UO ZIP
  *   EDRPOU_FOP_URL        — Download URL for FOP ZIP
  *   EDRPOU_FSU_URL        — Download URL for FSU ZIP
+ *   EDR_HISTORY_SNAPSHOT  — 1: after a successful UO import, also record UO.xml (+ FSU.xml)
+ *                           as a dated snapshot in the history schema edr_hist (default off)
+ *   EDR_HISTORY_SNAPSHOT_DATE — override the snapshot date (default: CKAN last_modified of UO.zip,
+ *                           else today)
  */
 
 import dotenv from 'dotenv';
@@ -39,6 +43,7 @@ import { DatabaseImporter, ImportStats } from '../services/database-importer.js'
 import { DownloadService } from '../services/download-service.js';
 import { ImportProgress } from '../services/import-progress.js';
 import { ParsedUOEntity, ParsedFOPEntity, ParsedFSUEntity } from '../services/xml-parser.js';
+import { loadEdrSnapshot } from '../services/edr-history/loader';
 
 const DATA_DIR = process.env.EDRPOU_DATA_DIR || path.join(__dirname, '../../data/edrpou');
 const BATCH_SIZE = parseInt(process.env.IMPORT_BATCH_SIZE || '500');
@@ -56,6 +61,11 @@ const DEFAULT_URLS: Record<string, string> = {
   FSU: 'https://data.gov.ua/dataset/03cc1239-3988-4451-aa0d-aadb77448714/resource/2b7eeee3-6c29-4ba8-8c35-1618974830eb/download/fsu.zip',
 };
 
+const EDR_HISTORY = process.env.EDR_HISTORY_SNAPSHOT === '1';
+
+// CKAN last_modified per resource (UO/FOP/FSU), for the history snapshot date.
+const datasetModified: Record<string, string> = {};
+
 const ENV_URLS: Record<string, string | undefined> = {
   UO: process.env.EDRPOU_UO_URL,
   FOP: process.env.EDRPOU_FOP_URL,
@@ -71,10 +81,11 @@ async function resolveDatasetUrls(): Promise<Record<string, string>> {
   try {
     const res = await fetch(CKAN_PACKAGE_SHOW + EDRPOU_DATASET_ID, { signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const body = await res.json() as { result?: { resources?: { name?: string; url?: string }[] } };
+    const body = await res.json() as { result?: { resources?: { name?: string; url?: string; last_modified?: string }[] } };
     for (const r of body.result?.resources || []) {
       const key = (r.name || '').toUpperCase().replace(/\.ZIP$/, '');
       if (key in DEFAULT_URLS && r.url) urls[key] = r.url;
+      if (key in DEFAULT_URLS && r.last_modified) datasetModified[key] = r.last_modified;
     }
     console.log(`Resolved download URLs via CKAN dataset ${EDRPOU_DATASET_ID}`);
   } catch (err) {
@@ -376,6 +387,9 @@ async function main() {
   const downloader = new DownloadService();
   const datasetUrls = args.skipDownload ? {} as Record<string, string> : await resolveDatasetUrls();
   const results: { type: string; status: string; stats?: ImportStats; error?: string }[] = [];
+  // EDR_HISTORY_SNAPSHOT: imported UO/FSU XML kept until the snapshot is recorded after the loop
+  const historyXml: Record<string, string> = {};
+  const deferredCleanup: string[] = [];
 
   try {
     for (const entityType of types) {
@@ -475,8 +489,12 @@ async function main() {
           throw importErr;
         }
 
-        // Step 7: Clean up
-        if (!args.keepFiles) {
+        if (EDR_HISTORY && (entityType === 'UO' || entityType === 'FSU')) historyXml[entityType] = xmlPath;
+
+        // Step 7: Clean up (UO/FSU only after the history snapshot when it is on)
+        if (!args.keepFiles && EDR_HISTORY && historyXml[entityType]) {
+          deferredCleanup.push(extractDir, zipPath);
+        } else if (!args.keepFiles) {
           console.log('Cleaning up temp files...');
           fs.rmSync(extractDir, { recursive: true, force: true });
           fs.unlinkSync(zipPath);
@@ -486,6 +504,31 @@ async function main() {
         console.error(`\nFailed to sync ${entityType}:`, (err as Error).message);
         results.push({ type: entityType, status: 'failed', error: (err as Error).message });
       }
+    }
+
+    // Step 8: history snapshot (edr_hist) of the imported UO (+ FSU)
+    if (EDR_HISTORY && !args.dryRun) {
+      if (!historyXml.UO) {
+        console.log('\nEDR history: UO was not imported in this run, no snapshot recorded');
+      } else {
+        const snapshot = process.env.EDR_HISTORY_SNAPSHOT_DATE
+          || (datasetModified.UO || '').slice(0, 10)
+          || new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Kyiv' });
+        const files = [historyXml.UO, historyXml.FSU].filter(Boolean);
+        console.log(`\n=== EDR history snapshot ${snapshot}: ${files.map(f => path.basename(f)).join(', ')} ===`);
+        try {
+          const r = await loadEdrSnapshot(pool, {
+            snapshot,
+            source: `data.gov.ua ${EDRPOU_DATASET_ID} (weekly sync${datasetModified.UO ? `, UO.zip last_modified ${datasetModified.UO}` : ''})`,
+            files,
+          });
+          results.push({ type: 'HISTORY', status: r.skipped ? 'skipped' : 'completed', error: r.skipped });
+        } catch (err) {
+          console.error('EDR history snapshot failed:', (err as Error).message);
+          results.push({ type: 'HISTORY', status: 'failed', error: (err as Error).message });
+        }
+      }
+      for (const p of deferredCleanup) fs.rmSync(p, { recursive: true, force: true });
     }
 
     // Summary

@@ -126,6 +126,75 @@ export class MCPOpenReyestrAPI {
         },
       },
       {
+        name: 'company_as_of',
+        description: `ЄДР у минулому: відомості про юрособу станом на дату
+
+Повертає стан суб'єкта (назва, ОПФ, стан, місцезнаходження, КВЕД, капітал, керівники,
+засновники, бенефіціари) за найближчим завантаженим знімком ЄДР не пізніше вказаної дати
+(2016, 2018, жовтень-листопад 2021, щотижневі знімки з 2026). У відповіді — дата знімка і джерело.
+Поля, яких знімок не публікує (адреси й КВЕД у воєнний час), беруться з останнього знімка, де вони були.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            edrpou: { type: 'string', description: 'Код ЄДРПОУ (8 цифр)' },
+            date: { type: 'string', description: 'Дата у форматі YYYY-MM-DD, напр. 2021-10-25' },
+          },
+          required: ['edrpou', 'date'],
+        },
+      },
+      {
+        name: 'company_history',
+        description: `ЄДР: історія змін юрособи за знімками
+
+Для кожного поля (назва, стан, адреса, КВЕД, капітал, керівник, засновник, бенефіціар) —
+усі значення з першим і останнім знімком ЄДР, у якому значення було. Значення, що зникло і
+повернулося, дає дві серії. Перелік знімків із джерелами — у відповіді.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            edrpou: { type: 'string', description: 'Код ЄДРПОУ (8 цифр)' },
+          },
+          required: ['edrpou'],
+        },
+      },
+      {
+        name: 'search_founders_history',
+        description: `Зворотний пошук за засновником з урахуванням минулих знімків ЄДР
+
+Знаходить юрособи, де особа чи компанія була або є засновником, зокрема колишніх засновників
+(знімки 2016-2021 і щотижневі з 2026). Ім'я можна писати латиницею: «Scaramander Limited»
+знаходить «СКАРАМАНДЕР ЛІМІТЕД». Фільтр за країною (ISO або українською). Пошук за кодом
+ЄДРПОУ засновника — у яких юрособах ця компанія була засновником.
+Збіг за ім'ям — лише наводка; збіг за кодом ЄДРПОУ — факт.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Назва компанії або ПІБ засновника, будь-якою мовою' },
+            code: { type: 'string', description: 'Код ЄДРПОУ засновника-юрособи (замість query)' },
+            country: { type: 'string', description: 'Країна: ISO-код (CY, GB, VG) або назва українською («Кіпр»)' },
+            current_only: { type: 'boolean', description: 'Лише записи з останнього знімка, де є юрособа' },
+            limit: { type: 'number', default: 50, minimum: 1, maximum: 200, description: 'Кількість результатів (1-200)' },
+          },
+        },
+      },
+      {
+        name: 'search_beneficiaries_history',
+        description: `Пошук кінцевих бенефіціарних власників з урахуванням минулих знімків ЄДР
+
+Знаходить юрособи, де особа була або є КБВ (знімки 2016-2021 і щотижневі з 2026). ПІБ можна
+писати латиницею: «John Jones» знаходить «ДЖОНС ДЖОН». Фільтр за країною громадянства.
+Збіг за ім'ям — лише наводка, особу треба підтвердити.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'ПІБ бенефіціара, будь-якою мовою' },
+            country: { type: 'string', description: 'Країна громадянства: ISO-код або назва українською' },
+            current_only: { type: 'boolean', description: 'Лише записи з останнього знімка, де є юрособа' },
+            limit: { type: 'number', default: 50, minimum: 1, maximum: 200, description: 'Кількість результатів (1-200)' },
+          },
+        },
+      },
+      {
         name: 'search_beneficiaries',
         description: `Пошук кінцевих бенефіціарних власників (контролерів) компаній
 
@@ -650,6 +719,18 @@ status — стан заходу АРМА (null, якщо заходу не бу
           break;
         case 'search_founders':
           result = await this.tools.searchFounders(args);
+          break;
+        case 'company_as_of':
+          result = await this.tools.companyAsOf(args.edrpou, args.date);
+          break;
+        case 'company_history':
+          result = await this.tools.companyHistory(args.edrpou);
+          break;
+        case 'search_founders_history':
+          result = await this.tools.searchFoundersHistory(args);
+          break;
+        case 'search_beneficiaries_history':
+          result = await this.tools.searchBeneficiariesHistory(args);
           break;
         case 'get_by_edrpou':
           result = await this.tools.getByEdrpou(args.edrpou);
