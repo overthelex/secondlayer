@@ -17,7 +17,7 @@ dotenv.config();
 import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
-import unzipper from 'unzipper';
+import { extractZip, findDataFile } from '../services/registry-archive';
 import { REGISTRIES, RegistryConfig } from '../config/registries';
 import { importXml } from '../services/generic-xml-importer';
 import { importCsv } from '../services/csv-importer';
@@ -170,93 +170,6 @@ function downloadFile(url: string, dest: string, maxRetries = 3): Promise<void> 
   });
 }
 
-async function extractZip(zipPath: string, extractDir: string, depth: number = 0): Promise<string[]> {
-  if (depth > 2) {
-    console.warn(`  Skipping nested ZIP extraction at depth ${depth} (max 2)`);
-    return [];
-  }
-  const { execFileSync } = require('child_process');
-
-  // Try system unzip first — handles ZIP64 and large files better than Node.js unzipper
-  try {
-    execFileSync('unzip', ['-o', '-q', zipPath, '-d', extractDir], {
-      timeout: 10 * 60 * 1000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-  } catch {
-    // Fallback to Node.js unzipper for environments without unzip
-    const writePromises: Promise<string>[] = [];
-    await new Promise<void>((resolve, reject) => {
-      fs.createReadStream(zipPath)
-        .pipe(unzipper.Parse())
-        .on('entry', (entry: any) => {
-          const filePath = entry.path as string;
-          const type = entry.type as string;
-          if (type === 'File') {
-            const outPath = path.resolve(extractDir, filePath);
-            // Prevent Zip Slip: ensure extracted path stays within extractDir
-            if (!outPath.startsWith(path.resolve(extractDir) + path.sep)) {
-              entry.autodrain();
-              return;
-            }
-            fs.mkdirSync(path.dirname(outPath), { recursive: true });
-            const writePromise = new Promise<string>((res) => {
-              entry.pipe(fs.createWriteStream(outPath))
-                .on('finish', () => res(filePath));
-            });
-            writePromises.push(writePromise);
-          } else {
-            entry.autodrain();
-          }
-        })
-        .on('close', () => resolve())
-        .on('error', (err: Error) => reject(err));
-    });
-    await Promise.all(writePromises);
-  }
-
-  // List all extracted files (non-directories)
-  const extracted = listFilesRecursive(extractDir, extractDir);
-
-  // Recursively extract any nested .zip files found inside (max depth 2)
-  const nestedZips = extracted.filter(f => f.toLowerCase().endsWith('.zip'));
-  const processedZips = new Set<string>();
-  for (const nested of nestedZips) {
-    const baseName = path.basename(nested);
-    if (processedZips.has(baseName)) {
-      console.log(`  Skipping duplicate nested ZIP: ${nested}`);
-      continue;
-    }
-    processedZips.add(baseName);
-    const nestedPath = path.join(extractDir, nested);
-    if (!fs.existsSync(nestedPath)) continue;
-    console.log(`  Extracting nested ZIP: ${nested} (depth ${depth + 1})`);
-    try {
-      const innerFiles = await extractZip(nestedPath, extractDir, depth + 1);
-      extracted.push(...innerFiles);
-      try { fs.unlinkSync(nestedPath); } catch { /* ignore */ }
-    } catch (err: any) {
-      console.error(`  Failed to extract nested ZIP ${nested}: ${err.message}`);
-    }
-  }
-
-  return extracted.filter(f => !f.toLowerCase().endsWith('.zip'));
-}
-
-/** Recursively list files relative to baseDir */
-function listFilesRecursive(dir: string, baseDir: string): string[] {
-  const results: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      results.push(...listFilesRecursive(fullPath, baseDir));
-    } else {
-      results.push(path.relative(baseDir, fullPath));
-    }
-  }
-  return results;
-}
-
 // --- Weekly check ---
 
 async function isRegistryDue(pool: Pool, config: RegistryConfig): Promise<boolean> {
@@ -352,14 +265,7 @@ async function syncRegistry(
 
   // 3. Find data file
   const ext = config.format === 'csv' ? '.csv' : '.xml';
-  let dataFile = config.innerFileName
-    ? extracted.find(f => f === config.innerFileName || f.endsWith(config.innerFileName) || f.includes(config.innerFileName))
-    : extracted.find(f => f.toLowerCase().endsWith(ext));
-
-  if (!dataFile) {
-    // Fallback: try any file with the right extension
-    dataFile = extracted.find(f => f.toLowerCase().endsWith(ext));
-  }
+  const dataFile = findDataFile(extracted, config);
 
   if (!dataFile) {
     return { registry: config.name, count: 0, time: (Date.now() - startTime) / 1000, error: `No ${ext} file found. Available: ${extracted.join(', ')}` };

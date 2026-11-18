@@ -520,21 +520,17 @@ class HTTPOpenReyestrServer {
             doGet(config.datasetUrl);
           });
 
-          // Extract
-          const { execFileSync } = await import('child_process');
-          try {
-            execFileSync('unzip', ['-o', '-q', zipPath, '-d', registryDir], { timeout: 10 * 60 * 1000 });
-          } catch { /* fallback handled by sync-all-registries */ }
-
-          // Find data file
-          const ext = config.format === 'csv' ? '.csv' : '.xml';
-          const files = fs.readdirSync(registryDir);
-          const dataFile = config.innerFileName
-            ? files.find((f: string) => f.includes(config.innerFileName))
-            : files.find((f: string) => f.toLowerCase().endsWith(ext));
+          // Extract, including archives nested inside the archive (25-edrnpa.zip
+          // holds 25.1-edrnpa_cards.zip). Start from an empty dir so a file left
+          // from an earlier run cannot be picked instead of this week's.
+          const { extractZip, findDataFile } = await import('./services/registry-archive');
+          fs.rmSync(registryDir, { recursive: true, force: true });
+          fs.mkdirSync(registryDir, { recursive: true });
+          const extracted = await extractZip(zipPath, registryDir);
+          const dataFile = findDataFile(extracted, config);
 
           if (!dataFile) {
-            logger.error(`No ${ext} file found for ${registry}`);
+            logger.error(`No ${config.format} data file found for ${registry}. Extracted: ${extracted.join(', ')}`);
             return;
           }
 
