@@ -1,0 +1,7 @@
+# Weekly ЄДР sync for openreyestr on legal_prod (cthulhu, user vovkes).
+# Install (merge into the existing crontab):
+#   crontab -l | cat - ~/SecondLayer/deployment/cron/edrpou-crontab | crontab -
+# Script: deployment/cron/edrpou-weekly-sync.sh (starts a one-off container, returns at once).
+
+# Tuesday 03:30 server time: the ministry usually republishes on Monday.
+30 3 * * 2 mkdir -p $HOME/logs && /home/vovkes/SecondLayer/deployment/cron/edrpou-weekly-sync.sh >> $HOME/logs/edrpou-weekly-sync.log 2>&1
