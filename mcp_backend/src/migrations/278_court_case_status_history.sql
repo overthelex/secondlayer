@@ -11,7 +11,8 @@
 
 CREATE TABLE IF NOT EXISTS court_case_status_history (
   id                BIGSERIAL PRIMARY KEY,
-  event_key         TEXT NOT NULL,          -- md5(court|case|proc|stage_date|stage_name|type|cause_result)
+  event_key         TEXT NOT NULL,          -- md5 of canonical court|case|proc|stage_date|stage_name|type|cause_result
+                                            -- (whitespace collapsed, parsed date; load_case_status.py event_key())
   court_name        TEXT NOT NULL,
   case_number       TEXT NOT NULL,
   case_proc         TEXT,
@@ -31,6 +32,8 @@ CREATE TABLE IF NOT EXISTS court_case_status_history (
 )
 -- Every daily load rewrites last_seen of all ~1.5M events in the snapshot; free space on each page
 -- lets those updates stay HOT (no indexed column changes) instead of growing every index daily.
+-- The loader's ON CONFLICT also assigns participants / registration_date, but HOT compares values,
+-- so re-assigning an unchanged value does not cost an index entry.
 WITH (fillfactor = 85);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ccsh_event_key ON court_case_status_history (event_key);
@@ -46,20 +49,27 @@ CREATE INDEX IF NOT EXISTS idx_ccsh_participants_fts
   ON court_case_status_history USING gin (to_tsvector('simple', participants))
   WHERE participants IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_ccsh_participants_trgm
-  ON court_case_status_history USING gin (participants gin_trgm_ops)
-  WHERE participants IS NOT NULL;
-
--- Loader bookkeeping: one row per processed snapshot, so a rerun of the same zip is a no-op.
+-- Loader bookkeeping: one row per processed snapshot. --latest skips a resource only when it is
+-- recorded here as complete with the same resource_modified (and resource_size), so a zip that
+-- CKAN republishes under the same name is loaded again, and a partial export (the zip of
+-- 31.10.2026 had 26 of 30 files) is merged but kept complete = false and retried on the next run.
 CREATE TABLE IF NOT EXISTS court_case_status_snapshots (
   snapshot_name   TEXT PRIMARY KEY,
   resource_url    TEXT,
   resource_modified TIMESTAMPTZ,
+  resource_size   BIGINT,
+  files           INTEGER,
   rows_read       BIGINT,
   rows_inserted   BIGINT,
   rows_updated    BIGINT,
+  complete        BOOLEAN NOT NULL DEFAULT true,
   loaded_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- The table predates these columns on the first database it was created in.
+ALTER TABLE court_case_status_snapshots
+  ADD COLUMN IF NOT EXISTS resource_size BIGINT,
+  ADD COLUMN IF NOT EXISTS files INTEGER,
+  ADD COLUMN IF NOT EXISTS complete BOOLEAN NOT NULL DEFAULT true;
 
 -- Pricing: same level as search_court_case_status / search_court_hearing_schedule searches.
 INSERT INTO tool_pricing (tool_name, service, display_name, base_cost_usd, markup_percent, notes, updated_by)

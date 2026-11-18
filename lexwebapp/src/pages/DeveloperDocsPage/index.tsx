@@ -14,8 +14,8 @@ const API_BASE = 'https://platform.legal.org.ua/api/tools';
  */
 const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
 
-/** Кількість інструментів за сервісами — звірено з GET /api/tools, 20.08.2026. */
-const TOOL_COUNTS = { total: 124, backend: 90, rada: 5, openreyestr: 29 };
+/** Кількість інструментів за сервісами — звірено зі списком toolGroups нижче, 18.11.2026. */
+const TOOL_COUNTS = { total: 128, backend: 93, rada: 5, openreyestr: 30 };
 /** Курс НБУ на 14.11.2026, за яким перераховані гривневі суми нижче. */
 const USD_UAH = '45,43';
 

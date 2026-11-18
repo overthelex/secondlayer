@@ -277,6 +277,9 @@ const runningScripts = new Set<string>();
  * stdout/stderr go to the container log; the last output line becomes the result message.
  * A run that is still going when the next cron tick fires is not started twice.
  */
+/** Timeout of a script source that sets no timeoutMs. */
+const DEFAULT_SCRIPT_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+
 async function runScript(source: DataSourceSchedule): Promise<SyncResult> {
   const start = Date.now();
   const startedAt = new Date().toISOString();
@@ -301,10 +304,11 @@ async function runScript(source: DataSourceSchedule): Promise<SyncResult> {
       };
       child.stdout.on('data', (c: Buffer) => forward(c, process.stdout));
       child.stderr.on('data', (c: Buffer) => forward(c, process.stderr));
+      const timeoutMs = source.timeoutMs ?? DEFAULT_SCRIPT_TIMEOUT_MS;
       const timer = setTimeout(() => {
         child.kill('SIGTERM');
-        lastLine = `таймаут ${Math.round((source.timeoutMs ?? 0) / 60000)} хв, процес зупинено`;
-      }, source.timeoutMs ?? 4 * 60 * 60 * 1000);
+        lastLine = `таймаут ${Math.round(timeoutMs / 60000)} хв, процес зупинено`;
+      }, timeoutMs);
       child.on('error', (err) => {
         clearTimeout(timer);
         resolve(finish(false, `Не вдалося запустити ${cmd}: ${err.message}`));

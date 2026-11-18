@@ -194,8 +194,57 @@ function courtKey(court: string | null | undefined): string {
   return String(court ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Proceeding suffix in letters only, or '' for a bare number: "16-Ц" → "ц". The source also
+ * writes "16-ц." and "16-ц," (stray punctuation); those are the same proceeding.
+ */
+export function caseSuffix(raw: string): string {
+  const m = normalizeCaseNumber(raw).match(/\d-([^\d/-]+)$/u);
+  return m ? m[1].replace(/[^\p{L}]/gu, '') : '';
+}
+
+/**
+ * Identity of a case: court + number WITH the proceeding suffix. The same court can hold
+ * 2-…/16-ц and 2-…/16-а under one base number; those are different proceedings.
+ * A bare spelling is folded into a suffixed case later, only when that is unambiguous
+ * (mergeBareSpellings).
+ */
 export function caseKey(court: string | null | undefined, caseNumber: string): string {
+  return `${courtKey(court)}|${baseCaseNumber(caseNumber)}|${caseSuffix(caseNumber)}`;
+}
+
+/** Court + base number, without the suffix. */
+function caseBaseKey(court: string | null | undefined, caseNumber: string): string {
   return `${courtKey(court)}|${baseCaseNumber(caseNumber)}`;
+}
+
+/**
+ * Fold every bare-number entry ("522/9583/16") into the suffixed entry of the same court and
+ * base ("522/9583/16-ц") when exactly one suffixed entry exists; with two or more suffixes
+ * the bare spelling cannot be attributed and stays a card of its own.
+ */
+export function mergeBareSpellings<T>(
+  entries: Map<string, T>,
+  keyOf: (e: T) => { court: string; caseNumber: string },
+  merge: (into: T, from: T) => void,
+): void {
+  const suffixed = new Map<string, string[]>();
+  for (const [k, e] of entries) {
+    const { court, caseNumber } = keyOf(e);
+    if (!caseSuffix(caseNumber)) continue;
+    const bk = caseBaseKey(court, caseNumber);
+    suffixed.set(bk, [...(suffixed.get(bk) ?? []), k]);
+  }
+  for (const [k, e] of [...entries]) {
+    const { court, caseNumber } = keyOf(e);
+    if (caseSuffix(caseNumber)) continue;
+    const targets = suffixed.get(caseBaseKey(court, caseNumber)) ?? [];
+    if (targets.length !== 1) continue;
+    const into = entries.get(targets[0]);
+    if (!into) continue;
+    merge(into, e);
+    entries.delete(k);
+  }
 }
 
 /** Spellings to look a case up by in court_sessions; callers normalise them (idx_court_sessions_case_norm, migration 279). */
@@ -207,7 +256,10 @@ export function caseNumberVariants(raw: string, known: string[] = []): string[] 
   for (const k of known) { add(k); add(k.replace(/\s+/g, '')); }
   const base = baseCaseNumber(raw);
   add(base);
-  if (!hasProceedingSuffix(normalizeCaseNumber(raw)) && known.length === 0) {
+  // Probe common suffixes unless some spelling already carries one: a bare known spelling
+  // ("522/9583/16" in the status table) says nothing about the archive's "…-ц".
+  const suffixKnown = [raw, ...known].some((k) => hasProceedingSuffix(normalizeCaseNumber(k)));
+  if (!suffixKnown) {
     for (const s of COMMON_SUFFIXES) add(`${base}-${s}`);
   }
   return [...out];
@@ -223,6 +275,14 @@ export function kyivToday(): string {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** YYYY-MM-DD that is a real calendar date (2024-02-31 is not), so the ::date cast cannot throw. */
+export function isValidIsoDate(v: string): boolean {
+  if (!ISO_DATE.test(v)) return false;
+  const [y, m, d] = v.split('-').map(Number);
+  if (y < 1 || m < 1 || m > 12 || d < 1) return false;
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
 
 /** One statement under a server-side timeout; Postgres cancels a runaway scan itself. */
 async function timedQuery(db: any, sql: string, values: unknown[], settings: string[] = []): Promise<any[]> {
@@ -304,6 +364,32 @@ function addMatches(g: CaseGroup, ms: PartyMatch[]): void {
   for (const m of ms) {
     if (!g.matched.some((x) => x.role === m.role && x.name === m.name)) g.matched.push(m);
   }
+}
+
+/** Fold a bare-number group into the suffixed group of the same case. */
+function mergeGroups(into: CaseGroup, from: CaseGroup): void {
+  into.stage_events_seen += from.stage_events_seen;
+  for (const s of from.sources) into.sources.add(s);
+  for (const n of from.caseNumbers) into.caseNumbers.add(n);
+  into.hearings.push(...from.hearings);
+  addMatches(into, from.matched);
+  if (from.activity > into.activity) into.activity = from.activity;
+  if (from.last_stage && (!into.last_stage || (from.last_stage.date ?? '') > (into.last_stage.date ?? ''))) {
+    into.last_stage = from.last_stage;
+  }
+  into.case_proc ??= from.case_proc;
+  into.registration_date ??= from.registration_date;
+  into.judges ??= from.judges;
+  into.participants ??= from.participants;
+  into.subject ??= from.subject;
+  into.case_type ??= from.case_type;
+}
+
+/** Suffixes are compatible when equal or when either spelling is bare. */
+function suffixCompatible(a: string, b: string): boolean {
+  const sa = caseSuffix(a);
+  const sb = caseSuffix(b);
+  return !sa || !sb || sa === sb;
 }
 
 /**
@@ -388,6 +474,8 @@ export function groupPartyRows(
     addMatches(g, ms);
   }
 
+  mergeBareSpellings(groups, (g) => ({ court: g.court, caseNumber: g.case_number }), mergeGroups);
+
   const list = [...groups.values()].sort((a, b) =>
     b.activity.localeCompare(a.activity) || a.court.localeCompare(b.court) || a.case_number.localeCompare(b.case_number));
   return { groups: list, rejected };
@@ -395,18 +483,29 @@ export function groupPartyRows(
 
 /** Attach archive hearings to the cases they belong to (court + number; number alone when it carries the court code). */
 export function attachHearings(groups: CaseGroup[], rows: any[]): void {
-  const byKey = new Map(groups.map((g) => [g.key, g]));
+  const byKey = new Map(groups.map((g) => [caseKey(g.court, g.case_number), g]));
+  const byCourtBase = new Map<string, CaseGroup[]>();
   const byBase = new Map<string, CaseGroup[]>();
   for (const g of groups) {
+    const cb = caseBaseKey(g.court, g.case_number);
+    byCourtBase.set(cb, [...(byCourtBase.get(cb) ?? []), g]);
     const b = baseCaseNumber(g.case_number);
     byBase.set(b, [...(byBase.get(b) ?? []), g]);
   }
   for (const r of rows) {
     const h = toHearing(r);
-    let g = byKey.get(caseKey(r.court_name, r.case_number));
+    const num = String(r.case_number ?? '');
+    let g = byKey.get(caseKey(r.court_name, num));
     if (!g) {
-      const b = baseCaseNumber(String(r.case_number ?? ''));
-      const cands = byBase.get(b) ?? [];
+      // Same court, bare on one side: only when one case of that court has this base number.
+      const cands = (byCourtBase.get(caseBaseKey(r.court_name, num)) ?? [])
+        .filter((c) => suffixCompatible(c.case_number, num));
+      if (cands.length === 1) g = cands[0];
+    }
+    if (!g) {
+      // Court names differ between sources; a court-coded number is unique without them.
+      const b = baseCaseNumber(num);
+      const cands = (byBase.get(b) ?? []).filter((c) => suffixCompatible(c.case_number, num));
       if (isCourtCodedNumber(b) && cands.length === 1) g = cands[0];
     }
     if (g) g.hearings.push(h);
@@ -705,7 +804,13 @@ export class CourtStatusTools extends BaseToolHandler {
       }
     }
     for (const k of ['date_from', 'date_to'] as const) {
-      if (args[k] && !ISO_DATE.test(String(args[k]))) return this.wrapError(`${k} має бути у форматі YYYY-MM-DD`);
+      if (!args[k]) continue;
+      const v = String(args[k]);
+      if (!ISO_DATE.test(v)) return this.wrapError(`${k} має бути у форматі YYYY-MM-DD`);
+      if (!isValidIsoDate(v)) return this.wrapError(`${k}: дати ${v} не існує в календарі`);
+    }
+    if (args.date_from && args.date_to && String(args.date_from) > String(args.date_to)) {
+      return this.wrapError('date_from не може бути пізніше за date_to');
     }
     const limit = Math.min(Math.max(Math.floor(Number(args.limit) || 20), 1), 100);
     const offset = Math.max(Math.floor(Number(args.offset) || 0), 0);
@@ -986,7 +1091,8 @@ export class CourtStatusTools extends BaseToolHandler {
       warnings.push(`Архів засідань тимчасово недоступний: ${dbErrorText(error)}`);
     }
 
-    // One card per court: the same number passes through first instance, appeal and cassation.
+    // One card per court and proceeding: the same number passes through first instance, appeal and
+    // cassation, and one court can hold the same base number as -ц and -а proceedings.
     const cards = new Map<string, any>();
     for (const r of statusRows) {
       const key = caseKey(r.court_name, r.case_number);
@@ -1008,6 +1114,20 @@ export class CourtStatusTools extends BaseToolHandler {
       const sk = `${stage.date}|${stage.name}|${stage.cause_result}|${stage.case_proc}`;
       if (!c._seen.has(sk)) { c._seen.add(sk); c.stages.push(stage); }
     }
+    mergeBareSpellings(cards, (c) => ({ court: c.court, caseNumber: c.case_number }), (into, from) => {
+      for (const p of from.case_proc) if (!into.case_proc.includes(p)) into.case_proc.push(p);
+      for (const st of from.stages) {
+        const sk = `${st.date}|${st.name}|${st.cause_result}|${st.case_proc}`;
+        if (!into._seen.has(sk)) { into._seen.add(sk); into.stages.push(st); }
+      }
+      // Rows arrive oldest first; keep the chronological order across both spellings.
+      into.stages.sort((a: any, b: any) => (a.date ?? '').localeCompare(b.date ?? ''));
+      into.registration_date ??= from.registration_date;
+      into.judges ??= from.judges;
+      into.participants ??= from.participants;
+      into.subject ??= from.subject;
+      into.case_type ??= from.case_type;
+    });
     const hearings = dedupeHearings(hearingRows.map(toHearing));
     const today = kyivToday();
     const { last, next } = lastAndNext(hearings, today);

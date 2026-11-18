@@ -23,8 +23,13 @@ import {
 import {
   CourtStatusTools,
   STATUS_ROW_CAP,
+  attachHearings,
   baseCaseNumber,
+  caseKey,
   caseNumberVariants,
+  caseSuffix,
+  groupPartyRows,
+  isValidIsoDate,
   lastAndNext,
   partyHash,
 } from '../tools/court-status-tools';
@@ -53,6 +58,23 @@ describe('participants parsing and matching', () => {
       { label: 'відповідач', name: 'Іванов Іван Іванович' },
     ]);
     expect(splitParticipants('-')).toEqual([{ label: null, name: '-' }]);
+  });
+
+  it('a role label with a comma ("особа, яка …") stays one label, not a fake party', () => {
+    const t = 'особа, яка притягається до адміністративної відповідальності: Іванов Іван Іванович';
+    expect(splitParticipants(t)).toEqual([
+      { label: 'особа, яка притягається до адміністративної відповідальності', name: 'Іванов Іван Іванович' },
+    ]);
+    const t2 = 'потерпілий: Петров Петро Петрович, особа, що притягується до адміністративної відповідальності: Іванов Іван';
+    expect(splitParticipants(t2)).toEqual([
+      { label: 'потерпілий', name: 'Петров Петро Петрович' },
+      { label: 'особа, що притягується до адміністративної відповідальності', name: 'Іванов Іван' },
+    ]);
+    const m = matchParticipants(t, parsePartyQuery('Іванов'));
+    expect(m).toHaveLength(1);
+    expect(m[0].role).toBe('особа, яка притягається до адміністративної відповідальності');
+    // "особа" alone never becomes a matchable party.
+    expect(matchParticipants(t, parsePartyQuery('особа'))).toEqual([]);
   });
 
   it('canonicalises roles', () => {
@@ -118,6 +140,26 @@ describe('regions', () => {
     expect(REGIONS.filter((r) => r.name.endsWith('область'))).toHaveLength(24);
   });
 
+  it('Kyiv city and Kyiv oblast select the right courts (names as stored on prod)', () => {
+    // ILIKE pattern → case-insensitive regex.
+    const like = (pat: string) => new RegExp(`^${pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`, 'iu');
+    const hits = (region: string, court: string) => resolveRegion(region)!.patterns.some((p) => like(p).test(court));
+    const city = ['Печерський районний суд міста Києва', 'Господарський суд м. Києва', 'Окружний адміністративний суд міста Києва',
+      'Київський апеляційний суд'];
+    const oblastCourts = ['Броварський міськрайонний суд Київської області', 'Господарський суд Київської області',
+      'Київський окружний адміністративний суд', 'Київський апеляційний суд'];
+    const neither = ['Київський районний суд м. Одеси', 'Київський районний суд м. Полтави', 'Київський районний суд м.Харкова'];
+    for (const c of city) expect([c, hits('м. Київ', c)]).toEqual([c, true]);
+    for (const c of oblastCourts) expect([c, hits('Київська область', c)]).toEqual([c, true]);
+    expect(hits('м. Київ', 'Київський окружний адміністративний суд')).toBe(false);
+    expect(hits('Київська область', 'Окружний адміністративний суд міста Києва')).toBe(false);
+    expect(hits('Київська область', 'Печерський районний суд міста Києва')).toBe(false);
+    for (const c of neither) {
+      expect([c, hits('м. Київ', c)]).toEqual([c, false]);
+      expect([c, hits('Київська область', c)]).toEqual([c, false]);
+    }
+  });
+
   it('oblast patterns cover first-instance, appellate and administrative courts', () => {
     expect(resolveRegion('Дніпропетровська')?.patterns).toEqual([
       '%Дніпропетровської області%', '%Дніпровський апеляційний%', '%Дніпропетровський окружний%',
@@ -133,6 +175,27 @@ describe('case-number helpers', () => {
   it('variants try common suffixes only when nothing is known', () => {
     expect(caseNumberVariants('533/318/15')).toEqual(expect.arrayContaining(['533/318/15', '533/318/15-ц', '533/318/15-к']));
     expect(caseNumberVariants('533/318/15', ['533/318/15-ц'])).toEqual(['533/318/15', '533/318/15-ц']);
+  });
+  it('a bare known spelling does not suppress suffix probing; a suffixed one does', () => {
+    // The status table stores "533/318/15", the archive "533/318/15-ц": still probe.
+    expect(caseNumberVariants('533/318/15', ['533/318/15'])).toEqual(expect.arrayContaining(['533/318/15-ц', '533/318/15-а']));
+    expect(caseNumberVariants('533/318/15', ['533/318/15', '533/318/15-а'])).toEqual(['533/318/15', '533/318/15-а']);
+    expect(caseNumberVariants('533/318/15-ц')).toEqual(['533/318/15-ц', '533/318/15']);
+  });
+  it('the proceeding suffix is part of the case identity, stray punctuation is not', () => {
+    expect(caseSuffix('530/1730/16-Ц.')).toBe('ц');
+    expect(caseSuffix('530/1730/16')).toBe('');
+    expect(caseKey('Суд', '530/1730/16-ц')).toBe(caseKey(' суд ', '530/1730/16-ц,'));
+    expect(caseKey('Суд', '530/1730/16-ц')).not.toBe(caseKey('Суд', '530/1730/16-а'));
+    expect(caseKey('Суд', '530/1730/16-ц')).not.toBe(caseKey('Суд', '530/1730/16'));
+  });
+  it('validates calendar dates', () => {
+    expect(isValidIsoDate('2024-02-29')).toBe(true);
+    expect(isValidIsoDate('2023-02-29')).toBe(false);
+    expect(isValidIsoDate('2024-02-31')).toBe(false);
+    expect(isValidIsoDate('2024-13-01')).toBe(false);
+    expect(isValidIsoDate('2024-04-31')).toBe(false);
+    expect(isValidIsoDate('2024-12-31')).toBe(true);
   });
   it('splits hearings into last and next around today', () => {
     const h = (date: string) => ({ date, time: '10:00', court: 'c', case_number: 'n', judge: null, form: null, room: null });
@@ -254,6 +317,49 @@ describe('search_case_status_by_party', () => {
     expect(res.as_of).toEqual({ case_status: '2026-11-17', case_status_snapshot: 'stan-17-11-2026.zip', hearings_archive: '2026-11-17' });
     expect(res.coverage_note).toContain('НЕ означає');
     expect(res.matching_note).toContain('Відкинуто записів');
+  });
+
+  it('keeps -ц and -а proceedings of one court apart; a bare spelling joins only an unambiguous case', () => {
+    const q = parsePartyQuery('Приватбанк');
+    const one = groupPartyRows([
+      statusRow({ case_number: '533/318/15-ц', stage_key: '20150605' }),
+      statusRow({ case_number: '533/318/15', stage_key: '20150410', stage_name: 'Зареєстровано' }),
+    ], [], q).groups;
+    expect(one).toHaveLength(1);
+    expect(one[0]).toMatchObject({ case_number: '533/318/15-ц', stage_events_seen: 2 });
+    expect(one[0].last_stage!.date).toBe('2015-06-05');
+
+    const two = groupPartyRows([
+      statusRow({ case_number: '533/318/15-ц', stage_name: 'Цивільна' }),
+      statusRow({ case_number: '533/318/15-а', stage_name: 'Адмін', participants: 'позивач: ПАТ КБ "Приватбанк", відповідач: ДПС' }),
+      statusRow({ case_number: '533/318/15', stage_name: 'Без суфікса' }),
+    ], [], q).groups;
+    expect(two.map((g) => g.case_number).sort()).toEqual(['533/318/15', '533/318/15-а', '533/318/15-ц']);
+    expect(two.find((g) => g.case_number === '533/318/15-а')!.participants).toContain('ДПС');
+
+    // Hearings: exact proceeding first, a bare archive number only to the single case of that base.
+    const h = (case_number: string, session_date: string) => ({ case_number, session_date, session_time: '10:00',
+      court_name: 'Козельщинський районний суд Полтавської області', judge_name: null, session_form: null, session_place: null });
+    attachHearings(two, [h('533/318/15-а', '2015-07-01'), h('533/318/15', '2015-07-02')]);
+    expect(two.find((g) => g.case_number === '533/318/15-а')!.hearings.map((x) => x.date)).toEqual(['2015-07-01']);
+    expect(two.find((g) => g.case_number === '533/318/15-ц')!.hearings).toEqual([]);
+    expect(two.find((g) => g.case_number === '533/318/15')!.hearings.map((x) => x.date)).toEqual(['2015-07-02']);
+
+    attachHearings(one, [h('533/318/15', '2015-08-01'), h('533/318/15-ц', '2015-08-02'), h('533/318/15-а', '2015-08-03')]);
+    expect(one[0].hearings.map((x) => x.date)).toEqual(['2015-08-01', '2015-08-02']);
+  });
+
+  it('rejects impossible calendar dates in Ukrainian before querying', async () => {
+    const { db, calls } = makeDb(() => []);
+    const tool = new CourtStatusTools(db);
+    const bad = await tool.executeTool('search_case_status_by_party', { party: 'Приватбанк', date_from: '2024-02-31' }) as any;
+    expect(bad.isError).toBe(true);
+    expect(bad.content[0].text).toContain('не існує');
+    const fmt = await tool.executeTool('search_case_status_by_party', { party: 'Приватбанк', date_to: '31.02.2024' }) as any;
+    expect(fmt.content[0].text).toContain('YYYY-MM-DD');
+    const order = await tool.executeTool('search_case_status_by_party', { party: 'Приватбанк', date_from: '2025-01-02', date_to: '2025-01-01' }) as any;
+    expect(order.isError).toBe(true);
+    expect(calls.some((c) => isStatusSql(c.sql))).toBe(false);
   });
 
   it('merges cases found only in the hearing archive', async () => {
@@ -385,6 +491,30 @@ describe('get_case_status_details', () => {
     expect(res.next_steps.decisions).toContain('search_court_decisions');
     expect(res.next_steps.documents_chain).toContain('get_case_documents_chain');
     expect(res.verify.url).toBe('https://court.gov.ua/fair/');
+  });
+
+  it('one card per proceeding: -ц and -а of the same court and base are not mixed', async () => {
+    const { db } = makeDb((sql) => (isStatusSql(sql) ? [
+      statusRow({ case_number: '533/318/15-ц', stage_key: '20150407', stage_name: 'Зареєстровано' }),
+      statusRow({ case_number: '533/318/15-а', stage_key: '20160101', stage_name: 'Адмін стадія', participants: 'позивач: Х' }),
+      statusRow({ case_number: '533/318/15-ц', stage_key: '20150605', stage_name: 'Розглянуто' }),
+    ] : []));
+    const res = parse(await new CourtStatusTools(db).executeTool('get_case_status_details', { case_number: '533/318/15' }));
+    expect(res.cases).toHaveLength(2);
+    const c = res.cases.find((x: any) => x.case_number === '533/318/15-ц');
+    expect(c.stages.map((s: any) => s.name)).toEqual(['Зареєстровано', 'Розглянуто']);
+    expect(res.cases.find((x: any) => x.case_number === '533/318/15-а').stages.map((s: any) => s.name)).toEqual(['Адмін стадія']);
+  });
+
+  it('a bare-number record joins the single suffixed card of that court', async () => {
+    const { db } = makeDb((sql) => (isStatusSql(sql) ? [
+      statusRow({ case_number: '533/318/15', stage_key: '20150407', stage_name: 'Зареєстровано' }),
+      statusRow({ case_number: '533/318/15-ц', stage_key: '20150605', stage_name: 'Розглянуто' }),
+    ] : []));
+    const res = parse(await new CourtStatusTools(db).executeTool('get_case_status_details', { case_number: '533/318/15' }));
+    expect(res.cases).toHaveLength(1);
+    expect(res.cases[0].case_number).toBe('533/318/15-ц');
+    expect(res.cases[0].stages.map((s: any) => s.name)).toEqual(['Зареєстровано', 'Розглянуто']);
   });
 
   it('falls back to the snapshot when history has no rows for the case', async () => {

@@ -51,6 +51,9 @@ export function buildTsQuery(q: PartyQuery): string {
 
 export interface PartySegment { label: string | null; name: string }
 
+/** A label that continues the previous words of the role ("особа, яка …", "особа, що …"). */
+const CONTINUATION_LABEL = /^\s*(яка|який|які|що)\s/u;
+
 /**
  * "роль: ім'я" segments. A label is the text between a comma (or the start) and a colon;
  * a comma inside a company name is kept because no colon follows it.
@@ -65,6 +68,21 @@ export function splitParticipants(text: string): PartySegment[] {
     if (m[0].length === 0) re.lastIndex++;
   }
   if (marks.length === 0) return s.trim() ? [{ label: null, name: s.trim() }] : [];
+  // "особа, яка притягається до адміністративної відповідальності: …": the role label itself
+  // has a comma, so the regex only captured "яка …". Pull the chunk before that comma back into
+  // the label instead of emitting "особа" as a party of its own.
+  marks.forEach((mk, i) => {
+    if (!CONTINUATION_LABEL.test(mk.label)) return;
+    const from = i > 0 ? marks[i - 1].end : 0;
+    const before = s.slice(from, mk.start);
+    const cut = before.lastIndexOf(',');
+    // After another label the chunk must follow a comma, or it is that party's name.
+    if (i > 0 && cut < 0) return;
+    const head = before.slice(cut + 1).trim();
+    if (!head || head.length > 40 || /\d/u.test(head)) return;
+    mk.label = `${head}, ${mk.label.trim()}`;
+    mk.start = from + (cut >= 0 ? cut : 0);
+  });
   const out: PartySegment[] = [];
   if (marks[0].start > 0) {
     const lead = s.slice(0, marks[0].start).replace(/[\s,]+$/u, '').trim();
@@ -83,7 +101,7 @@ export function canonicalRole(label: string | null): string | null {
   if (!label) return null;
   let l = label.toLowerCase().replace(/\s+/g, ' ').trim();
   // "особа, яка притягається до адмін. відповідальності" loses "особа" at the comma.
-  if (/^(яка|який|які)\s/u.test(l)) l = `особа, ${l}`;
+  if (/^(яка|який|які|що)\s/u.test(l)) l = `особа, ${l}`;
   if (l.includes('представник')) return l;
   if (l.startsWith('позивач')) return 'позивач';
   if (l.startsWith('відповідач')) return 'відповідач';
@@ -210,7 +228,10 @@ const oblast = (name: string, stems: string[], genitive: string, adjective: stri
 });
 
 export const REGIONS: RegionDef[] = [
-  { name: 'м. Київ', stems: ['київ', 'києв', 'kyiv', 'kiev'], patterns: ['%міста Києва%', '%м. Києва%', '%м.Києва%', '%м. Київ%'] },
+  // Київський апеляційний суд hears appeals from both the city and the oblast, so it is in both
+  // regions. «Київський окружний адміністративний суд» is the oblast's; the city's is
+  // «Окружний адміністративний суд міста Києва» (covered by «міста Києва»).
+  { name: 'м. Київ', stems: ['київ', 'києв', 'kyiv', 'kiev'], patterns: ['%міста Києва%', '%м. Києва%', '%м.Києва%', '%м. Київ%', '%Київський апеляційний%'] },
   { name: 'м. Севастополь', stems: ['севастопол'], patterns: ['%Севастопол%'] },
   { name: 'Автономна Республіка Крим', stems: ['крим', 'арк', 'автономна'], patterns: ['%Автономної Республіки Крим%'] },
   oblast('Київська область', ['київськ'], 'Київської', 'Київський'),
