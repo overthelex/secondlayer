@@ -2,8 +2,9 @@ import type { VaultDocument } from '../../../types/models/Message';
 import type { EvidenceResult, ToolResultData } from './types';
 
 /**
- * Financial-statement key figures (search_registry registry=financial_statements and
- * the financial_statements section of get_company_dossier) go to the right panel as
+ * Financial-statement key figures (search_registry registry=financial_statements,
+ * get_financial_statements and the financial_statements section of
+ * get_company_dossier) go to the right panel as
  * one document per filing, figures in the snippet.
  */
 
@@ -35,18 +36,19 @@ function figuresSnippet(figures: Figure[], units: string, columns: ToolResultDat
 function filingToDocument(r: ToolResultData, edrpou?: string): VaultDocument {
   const units = r.units || 'тис. грн';
   return {
-    id: `finstmt-${r.tin || edrpou || ''}-${r.period_year}-${r.period_month}-${r.form_type || r.c_doc_sub}`,
+    id: `finstmt-${r.tin || edrpou || ''}-${r.period_year}-${r.period_month}-${r.form_type || r.c_doc_sub}${r.source ? `-${r.source}` : ''}`,
     title: `Фінансова звітність, ${r.period || r.period_year}: ${r.form_name || r.form_type}`,
     type: 'other',
     metadata: {
       snippet: [
         (r.tin || edrpou) && `ЄДРПОУ: ${r.tin || edrpou}`,
         r.report_date && `Станом на ${r.report_date}`,
+        r.filed_on && `Подано ${r.filed_on}`,
         figuresSnippet(r.figures as Figure[], units, r.columns),
         r.balance_check === false && 'Актив (р. 1300) не дорівнює пасиву (р. 1900) у поданому звіті',
       ].filter(Boolean).join(' • '),
       edrpou: r.tin || edrpou,
-      source: 'Фінансова звітність (ДПС, data.gov.ua)',
+      source: r.source_name || 'Фінансова звітність (ДПС, data.gov.ua)',
     },
   };
 }
@@ -57,6 +59,12 @@ export function extractFinancialEvidence(toolName: string, parsed: ToolResultDat
   if (toolName === 'search_registry' && Array.isArray(parsed.results)) {
     for (const r of parsed.results) {
       if (r && Array.isArray(r.figures) && r.figures.length && r.form_type) documents.push(filingToDocument(r));
+    }
+  }
+
+  if (toolName === 'get_financial_statements' && Array.isArray(parsed.results)) {
+    for (const r of parsed.results) {
+      if (r && Array.isArray(r.figures) && r.figures.length) documents.push(filingToDocument(r, parsed.edrpou));
     }
   }
 

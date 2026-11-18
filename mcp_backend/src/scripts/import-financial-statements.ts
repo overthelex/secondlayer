@@ -6,10 +6,16 @@
  * (tin, period_year, form_type, c_doc_sub).
  *
  * Heavy: ~713K filings / ~3.7 GB. Run in the background; idempotent (ON CONFLICT).
+ * A filing whose XML is unchanged is left alone, so imported_at marks real changes only
+ * (backfill-financial-figures --incremental re-reads rows by it). Codes longer than 8
+ * digits (sole traders' personal tax numbers) are skipped.
  *
  * Usage:
  *   npx tsx src/scripts/import-financial-statements.ts [root]
  *   default: /data/opendata/finrep
+ *   node dist/scripts/import-financial-statements.js file1.zip [file2.zip ...]
+ *   (explicit archives, in the given order: the weekly finzvit archive job passes the
+ *   newly archived resources, oldest last_modified first)
  */
 
 import { Pool } from 'pg';
@@ -53,6 +59,8 @@ function parseFiling(buf: Buffer): any | null {
   const fm = declarXml.match(/noNamespaceSchemaLocation="([^"]+?)\.XSD"/i);
   const formType = fm ? fm[1] : null;
   if (!tin || periodYear == null || !formType || !cDocSub) return null;
+  // A sole trader's personal tax number is personal data: not loaded.
+  if (!/^\d{1,8}$/.test(tin)) return null;
 
   return {
     tin,
@@ -114,22 +122,31 @@ async function insertBatch(rows: any[]): Promise<number> {
       c_doc = EXCLUDED.c_doc, c_doc_ver = EXCLUDED.c_doc_ver, period_month = EXCLUDED.period_month,
       period_type = EXCLUDED.period_type, c_reg = EXCLUDED.c_reg, c_raj = EXCLUDED.c_raj,
       raw_xml = EXCLUDED.raw_xml, imported_at = NOW()
+    WHERE opendata_financial_statements.raw_xml IS DISTINCT FROM EXCLUDED.raw_xml
   `;
   const res = await pool.query(sql, values);
   return res.rowCount || 0;
 }
 
 async function main(): Promise<void> {
-  const root = process.argv[2] || DEFAULT_ROOT;
+  const args = process.argv.slice(2);
+  const explicit = args.length > 0 && args.every((a) => a.toLowerCase().endsWith('.zip'));
+  const root = explicit ? '(explicit archives)' : (args[0] || DEFAULT_ROOT);
   console.log(`📥 Financial statements refresh from ${root}`);
-  if (!fs.existsSync(root)) { console.error(`❌ Not found: ${root}`); process.exit(1); }
-  await pool.query('SELECT 1');
-
   const zips: string[] = [];
-  for (const sub of ['annual', 'quarterly']) {
-    const d = path.join(root, sub);
-    if (fs.existsSync(d)) for (const f of fs.readdirSync(d)) if (f.toLowerCase().endsWith('.zip')) zips.push(path.join(d, f));
+  if (explicit) {
+    for (const a of args) {
+      if (!fs.existsSync(a)) { console.error(`❌ Not found: ${a}`); process.exit(1); }
+      zips.push(a);
+    }
+  } else {
+    if (!fs.existsSync(root)) { console.error(`❌ Not found: ${root}`); process.exit(1); }
+    for (const sub of ['annual', 'quarterly']) {
+      const d = path.join(root, sub);
+      if (fs.existsSync(d)) for (const f of fs.readdirSync(d)) if (f.toLowerCase().endsWith('.zip')) zips.push(path.join(d, f));
+    }
   }
+  await pool.query('SELECT 1');
   console.log(`   ${zips.length} archives`);
 
   let total = 0, parsed = 0, skipped = 0;

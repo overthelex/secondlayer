@@ -3,9 +3,10 @@
  * tax service (opendata_financial_statements.raw_xml, data.gov.ua dataset
  * "Фінансова звітність").
  *
- * Parsed at query time for the few rows a caller asked for: a company has a handful
- * of filings a year, so this costs microseconds and needs no migration of the 2.8 GB
- * table.
+ * Pure module, shared by the query-time path and the batch scripts: the cells of
+ * Форми 1, 2, 1-м and 1-мс are normalized into financial_figures (migration 278,
+ * scripts/backfill-financial-figures.ts); a filing not normalized yet is parsed on
+ * the fly from its XML, which for the few rows of one company costs microseconds.
  *
  * Tag scheme. Taken from the field-structure description published with the dataset
  * (opis_strukturi-poliv-do-form-fin_zvitnosti.zip) and checked against prod filings
@@ -135,34 +136,95 @@ function net(profit: number | undefined, loss: number | undefined): number | nul
 
 const val = (v: number | undefined): number | null => (v === undefined ? null : v);
 
+/** Form of a filing in financial_figures, by c_doc_sub. */
+export type FormKey = '1' | '2' | '1-m' | '1-ms';
+export const FORM_BY_SUB: Record<string, FormKey> = { '001': '1', '002': '2', '100': '1-m', '110': '1-ms' };
+export const SUB_BY_FORM: Record<FormKey, string> = { '1': '001', '2': '002', '1-m': '100', '1-ms': '110' };
+
 /**
- * Key figures of one filing, or null for forms that carry none of them
- * (cash flow, equity statement, notes) and for unparseable input.
+ * Line code → value, split by column: `cur` is the reporting period (balance at its
+ * end, income for the period), `prev` the comparative column (balance at the start
+ * of the period or year, income for the same period last year).
  */
-export function parseStatementFigures(cDocSub: string | null | undefined, xml: string | null | undefined): StatementFigures | null {
+export interface StatementCells {
+  cur: Record<string, number>;
+  prev: Record<string, number>;
+}
+
+const CELL = /^([AB])(\d{4})(?:_([34]))?$/;
+
+/**
+ * Tag map of one XML filing → cells, by the form's column scheme (see the header).
+ * Only the tag shapes a form defines are read; a stray tag of another scheme is ignored.
+ * Checked on secondlayer_local 2026-11-18 by chaining years: the start-of-year column
+ * of a 2024 balance equals the end-of-year column of the 2023 one (Ф1 1388/1594,
+ * 1-м 3098/4227, 1-мс 1864/2488), and the comparative column of a 2024 income
+ * statement equals the 2023 reporting column (Ф2 1326/1591), the reverse pairings
+ * matching almost never.
+ */
+export function cellsFromTags(cDocSub: string, tags: Map<string, number>): StatementCells {
   const sub = String(cDocSub ?? '').padStart(3, '0');
-  if (!xml || !(FIGURE_FORMS as readonly string[]).includes(sub)) return null;
-  const t = readTags(xml);
+  const cells: StatementCells = { cur: {}, prev: {} };
+  for (const [tag, v] of tags) {
+    const m = CELL.exec(tag);
+    if (!m) continue;
+    const [, col, line, graph] = m;
+    const income = line >= '2000';
+    let side: 'cur' | 'prev' | null = null;
+    if (sub === '001') {
+      if (!income && !graph) side = col === 'B' ? 'cur' : 'prev';
+    } else if (sub === '002') {
+      if (income && !graph) side = col === 'A' ? 'cur' : 'prev';
+    } else if (sub === '100' || sub === '110') {
+      if (!income && col === 'A' && graph) side = graph === '4' ? 'cur' : 'prev';
+      if (income && col === 'B' && graph) side = graph === '3' ? 'cur' : 'prev';
+    }
+    if (side) cells[side][line] = v;
+  }
+  return cells;
+}
+
+/**
+ * Graph-numbered cells (ДПС CSV for 2020, R<line>G<3|4>) → cells. Graph 3 is the start
+ * of the year for balance lines and the reporting period for income lines, graph 4
+ * the end of the year and the previous period.
+ */
+export function cellsFromGraphs(entries: Iterable<[line: string, graph: 3 | 4, value: number]>): StatementCells {
+  const cells: StatementCells = { cur: {}, prev: {} };
+  for (const [line, graph, v] of entries) {
+    const income = line >= '2000';
+    cells[(graph === 3) === income ? 'cur' : 'prev'][line] = v;
+  }
+  return cells;
+}
+
+const own = (o: Record<string, number> | null | undefined, k: string): number | undefined =>
+  o && Object.prototype.hasOwnProperty.call(o, k) && typeof o[k] === 'number' ? o[k] : undefined;
+
+/** Figures, columns and the balance check of one statement, from its cells. */
+export function figuresFromCells(
+  cDocSub: string,
+  cells: { cur?: Record<string, number> | null; prev?: Record<string, number> | null },
+): Pick<StatementFigures, 'columns' | 'figures' | 'balance_check'> | null {
+  const sub = String(cDocSub ?? '').padStart(3, '0');
+  if (!(FIGURE_FORMS as readonly string[]).includes(sub)) return null;
   const figures: Figure[] = [];
   const columns: StatementFigures['columns'] = {};
   let balanceCheck: boolean | undefined;
+  const cur = (line: string) => own(cells.cur, line);
+  const pri = (line: string) => own(cells.prev, line);
 
   if (sub === '001' || sub === '100' || sub === '110') {
-    const small = sub !== '001';
-    const cur = (line: string) => t.get(small ? `A${line}_4` : `B${line}`);
-    const pri = (line: string) => t.get(small ? `A${line}_3` : `A${line}`);
     for (const b of BALANCE_LINES) {
       figures.push({ key: b.key, line: b.line, label: b.label, current: val(cur(b.line)), prior: val(pri(b.line)) });
     }
-    columns.balance = small ? COLS_SMALL_BALANCE : COLS_FULL_BALANCE;
+    columns.balance = sub === '001' ? COLS_FULL_BALANCE : COLS_SMALL_BALANCE;
     const a = cur('1300');
     const l = cur('1900');
     if (a !== undefined && l !== undefined) balanceCheck = Math.abs(a - l) < 0.05;
   }
 
   if (sub === '002') {
-    const cur = (line: string) => t.get(`A${line}`);
-    const pri = (line: string) => t.get(`B${line}`);
     figures.push(
       { key: 'net_revenue', line: '2000', label: LABEL.net_revenue, current: val(cur('2000')), prior: val(pri('2000')) },
       { key: 'gross_profit', line: '2090/2095', label: LABEL.gross_profit, current: net(cur('2090'), cur('2095')), prior: net(pri('2090'), pri('2095')) },
@@ -173,8 +235,6 @@ export function parseStatementFigures(cDocSub: string | null | undefined, xml: s
   }
 
   if (sub === '100' || sub === '110') {
-    const cur = (line: string) => t.get(`B${line}_3`);
-    const pri = (line: string) => t.get(`B${line}_4`);
     figures.push(
       { key: 'net_revenue', line: '2000', label: LABEL.net_revenue, current: val(cur('2000')), prior: val(pri('2000')) },
       { key: 'profit_before_tax', line: '2290', label: LABEL.profit_before_tax, current: val(cur('2290')), prior: val(pri('2290')) },
@@ -184,17 +244,183 @@ export function parseStatementFigures(cDocSub: string | null | undefined, xml: s
   }
 
   // A filing with every key line empty (a nil-only form) says nothing: report no figures.
-  const filled = figures.filter((f) => f.current !== null || f.prior !== null);
+  return {
+    columns,
+    figures: figures.filter((f) => f.current !== null || f.prior !== null),
+    ...(balanceCheck !== undefined ? { balance_check: balanceCheck } : {}),
+  };
+}
+
+/**
+ * Key figures of one filing, or null for forms that carry none of them
+ * (cash flow, equity statement, notes) and for unparseable input.
+ */
+export function parseStatementFigures(cDocSub: string | null | undefined, xml: string | null | undefined): StatementFigures | null {
+  const sub = String(cDocSub ?? '').padStart(3, '0');
+  if (!xml || !(FIGURE_FORMS as readonly string[]).includes(sub)) return null;
+  const parsed = figuresFromCells(sub, cellsFromTags(sub, readTags(xml)))!;
   return {
     form_code: sub,
     form_name: FORM_NAMES[sub],
     units: UNITS,
     report_date: ddmmyyyy(readText(xml, 'MY_DATE')),
     period_name: readText(xml, 'REP_PERNM'),
-    columns,
-    figures: filled,
-    ...(balanceCheck !== undefined ? { balance_check: balanceCheck } : {}),
+    ...parsed,
   };
+}
+
+/** Summary amounts stored per statement in financial_figures (тис. грн). */
+export interface KeyAmounts {
+  assets: number | null;
+  equity: number | null;
+  liabilities: number | null;
+  revenue: number | null;
+  net_profit: number | null;
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/**
+ * Summary amounts of the reporting period: assets 1300 (else 1900), equity 1495,
+ * liabilities and provisions 1900 − 1495, net revenue 2000, net profit 2350 − 2355.
+ * A line left empty on a filed side of the statement counts as zero (the form omits
+ * empty lines); a side not filed at all (no balance lines in Форма 2) gives null.
+ */
+export function keyAmounts(cells: StatementCells): KeyAmounts {
+  const c = cells.cur;
+  const lines = Object.keys(c);
+  const balance = lines.some((k) => k < '2000');
+  const income = lines.some((k) => k >= '2000');
+  const assets = balance ? (c['1300'] ?? c['1900'] ?? null) : null;
+  const equity = balance ? (c['1495'] ?? 0) : null;
+  return {
+    assets,
+    equity,
+    liabilities: assets !== null ? round3((c['1900'] ?? assets) - (equity ?? 0)) : null,
+    revenue: income ? (c['2000'] ?? 0) : null,
+    net_profit: income ? round3((c['2350'] ?? 0) - Math.abs(c['2355'] ?? 0)) : null,
+  };
+}
+
+/** '376372' → '00376372'. Longer codes are personal tax numbers of sole traders: null. */
+export function normalizeEdrpou(v: unknown): string | null {
+  const s = String(v ?? '').trim();
+  return /^\d{1,8}$/.test(s) ? s.padStart(8, '0') : null;
+}
+
+const XML_ENTITIES: Record<string, string> = { '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>', '&amp;': '&' };
+const unescapeXml = (s: string) => s.replace(/&(?:quot|apos|lt|gt|amp);/g, (e) => XML_ENTITIES[e]);
+
+export interface FilingHeader {
+  name: string | null;
+  kved: string | null;
+  /** D_FILL: the date the filer completed the report, ISO. */
+  filed_on: string | null;
+  /** C_DOC_STAN: 1 звітний, 2 новий звітний, 3 уточнюючий (absent in most filings). */
+  doc_stan: number | null;
+  /** MY_DATE: balance date, ISO. */
+  report_date: string | null;
+  /** REP_PERNM, e.g. "Рік 2025". */
+  period_name: string | null;
+}
+
+export function readHeader(xml: string): FilingHeader {
+  const text = (tag: string) => {
+    const v = readText(xml, tag);
+    return v === null ? null : unescapeXml(v);
+  };
+  const stan = text('C_DOC_STAN');
+  return {
+    name: text('FIRM_NAME'),
+    kved: text('FIRM_KVED') ?? text('KVED'),
+    filed_on: ddmmyyyy(text('D_FILL')),
+    doc_stan: stan && /^\d+$/.test(stan) ? Number(stan) : null,
+    report_date: ddmmyyyy(text('MY_DATE')),
+    period_name: text('REP_PERNM'),
+  };
+}
+
+export type FigureSource = 'dssu' | 'dps2020' | 'smida';
+
+/** One row of financial_figures, keys as the table's columns. */
+export interface FinancialFigureRow extends KeyAmounts, FilingHeader {
+  edrpou: string;
+  year: number;
+  /** Month the reporting period ends: 3, 6, 9 or 12. */
+  period: number;
+  form: FormKey;
+  source: FigureSource;
+  cur: Record<string, number>;
+  prev: Record<string, number> | null;
+  source_ref: string;
+  source_id: number | null;
+}
+
+/** Cells + header → a financial_figures row, or null when no line is filled. */
+export function buildFigureRow(
+  base: { edrpou: string; year: number; period: number; form: FormKey; source: FigureSource; source_ref: string; source_id: number | null },
+  header: FilingHeader,
+  cells: StatementCells,
+): FinancialFigureRow | null {
+  const hasCur = Object.keys(cells.cur).length > 0;
+  const hasPrev = Object.keys(cells.prev).length > 0;
+  if (!hasCur && !hasPrev) return null;
+  return { ...base, ...header, cur: cells.cur, prev: hasPrev ? cells.prev : null, ...keyAmounts(cells) };
+}
+
+/**
+ * opendata_financial_statements row → financial_figures row (source 'dssu'), or null
+ * when the filing is not a Форма 1/2/1-м/1-мс, its code is a personal tax number,
+ * its period is unknown, or no line is filled.
+ */
+export function figureRowFromFiling(r: {
+  id: number | string;
+  tin: string | null;
+  c_doc_sub: string | null;
+  period_year: number | string | null;
+  period_month: number | string | null;
+  raw_xml: string | null;
+}): FinancialFigureRow | null {
+  const sub = String(r.c_doc_sub ?? '').padStart(3, '0');
+  const form = FORM_BY_SUB[sub];
+  const edrpou = normalizeEdrpou(r.tin);
+  const year = Number(r.period_year);
+  const period = Number(r.period_month);
+  if (!form || !edrpou || !r.raw_xml || !(year > 1990 && year < 2100) || !(period >= 1 && period <= 12)) return null;
+  return buildFigureRow(
+    { edrpou, year, period, form, source: 'dssu', source_ref: `opendata_financial_statements:${r.id}`, source_id: Number(r.id) },
+    readHeader(r.raw_xml),
+    cellsFromTags(sub, readTags(r.raw_xml)),
+  );
+}
+
+/**
+ * True when `a` should replace `b` for the same (edrpou, year, period, form, source):
+ * the later filing wins (D_FILL), then the higher document state (a correction), then
+ * the newer import. Equal rows replace each other, so a rerun refreshes the parse.
+ */
+export function newerFiling(
+  a: Pick<FinancialFigureRow, 'filed_on' | 'doc_stan' | 'source_id'>,
+  b: Pick<FinancialFigureRow, 'filed_on' | 'doc_stan' | 'source_id'>,
+): boolean {
+  const fa = a.filed_on ?? '';
+  const fb = b.filed_on ?? '';
+  if (fa !== fb) return fa > fb;
+  const sa = a.doc_stan ?? 0;
+  const sb = b.doc_stan ?? 0;
+  if (sa !== sb) return sa > sb;
+  return (a.source_id ?? 0) >= (b.source_id ?? 0);
+}
+
+/** Keep one row per key, by newerFiling. */
+export function dedupeFigureRows(rows: FinancialFigureRow[]): FinancialFigureRow[] {
+  const best = new Map<string, FinancialFigureRow>();
+  for (const r of rows) {
+    const k = `${r.edrpou}|${r.year}|${r.period}|${r.form}|${r.source}`;
+    const cur = best.get(k);
+    if (!cur || newerFiling(r, cur)) best.set(k, r);
+  }
+  return [...best.values()];
 }
 
 const PERIOD_BY_MONTH: Record<number, string> = { 3: 'I квартал', 6: 'півріччя', 9: '9 місяців', 12: 'рік' };
@@ -207,14 +433,38 @@ export function periodLabel(year: unknown, month: unknown): string {
 }
 
 /**
- * search_registry row hook: replaces raw_xml with the parsed figures, so the XML
- * never leaves the backend.
+ * Statement figures from a financial_figures row (its cur/prev cells), the same shape
+ * parseStatementFigures gives for the XML.
+ */
+export function statementFromStored(
+  cDocSub: string,
+  stored: { cur?: Record<string, number> | null; prev?: Record<string, number> | null; report_date?: string | null; period_name?: string | null },
+): StatementFigures | null {
+  const sub = String(cDocSub ?? '').padStart(3, '0');
+  const parsed = figuresFromCells(sub, stored);
+  if (!parsed) return null;
+  return {
+    form_code: sub,
+    form_name: FORM_NAMES[sub],
+    units: UNITS,
+    report_date: stored.report_date ? String(stored.report_date).slice(0, 10) : null,
+    period_name: stored.period_name ?? null,
+    ...parsed,
+  };
+}
+
+/**
+ * search_registry row hook: replaces raw_xml with the figures, so the XML never
+ * leaves the backend. `stored_figures` (cells from financial_figures) is used when
+ * the filing has been normalized; otherwise the XML is parsed on the fly.
  */
 export function financialStatementRow(row: any): any {
   if (!row || typeof row !== 'object') return row;
-  const { raw_xml, ...rest } = row;
+  const { raw_xml, stored_figures, ...rest } = row;
   const sub = String(rest.c_doc_sub ?? '').padStart(3, '0');
-  const parsed = parseStatementFigures(sub, typeof raw_xml === 'string' ? raw_xml : null);
+  const parsed = stored_figures && typeof stored_figures === 'object'
+    ? statementFromStored(sub, stored_figures)
+    : parseStatementFigures(sub, typeof raw_xml === 'string' ? raw_xml : null);
   return {
     ...rest,
     form_name: FORM_NAMES[sub] ?? null,
