@@ -50,7 +50,9 @@ CREATE INDEX IF NOT EXISTS edr_hist_company_latn_trgm ON edr_hist.company USING 
 
 -- Value history: one row per run of consecutive loaded snapshots (of this kind, among those that
 -- publish the field) in which the company had this value. A value that disappears and comes back
--- has two rows. Snapshots may be loaded in any order.
+-- has two rows. Snapshots may be loaded in any order. last_snapshot NULL = open run: it lasts
+-- through the latest loaded snapshot of this kind that publishes the field, so loading the newest
+-- snapshot writes only the values that changed. Read through edr_hist.history_runs.
 -- field: name, short_name, legal_form, status, address, kved, capital, head, founder, beneficiary.
 CREATE TABLE IF NOT EXISTS edr_hist.history (
     edrpou          text NOT NULL,
@@ -59,10 +61,9 @@ CREATE TABLE IF NOT EXISTS edr_hist.history (
     value           text,
     kind            text NOT NULL,
     first_snapshot  date NOT NULL,
-    last_snapshot   date NOT NULL,
+    last_snapshot   date,                   -- NULL: open run
     PRIMARY KEY (edrpou, field, value_hash, first_snapshot)
 );
-CREATE INDEX IF NOT EXISTS edr_hist_history_last ON edr_hist.history (field, last_snapshot);
 
 -- Founders: one row per distinct entry text per company, first/last snapshot that listed it.
 CREATE TABLE IF NOT EXISTS edr_hist.founder (
@@ -122,3 +123,10 @@ CREATE TABLE IF NOT EXISTS edr_hist.head (
     PRIMARY KEY (edrpou, entry_hash)
 );
 CREATE INDEX IF NOT EXISTS edr_hist_head_latn ON edr_hist.head (name_latn);
+
+-- History with open runs resolved to the latest loaded snapshot that publishes the field.
+CREATE OR REPLACE VIEW edr_hist.history_runs AS
+SELECT h.edrpou, h.field, h.value_hash, h.value, h.kind, h.first_snapshot,
+       COALESCE(h.last_snapshot, (SELECT max(s.snapshot_date) FROM edr_hist.snapshot s
+                                  WHERE s.kind = h.kind AND h.field = ANY (s.fields))) AS last_snapshot
+FROM edr_hist.history h;

@@ -65,7 +65,7 @@ export async function companyAsOf(pool: Pool, edrpouIn: string, date: string): P
     }
     const hist = (await pool.query(
       `SELECT field, value, to_char(first_snapshot, 'YYYY-MM-DD') AS f, to_char(last_snapshot, 'YYYY-MM-DD') AS l
-       FROM edr_hist.history WHERE edrpou = $1 ORDER BY field, first_snapshot, value`, [edrpou])).rows;
+       FROM edr_hist.history_runs WHERE edrpou = $1 ORDER BY field, first_snapshot, value`, [edrpou])).rows;
     const fields: Record<string, any> = {};
     for (const f of HISTORY_FIELDS) {
       const s = snaps.find(x => x.fields.includes(f));
@@ -108,7 +108,7 @@ export async function companyHistory(pool: Pool, edrpouIn: string): Promise<any>
     const hist = (await pool.query(
       `SELECT field, value, to_char(first_snapshot, 'YYYY-MM-DD') AS first_snapshot,
               to_char(last_snapshot, 'YYYY-MM-DD') AS last_snapshot
-       FROM edr_hist.history WHERE edrpou = $1 ORDER BY field, first_snapshot, value`, [edrpou])).rows;
+       FROM edr_hist.history_runs WHERE edrpou = $1 ORDER BY field, first_snapshot, value`, [edrpou])).rows;
     const fields: Record<string, any[]> = {};
     const truncated: Record<string, number> = {};
     for (const f of HISTORY_FIELDS) {

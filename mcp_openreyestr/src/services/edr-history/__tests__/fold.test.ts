@@ -64,7 +64,7 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
   const load = (snapshot: string, file: string) => loadEdrSnapshot(pool, { snapshot, source: 'test', files: [file], log: () => undefined });
   const runs = async (field: string) => {
     const r = await pool.query(
-      `SELECT value, to_char(first_snapshot,'YYYY-MM-DD') f, to_char(last_snapshot,'YYYY-MM-DD') l FROM edr_hist.history
+      `SELECT value, to_char(first_snapshot,'YYYY-MM-DD') f, to_char(last_snapshot,'YYYY-MM-DD') l FROM edr_hist.history_runs
        WHERE edrpou = '11111111' AND field = $1 ORDER BY first_snapshot, value`, [field]);
     return r.rows.map(x => [x.value, x.f, x.l]);
   };
@@ -101,6 +101,22 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
     expect(co.status).toBe('в стані припинення');
     expect(co.record_id).toBe('10');
     expect(co.address).toMatch(/^01001/);   // kept from the last snapshot that published it
+  });
+
+  it('gives the same runs when loaded in date order (open runs)', async () => {
+    const before: Record<string, unknown> = {};
+    for (const f of ['name', 'status', 'founder', 'beneficiary', 'address', 'head']) before[f] = await runs(f);
+    await pool.query('DROP SCHEMA edr_hist CASCADE');
+    await pool.query(fs.readFileSync(path.join(__dirname, '../../../migrations/027_edr_history.sql'), 'utf8'));
+    await load(S1, files.s1);
+    await load(S2, files.s2);
+    await load(S3, files.s3);
+    // the same runs; the wording of a closed run may come from another era's format
+    const shape = (f: string, r: any) => (['name', 'status', 'address'].includes(f) ? r : r.map(([, a, b]: string[]) => [a, b]));
+    for (const f of Object.keys(before)) expect([f, shape(f, await runs(f))]).toEqual([f, shape(f, before[f])]);
+    // unchanged values stay open: nothing to rewrite at the next weekly load
+    const open = (await pool.query(`SELECT count(*)::int n FROM edr_hist.history WHERE edrpou = '11111111' AND last_snapshot IS NULL`)).rows[0].n;
+    expect(open).toBeGreaterThan(0);
   });
 
   it('as of a date', async () => {

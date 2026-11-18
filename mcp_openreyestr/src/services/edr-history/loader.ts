@@ -10,12 +10,15 @@
  *    nothing behind.
  *
  * History fold, for snapshot S and field F, with prev/next = the loaded snapshots of this kind
- * just before/after S that publish F (edr_hist.snapshot.fields):
+ * just before/after S that publish F (edr_hist.snapshot.fields). A run with last_snapshot NULL is
+ * open (lasts through the latest snapshot publishing F), so the weekly newest-snapshot load only
+ * writes changes:
  *   a. a run spanning S whose value is absent in S is split into [first, prev] and [next, last]
- *      (only when S publishes F at all);
+ *      (only when S publishes F at all); a2. when S is the newest, open runs of absent values close
+ *      at prev;
  *   b. a present value whose runs end at prev and start at next: the two runs are joined;
- *   c. else the run ending at prev is extended to S, or d. the run starting at next starts at S;
- *   e. else a new run [S, S].
+ *   c. else the closed run ending at prev is extended to S, or d. the run starting at next starts at S;
+ *   e. else a new run, open when S is the newest.
  * So snapshots can be loaded in any order.
  */
 import * as fs from 'fs';
@@ -183,6 +186,7 @@ async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields
        SELECT f AS field,
               (SELECT max(snapshot_date) FROM edr_hist.snapshot WHERE kind = $1 AND snapshot_date < $2::date AND f = ANY(fields)) AS prev,
               (SELECT min(snapshot_date) FROM edr_hist.snapshot WHERE kind = $1 AND snapshot_date > $2::date AND f = ANY(fields)) AS next,
+              (SELECT max(snapshot_date) FROM edr_hist.snapshot WHERE kind = $1 AND snapshot_date <> $2::date AND f = ANY(fields)) AS latest,
               f = ANY($3::text[]) AS carried
        FROM unnest($4::text[]) AS f`,
       [kind, S, fields, [...HISTORY_FIELDS]],
@@ -218,9 +222,11 @@ async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields
              first_seen = LEAST(edr_hist.${table}.first_seen, EXCLUDED.first_seen),
              last_seen = GREATEST(edr_hist.${table}.last_seen, EXCLUDED.last_seen)`, a);
       }
-      await foldHistory(c, kind, S, alias => chunk(`${alias}.edrpou`, lo, hi));
-      if (i % 20 === 19) log(`  ${kind}: chunk ${i + 1}/${BOUNDS.length - 1}`);
+      if (i % 20 === 19) log(`  ${kind}: entries chunk ${i + 1}/${BOUNDS.length - 1}`);
     }
+    const t0 = Date.now();
+    const steps = await foldHistory(c, kind, S);
+    log(`  ${kind}: history fold ${((Date.now() - t0) / 1000).toFixed(0)}s, rows ${JSON.stringify(steps)}`);
     await c.query(
       `INSERT INTO edr_hist.snapshot (kind, snapshot_date, source, file, md5, format, subjects, fields)
        VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8)`,
@@ -233,59 +239,80 @@ async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields
 }
 
 /**
- * The five fold steps for one chunk of codes. `w(alias)` is the chunk predicate on that alias:
- * every relation, including the anti-join subqueries, is bounded to the chunk explicitly, because
- * the planner does not carry a range on t.edrpou over to the joined side and would otherwise scan
- * (or hash) the whole history table once per chunk.
+ * Fold the staged values (stg_h) of snapshot S into edr_hist.history. One statement per step over
+ * the whole kind, with nested loops disabled: these are bulk set operations (millions of rows on
+ * both sides) and the planner, misled by dates outside the column statistics, otherwise picked
+ * nested loops that rescanned history per staged row.
+ *
+ * A run with last_snapshot NULL is open: it lasts through the latest loaded snapshot that
+ * publishes the field (see view edr_hist.history_runs). Loading the newest snapshot therefore
+ * writes only what changed: runs of values that disappeared are closed (a2), new values are
+ * inserted (e). Unchanged values are not touched. Steps a-d only do work for a snapshot loaded
+ * between two already loaded ones (historical backfill).
  */
-export async function foldHistory(c: PoolClient, kind: string, S: string, w: (alias: string) => string): Promise<void> {
+export async function foldHistory(c: PoolClient, kind: string, S: string): Promise<Record<string, number>> {
   const a = [S, kind];
-  // a. values gone in this snapshot: a run that spans it is split around it
-  await c.query(
-    `WITH sp AS (
-       SELECT h.edrpou, h.field, h.value_hash, h.value, h.kind, h.first_snapshot, h.last_snapshot, n.prev, n.next
-       FROM edr_hist.history h JOIN stg_nb n ON n.field = h.field AND n.carried
-       WHERE h.kind = $2 AND ${w('h')} AND h.first_snapshot < $1::date AND h.last_snapshot > $1::date
-         AND (SELECT 1 FROM stg_h t WHERE ${KEY} LIMIT 1) IS NULL),
-     ins AS (INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
-             SELECT edrpou, field, value_hash, value, kind, next, last_snapshot FROM sp)
-     UPDATE edr_hist.history h SET last_snapshot = sp.prev FROM sp
-     WHERE h.edrpou = sp.edrpou AND h.field = sp.field AND h.value_hash = sp.value_hash
-       AND h.first_snapshot = sp.first_snapshot AND ${w('h')}`, a);
-  // b. present, not yet covered: join the runs that end at prev and start at next
-  await c.query(
-    `WITH pairs AS (
-       SELECT t.edrpou, t.field, t.value_hash, p.first_snapshot AS pf, x.first_snapshot AS xf, x.last_snapshot AS xl
+  const n: Record<string, number> = {};
+  const run = async (step: string, sql: string, params: unknown[] = a) => {
+    const r = await c.query(sql, params);
+    n[step] = r.rowCount ?? 0;
+  };
+  await c.query('SET LOCAL enable_nestloop = off');
+  const between = (await c.query(`SELECT bool_or(next IS NOT NULL) AS b FROM stg_nb WHERE carried`)).rows[0].b === true;
+  const absent = `NOT EXISTS (SELECT 1 FROM stg_h t WHERE ${KEY})`;
+  if (between) {
+    // a. a run spanning S whose value is absent in S is split into [first, prev] and [next, last]
+    await run('split', `WITH sp AS (
+         SELECT h.edrpou, h.field, h.value_hash, h.value, h.kind, h.first_snapshot, h.last_snapshot, n.prev, n.next
+         FROM edr_hist.history h JOIN stg_nb n ON n.field = h.field AND n.carried
+         WHERE h.kind = $2 AND h.first_snapshot < $1::date
+           AND (h.last_snapshot > $1::date OR (h.last_snapshot IS NULL AND n.latest > $1::date)) AND ${absent}),
+       ins AS (INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
+               SELECT edrpou, field, value_hash, value, kind, next, last_snapshot FROM sp)
+       UPDATE edr_hist.history h SET last_snapshot = sp.prev FROM sp
+       WHERE h.edrpou = sp.edrpou AND h.field = sp.field AND h.value_hash = sp.value_hash
+         AND h.first_snapshot = sp.first_snapshot`);
+  }
+  // a2. S is the newest snapshot of the field: close the open runs of values absent in S
+  await run('close', `UPDATE edr_hist.history h SET last_snapshot = n.prev FROM stg_nb n
+     WHERE n.field = h.field AND n.carried AND n.next IS NULL AND n.prev < $1::date
+       AND h.kind = $2 AND h.last_snapshot IS NULL AND h.first_snapshot <= n.prev AND ${absent}`);
+  if (between) {
+    // b. present: join the run that ends at prev with the one that starts at next
+    await run('merge', `WITH pairs AS (
+         SELECT t.edrpou, t.field, t.value_hash, p.first_snapshot AS pf, x.first_snapshot AS xf, x.last_snapshot AS xl
+         FROM stg_h t JOIN stg_nb n USING (field)
+         JOIN edr_hist.history p ON p.edrpou = t.edrpou AND p.field = t.field AND p.value_hash = t.value_hash AND p.last_snapshot = n.prev
+         JOIN edr_hist.history x ON x.edrpou = t.edrpou AND x.field = t.field AND x.value_hash = t.value_hash AND x.first_snapshot = n.next),
+       del AS (DELETE FROM edr_hist.history h USING pairs q
+               WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.xf)
+       UPDATE edr_hist.history h SET last_snapshot = q.xl FROM pairs q
+       WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.pf`, []);
+  }
+  const covered = (alias: string) => `EXISTS (SELECT 1 FROM edr_hist.history y WHERE y.edrpou = ${alias}.edrpou
+      AND y.field = ${alias}.field AND y.value_hash = ${alias}.value_hash AND y.first_snapshot <= $1::date
+      AND (y.last_snapshot >= $1::date OR y.last_snapshot IS NULL))`;
+  // c. extend the closed run that ends at prev (open when S is the newest), or d. start the run
+  //    that starts at next at S
+  await run('extend', `UPDATE edr_hist.history h SET last_snapshot = CASE WHEN n.next IS NULL THEN NULL ELSE $1::date END, value = t.value
+     FROM stg_h t JOIN stg_nb n USING (field)
+     WHERE ${KEY} AND h.kind = $2 AND h.last_snapshot = n.prev AND NOT ${covered('t')}`);
+  if (between) {
+    await run('prepend', `UPDATE edr_hist.history h SET first_snapshot = $1::date
        FROM stg_h t JOIN stg_nb n USING (field)
-       JOIN edr_hist.history p ON p.edrpou = t.edrpou AND p.field = t.field AND p.value_hash = t.value_hash AND p.last_snapshot = n.prev
-       JOIN edr_hist.history x ON x.edrpou = t.edrpou AND x.field = t.field AND x.value_hash = t.value_hash AND x.first_snapshot = n.next
-       WHERE ${w('t')} AND ${w('p')} AND ${w('x')}),
-     del AS (DELETE FROM edr_hist.history h USING pairs q
-             WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.xf AND ${w('h')})
-     UPDATE edr_hist.history h SET last_snapshot = q.xl FROM pairs q
-     WHERE h.edrpou = q.edrpou AND h.field = q.field AND h.value_hash = q.value_hash AND h.first_snapshot = q.pf AND ${w('h')}`);
-  // A scalar subquery with LIMIT is not pulled up into an anti-join: it runs per staged row as a
-  // primary-key probe. As NOT EXISTS the planner hashed the whole chunk of history, or, when the
-  // date lay outside the column statistics (a 2018 snapshot into 2021+ history), estimated no
-  // matches and chose a nested loop over the whole chunk per row (hours per chunk).
-  const notCovered = `(SELECT 1 FROM edr_hist.history y WHERE y.edrpou = t.edrpou AND y.field = t.field
-                       AND y.value_hash = t.value_hash AND y.first_snapshot <= $1::date AND y.last_snapshot >= $1::date
-                       LIMIT 1) IS NULL`;
-  // c. extend the run that ends at prev
-  await c.query(
-    `UPDATE edr_hist.history h SET last_snapshot = $1::date, value = t.value
+       WHERE ${KEY} AND h.kind = $2 AND h.first_snapshot = n.next AND NOT ${covered('t')}`);
+  }
+  // the newest wording of an open run (formats differ between eras): only rows whose text changed
+  await run('reword', `UPDATE edr_hist.history h SET value = t.value
      FROM stg_h t JOIN stg_nb n USING (field)
-     WHERE ${KEY} AND ${w('t')} AND ${w('h')} AND h.kind = $2 AND h.last_snapshot = n.prev AND ${notCovered}`, a);
-  // d. or the run that starts at next
-  await c.query(
-    `UPDATE edr_hist.history h SET first_snapshot = $1::date
+     WHERE ${KEY} AND h.kind = $2 AND n.next IS NULL AND h.last_snapshot IS NULL AND h.first_snapshot < $1::date
+       AND h.value IS DISTINCT FROM t.value`);
+  // e. otherwise a new run: open when S is the newest snapshot of the field, else [S, S]
+  await run('new', `INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
+     SELECT t.edrpou, t.field, t.value_hash, t.value, $2, $1::date, CASE WHEN n.next IS NULL THEN NULL ELSE $1::date END
      FROM stg_h t JOIN stg_nb n USING (field)
-     WHERE ${KEY} AND ${w('t')} AND ${w('h')} AND h.kind = $2 AND h.first_snapshot = n.next AND ${notCovered}`, a);
-  // e. otherwise a new run of one snapshot
-  await c.query(
-    `INSERT INTO edr_hist.history (edrpou, field, value_hash, value, kind, first_snapshot, last_snapshot)
-     SELECT t.edrpou, t.field, t.value_hash, t.value, $2, $1::date, $1::date FROM stg_h t
-     WHERE ${w('t')} AND ${notCovered}`, a);
+     WHERE NOT ${covered('t')}`);
+  return n;
 }
 
 export function md5File(file: string): Promise<string> {
@@ -312,7 +339,7 @@ export async function loadEdrSnapshot(pool: Pool, opts: LoadOptions): Promise<Lo
   let locked = false;
   try {
     await c.query(`SET statement_timeout = '${(opts.statementTimeout || '60min').replace(/'/g, '')}'`);
-    await c.query(`SET work_mem = '256MB'`);
+    await c.query(`SET work_mem = '512MB'`);
     const lock = await c.query(`SELECT pg_try_advisory_lock(hashtext('edr_hist_loader')) AS ok`);
     if (!lock.rows[0].ok) throw new Error('another edr_hist load is running');
     locked = true;
