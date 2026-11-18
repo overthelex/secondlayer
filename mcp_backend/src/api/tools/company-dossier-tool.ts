@@ -12,6 +12,7 @@
  */
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
+import { latestFigures, LatestFigures } from './financial-statement-figures.js';
 
 const SUBTOOL_TIMEOUT_MS = 40_000;
 const ROWS_PER_SECTION = 10;
@@ -43,6 +44,12 @@ export const ROW_FIELDS: Record<string, (r: any) => any> = {
     winners: Array.isArray(r.winners)
       ? r.winners.slice(0, 3).map((w: any) => ({ edrpou: w.edrpou ?? w.supplier_edrpou, name: w.name ?? w.supplier_name, amount: w.amount ?? w.contract_amount }))
       : r.winners ?? null,
+  }),
+  // Figures are summarised once in the section's `latest`; per-row figures would repeat
+  // ten labelled values for every filing.
+  financial_statements: (r) => ({
+    period: r.period, period_year: r.period_year, period_month: r.period_month,
+    form_type: r.form_type, form_name: r.form_name, report_date: r.report_date ?? null,
   }),
   spending_recipient: (r) => ({
     payer_edrpou: r.edrpou, doc_type: r.doc_type_label ?? r.doc_type, document_number: r.document_number,
@@ -88,6 +95,8 @@ export interface Section {
   more_available: boolean;
   items: any[];
   message?: string;
+  /** financial_statements only: key figures of the latest reporting period. */
+  latest?: (LatestFigures & { source: string }) | null;
 }
 
 const EDR_SOURCE: SectionSource = {
@@ -137,7 +146,7 @@ export const SECTION_SPECS: SectionSpec[] = [
     args: (c) => ({ registry: 'large_taxpayers', filters: { edrpou: c } }),
     source: { name: 'Перелік великих платників податків (ДПС)' } },
   { key: 'financial_statements', title: 'Фінансова звітність', tool: 'search_registry',
-    args: (c) => ({ registry: 'financial_statements', filters: { tin: c } }),
+    args: (c) => ({ registry: 'financial_statements', filters: { tin: c }, limit: 30 }),
     source: { name: 'Фінансова звітність юридичних осіб (ДПС/ДССУ)' } },
   // Публічні кошти та діяльність
   { key: 'prozorro_supplier', title: 'ProZorro: договори як постачальник', tool: 'openreyestr_search_prozorro',
@@ -317,6 +326,10 @@ export class CompanyDossierTool extends BaseToolHandler {
       sections[spec.key] = this.section(spec.title, spec.tool, spec.source, sectionCalls[i], freshness, spec.key);
     });
     sections.courts = this.courtsSection(courts.party, courts.c);
+    const finIdx = SECTION_SPECS.findIndex((s) => s.key === 'financial_statements');
+    if (finIdx >= 0 && sections.financial_statements?.status === 'found') {
+      sections.financial_statements.latest = this.latestFinancials(sectionCalls[finIdx]);
+    }
 
     const entityBlock = this.entityBlock(edrpou, edr, entity, details, freshness);
     return {
@@ -382,6 +395,14 @@ export class CompanyDossierTool extends BaseToolHandler {
       items: rows.slice(0, ROWS_PER_SECTION).map((r) => trimRow(key && ROW_FIELDS[key] ? ROW_FIELDS[key](r) : r)),
       ...(rows.length ? {} : { message: message || 'Записів не знайдено.' }),
     };
+  }
+
+  /** Key figures of the latest reporting period, with the forms they come from. */
+  latestFinancials(call: SubCall): (LatestFigures & { source: string }) | null {
+    if (call.status !== 'ok') return null;
+    const latest = latestFigures(toRows(call.data).rows);
+    if (!latest) return null;
+    return { ...latest, source: `${latest.forms.join('; ')} за ${latest.period}` };
   }
 
   private courtsSection(party: string | null, call: SubCall): Section {
@@ -463,6 +484,17 @@ export class CompanyDossierTool extends BaseToolHandler {
         out.push({ section: key, fact: `${s.title}: джерело не відповіло, перевірку не виконано.` });
       } else if (s.status === 'unavailable') {
         out.push({ section: key, fact: `${s.title}: джерело недоступне, перевірку не виконано.` });
+      }
+    }
+    const fin = sections.financial_statements?.latest;
+    if (fin) {
+      const fmt = (n: number) => n.toLocaleString('uk-UA', { maximumFractionDigits: 1 });
+      const parts = (['total_assets', 'equity', 'net_revenue', 'net_profit'] as const)
+        .map((k) => fin.figures.find((f) => f.key === k))
+        .filter((f): f is NonNullable<typeof f> => !!f && f.current !== null)
+        .map((f) => `${f.label.toLowerCase()} ${fmt(f.current as number)}`);
+      if (parts.length) {
+        out.push({ section: 'financial_statements', fact: `Фінансова звітність за ${fin.period} (${fin.units}): ${parts.join(', ')}.` });
       }
     }
     const won = sections.prozorro_supplier;
