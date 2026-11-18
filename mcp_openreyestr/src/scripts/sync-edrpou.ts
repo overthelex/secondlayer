@@ -33,6 +33,7 @@ import { pipeline } from 'stream/promises';
 import unzipper from 'unzipper';
 import iconv from 'iconv-lite';
 import { Readable } from 'stream';
+import { forbiddenCharRefFilter } from './lib/xml-char-refs';
 import { StreamingXMLParser } from '../services/streaming-xml-parser.js';
 import { DatabaseImporter, ImportStats } from '../services/database-importer.js';
 import { DownloadService } from '../services/download-service.js';
@@ -195,15 +196,26 @@ async function logImportComplete(
   );
 }
 
+/**
+ * registry_metadata has no record_count column and no unique key on
+ * registry_name, so the old INSERT ... ON CONFLICT (registry_name) failed after
+ * every successful import and marked UO/FSU as failed. Update by name, insert
+ * only when the row does not exist yet.
+ */
 async function updateRegistryMetadata(pool: Pool, registryName: string, recordCount: number): Promise<void> {
-  await pool.query(
-    `INSERT INTO registry_metadata (registry_name, record_count, last_update_date)
-     VALUES ($1, $2, CURRENT_DATE)
-     ON CONFLICT (registry_name) DO UPDATE SET
-       record_count = EXCLUDED.record_count,
-       last_update_date = EXCLUDED.last_update_date`,
-    [registryName, recordCount]
+  const upd = await pool.query(
+    `UPDATE registry_metadata SET last_update_date = CURRENT_DATE, updated_at = CURRENT_TIMESTAMP
+     WHERE registry_name = $1`,
+    [registryName]
   );
+  if (upd.rowCount === 0) {
+    await pool.query(
+      `INSERT INTO registry_metadata (registry_name, registry_title, data_format, update_frequency, last_update_date)
+       VALUES ($1, $2, 'xml', 'weekly', CURRENT_DATE)`,
+      [registryName, `ЄДР (${registryName.replace(/^EDRPOU_/, '')})`]
+    );
+  }
+  console.log(`  registry_metadata: ${registryName} updated (${recordCount} records in DB)`);
 }
 
 // --- XML stream ---
@@ -225,7 +237,10 @@ function openXmlStream(xmlPath: string): Readable {
     throw new Error(`Unsupported XML encoding: ${encoding}`);
   }
   console.log(`XML encoding: ${encoding}`);
-  return fs.createReadStream(xmlPath).pipe(iconv.decodeStream(encoding)) as unknown as Readable;
+  // FOP.xml holds a few references to control characters (&#14;) that strict sax rejects.
+  return fs.createReadStream(xmlPath)
+    .pipe(iconv.decodeStream(encoding))
+    .pipe(forbiddenCharRefFilter()) as unknown as Readable;
 }
 
 // --- Archive ---
