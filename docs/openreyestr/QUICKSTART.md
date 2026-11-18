@@ -4,7 +4,7 @@
 
 - Node.js 20+
 - PostgreSQL 15+
-- Downloaded OPENREYESTR data from https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10
+- Downloaded OPENREYESTR data from https://data.gov.ua/dataset/a1799820-195b-4982-8141-6e84f58103e7
 
 ## Quick Setup (5 steps)
 

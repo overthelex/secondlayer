@@ -51,7 +51,7 @@ npm run db:setup
 2. Import OPENREYESTR data from XML files:
 
 ```bash
-# Download data from https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10
+# Download data from https://data.gov.ua/dataset/a1799820-195b-4982-8141-6e84f58103e7
 
 # Import all data types at once
 npm run import:all /path/to/OPENREYESTR.zip
@@ -258,7 +258,7 @@ Data is obtained from the official Ukrainian open data portal:
 
 **Dataset:** Єдиний державний реєстр юридичних осіб, фізичних осіб – підприємців та громадських формувань
 
-**URL:** https://data.gov.ua/dataset/1c7f3815-3259-45e0-bdf1-64dca07ddc10
+**URL:** https://data.gov.ua/dataset/a1799820-195b-4982-8141-6e84f58103e7
 
 **Update frequency:** Daily
 
