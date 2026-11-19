@@ -156,6 +156,8 @@ runs:
             deployment/*) DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             mobile/*) MOBILE=true ;;
             platform/*) PLATFORM=true ;;
+            # load_drcor.py is baked into the opendata-sync image (LEXAI-2301)
+            scripts/cyprus/*) OPENDATA_SYNC=true ;;
             opendata-sync/*) OPENDATA_SYNC=true ;;
             # load_case_status.py is baked into the opendata-sync image (Dockerfile.opendata-sync)
             scripts/court-status/*) OPENDATA_SYNC=true ;;

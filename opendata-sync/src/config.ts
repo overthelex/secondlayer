@@ -357,6 +357,21 @@ const openreyestrFeedSources: DataSourceSchedule[] = [
 
 const scriptSources: DataSourceSchedule[] = [
   {
+    // LEXAI-2301: Cyprus register of companies (DRCOR) from data.gov.cy dataset 1026: organisations,
+    // registered offices and officials (directors, secretaries; name + position only). Published
+    // monthly (R/P1M; the November 2026 files are dated 02.11) under new file names each time.
+    // load_drcor.py skips files whose sha256 is in cy_drcor_snapshots, so the 11th is a retry
+    // that does nothing when the 4th already loaded the month's files.
+    name: 'cy_drcor',
+    title: 'Кіпр — реєстр компаній (DRCOR, data.gov.cy)',
+    cron: '0 4 4,11 * *', // 04:00 on the 4th and 11th of each month
+    target: 'script',
+    sourceName: 'cy_drcor',
+    command: ['python3', '-I', '/app/scripts/load_drcor.py'],
+    timeoutMs: 2 * 60 * 60 * 1000,
+    enabled: true,
+  },
+  {
     // ДСА «Стан розгляду справ» (data.gov.ua 0ad60ea9-…): a daily ZIP with only the latest ~1.5M
     // stage events. load_case_status.py upserts it into court_case_status_history (migration 278)
     // so events that fall out of later snapshots are kept. The ZIP of day D is published around
