@@ -36,6 +36,11 @@ export function ParamFormBuilder({ params, value, onChange }: Props) {
         const t = paramDef?.type || type;
         if (t === 'number') output[k] = Number(v);
         else if (t === 'boolean') output[k] = v === 'true';
+        else if (t === 'array' || t === 'object') {
+          // JSON (e.g. [110679112, 110441965] or {"name": "…"}); a plain list "34, 35" becomes an array.
+          try { output[k] = JSON.parse(v); }
+          catch { output[k] = t === 'array' ? v.split(',').map(x => x.trim()).filter(Boolean) : v; }
+        }
         else output[k] = v;
       }
       onChange(JSON.stringify(output, null, 2));
