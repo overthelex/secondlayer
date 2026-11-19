@@ -102,24 +102,6 @@ export function buildPartyRoleRegex(partyName: string, role: Exclude<PartyRole, 
 // LEXAI-1760: the structured parties table (edrsr_parties, migration 239).
 // ---------------------------------------------------------------------------------------
 
-/**
- * Merge the results of statements over DISJOINT document sets of one year leg (parties leg +
- * the other-kinds full-text leg): counts add, cause lists union, court counts add.
- */
-export function mergePartyLegResults(parts: Array<{
-  n: number; causes: string[]; by_court: Array<{ court_code: number; count: number }>; sample: any[];
-}>): { n: number; causes: string[]; by_court: Array<{ court_code: number; count: number }>; sample: any[] } {
-  if (parts.length === 1) return parts[0];
-  const courts = new Map<number, number>();
-  for (const p of parts) for (const b of p.by_court) courts.set(b.court_code, (courts.get(b.court_code) ?? 0) + b.count);
-  return {
-    n: parts.reduce((a, p) => a + p.n, 0),
-    causes: [...new Set(parts.flatMap(p => p.causes))],
-    by_court: [...courts.entries()].map(([court_code, count]) => ({ court_code, count })).sort((a, b) => b.count - a.count),
-    sample: parts.flatMap(p => p.sample),
-  };
-}
-
 /** edrsr_parties.role codes. */
 export const PARTY_ROLE_CODE: Record<Exclude<PartyRole, 'any'>, number> = { plaintiff: 1, defendant: 2 };
 
@@ -414,15 +396,14 @@ export interface PartyCaseCount {
   /** LEXAI-1760: years (leg labels) answered from edrsr_parties instead of the full text. */
   parties_years?: number[];
   /**
-   * Years served from edrsr_parties whose full-text supplement for the justice kinds the table
-   * does not hold (2 criminal, 5 administrative offences, NULL) did not fit the time budget.
-   * Those years are counted for kinds 1/3/4 only, so the totals are a floor. Present with
-   * `incomplete`. The supplement is cached when it finishes, so a repeat resumes.
+   * Years served from edrsr_parties with no justice_kind filter: counted for the kinds the
+   * table holds (1 civil, 3 commercial, 4 administrative) only — criminal (2), administrative
+   * offence (5) and kind-less decisions are left out. justice_kind 2 or 5 counts those.
    */
-  kinds_pending_years?: number[];
+  other_kinds_excluded_years?: number[];
   /**
-   * Statements that ran on the full-text path: uncovered legs plus kinds-2/5 supplements
-   * (computed or from cache). 0 means the whole answer came from edrsr_parties.
+   * Year legs that ran on the full-text path (computed or from cache). 0 means the whole
+   * answer came from edrsr_parties.
    */
   fts_legs?: number;
 }
@@ -555,11 +536,6 @@ export function yearLegDocPredicate(leg: YearLeg, alias = 'd'): string[] {
 // re-checks full_text with a regex, which is the expensive part.
 // The edrsr_parties_coverage lookup (a handful of rows).
 const COVERAGE_TIMEOUT_MS = 5_000;
-// The kinds-2/5 full-text supplement of a leg served from edrsr_parties (see countByParty)
-// adds a handful of documents but can cost the whole budget cold (Бізнес Позика Q1 2025: 45 s
-// for 1 document). It runs after every parties statement, each under at most this much, so
-// the first answer comes back in ~15 s with the year in kinds_pending_years.
-const PARTY_OTHER_KINDS_MAX_MS = 12_000;
 // The FTS fallback runs one statement per adj_year leg (LEXAI-2177) under this shared
 // wall-clock budget; each leg's statement_timeout is whatever is left of it. Kept under the
 // 60 s tool timeout with room for the court-name lookup.
@@ -1681,7 +1657,7 @@ export class EdsrFtsService {
           (SELECT coalesce(json_agg(s), '[]'::json) FROM (
              SELECT doc_id, cause_num, court_code, justice_kind, adjudication_date FROM l
              ORDER BY adjudication_date DESC NULLS LAST LIMIT ${safeSample}) s) AS sample` : ''}`;
-    const legSql = (leg: YearLeg, extraDocConds: string[] = []) => `
+    const legSql = (leg: YearLeg) => `
         WITH l AS MATERIALIZED (
           SELECT j.doc_id, j.court_code, j.cause_num, j.justice_kind, j.adjudication_date
           FROM (
@@ -1693,7 +1669,7 @@ export class EdsrFtsService {
               OFFSET 0
             ) m
             JOIN edrsr_documents d ON d.doc_id = m.doc_id
-            WHERE ${[...yearLegDocPredicate(leg), ...docConditions, ...extraDocConds].join(' AND ')}
+            WHERE ${[...yearLegDocPredicate(leg), ...docConditions].join(' AND ')}
             OFFSET 0
           ) j${recheck.length ? `
           WHERE ${recheck.join(' AND ')}` : ''}
@@ -1744,16 +1720,14 @@ export class EdsrFtsService {
     const courtCounts = new Map<number, number>();
     const samples: NonNullable<PartyCaseCount['sample']> = [];
     const pending: YearLeg[] = [];
-    // Covered years whose kinds-2/5 full-text supplement did not finish (see kinds_pending_years).
-    const kindsPending: YearLeg[] = [];
+    // Covered years counted without kinds 2/5 (see other_kinds_excluded_years).
+    const kindsExcluded: YearLeg[] = [];
     const answered = new Set<YearLeg>();
     let ftsLegs = 0;
     let firstPending = -1;
     let counted = 0;
     let firstSkipped = -1;
     let cacheHits = 0;
-    // Covered legs whose kinds-2/5 supplement was not cached: run after the loop (see below).
-    const deferred: Array<{ leg: YearLeg; key: string; ttl: number }> = [];
 
     const runLeg = async (leg: YearLeg, fromParties: boolean, sql: string, args: any[], timeoutMs: number): Promise<PartyLegResult> => {
       logger.debug('[EdsrFtsService] countByParty leg SQL', { leg, from_parties: fromParties, sql, params: args });
@@ -1813,19 +1787,14 @@ export class EdsrFtsService {
             ftsLegs++;
             await this.setCachedPartyLeg(key, legRes, ttl);
           } else {
-            const parts = [await runLeg(leg, true, partiesLegSql(leg), partiesParams, remaining)];
-            // A covered leg without a justice_kind filter also needs kinds 2/5 (not in
-            // edrsr_parties) from the full-text predicate. That supplement is the slow part —
-            // it bitmap-scans every GIN candidate of the year off the HDD (Бізнес Позика 2024:
-            // 18,948 random heap blocks, >45 s cold) — so it is cached under its own key and,
-            // on a miss, deferred until every parties statement has run (see below).
-            if (partiesPlan!.otherKinds) {
-              const otherKey = `${key}|other-kinds`;
-              const other = await this.getCachedPartyLeg(otherKey);
-              if (other) { parts.push(other); cacheHits++; ftsLegs++; }
-              else deferred.push({ leg, key: otherKey, ttl });
-            }
-            legRes = mergePartyLegResults(parts);
+            legRes = await runLeg(leg, true, partiesLegSql(leg), partiesParams, remaining);
+            // Without a justice_kind filter a covered leg is counted from edrsr_parties alone,
+            // i.e. without kinds 2/5 (the table holds 1/3/4 only). Taking those from the
+            // full-text predicate bitmap-scanned every GIN candidate of the year off the HDD
+            // (Бізнес Позика 2024: 18,948 random heap blocks, >45 s cold) for a handful of
+            // documents (Q1 2025: 1 of 7,848), so it is left out and reported instead; a
+            // caller who needs them passes justice_kind 2 or 5, which takes the full-text path.
+            if (partiesPlan!.otherKinds) kindsExcluded.push(leg);
           }
         } catch (err: any) {
           if (err.code === '57014') {
@@ -1846,35 +1815,12 @@ export class EdsrFtsService {
       addToTotals(legRes);
     }
 
-    // The deferred kinds-2/5 supplements, newest first, each under PARTY_OTHER_KINDS_MAX_MS
-    // of what is left. One that does not fit keeps its year's parties count and is reported in
-    // kinds_pending_years; a finished one is cached, so a repeat call fills the gap.
-    let supplementDocs = 0;
-    for (const d of deferred) {
-      const left = Math.min(PARTY_FTS_BUDGET_MS - (Date.now() - started), PARTY_OTHER_KINDS_MAX_MS);
-      if (left < PARTY_LEG_MIN_MS) { kindsPending.push(d.leg); continue; }
-      try {
-        const other = await runLeg(d.leg, false, legSql(d.leg, [notPartiesKindSql('d')]), params, left);
-        await this.setCachedPartyLeg(d.key, other, d.ttl);
-        ftsLegs++;
-        supplementDocs += other.n;
-        addToTotals(other);
-      } catch (e: any) {
-        if (e.code !== '57014') {
-          logger.error('[EdsrFtsService] countByParty failed', { error: e.message, party_name: partyName, leg: d.leg });
-          throw new Error(`Party count failed: ${e.message}`);
-        }
-        logger.warn('[EdsrFtsService] countByParty other-kinds supplement timed out', { party_name: partyName, leg: d.leg, timeout_ms: left });
-        kindsPending.push(d.leg);
-      }
-    }
-
     if (counted === 0 && pending.length > 0) {
       logger.warn('[EdsrFtsService] countByParty statement timeout', { party_name: partyName, party_role: partyRole ?? 'any' });
       throw new Error('підрахунок не вклався в ліміт часу. Звузьте період (date_from/date_to) або вкажіть вид судочинства (justice_kind) і повторіть запит — уже пораховані роки зберігаються, тож повторний виклик продовжить з них.');
     }
 
-    const total = (cum.length ? cum[cum.length - 1] : 0) + supplementDocs;
+    const total = cum.length ? cum[cum.length - 1] : 0;
     const distinct_cases = causes.size;
     const by_court = [...courtCounts.entries()]
       .map(([court_code, count]) => ({ court_code, count }))
@@ -1900,7 +1846,7 @@ export class EdsrFtsService {
       filters: Object.keys(filters).filter(k => (filters as any)[k] !== undefined),
       total, distinct_cases, courts: by_court.length, legs: legs.length, cum, capped,
       cache_hits: cacheHits, pending: pending.map(legYear), ms: Date.now() - started,
-      parties_legs: partiesYears, kinds_pending: kindsPending.map(legYear),
+      parties_legs: partiesYears,
     });
 
     return {
@@ -1910,7 +1856,8 @@ export class EdsrFtsService {
       ...(sample ? { sample } : {}),
       ...(capped ? { capped: true, candidate_cap: cap, ...(countedFromYear !== null ? { counted_from_year: countedFromYear } : {}) } : {}),
       ...(pending.length ? { incomplete: true, pending_years: pending.map(legYear), resumable: this.edsrCache !== null } : {}),
-      ...(kindsPending.length ? { incomplete: true, kinds_pending_years: kindsPending.map(legYear), resumable: this.edsrCache !== null } : {}),
+      ...(kindsExcluded.some(l => answered.has(l))
+        ? { other_kinds_excluded_years: kindsExcluded.filter(l => answered.has(l)).map(legYear) } : {}),
       ...(partiesYears.length ? { parties_years: partiesYears } : {}),
       fts_legs: ftsLegs,
     };

@@ -1224,57 +1224,24 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     }
   });
 
-  it('countByParty keeps the parties count when the kinds-2/5 supplement times out, then resumes from cache', async () => {
-    const svc = new EdsrFtsService();
-    const cache = makeLegCache();
-    (svc as any).edsrCache = cache;
-    let otherFails = true;
-    const calls: string[] = [];
-    const db = {
-      query: jest.fn((sql: string) => {
-        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2024 }] });
-        calls.push(sql);
-        if (sql.includes('NOT IN (1, 3, 4)')) {
-          if (otherFails) return Promise.reject(pgTimeout());
-          return Promise.resolve({ rows: [{ n: 2, causes: ['k1'], by_court: [{ court_code: 5, count: 2 }] }] });
-        }
-        return Promise.resolve({ rows: [{ n: 10, causes: ['a', 'b', 'c'], by_court: [{ court_code: 9, count: 10 }] }] });
-      }),
-    };
-    const args = ['Бізнес Позика', 'any', db, { date_from: '2024-01-01', date_to: '2024-03-31' }] as const;
-    const first = await svc.countByParty(...args);
-    expect(first).toMatchObject({
-      total: 10, distinct_cases: 3, incomplete: true, kinds_pending_years: [2024], parties_years: [2024], fts_legs: 0,
-    });
-    expect(first.pending_years).toBeUndefined();
-
-    otherFails = false;
-    const second = await svc.countByParty(...args);
-    expect(second).toMatchObject({ total: 12, distinct_cases: 4, parties_years: [2024], fts_legs: 1 });
-    expect(second.incomplete).toBeUndefined();
-
-    // Third call: the supplement comes from the cache, only the parties statement runs.
-    calls.length = 0;
-    const third = await svc.countByParty(...args);
-    expect(third).toMatchObject({ total: 12, distinct_cases: 4 });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain('FROM edrsr_parties p');
-  });
-
-  it('countByParty runs every parties statement before any kinds-2/5 supplement', async () => {
+  it('countByParty counts a covered leg without justice_kind from edrsr_parties alone and reports kinds 2/5 as left out', async () => {
     const svc = new EdsrFtsService();
     const calls: string[] = [];
     const db = {
       query: jest.fn((sql: string) => {
         if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2024 }, { adj_year: 2025 }] });
         calls.push(sql.includes('FROM edrsr_parties p') ? 'parties' : 'fts');
-        return Promise.resolve({ rows: [{ n: 1, causes: [sql.length.toString()], by_court: [] }] });
+        return Promise.resolve({ rows: [{ n: 10, causes: [sql.length.toString()], by_court: [] }] });
       }),
     };
     const res = await svc.countByParty('Бізнес Позика', 'any', db, { date_from: '2024-01-01', date_to: '2025-12-31' });
-    expect(calls).toEqual(['parties', 'parties', 'fts', 'fts']);
-    expect(res).toMatchObject({ total: 4, parties_years: [2025, 2024], fts_legs: 2 });
-    expect(res.kinds_pending_years).toBeUndefined();
+    expect(calls).toEqual(['parties', 'parties']);
+    expect(res).toMatchObject({ total: 20, parties_years: [2025, 2024], other_kinds_excluded_years: [2025, 2024], fts_legs: 0 });
+    expect(res.incomplete).toBeUndefined();
+
+    // With a justice_kind the table holds, nothing is left out.
+    const withKind = await svc.countByParty('Бізнес Позика', 'any', db, { date_from: '2024-01-01', date_to: '2025-12-31', justice_kind: 1 });
+    expect(withKind.other_kinds_excluded_years).toBeUndefined();
   });
 
   it('countByParty does not stop parties legs at the full-text candidate cap', async () => {
@@ -1364,35 +1331,6 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     expect(params).not.toContain('Нова Пошта');
     expect(params.slice(0, 4)).toEqual(['стягнення боргу', 'нова пошта', '% нова пошта', 1]);
     for (let i = 1; i <= params.length; i++) expect(sql).toContain(`$${i}`);
-  });
-
-  it('countByParty without a justice kind adds the kinds 2/5 from full text to a covered leg', async () => {
-    const svc = new EdsrFtsService();
-    const calls: { sql: string; params: any[] }[] = [];
-    const db = {
-      query: jest.fn((sql: string, params: any[]) => {
-        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2025 }] });
-        calls.push({ sql, params });
-        return Promise.resolve({ rows: [sql.includes('FROM edrsr_parties p')
-          ? { n: 3, causes: ['a', 'b'], by_court: [{ court_code: 7, count: 3 }], sample: [{ doc_id: 1 }] }
-          : { n: 2, causes: ['b', 'c'], by_court: [{ court_code: 7, count: 1 }, { court_code: 9, count: 1 }], sample: [{ doc_id: 2 }] }] });
-      }),
-    };
-    const res = await svc.countByParty('ПриватБанк', 'plaintiff', db, { date_from: '2025-01-01', date_to: '2025-12-31' });
-    const legs = calls.filter((c) => c.sql.includes(legMark));
-    expect(legs).toHaveLength(2);
-    expect(legs[0].sql).toContain('FROM edrsr_parties p');
-    expect(legs[0].params).toEqual(['приватбанк', '% приватбанк', 1, '2025-01-01', '2025-12-31']);
-    // the other-kinds leg: full-text predicate, restricted to the kinds edrsr_parties lacks
-    expect(legs[1].sql).not.toContain('FROM edrsr_parties');
-    expect(legs[1].sql).toContain('full_text ~*');
-    expect(legs[1].sql).toContain('coalesce(d.justice_kind, 0) NOT IN (1, 3, 4)');
-    expect(legs[1].params).toContain('ПриватБанк');
-    for (const leg of legs) for (let i = 1; i <= leg.params.length; i++) expect(leg.sql).toContain(`$${i}`);
-    expect(res).toMatchObject({
-      total: 5, distinct_cases: 3,
-      by_court: [{ court_code: 7, count: 4 }, { court_code: 9, count: 1 }],
-    });
   });
 
   it('searchFulltext without a justice kind keeps kinds 2/5 on the full-text predicate in a covered leg', async () => {

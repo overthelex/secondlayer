@@ -1673,9 +1673,10 @@ total_resolved_links=0 означає відсутність даних граф
 
       // LEXAI-1760: years answered from the structured parties table vs the full-text anchor.
       const partiesYears = counts.parties_years ?? [];
-      const partiesAll = partiesYears.length > 0 && counts.fts_legs === 0 && !counts.kinds_pending_years?.length;
+      const partiesAll = partiesYears.length > 0 && counts.fts_legs === 0;
+      const excluded = counts.other_kinds_excluded_years ?? [];
       const partiesNote = partiesYears.length
-        ? ` За ${partiesYears.length === 1 ? 'рік' : 'роки'} ${[...partiesYears].sort().join(', ')} сторони взято зі структурованої таблиці сторін (позивач, відповідач, третя особа з шапки рішення) для цивільних, господарських і адміністративних справ${partiesAll ? '' : '; кримінальні справи та справи про адмінправопорушення в ці роки рахуються FTS-прив\'язкою'}. Стягувач/боржник у наказному провадженні в таблиці поки не виділяються.`
+        ? ` За ${partiesYears.length === 1 ? 'рік' : 'роки'} ${[...partiesYears].sort().join(', ')} сторони взято зі структурованої таблиці сторін (позивач, відповідач, третя особа з шапки рішення) для цивільних, господарських і адміністративних справ${excluded.length ? `; кримінальні справи та справи про адмінправопорушення (justice_kind 2 і 5) за ${excluded.length === 1 ? 'цей рік' : 'ці роки'} НЕ ВРАХОВАНО — для них повторіть запит з justice_kind: 2 або 5` : ''}. Стягувач/боржник у наказному провадженні в таблиці поки не виділяються.`
         : '';
       const result: any = {
         party_name: partyName,
@@ -1714,15 +1715,7 @@ total_resolved_links=0 означає відсутність даних граф
             ? 'Пораховані роки збережено в кеші: повторіть той самий запит, і він продовжить з непорахованих років (або звузьте період).'
             : 'Кеш недоступний, тож повтор запиту рахуватиме все заново: запитайте непораховані роки окремо (date_from/date_to).');
       }
-      if (counts.kinds_pending_years?.length) {
-        result.incomplete = true;
-        result.kinds_pending_years = counts.kinds_pending_years;
-        result.resumable = counts.resumable === true;
-        result.note += ` УВАГА: за ${counts.kinds_pending_years.join(', ')} пораховано лише цивільні, господарські й адміністративні справи — кримінальні справи та справи про адмінправопорушення (justice_kind 2 і 5) не вклалися в ліміт часу; підсумки — НИЖНІ МЕЖІ. ` +
-          (counts.resumable
-            ? 'Повторіть той самий запит — уже пораховане збережено в кеші, і він дорахує решту; або вкажіть justice_kind.'
-            : 'Вкажіть justice_kind, щоб отримати точне число для конкретного виду судочинства.');
-      }
+      if (excluded.length) result.other_kinds_excluded_years = excluded;
       if (args.date_from) result.date_from = args.date_from;
       if (args.date_to) result.date_to = args.date_to;
       if (returnCases && counts.sample) {
