@@ -33,3 +33,15 @@ test('loadConfig never sends a comma-joined key list as a Bearer token', () => {
     process.env = saved;
   }
 });
+
+// The ДСА case-status history loader runs as a script inside this container; the old HTTP
+// source points to a dataset data.gov.ua no longer serves and must stay disabled.
+test('court case status: history script enabled, broken start_import source disabled', async () => {
+  const { ALL_SOURCES } = await import('../config.js');
+  const cron = (await import('node-cron')).default;
+  const history = ALL_SOURCES.find((s) => s.name === 'court_case_status_history');
+  assert.ok(history && history.enabled && history.target === 'script');
+  assert.ok(history.command?.some((a) => a.endsWith('load_case_status.py')));
+  assert.ok(cron.validate(history.cron));
+  assert.equal(ALL_SOURCES.find((s) => s.name === 'court_case_status')?.enabled, false);
+});

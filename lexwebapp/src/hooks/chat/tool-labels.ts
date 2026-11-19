@@ -12,6 +12,8 @@ export const TOOL_LABELS: Record<string, string> = {
   find_similar_fact_pattern_cases: 'Схожі справи',
   compare_practice_pro_contra: 'Аналіз за і проти',
   count_cases_by_party: 'Справи сторони',
+  search_case_status_by_party: 'Справи за стороною',
+  get_case_status_details: 'Картка справи',
   get_case_text: 'Текст справи',
   analyze_case_pattern: 'Аналіз паттернів',
   get_similar_reasoning: 'Схоже обґрунтування',

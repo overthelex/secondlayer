@@ -104,6 +104,32 @@ export const tools: Tool[] = [
   },
   { name: 'count_cases_by_party', category: 'Analysis', description: 'Кількість справ за назвою сторони', cost: '$0.002–$0.005' },
   { name: 'search_court_case_status', category: 'Analysis', description: 'Пошук статусу судової справи', cost: '$0.002–$0.005' },
+  {
+    name: 'search_case_status_by_party', category: 'Analysis',
+    description: 'Справи за стороною (ПІБ або назва): стадії розгляду та засідання',
+    cost: '₴1',
+    params: [
+      { name: 'party', type: 'string', required: true, description: 'Сторона справи: прізвище, ПІБ, прізвище з ініціалами або назва юрособи (щонайменше 3 символи)' },
+      { name: 'region', type: 'string', required: false, description: 'Регіон: область (напр. «Львівська») або «м. Київ»' },
+      { name: 'court_name', type: 'string', required: false, description: 'Назва суду або її частина' },
+      { name: 'case_number', type: 'string', required: false, description: 'Номер справи або його початок (напр. 757/12345/24)' },
+      { name: 'proceeding_number', type: 'string', required: false, description: 'Номер провадження або його початок (напр. 2/757/1234/24)' },
+      { name: 'date_from', type: 'string', required: false, description: 'Від дати (YYYY-MM-DD): дата реєстрації справи, для засідань — дата засідання' },
+      { name: 'date_to', type: 'string', required: false, description: 'До дати (YYYY-MM-DD)' },
+      { name: 'include_sessions', type: 'boolean', required: false, description: 'Шукати також в архіві засідань (за замовчуванням true)' },
+      { name: 'limit', type: 'number', required: false, description: 'Кількість справ на сторінці (за замовчуванням 20, максимум 100)' },
+      { name: 'offset', type: 'number', required: false, description: 'Зсув для пагінації' },
+    ],
+  },
+  {
+    name: 'get_case_status_details', category: 'Analysis',
+    description: 'Картка справи: усі стадії розгляду, сторони, засідання',
+    cost: '₴1',
+    params: [
+      { name: 'case_number', type: 'string', required: true, description: 'Номер справи (напр. 533/318/15-ц; суфікс провадження можна не вказувати)' },
+      { name: 'court_name', type: 'string', required: false, description: 'Назва суду або її частина (для старих номерів без коду суду)' },
+    ],
+  },
 
   // ========== Documents ==========
   {
