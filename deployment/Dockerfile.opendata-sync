@@ -29,6 +29,8 @@ COPY scripts/sanctions/load_sanctions.py ./scripts/load_sanctions.py
 
 # LEXAI-2301: Cyprus DRCOR register loader (python3 stdlib + psql)
 COPY scripts/cyprus/load_drcor.py ./scripts/load_drcor.py
+# load_nbu_fin.py (LEXAI-2296): python3 stdlib + psql, like load_case_status.py
+COPY scripts/nbu-fin/load_nbu_fin.py ./scripts/load_nbu_fin.py
 
 EXPOSE 3010
 

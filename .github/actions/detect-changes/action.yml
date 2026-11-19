@@ -163,6 +163,8 @@ runs:
             scripts/court-status/*) OPENDATA_SYNC=true ;;
             # so is load_sanctions.py (LEXAI-2299)
             scripts/sanctions/*) OPENDATA_SYNC=true ;;
+            # so is load_nbu_fin.py (LEXAI-2296)
+            scripts/nbu-fin/*) OPENDATA_SYNC=true ;;
             attorney_crm/*) ATTORNEY_CRM=true ;;
           esac
         done <<< "$CHANGED_FILES"

@@ -401,6 +401,31 @@ const scriptSources: DataSourceSchedule[] = [
     timeoutMs: 60 * 60 * 1000,
     enabled: true,
   },
+  // LEXAI-2296: НБУ — Державний реєстр фінансових установ (ree_fu.xlsx) and the qualifying-holding
+  // lists of non-bank institutions and banks (migration 284). load_nbu_fin.py skips a file whose
+  // sha256 is already in nbu_fin_snapshots, so an unchanged day is a no-op.
+  {
+    name: 'nbu_fin_registers',
+    title: 'НБУ — Реєстр фінансових установ та власники істотної участі',
+    cron: '15 6 * * *', // 06:15 daily
+    target: 'script',
+    sourceName: 'nbu_fin_registers',
+    command: ['python3', '-I', '/app/scripts/load_nbu_fin.py', '--list', 'ree_fu', '--list', 'nonbank_approved',
+      '--list', 'nonbank_no_voting', '--list', 'bank_decisions'],
+    timeoutMs: 30 * 60 * 1000,
+    enabled: true,
+  },
+  {
+    // Index of the bank ownership-structure PDFs: ~180 bank pages, 1.5 s apart, checkpointed.
+    name: 'nbu_bank_ownership_docs',
+    title: 'НБУ — Структури власності банків (перелік PDF)',
+    cron: '40 4 * * 1', // Monday 04:40
+    target: 'script',
+    sourceName: 'nbu_bank_ownership_docs',
+    command: ['python3', '-I', '/app/scripts/load_nbu_fin.py', '--list', 'bank_ownership_docs'],
+    timeoutMs: 60 * 60 * 1000,
+    enabled: true,
+  },
 ];
 
 // ─── ECHR HUDOC data sources (weekly, all 47 CoE member states) ─────
