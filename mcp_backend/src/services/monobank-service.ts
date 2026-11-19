@@ -13,9 +13,13 @@ import { invoiceService } from './invoice-service.js';
 import type { IDatabase } from '../domain/ports/index.js';
 import type { AuditService } from './audit-service.js';
 import { WelcomeBonusService, type ClaimSignals } from './welcome-bonus-service.js';
+import { CARD_LINK_PAYMENT_UAH, WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
 
-/** Amount charged to verify a card; refunded right after the bonus is credited. */
-export const CARD_VERIFY_AMOUNT_UAH = 1;
+/**
+ * Marks card-link invoices created under the paid offer (CARD_LINK_PAYMENT_UAH kept
+ * and credited). Invoices without it are the earlier 1 UAH checks, which are refunded.
+ */
+const CARD_LINK_PAID = 'paid';
 
 export type CardVerifyOutcome = 'credited' | 'pending_review' | 'already_claimed' | 'card_used' | 'no_card' | 'failed';
 
@@ -311,50 +315,10 @@ export class MonobankService {
     }
 
     const amountUah = storedAmountUah > 0 ? storedAmountUah : webhookAmountUah;
-    let amountUsd = 0;
-    if (this.currencyService) {
-      try {
-        const { amountUsd: converted } = await this.currencyService.convertUahToUsd(amountUah);
-        amountUsd = converted;
-      } catch (err: any) {
-        logger.warn('[MonobankService] Failed to convert UAH to USD, crediting UAH only', { amountUah, error: err.message });
-      }
-    }
-    const transaction = await this.billingService.topUpBalance({
-      userId: pi.user_id,
-      amountUsd,
-      amountUah,
+    const transaction = await this.creditPayment(pi, body.invoiceId, amountUah, {
       description: `Поповнення через Monobank: ${amountUah} ₴`,
-      paymentProvider: 'monobank',
-      paymentId: pi.id,
       metadata: { invoiceId: body.invoiceId, reference: body.reference },
     });
-
-    // Generate invoice number
-    const invoiceNumber = invoiceService.generateInvoiceNumber(transaction.id);
-    await this.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
-
-    logger.info('[MonobankService] Payment succeeded', {
-      paymentIntentId: pi.id,
-      amountUah,
-      transactionId: transaction.id,
-      invoiceNumber,
-    });
-
-    // Audit: payment.received
-    if (this.auditService) {
-      try {
-        await this.auditService.log({
-          userId: pi.user_id,
-          action: 'payment.received',
-          resourceType: 'payment_intent',
-          resourceId: pi.id,
-          details: { invoiceId: body.invoiceId, amountUah, amountUsd, transactionId: transaction.id },
-        });
-      } catch (err: any) {
-        logger.warn('[Audit] Failed to log payment.received', { error: err.message });
-      }
-    }
 
     // Save card details from invoice status (non-blocking)
     try {
@@ -385,10 +349,11 @@ export class MonobankService {
   }
 
   /**
-   * Start card verification for the welcome bonus: a 1 UAH invoice that is
-   * refunded once the webhook confirms it. Throws if the account already
-   * has a claim. The client IP and device id are kept with the invoice so the
-   * claim can be compared with earlier claimants.
+   * Start a card link for the welcome bonus: a CARD_LINK_PAYMENT_UAH invoice that
+   * is NOT refunded. The webhook credits it to the balance as a normal top-up
+   * and adds the bonus on top. Throws if the account already has a claim. The
+   * client IP and device id are kept with the invoice so the claim can be
+   * compared with earlier claimants.
    */
   async createCardVerifyInvoice(userId: string, email?: string, signals: ClaimSignals = {}): Promise<MonobankInvoiceResult> {
     if ((await this.welcomeBonus.status(userId)) !== 'available') {
@@ -396,12 +361,72 @@ export class MonobankService {
     }
     return this.createInvoice(
       userId,
-      CARD_VERIFY_AMOUNT_UAH,
-      `Перевірка картки LEX: ${CARD_VERIFY_AMOUNT_UAH} ₴ буде повернено`,
+      CARD_LINK_PAYMENT_UAH,
+      `Прив'язка картки LEX: ${CARD_LINK_PAYMENT_UAH} ₴ на баланс + ${WELCOME_BONUS_UAH} ₴ бонусу. Оплата не повертається`,
       `${this.redirectUrl}/billing/overview?card_verify=1`,
       email,
-      { purpose: 'card_verify', client_ip: signals.clientIp || null, device_id: signals.deviceId || null }
+      {
+        purpose: 'card_verify',
+        card_link: CARD_LINK_PAID,
+        client_ip: signals.clientIp || null,
+        device_id: signals.deviceId || null,
+      }
     );
+  }
+
+  /**
+   * Credit a successful Monobank payment to the balance: top-up transaction,
+   * invoice number and a payment.received audit entry.
+   */
+  private async creditPayment(
+    pi: any,
+    invoiceId: string,
+    amountUah: number,
+    opts: { description: string; metadata: Record<string, unknown> },
+  ): Promise<any> {
+    let amountUsd = 0;
+    if (this.currencyService) {
+      try {
+        const { amountUsd: converted } = await this.currencyService.convertUahToUsd(amountUah);
+        amountUsd = converted;
+      } catch (err: any) {
+        logger.warn('[MonobankService] Failed to convert UAH to USD, crediting UAH only', { amountUah, error: err.message });
+      }
+    }
+    const transaction = await this.billingService.topUpBalance({
+      userId: pi.user_id,
+      amountUsd,
+      amountUah,
+      description: opts.description,
+      paymentProvider: 'monobank',
+      paymentId: pi.id,
+      metadata: opts.metadata,
+    });
+
+    const invoiceNumber = invoiceService.generateInvoiceNumber(transaction.id);
+    await this.billingService.setTransactionInvoiceNumber(transaction.id, invoiceNumber);
+
+    logger.info('[MonobankService] Payment succeeded', {
+      paymentIntentId: pi.id,
+      amountUah,
+      transactionId: transaction.id,
+      invoiceNumber,
+    });
+
+    if (this.auditService) {
+      try {
+        await this.auditService.log({
+          userId: pi.user_id,
+          action: 'payment.received',
+          resourceType: 'payment_intent',
+          resourceId: pi.id,
+          details: { invoiceId, amountUah, amountUsd, transactionId: transaction.id },
+        });
+      } catch (err: any) {
+        logger.warn('[Audit] Failed to log payment.received', { error: err.message });
+      }
+    }
+    return transaction;
   }
 
   private meta(pi: any): Record<string, any> {
@@ -428,12 +453,30 @@ export class MonobankService {
   }
 
   /**
-   * A card-verification invoice was paid: save the card, claim the welcome
-   * bonus (credited, or held for review if it looks like an earlier
-   * claimant; see WelcomeBonusService), then refund
-   * the 1 UAH. The verification payment itself never reaches the balance.
+   * A card-link invoice was paid: credit the payment to the balance, save the
+   * card, and claim the welcome bonus (credited, or held for review if it looks
+   * like an earlier claimant; see WelcomeBonusService). The payment is credited
+   * whatever happens to the bonus and is never refunded.
+   *
+   * Invoices from before the paid offer (1 UAH, no card_link marker) keep the
+   * old behaviour: the bonus is claimed and the 1 UAH is refunded, not credited.
    */
   async processCardVerification(pi: any, invoiceId: string, statusData?: any): Promise<CardVerifyOutcome> {
+    const paid = this.meta(pi).card_link === CARD_LINK_PAID;
+    if (paid) {
+      const amountUah = parseFloat(pi.amount_uah) || CARD_LINK_PAYMENT_UAH;
+      try {
+        await this.creditPayment(pi, invoiceId, amountUah, {
+          description: `Прив'язка картки: поповнення через Monobank ${amountUah} ₴`,
+          metadata: { invoiceId, cardLink: true },
+        });
+      } catch (err: any) {
+        logger.error('[CardLink] Crediting the card-link payment failed, credit it manually', {
+          userId: pi.user_id, invoiceId, amountUah, error: err.message,
+        });
+      }
+    }
+
     let outcome: CardVerifyOutcome = 'no_card';
     try {
       const maskedPan = await this.saveCard(pi.user_id, statusData ?? await this.getInvoiceStatusRaw(invoiceId));
@@ -453,13 +496,15 @@ export class MonobankService {
       [JSON.stringify({ card_verify_outcome: outcome }), pi.id]
     ).catch(() => {});
 
-    try {
-      await this.cancelInvoice(invoiceId);
-    } catch (err: any) {
-      logger.error('[CardVerify] Refund of verification payment failed, refund manually', { invoiceId, error: err.message });
+    if (!paid) {
+      try {
+        await this.cancelInvoice(invoiceId);
+      } catch (err: any) {
+        logger.error('[CardVerify] Refund of verification payment failed, refund manually', { invoiceId, error: err.message });
+      }
     }
 
-    logger.info('[CardVerify] Done', { userId: pi.user_id, invoiceId, outcome });
+    logger.info('[CardVerify] Done', { userId: pi.user_id, invoiceId, outcome, paid });
     return outcome;
   }
 

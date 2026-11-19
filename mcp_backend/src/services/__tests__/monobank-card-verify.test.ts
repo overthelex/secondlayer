@@ -1,6 +1,8 @@
 /**
- * Welcome bonus via card verification: a 1 UAH invoice that is refunded,
- * one bonus per person (account, card, and a review for look-alike claims).
+ * Card link with the welcome bonus: the customer pays 200 UAH, which is credited
+ * to the balance and not refunded, and gets a 200 UAH bonus on top once per
+ * person (account, card, and a review for look-alike claims). Invoices from the
+ * earlier 1 UAH check are still refunded.
  */
 import { MonobankService } from '../monobank-service';
 import { nameKey, normalizeDeviceId } from '../welcome-bonus-service';
@@ -33,6 +35,7 @@ function setup(opts: Setup = {}) {
       if (q.startsWith('INSERT INTO welcome_bonus_claims')) return { rows: claimInserted ? [{ user_id: 'u1' }] : [] };
       if (q.startsWith('SELECT status FROM welcome_bonus_claims')) return { rows: existingStatus ? [{ status: existingStatus }] : [] };
       if (q.startsWith('UPDATE welcome_bonus_claims SET status = \'credited\'')) return { rows: [{ invoice_id: 'inv-1' }] };
+      if (q.startsWith('INSERT INTO payment_intents')) return { rows: [{ id: 'pi-9' }] };
       return { rows: [] };
     }),
   };
@@ -48,57 +51,92 @@ function setup(opts: Setup = {}) {
   return { service, billing, db, fetchMock };
 }
 
-const PI = { id: 'pi-1', user_id: 'u1', metadata: { purpose: 'card_verify', client_ip: '203.0.113.7', device_id: 'dev-12345678' } };
+const PI = {
+  id: 'pi-1', user_id: 'u1', amount_uah: '200.00',
+  metadata: { purpose: 'card_verify', card_link: 'paid', client_ip: '203.0.113.7', device_id: 'dev-12345678' },
+};
+const LEGACY_PI = { id: 'pi-0', user_id: 'u1', amount_uah: '1.00', metadata: { purpose: 'card_verify', client_ip: '203.0.113.7' } };
 const cancelled = (f: jest.Mock) => f.mock.calls.some(([u]) => String(u).includes('/invoice/cancel'));
 const insertParams = (db: any) => db.query.mock.calls.find(([sql]: any[]) => String(sql).trim().startsWith('INSERT INTO welcome_bonus_claims'))?.[1];
+const topUps = (billing: any) => billing.topUpBalance.mock.calls.map(([arg]: any[]) => arg);
+const PAYMENT = { amountUah: 200, paymentProvider: 'monobank', paymentId: 'pi-1' };
+const BONUS = { amountUah: 200, paymentProvider: 'adjustment', paymentId: 'welcome-u1' };
 
-describe('MonobankService card verification', () => {
-  it('credits the welcome bonus and refunds the 1 UAH', async () => {
+describe('MonobankService card link', () => {
+  it('credits the 200 UAH payment and the 200 UAH bonus, and refunds nothing', async () => {
     const { service, billing, fetchMock, db } = setup();
     await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('credited');
-    expect(billing.topUpBalance).toHaveBeenCalledTimes(1);
-    expect(billing.topUpBalance.mock.calls[0][0]).toMatchObject({ amountUah: 430, paymentId: 'welcome-u1' });
-    expect(cancelled(fetchMock)).toBe(true);
+    expect(topUps(billing)).toEqual([expect.objectContaining(PAYMENT), expect.objectContaining(BONUS)]);
+    expect(billing.setTransactionInvoiceNumber).toHaveBeenCalledTimes(1);
+    expect(cancelled(fetchMock)).toBe(false);
     // signals stored with the claim
     expect(insertParams(db)).toEqual(expect.arrayContaining(['credited', 'петренко іван', '203.0.113.7', 'dev-12345678']));
   });
 
-  it('holds the bonus for review when the claim looks like an earlier claimant', async () => {
+  it('credits the payment but holds the bonus for review when the claim looks like an earlier claimant', async () => {
     const { service, billing, fetchMock, db } = setup({ match: { user_id: 'u0', reason: 'name' } });
     await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('pending_review');
-    expect(billing.topUpBalance).not.toHaveBeenCalled();
-    expect(cancelled(fetchMock)).toBe(true);
+    expect(topUps(billing)).toEqual([expect.objectContaining(PAYMENT)]);
+    expect(cancelled(fetchMock)).toBe(false);
     expect(insertParams(db)).toEqual(expect.arrayContaining(['pending_review', 'name', 'u0']));
   });
 
-  it('gives no bonus when the card already claimed one on another account', async () => {
+  it('credits the payment without a bonus when the card already claimed one on another account', async () => {
     const { service, billing, fetchMock } = setup({ claimInserted: false });
     await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('card_used');
-    expect(billing.topUpBalance).not.toHaveBeenCalled();
-    expect(cancelled(fetchMock)).toBe(true);
+    expect(topUps(billing)).toEqual([expect.objectContaining(PAYMENT)]);
+    expect(cancelled(fetchMock)).toBe(false);
   });
 
   it('gives no second bonus to the same account', async () => {
     const { service, billing } = setup({ claimInserted: false, existingStatus: 'credited' });
     await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('already_claimed');
-    expect(billing.topUpBalance).not.toHaveBeenCalled();
+    expect(topUps(billing)).toEqual([expect.objectContaining(PAYMENT)]);
   });
 
-  it('still refunds when Monobank returns no card data', async () => {
+  it('credits the payment when Monobank returns no card data', async () => {
     const { service, billing, fetchMock } = setup({ maskedPan: null });
     await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('no_card');
-    expect(billing.topUpBalance).not.toHaveBeenCalled();
-    expect(cancelled(fetchMock)).toBe(true);
+    expect(topUps(billing)).toEqual([expect.objectContaining(PAYMENT)]);
+    expect(cancelled(fetchMock)).toBe(false);
   });
 
-  it('frees the claim when crediting fails so a retry can succeed', async () => {
-    const { service, billing, db } = setup();
+  it('still claims the bonus when crediting the payment fails', async () => {
+    const { service, billing } = setup();
     billing.topUpBalance.mockRejectedValueOnce(new Error('db down'));
+    await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('credited');
+    expect(topUps(billing)[1]).toMatchObject(BONUS);
+  });
+
+  it('frees the claim when crediting the bonus fails so a retry can succeed', async () => {
+    const { service, billing, db } = setup();
+    billing.topUpBalance
+      .mockResolvedValueOnce({ id: 'txn-1' })
+      .mockRejectedValueOnce(new Error('db down'));
     await expect(service.processCardVerification(PI, 'inv-1')).resolves.toBe('failed');
     expect(db.query.mock.calls.some(([sql]) => String(sql).startsWith('DELETE FROM welcome_bonus_claims'))).toBe(true);
   });
 
-  it('refuses to open a verification invoice once the account has a claim', async () => {
+  it('refunds an earlier 1 UAH check and credits only the bonus', async () => {
+    const { service, billing, fetchMock } = setup();
+    await expect(service.processCardVerification(LEGACY_PI, 'inv-0')).resolves.toBe('credited');
+    expect(topUps(billing)).toEqual([expect.objectContaining(BONUS)]);
+    expect(cancelled(fetchMock)).toBe(true);
+  });
+
+  it('opens a 200 UAH card-link invoice marked as paid', async () => {
+    const { service, db, fetchMock } = setup();
+    process.env.PUBLIC_URL = 'https://legal.org.ua';
+    fetchMock.mockImplementationOnce(async () => ({ ok: true, json: async () => ({ invoiceId: 'inv-9', pageUrl: 'https://pay/x' }) }) as any);
+    await service.createCardVerifyInvoice('u1', 'a@b.c');
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as any[])[1]?.body));
+    expect(body.amount).toBe(20000);
+    expect(body.merchantPaymInfo.destination).toContain('не повертається');
+    const pi: any[] = db.query.mock.calls.find(([sql]: any[]) => String(sql).includes('INSERT INTO payment_intents'))!;
+    expect(JSON.parse(String((pi[1] as any[])[4])).card_link).toBe('paid');
+  });
+
+  it('refuses to open a card-link invoice once the account has a claim', async () => {
     const { service } = setup({ existingStatus: 'pending_review' });
     await expect(service.createCardVerifyInvoice('u1')).rejects.toThrow('WELCOME_BONUS_ALREADY_CLAIMED');
   });

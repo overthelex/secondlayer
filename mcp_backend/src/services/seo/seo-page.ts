@@ -3,13 +3,13 @@
  * server-rendered, no client JS, Ukrainian. Every interpolated value goes
  * through esc().
  */
-import { WELCOME_BONUS_UAH } from '../../config/welcome-bonus.js';
+import { CARD_LINK_PAYMENT_UAH, CARD_LINK_TOTAL_UAH, WELCOME_BONUS_UAH } from '../../config/welcome-bonus.js';
 
 export const SITE = 'https://legal.org.ua';
 
-export { WELCOME_BONUS_UAH };
+export { CARD_LINK_PAYMENT_UAH, CARD_LINK_TOTAL_UAH, WELCOME_BONUS_UAH };
 /** One line under every sign-up button, so the bonus is stated the same way everywhere. */
-export const BONUS_NOTE = `Прив'яжіть картку після реєстрації й отримайте ${WELCOME_BONUS_UAH} грн на баланс. Без підписки, 1 ₴ за перевірку картки повертаємо.`;
+export const BONUS_NOTE = `Прив'яжіть картку після реєстрації: сплатіть ${CARD_LINK_PAYMENT_UAH} грн і отримайте ${CARD_LINK_TOTAL_UAH} грн на баланс. Без підписки.`;
 
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
