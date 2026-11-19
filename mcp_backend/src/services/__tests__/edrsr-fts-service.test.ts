@@ -1224,6 +1224,51 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     }
   });
 
+  it('countByParty keeps the parties count when the kinds-2/5 supplement times out, then resumes from cache', async () => {
+    const svc = new EdsrFtsService();
+    const cache = makeLegCache();
+    (svc as any).edsrCache = cache;
+    let otherFails = true;
+    const calls: string[] = [];
+    const db = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2024 }] });
+        calls.push(sql);
+        if (sql.includes('NOT IN (1, 3, 4)')) {
+          if (otherFails) return Promise.reject(pgTimeout());
+          return Promise.resolve({ rows: [{ n: 2, causes: ['k1'], by_court: [{ court_code: 5, count: 2 }] }] });
+        }
+        return Promise.resolve({ rows: [{ n: 10, causes: ['a', 'b', 'c'], by_court: [{ court_code: 9, count: 10 }] }] });
+      }),
+    };
+    const args = ['Бізнес Позика', 'any', db, { date_from: '2024-01-01', date_to: '2024-03-31' }] as const;
+    const first = await svc.countByParty(...args);
+    expect(first).toMatchObject({
+      total: 10, distinct_cases: 3, incomplete: true, kinds_pending_years: [2024], parties_years: [2024], fts_legs: 0,
+    });
+    expect(first.pending_years).toBeUndefined();
+
+    otherFails = false;
+    const second = await svc.countByParty(...args);
+    expect(second).toMatchObject({ total: 12, distinct_cases: 4, parties_years: [2024], fts_legs: 1 });
+    expect(second.incomplete).toBeUndefined();
+
+    // Third call: the supplement comes from the cache, only the parties statement runs.
+    calls.length = 0;
+    const third = await svc.countByParty(...args);
+    expect(third).toMatchObject({ total: 12, distinct_cases: 4 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('FROM edrsr_parties p');
+  });
+
+  it('countByParty with a parties kind runs no full-text statement at all', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2024]);
+    const res = await svc.countByParty('Бізнес Позика', 'any', db, { date_from: '2024-01-01', date_to: '2024-03-31', justice_kind: 1 });
+    expect(res).toMatchObject({ parties_years: [2024], fts_legs: 0 });
+    expect(db.calls.filter((c) => c.sql.includes('edrsr_fulltext'))).toHaveLength(0);
+  });
+
   it('search keeps the full-text path for an unscoped party name', async () => {
     const svc = new EdsrFtsService();
     const db = makeCoveredDb([2025]);

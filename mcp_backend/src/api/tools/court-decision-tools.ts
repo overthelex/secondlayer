@@ -1671,6 +1671,12 @@ total_resolved_links=0 означає відсутність даних граф
           }
         : null;
 
+      // LEXAI-1760: years answered from the structured parties table vs the full-text anchor.
+      const partiesYears = counts.parties_years ?? [];
+      const partiesAll = partiesYears.length > 0 && counts.fts_legs === 0;
+      const partiesNote = partiesYears.length
+        ? ` За ${partiesYears.length === 1 ? 'рік' : 'роки'} ${[...partiesYears].sort().join(', ')} сторони взято зі структурованої таблиці сторін (позивач, відповідач, третя особа з шапки рішення) для цивільних, господарських і адміністративних справ${partiesAll ? '' : '; кримінальні справи та справи про адмінправопорушення в ці роки рахуються FTS-прив\'язкою'}. Стягувач/боржник у наказному провадженні в таблиці поки не виділяються.`
+        : '';
       const result: any = {
         party_name: partyName,
         party_type: partyType,
@@ -1684,8 +1690,8 @@ total_resolved_links=0 означає відсутність даних граф
         by_court,
         ...(by_court_other ? { by_court_other } : {}),
         time_taken_ms: Date.now() - startTime,
-        method: 'fts_party_anchor',
-        note: `total_cases — кількість УНІКАЛЬНИХ справ (за номером справи); total_documents — кількість документів, вона завжди більша, бо одна справа дає документи в кожній інстанції. У by_court рахуються ДОКУМЕНТИ по судах (не більше ${CourtDecisionTools.BY_COURT_LIMIT} судів з найбільшою кількістю; решта судів і документи без коду суду (unknown_court_documents) зведені в by_court_other), тому сума by_court разом з by_court_other.documents дорівнює total_documents, а не total_cases. Назва/роль — це FTS-прив'язка по тексту рішення, не структурний фільтр сторони; без ролі (any) рахуються лише рішення, де назва стоїть у позиції сторони (за позовом / до / позивач, відповідач, третя особа, заявник, стягувач, боржник, кредитор, скаржник, представник), а згадки в банківських реквізитах (р/р, МФО, «рахунок в АТ …») не рахуються. Повна офіційна назва (напр. «Державний експортно-імпортний банк України» для Укрексімбанку) рахується окремим запитом. Точне визначення ролі — після впровадження parties-таблиці (LEXAI-1760).`,
+        method: partiesYears.length === 0 ? 'fts_party_anchor' : partiesAll ? 'parties_table' : 'parties_table+fts_party_anchor',
+        note: `total_cases — кількість УНІКАЛЬНИХ справ (за номером справи); total_documents — кількість документів, вона завжди більша, бо одна справа дає документи в кожній інстанції. У by_court рахуються ДОКУМЕНТИ по судах (не більше ${CourtDecisionTools.BY_COURT_LIMIT} судів з найбільшою кількістю; решта судів і документи без коду суду (unknown_court_documents) зведені в by_court_other), тому сума by_court разом з by_court_other.documents дорівнює total_documents, а не total_cases. ${partiesYears.length ? 'Поза таблицею сторін (див. нижче) назва/роль — це FTS-прив\'язка по тексту рішення, не структурний фільтр сторони' : 'Назва/роль — це FTS-прив\'язка по тексту рішення, не структурний фільтр сторони'}; без ролі (any) рахуються лише рішення, де назва стоїть у позиції сторони (за позовом / до / позивач, відповідач, третя особа, заявник, стягувач, боржник, кредитор, скаржник, представник), а згадки в банківських реквізитах (р/р, МФО, «рахунок в АТ …») не рахуються. Повна офіційна назва (напр. «Державний експортно-імпортний банк України» для Укрексімбанку) рахується окремим запитом.${partiesNote}`,
       };
       if (counts.capped) {
         // Never let a truncated aggregate read as an exact count.
@@ -1707,6 +1713,15 @@ total_resolved_links=0 означає відсутність даних граф
           (counts.resumable
             ? 'Пораховані роки збережено в кеші: повторіть той самий запит, і він продовжить з непорахованих років (або звузьте період).'
             : 'Кеш недоступний, тож повтор запиту рахуватиме все заново: запитайте непораховані роки окремо (date_from/date_to).');
+      }
+      if (counts.kinds_pending_years?.length) {
+        result.incomplete = true;
+        result.kinds_pending_years = counts.kinds_pending_years;
+        result.resumable = counts.resumable === true;
+        result.note += ` УВАГА: за ${counts.kinds_pending_years.join(', ')} пораховано лише цивільні, господарські й адміністративні справи — кримінальні справи та справи про адмінправопорушення (justice_kind 2 і 5) не вклалися в ліміт часу; підсумки — НИЖНІ МЕЖІ. ` +
+          (counts.resumable
+            ? 'Повторіть той самий запит — уже пораховане збережено в кеші, і він дорахує решту; або вкажіть justice_kind.'
+            : 'Вкажіть justice_kind, щоб отримати точне число для конкретного виду судочинства.');
       }
       if (args.date_from) result.date_from = args.date_from;
       if (args.date_to) result.date_to = args.date_to;

@@ -80,4 +80,32 @@ describe('count_cases_by_party (LEXAI-2177)', () => {
     expect(out.total_cases).toBe(317);
     expect(out.total_documents).toBe(1113);
   });
+
+  it('says which years came from the parties table and stays on fts_party_anchor without them', async () => {
+    const fts = await run({ total: 3, distinct_cases: 2, by_court: [{ court_code: 1, count: 3 }], fts_legs: 1 });
+    expect(fts.method).toBe('fts_party_anchor');
+    expect(fts.note).not.toContain('LEXAI-1760');
+    expect(fts.note).not.toContain('таблиці сторін');
+
+    const mixed = await run({ total: 3, distinct_cases: 2, by_court: [{ court_code: 1, count: 3 }], parties_years: [2024], fts_legs: 1 });
+    expect(mixed.method).toBe('parties_table+fts_party_anchor');
+    expect(mixed.note).toContain('За рік 2024 сторони взято зі структурованої таблиці сторін');
+
+    const pure = await run({ total: 3, distinct_cases: 2, by_court: [{ court_code: 1, count: 3 }], parties_years: [2024, 2025], fts_legs: 0 });
+    expect(pure.method).toBe('parties_table');
+    expect(pure.note).toContain('За роки 2024, 2025');
+  });
+
+  it('flags a count whose kinds-2/5 supplement did not finish as a floor', async () => {
+    const out = await run({
+      total: 10, distinct_cases: 3, by_court: [{ court_code: 9, count: 10 }],
+      parties_years: [2024], fts_legs: 0, incomplete: true, kinds_pending_years: [2024], resumable: true,
+    });
+    expect(out.incomplete).toBe(true);
+    expect(out.kinds_pending_years).toEqual([2024]);
+    expect(out.pending_years).toBeUndefined();
+    expect(out.note).toContain('justice_kind 2 і 5');
+    expect(out.note).toContain('НИЖНІ МЕЖІ');
+    expect(out.note).toContain('Повторіть той самий запит');
+  });
 });
