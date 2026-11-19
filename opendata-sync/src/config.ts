@@ -426,6 +426,19 @@ const scriptSources: DataSourceSchedule[] = [
     timeoutMs: 60 * 60 * 1000,
     enabled: true,
   },
+  {
+    // LEXAI-2300: ICIJ Offshore Leaks Database (ODbL 1.0, contents CC BY-SA 3.0) into icij_nodes /
+    // icij_relationships (migration 287). ICIJ republishes the archive rarely: load_icij.py compares
+    // the archive's ETag and size with icij_snapshots and downloads nothing when they match.
+    name: 'icij_offshore_leaks',
+    title: 'ICIJ Offshore Leaks — офшорні компанії та їхні зв’язки',
+    cron: '30 4 3 * *', // 04:30 on the 3rd of each month
+    target: 'script',
+    sourceName: 'icij_offshore_leaks',
+    command: ['python3', '-I', '/app/scripts/load_icij.py'],
+    timeoutMs: 3 * 60 * 60 * 1000,
+    enabled: true,
+  },
 ];
 
 // ─── ECHR HUDOC data sources (weekly, all 47 CoE member states) ─────

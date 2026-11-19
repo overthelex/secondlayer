@@ -65,3 +65,14 @@ test('intl sanctions: daily script source runs load_sanctions.py for all lists',
   assert.ok(cron.validate(s.cron));
   assert.deepEqual(s.command, ['python3', '-I', '/app/scripts/load_sanctions.py', '--list', 'all']);
 });
+
+// LEXAI-2300: the ICIJ Offshore Leaks archive is checked monthly by a script baked into this image.
+test('icij offshore leaks: monthly script source runs load_icij.py', async () => {
+  const { ALL_SOURCES } = await import('../config.js');
+  const cron = (await import('node-cron')).default;
+  const s = ALL_SOURCES.find((x) => x.name === 'icij_offshore_leaks');
+  assert.ok(s && s.enabled && s.target === 'script');
+  assert.ok(cron.validate(s.cron));
+  assert.match(s.cron, /^\d+ \d+ \d+ \* \*$/);
+  assert.deepEqual(s.command, ['python3', '-I', '/app/scripts/load_icij.py']);
+});
