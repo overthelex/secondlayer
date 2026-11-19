@@ -35,4 +35,7 @@ COPY scripts/icij/load_icij.py ./scripts/load_icij.py
 
 EXPOSE 3010
 
+# ФГВФО debtor lists (LEXAI-2297): python3 stdlib + psql, like the loaders above.
+COPY scripts/fgvfo/load_fgvfo.py ./scripts/load_fgvfo.py
+
 CMD ["node", "dist/index.js"]

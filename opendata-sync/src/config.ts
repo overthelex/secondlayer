@@ -372,6 +372,20 @@ const scriptSources: DataSourceSchedule[] = [
     enabled: true,
   },
   {
+    // LEXAI-2297: ФГВФО (fg.gov.ua) — debtors of banks being liquidated, by court decision, one XLSX
+    // per bank (/borzhniki), and claims against former owners / related persons of failed banks.
+    // The Fund updates them quarterly; load_fgvfo.py skips a file whose sha256 is already in
+    // fgvfo_snapshots, so most weekly runs are a no-op. Each new file is a new snapshot.
+    name: 'fgvfo_debtors',
+    title: 'ФГВФО — боржники банків, що ліквідуються, та пов’язані з банками особи',
+    cron: '30 4 * * 3', // Wednesday 04:30
+    target: 'script',
+    sourceName: 'fgvfo_debtors',
+    command: ['python3', '-I', '/app/scripts/load_fgvfo.py', '--dataset', 'all'],
+    timeoutMs: 30 * 60 * 1000,
+    enabled: true,
+  },
+  {
     // ДСА «Стан розгляду справ» (data.gov.ua 0ad60ea9-…): a daily ZIP with only the latest ~1.5M
     // stage events. load_case_status.py upserts it into court_case_status_history (migration 278)
     // so events that fall out of later snapshots are kept. The ZIP of day D is published around

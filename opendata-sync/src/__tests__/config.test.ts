@@ -44,6 +44,16 @@ test('cy_drcor: monthly script source runs load_drcor.py', async () => {
   assert.deepEqual(s.command, ['python3', '-I', '/app/scripts/load_drcor.py']);
 });
 
+// LEXAI-2297: ФГВФО debtor lists load weekly through a script baked into this image.
+test('fgvfo debtors: weekly script source runs load_fgvfo.py for both datasets', async () => {
+  const { ALL_SOURCES } = await import('../config.js');
+  const cron = (await import('node-cron')).default;
+  const s = ALL_SOURCES.find((x) => x.name === 'fgvfo_debtors');
+  assert.ok(s && s.enabled && s.target === 'script');
+  assert.ok(cron.validate(s.cron));
+  assert.deepEqual(s.command, ['python3', '-I', '/app/scripts/load_fgvfo.py', '--dataset', 'all']);
+});
+
 // The ДСА case-status history loader runs as a script inside this container; the old HTTP
 // source points to a dataset data.gov.ua no longer serves and must stay disabled.
 test('court case status: history script enabled, broken start_import source disabled', async () => {

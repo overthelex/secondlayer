@@ -155,6 +155,8 @@ runs:
             deployment/Dockerfile.attorney-crm) ATTORNEY_CRM=true; DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             deployment/*) DEPLOY_INFRA=true; DEPLOYMENT=true ;;
             mobile/*) MOBILE=true ;;
+            # load_fgvfo.py (LEXAI-2297) is baked into the opendata-sync image
+            scripts/fgvfo/*) OPENDATA_SYNC=true ;;
             platform/*) PLATFORM=true ;;
             # load_drcor.py is baked into the opendata-sync image (LEXAI-2301)
             scripts/cyprus/*) OPENDATA_SYNC=true ;;
