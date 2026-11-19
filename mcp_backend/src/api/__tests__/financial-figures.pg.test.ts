@@ -36,7 +36,7 @@ d('financial_figures on PostgreSQL', () => {
       CREATE TABLE opendata_financial_statements (id BIGSERIAL PRIMARY KEY, tin TEXT NOT NULL, c_doc TEXT, c_doc_sub TEXT,
         c_doc_ver TEXT, period_year INT, period_month INT, period_type INT, c_reg TEXT, c_raj TEXT, form_type TEXT,
         raw_xml TEXT, imported_at TIMESTAMPTZ DEFAULT NOW());`);
-    const migration = readFileSync(join(__dirname, '..', '..', 'migrations', '278_financial_figures.sql'), 'utf8');
+    const migration = readFileSync(join(__dirname, '..', '..', 'migrations', '280_financial_figures.sql'), 'utf8');
     await pool.query(migration);
     await pool.query(migration); // idempotent
   });
