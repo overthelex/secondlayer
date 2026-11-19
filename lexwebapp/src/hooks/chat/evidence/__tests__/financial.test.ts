@@ -27,6 +27,23 @@ describe('extractFinancialEvidence', () => {
     expect(snippet).toContain('аналогічний період попереднього року');
   });
 
+  it('maps get_financial_statements statements with their source and filing date', () => {
+    const r = extractFinancialEvidence('get_financial_statements', {
+      edrpou: '00000001',
+      results: [
+        { period: 'рік 2024', period_year: 2024, period_month: 12, form: '1-m', c_doc_sub: '100', form_name: 'Форми № 1-м, 2-м',
+          source: 'dssu', source_name: 'Фінансова звітність підприємств (Держстат, ДПС; data.gov.ua)', filed_on: '2025-02-20',
+          units: 'тис. грн', columns, figures },
+        { period: 'рік 2020', period_year: 2020, period_month: 12, form: '2', c_doc_sub: '002', form_name: 'Форма № 2', figures: [] },
+      ],
+    });
+    expect(r.documents).toHaveLength(1);
+    expect(r.documents[0].title).toBe('Фінансова звітність, рік 2024: Форми № 1-м, 2-м');
+    expect(r.documents[0].metadata!.snippet).toContain('ЄДРПОУ: 00000001');
+    expect(r.documents[0].metadata!.snippet).toContain('Подано 2025-02-20');
+    expect(r.documents[0].metadata!.source).toContain('Держстат');
+  });
+
   it('maps the dossier latest figures; ignores other tools', () => {
     const r = extractFinancialEvidence('get_company_dossier', {
       edrpou: '21673832',

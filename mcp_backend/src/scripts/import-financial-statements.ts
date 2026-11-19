@@ -6,10 +6,16 @@
  * (tin, period_year, form_type, c_doc_sub).
  *
  * Heavy: ~713K filings / ~3.7 GB. Run in the background; idempotent (ON CONFLICT).
+ * A filing whose XML is unchanged is left alone, so imported_at marks real changes only
+ * (backfill-financial-figures --incremental re-reads rows by it). Codes longer than 8
+ * digits (sole traders' personal tax numbers) are skipped.
  *
  * Usage:
  *   npx tsx src/scripts/import-financial-statements.ts [root]
  *   default: /data/opendata/finrep
+ *   node dist/scripts/import-financial-statements.js file1.zip [file2.zip ...]
+ *   (explicit archives, in the given order: the weekly finzvit archive job passes the
+ *   newly archived resources, oldest last_modified first)
  */
 
 import { Pool } from 'pg';
@@ -53,6 +59,8 @@ function parseFiling(buf: Buffer): any | null {
   const fm = declarXml.match(/noNamespaceSchemaLocation="([^"]+?)\.XSD"/i);
   const formType = fm ? fm[1] : null;
   if (!tin || periodYear == null || !formType || !cDocSub) return null;
+  // A sole trader's personal tax number is personal data: not loaded.
+  if (!/^\d{1,8}$/.test(tin)) return null;
 
   return {
     tin,
@@ -75,7 +83,7 @@ function parseFiling(buf: Buffer): any | null {
  * (outer zip → per-form inner zip → XML). The nested archives hold the main
  * annual річні звіти, so both must be walked.
  */
-function* collectXmls(zip: AdmZip): Generator<Buffer> {
+function* collectXmls(zip: AdmZip, stats: { badNested: number }): Generator<Buffer> {
   for (const en of zip.getEntries()) {
     if (en.isDirectory) continue;
     const name = en.entryName.toLowerCase();
@@ -83,19 +91,19 @@ function* collectXmls(zip: AdmZip): Generator<Buffer> {
       yield en.getData();
     } else if (name.endsWith('.zip')) {
       let inner: AdmZip;
-      try { inner = new AdmZip(en.getData()); } catch { continue; }
-      yield* collectXmls(inner);
+      try { inner = new AdmZip(en.getData()); } catch { stats.badNested++; continue; }
+      yield* collectXmls(inner, stats);
     }
   }
 }
 
 async function insertBatch(rows: any[]): Promise<number> {
   if (rows.length === 0) return 0;
-  const seen = new Set<string>();
-  const deduped = rows.filter(r => {
-    const k = `${r.tin}|${r.period_year}|${r.period_month}|${r.form_type}|${r.c_doc_sub}`;
-    if (seen.has(k)) return false; seen.add(k); return true;
-  });
+  // One row per key, the LAST one read: archives are passed oldest first and each is
+  // flushed before the next, so a later filing replaces an earlier one.
+  const byKey = new Map<string, any>();
+  for (const r of rows) byKey.set(`${r.tin}|${r.period_year}|${r.period_month}|${r.form_type}|${r.c_doc_sub}`, r);
+  const deduped = [...byKey.values()];
   const values: any[] = [];
   const ph: string[] = [];
   let i = 1;
@@ -114,30 +122,47 @@ async function insertBatch(rows: any[]): Promise<number> {
       c_doc = EXCLUDED.c_doc, c_doc_ver = EXCLUDED.c_doc_ver, period_month = EXCLUDED.period_month,
       period_type = EXCLUDED.period_type, c_reg = EXCLUDED.c_reg, c_raj = EXCLUDED.c_raj,
       raw_xml = EXCLUDED.raw_xml, imported_at = NOW()
+    WHERE opendata_financial_statements.raw_xml IS DISTINCT FROM EXCLUDED.raw_xml
   `;
   const res = await pool.query(sql, values);
   return res.rowCount || 0;
 }
 
 async function main(): Promise<void> {
-  const root = process.argv[2] || DEFAULT_ROOT;
+  const args = process.argv.slice(2);
+  const explicit = args.length > 0 && args.every((a) => a.toLowerCase().endsWith('.zip'));
+  const root = explicit ? '(explicit archives)' : (args[0] || DEFAULT_ROOT);
   console.log(`📥 Financial statements refresh from ${root}`);
-  if (!fs.existsSync(root)) { console.error(`❌ Not found: ${root}`); process.exit(1); }
-  await pool.query('SELECT 1');
-
   const zips: string[] = [];
-  for (const sub of ['annual', 'quarterly']) {
-    const d = path.join(root, sub);
-    if (fs.existsSync(d)) for (const f of fs.readdirSync(d)) if (f.toLowerCase().endsWith('.zip')) zips.push(path.join(d, f));
+  if (explicit) {
+    for (const a of args) {
+      if (!fs.existsSync(a)) { console.error(`❌ Not found: ${a}`); process.exit(1); }
+      zips.push(a);
+    }
+  } else {
+    if (!fs.existsSync(root)) { console.error(`❌ Not found: ${root}`); process.exit(1); }
+    for (const sub of ['annual', 'quarterly']) {
+      const d = path.join(root, sub);
+      if (fs.existsSync(d)) for (const f of fs.readdirSync(d)) if (f.toLowerCase().endsWith('.zip')) zips.push(path.join(d, f));
+    }
   }
+  await pool.query('SELECT 1');
   console.log(`   ${zips.length} archives`);
 
   let total = 0, parsed = 0, skipped = 0;
   let batch: any[] = [];
+  const failed: string[] = [];
   for (const zp of zips) {
+    const base = path.basename(zp);
     let zip: AdmZip;
-    try { zip = new AdmZip(zp); } catch (e: any) { console.warn(`   ⚠️ ${path.basename(zp)}: ${e.message}`); continue; }
-    for (const xmlBuf of collectXmls(zip)) {
+    try { zip = new AdmZip(zp); } catch (e: any) {
+      console.warn(`   ⚠️ ${base}: ${e.message}`);
+      failed.push(base);
+      continue;
+    }
+    const stats = { badNested: 0 };
+    const parsedBefore = parsed;
+    for (const xmlBuf of collectXmls(zip, stats)) {
       let row: any = null;
       try { row = parseFiling(xmlBuf); } catch { /* skip corrupt */ }
       if (!row) { skipped++; continue; }
@@ -145,11 +170,22 @@ async function main(): Promise<void> {
       batch.push(row);
       if (batch.length >= BATCH_SIZE) { total += await insertBatch(batch); batch = []; }
     }
-    console.log(`   ${path.basename(zp)}: parsed ${parsed}, upserted ${total}, skipped ${skipped}`);
+    // Flush at the archive boundary, so a later archive's filing always lands after this one's.
+    if (batch.length) { total += await insertBatch(batch); batch = []; }
+    if (stats.badNested > 0 || parsed === parsedBefore) {
+      console.warn(`   ⚠️ ${base}: ${stats.badNested} unreadable nested archive(s), ${parsed - parsedBefore} filings`);
+      failed.push(base);
+    }
+    console.log(`   ${base}: parsed ${parsed}, upserted ${total}, skipped ${skipped}`);
   }
-  if (batch.length) total += await insertBatch(batch);
   console.log(`✅ Financial statements: ${total} rows upserted (${parsed} parsed, ${skipped} skipped)`);
   await pool.end();
+  // Explicit archives are the weekly job's input: an unreadable or empty one fails the run,
+  // so the job keeps it pending instead of reporting success.
+  if (explicit && failed.length) {
+    console.error(`❌ ${failed.length} archive(s) unreadable or without filings: ${failed.join(', ')}`);
+    process.exit(1);
+  }
 }
 
 main().catch(err => { console.error('❌ Fatal:', err); process.exit(1); });

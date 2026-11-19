@@ -104,6 +104,7 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'openreyestr_search_founders_history', label: 'Засновники (історія)' },
       { name: 'openreyestr_search_beneficiaries_history', label: 'Бенефіціари (історія)' },
       { name: 'openreyestr_get_by_edrpou', label: 'За ЄДРПОУ' },
+      { name: 'get_financial_statements', label: 'Фінзвітність' },
       { name: 'openreyestr_get_statistics', label: 'Статистика' },
       { name: 'openreyestr_search_enforcement_proceedings', label: 'Виконавчі провадження' },
       { name: 'openreyestr_search_debtors', label: 'Боржники' },

@@ -534,9 +534,21 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     title: 'Фінансова звітність',
     description: 'Пошук фінансової звітності підприємств за ЄДРПОУ (ДПС, відкриті дані)\n\n1,2 млн звітів за 2021-2026 роки: Форми 1-6, а також 1-м/2-м (мале підприємство) і 1-мс/2-мс (мікропідприємство).\n\nДля балансу (Форма 1, 1-м, 1-мс) і звіту про фінрезультати (Форма 2, 2-м, 2-мс) кожен рядок містить figures: ключові показники з кодом рядка форми, current і prior (значення стовпців пояснює columns), у тис. грн. Баланс: активи (1300), необоротні (1095) й оборотні (1195) активи, власний капітал (1495), довгострокові (1595) і поточні (1695) зобов’язання. Фінрезультати: чистий дохід (2000), валовий прибуток (2090 мінус збиток 2095, лише Форма 2), фінрезультат до оподаткування (2290/2295), чистий прибуток або збиток (2350/2355; у формах 2-м і 2-мс один рядок 2350 зі знаком). balance_check показує, чи збігається актив (1300) з пасивом (1900).',
     table: 'opendata_financial_statements',
-    // raw_xml is read only for the forms whose figures are parsed, and transformRow
-    // drops it: the XML never reaches the caller.
-    selectColumns: "tin, c_doc, c_doc_sub, c_doc_ver, period_year, period_month, period_type, c_reg, c_raj, form_type, CASE WHEN c_doc_sub IN ('001', '002', '100', '110') THEN raw_xml END AS raw_xml",
+    // Figures come from financial_figures (normalized cells, migration 278). raw_xml is
+    // read only for a figure form not normalized yet, and transformRow drops it: the
+    // XML never reaches the caller. One figures row per filing, found by source_id
+    // (partial index idx_finfig_dssu_source_id). A stored row older than the filing's
+    // imported_at (XML refreshed in place, backfill not run yet) is ignored and the XML
+    // parsed instead.
+    selectColumns: "tin, c_doc, c_doc_sub, c_doc_ver, period_year, period_month, period_type, c_reg, c_raj, form_type, "
+      + "(SELECT jsonb_build_object('cur', f.cur, 'prev', f.prev, 'report_date', f.report_date, 'period_name', f.period_name) "
+      + "FROM financial_figures f WHERE f.source = 'dssu' AND f.source_id = opendata_financial_statements.id "
+      + "AND f.updated_at >= COALESCE(opendata_financial_statements.imported_at, '-infinity') LIMIT 1) AS stored_figures, "
+      + "CASE WHEN c_doc_sub IN ('001', '002', '100', '110') AND NOT EXISTS (SELECT 1 FROM financial_figures f "
+      + "WHERE f.source = 'dssu' AND f.source_id = opendata_financial_statements.id "
+      + "AND f.updated_at >= COALESCE(opendata_financial_statements.imported_at, '-infinity')) THEN raw_xml END AS raw_xml",
+    // Sole traders' personal tax numbers (loaded by an older importer) are personal data.
+    baseWhere: 'length(tin) <= 8',
     orderBy: 'period_year DESC, period_month DESC, form_type',
     transformRow: financialStatementRow,
     emptyMessage: 'Фінансову звітність не знайдено',

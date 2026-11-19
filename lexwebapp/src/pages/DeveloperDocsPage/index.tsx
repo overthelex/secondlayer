@@ -14,8 +14,8 @@ const API_BASE = 'https://platform.legal.org.ua/api/tools';
  */
 const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
 
-/** Кількість інструментів за сервісами — звірено з GET /api/tools, 20.08.2026. */
-const TOOL_COUNTS = { total: 128, backend: 90, rada: 5, openreyestr: 33 };
+/** Кількість інструментів за сервісами — звірено зі списком toolGroups нижче, 19.11.2026. */
+const TOOL_COUNTS = { total: 133, backend: 94, rada: 5, openreyestr: 34 };
 /** Курс НБУ на 14.11.2026, за яким перераховані гривневі суми нижче. */
 const USD_UAH = '45,43';
 
@@ -63,6 +63,8 @@ const toolGroups: ToolGroup[] = [
       { name: 'check_precedent_status', description: 'Чи не скасовано рішення вищою інстанцією', params: [{ name: 'case_id' }, { name: 'case_number' }, { name: 'doc_id' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'get_citation_graph', description: 'Граф цитувань рішення: на які статті законодавства воно посилається', params: [{ name: 'case_id', required: true }, { name: 'depth' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'search_court_case_status', description: 'Статус судової справи за номером, суддею або судом', params: [{ name: 'case_number' }, { name: 'judge' }, { name: 'description' }, { name: 'court_name' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
+      { name: 'search_case_status_by_party', description: 'Справи за стороною (ПІБ або назва юрособи): стадії розгляду, судді, засідання', params: [{ name: 'party', required: true }, { name: 'region' }, { name: 'court_name' }, { name: 'case_number' }, { name: 'proceeding_number' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'include_sessions' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1' },
+      { name: 'get_case_status_details', description: 'Картка справи: усі стадії розгляду, сторони, судді, засідання', params: [{ name: 'case_number', required: true }, { name: 'court_name' }], cost: '₴1' },
       { name: 'analyze_data', description: 'Read-only SQL для аналітики: GROUP BY, COUNT, агрегати, JOIN (таймаут 45с)', params: [{ name: 'sql', required: true }], cost: '₴0' },
     ],
   },
@@ -172,6 +174,7 @@ const toolGroups: ToolGroup[] = [
       { name: 'openreyestr_search_entities', description: 'Юридичні особи та ФОП у ЄДР', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'record' }, { name: 'entityType' }, { name: 'stan' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_get_entity_details', description: 'Повна картка суб’єкта: засновники, бенефіціари, керівники', params: [{ name: 'record', required: true }, { name: 'entityType' }], cost: '₴0.50 · до ₴0.75' },
       { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴8.00 · до ₴12.00' },
+      { name: 'get_financial_statements', description: 'Фінансова звітність за ЄДРПОУ: активи, капітал, зобов’язання, дохід і прибуток за роками (Ф1/Ф2, 1-м, 1-мс), тис. грн; джерело й дата подання на кожен звіт', params: [{ name: 'edrpou', required: true }, { name: 'year_from' }, { name: 'year_to' }, { name: 'include_interim' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0.50 · до ₴0.75' },
       { name: 'openreyestr_search_beneficiaries', description: 'Кінцеві бенефіціарні власники компаній', params: [{ name: 'query', required: true }, { name: 'limit' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_founders', description: 'Зворотний пошук за засновниками, зокрема іноземними: країна, частка, юрособа', params: [{ name: 'query' }, { name: 'country' }, { name: 'foreign_only' }, { name: 'entity_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },

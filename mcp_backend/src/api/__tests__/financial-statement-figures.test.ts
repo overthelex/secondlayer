@@ -155,7 +155,8 @@ describe('search_registry financial_statements', () => {
     const body = JSON.parse(text);
     expect(body.results).toHaveLength(2);
     expect(byKey(body.results[1].figures).net_revenue.current).toBe(43805245);
-    expect(sqls[0]).toMatch(/CASE WHEN c_doc_sub IN \('001', '002', '100', '110'\) THEN raw_xml END AS raw_xml/);
+    expect(sqls[0]).toMatch(/CASE WHEN c_doc_sub IN \('001', '002', '100', '110'\) AND NOT EXISTS \(SELECT 1 FROM financial_figures f /);
+    expect(sqls[0]).toContain('AS stored_figures');
     expect(sqls[0]).toContain('period_month DESC');
   });
 });
@@ -166,7 +167,7 @@ describe('get_company_dossier financial_statements', () => {
     const results = [row('001', 'S0100115', FORM1), row('002', 'S0100215', FORM2)].map(financialStatementRow);
     const reg = {
       executeTool: async (name: string, args: any) => {
-        if (name === 'search_registry' && args.registry === 'financial_statements') return ok({ results, total_count: 2 });
+        if (name === 'get_financial_statements' && args.edrpou === '21673832') return ok({ results, total_count: 2 });
         if (name === 'openreyestr_get_by_edrpou') return ok({ edrpou: '21673832', name: 'ПрАТ «Київстар»', stan: 'зареєстровано' });
         return ok([]);
       },

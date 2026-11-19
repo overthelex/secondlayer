@@ -259,6 +259,8 @@ npm run compute:judge-analytics  # Аналітика суддів
 - `search_court_sessions` — Пошук судових засідань
 - `bulk_ingest_court_sessions` — Масовий імпорт засідань
 - `search_court_case_status` — Статус справи
+- `search_case_status_by_party` — Справи за стороною (ПІБ або назва): стан розгляду ДСА + архів засідань
+- `get_case_status_details` — Картка справи: усі стадії, сторони, засідання
 - `search_legal_acts` — Пошук правових актів
 - `get_legal_act_meta` — Метадані правового акту
 - `search_public_spending` — Публічні витрати

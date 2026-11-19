@@ -119,6 +119,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   // company/EDRPOU, beneficiaries, debtors, enforcement, bankruptcy, Prozorro, sanctions, ARMA, NAZK, notaries.
   // Досьє компанії за ЄДРПОУ: оркеструє реєстри нижче, з джерелом і датою на кожен розділ.
   'get_company_dossier',
+  // Фінансова звітність за ЄДРПОУ: ключові показники Ф1/Ф2 (1-м, 1-мс) за роками.
+  'get_financial_statements',
   'openreyestr_get_by_edrpou',
   'openreyestr_get_entity_details',
   'openreyestr_search_entities',
@@ -157,6 +159,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'search_public_spending',        // Є-Data: spending_acts 8.8M, addendums 2M
   'search_edrnpa',                 // ЄДРНПА Мін'юсту: 141K карток + тексти
   'search_court_case_status',      // стан розгляду справ (лише Верховний Суд, 1.25M)
+  'search_case_status_by_party',   // справи за стороною: історія стану розгляду ДСА + архів засідань
+  'get_case_status_details',       // картка справи: усі стадії, сторони, засідання
   'search_court_hearing_schedule', // розклад засідань, 481K
   'search_invalid_passports',      // недійсні паспорти, 2.89M + 195K закордонних
   'search_judges',                 // судді: judges_current + історія
