@@ -5,7 +5,7 @@ Downloads 10 free federal data sources simultaneously and imports into prod DB.
 
 Usage:
     python3 import-us-opendata.py                     # import all sources
-    python3 import-us-opendata.py --source ofac       # single source
+    python3 import-us-opendata.py --source osha       # single source
     python3 import-us-opendata.py --source fec_committees --source osha
     python3 import-us-opendata.py --list              # list available sources
     python3 import-us-opendata.py --dry-run           # download only, no import
@@ -391,14 +391,8 @@ class ImportSource:
 
 
 SOURCES = {
-    "ofac": ImportSource(
-        name="ofac",
-        title="OFAC SDN List",
-        url="https://www.treasury.gov/ofac/downloads/sdn_xml.zip",
-        file_type="zip_xml",
-        target_table="us_ofac_sanctions",
-        desc="US Treasury sanctions list — 12K+ designated nationals",
-    ),
+    # OFAC moved to scripts/sanctions/load_sanctions.py (LEXAI-2299): SDN + Consolidated,
+    # keyed by (uid, entry_type), scheduled by opendata-sync.
     "sam_exclusions": ImportSource(
         name="sam_exclusions",
         title="SAM.gov Exclusions",
@@ -548,92 +542,6 @@ def parse_date(val: Optional[str]) -> Optional[str]:
                 y = "20" + y if int(y) < 50 else "19" + y
             return f"{y}-{m.zfill(2)}-{d.zfill(2)}"
     return None
-
-
-def import_ofac(data_dir: Path):
-    """Parse OFAC SDN XML and import."""
-    xml_file = None
-    zip_path = data_dir / "ofac" / "sdn_xml.zip"
-    if zip_path.exists():
-        with zipfile.ZipFile(zip_path) as zf:
-            for name in zf.namelist():
-                if name.lower().endswith(".xml"):
-                    zf.extract(name, data_dir / "ofac")
-                    xml_file = data_dir / "ofac" / name
-                    break
-    if not xml_file or not xml_file.exists():
-        log.error("[ofac] No XML file found")
-        return 0
-
-    log.info(f"[ofac] Parsing {xml_file.name}...")
-    tree = ET.parse(xml_file)
-    root = tree.getroot()
-    ns = {"sdn": "http://tempuri.org/sdnList.xsd"}
-    if root.tag.startswith("{"):
-        ns_uri = root.tag.split("}")[0] + "}"
-        ns = {"sdn": ns_uri[1:-1]}
-
-    entries = root.findall(".//sdn:sdnEntry", ns) or root.findall(".//sdnEntry")
-    if not entries:
-        entries = root.findall(".//{http://tempuri.org/sdnList.xsd}sdnEntry")
-    if not entries:
-        for child in root:
-            if "sdnEntry" in child.tag:
-                entries = [el for el in root if "sdnEntry" in el.tag]
-                break
-
-    conn = get_db()
-    cur = conn.cursor()
-    batch = []
-    total = 0
-
-    def get_text(el, tag, ns_dict=None):
-        child = el.find(tag, ns_dict) if ns_dict else el.find(tag)
-        if child is None:
-            for c in el:
-                if tag.lower() in c.tag.lower():
-                    return c.text
-            return None
-        return child.text
-
-    for entry in entries:
-        uid = get_text(entry, "uid") or get_text(entry, "sdn:uid", ns) or str(total)
-        sdn_name = get_text(entry, "lastName") or get_text(entry, "sdn:lastName", ns) or ""
-        first = get_text(entry, "firstName") or get_text(entry, "sdn:firstName", ns) or ""
-        if first:
-            sdn_name = f"{sdn_name}, {first}"
-        sdn_type = get_text(entry, "sdnType") or get_text(entry, "sdn:sdnType", ns)
-        program_el = entry.find(".//programList/program") or entry.find(".//{http://tempuri.org/sdnList.xsd}program")
-        program = program_el.text if program_el is not None else None
-        remarks = get_text(entry, "remarks") or get_text(entry, "sdn:remarks", ns)
-
-        batch.append((uid, "SDN", sdn_name, sdn_type, program, None, remarks,
-                      None, None, None, None, None, None, "[]", "[]", "[]"))
-        if len(batch) >= BATCH_SIZE:
-            execute_values(cur, """
-                INSERT INTO us_ofac_sanctions (uid, entry_type, sdn_name, sdn_type, program, title, remarks,
-                    call_sign, vessel_type, tonnage, grt, vessel_flag, vessel_owner, addresses, aliases, ids)
-                VALUES %s ON CONFLICT (uid) DO UPDATE SET
-                    sdn_name=EXCLUDED.sdn_name, program=EXCLUDED.program, remarks=EXCLUDED.remarks, imported_at=NOW()
-            """, batch)
-            conn.commit()
-            total += len(batch)
-            batch = []
-
-    if batch:
-        execute_values(cur, """
-            INSERT INTO us_ofac_sanctions (uid, entry_type, sdn_name, sdn_type, program, title, remarks,
-                call_sign, vessel_type, tonnage, grt, vessel_flag, vessel_owner, addresses, aliases, ids)
-            VALUES %s ON CONFLICT (uid) DO UPDATE SET
-                sdn_name=EXCLUDED.sdn_name, program=EXCLUDED.program, remarks=EXCLUDED.remarks, imported_at=NOW()
-        """, batch)
-        conn.commit()
-        total += len(batch)
-
-    cur.close()
-    conn.close()
-    log.info(f"[ofac] Imported {total} sanctions entries")
-    return total
 
 
 def import_cfpb(data_dir: Path):
@@ -909,7 +817,6 @@ def import_fec_committees(data_dir: Path):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 IMPORTER_MAP = {
-    "ofac": import_ofac,
     "cfpb": import_cfpb,
     "osha": import_osha,
     "fec_committees": import_fec_committees,

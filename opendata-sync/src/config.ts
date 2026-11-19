@@ -372,6 +372,20 @@ const scriptSources: DataSourceSchedule[] = [
     timeoutMs: 3 * 60 * 60 * 1000,
     enabled: true,
   },
+  {
+    // LEXAI-2299: OFAC SDN + Consolidated, UK Sanctions List (FCDO) and EU FSF, from the official
+    // publishers (not OpenSanctions). load_sanctions.py skips a file whose sha256 is already in
+    // intl_sanctions_snapshots, so a day without a new publication is a no-op; a new file replaces
+    // that list's rows in one transaction (delisted entries are removed).
+    name: 'intl_sanctions',
+    title: 'Санкційні списки ЄС, Великої Британії та США (OFAC)',
+    cron: '30 5 * * *', // 05:30 daily
+    target: 'script',
+    sourceName: 'intl_sanctions',
+    command: ['python3', '-I', '/app/scripts/load_sanctions.py', '--list', 'all'],
+    timeoutMs: 60 * 60 * 1000,
+    enabled: true,
+  },
 ];
 
 // ─── ECHR HUDOC data sources (weekly, all 47 CoE member states) ─────
