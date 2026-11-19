@@ -159,6 +159,8 @@ runs:
             opendata-sync/*) OPENDATA_SYNC=true ;;
             # load_case_status.py is baked into the opendata-sync image (Dockerfile.opendata-sync)
             scripts/court-status/*) OPENDATA_SYNC=true ;;
+            # so is load_dps_licences.py (LEXAI-2298)
+            scripts/dps-licences/*) OPENDATA_SYNC=true ;;
             attorney_crm/*) ATTORNEY_CRM=true ;;
           esac
         done <<< "$CHANGED_FILES"

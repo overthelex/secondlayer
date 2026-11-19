@@ -25,6 +25,7 @@ RUN npm install --production
 
 COPY --from=builder /app/dist/ ./dist/
 COPY scripts/court-status/load_case_status.py ./scripts/load_case_status.py
+COPY scripts/dps-licences/load_dps_licences.py ./scripts/load_dps_licences.py
 
 EXPOSE 3010
 

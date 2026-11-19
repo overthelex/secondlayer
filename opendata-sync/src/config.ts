@@ -372,6 +372,20 @@ const scriptSources: DataSourceSchedule[] = [
     timeoutMs: 3 * 60 * 60 * 1000,
     enabled: true,
   },
+  {
+    // LEXAI-2298: ДПС licence registers (alcohol, tobacco, e-cig liquids, fuel) from data.gov.ua.
+    // The datasets are resolved via CKAN on every run (ids move) and are frozen since 23.02.2022
+    // («Більше не оновлюється», КМУ No 1151 of 10.09.2025): a file already in dps_licence_snapshots
+    // is skipped, so a weekly run is a no-op until ДПС publishes again.
+    name: 'dps_licences',
+    title: 'ДПС — Ліцензійні реєстри (алкоголь, тютюн, рідини для е-сигарет, пальне)',
+    cron: '40 6 * * 1', // Monday 06:40
+    target: 'script',
+    sourceName: 'dps_licences',
+    command: ['python3', '-I', '/app/scripts/load_dps_licences.py', '--all'],
+    timeoutMs: 60 * 60 * 1000,
+    enabled: true,
+  },
 ];
 
 // ─── ECHR HUDOC data sources (weekly, all 47 CoE member states) ─────
