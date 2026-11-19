@@ -123,6 +123,13 @@ export function mergePartyLegResults(parts: Array<{
 /** edrsr_parties.role codes. */
 export const PARTY_ROLE_CODE: Record<Exclude<PartyRole, 'any'>, number> = { plaintiff: 1, defendant: 2 };
 
+/**
+ * Roles a party_type 'any' count takes from edrsr_parties: позивач, відповідач, третя особа —
+ * every slot the extractor fills. (Applicant/debtor of court orders are not extracted yet, so
+ * a covered leg does not see a party that appears ONLY as стягувач/боржник.)
+ */
+export const PARTY_ANY_ROLE_CODES: readonly number[] = [1, 2, 3];
+
 /** Justice kinds the extractor covers (civil, commercial, administrative). */
 export const PARTIES_JUSTICE_KINDS: ReadonlySet<number> = new Set([1, 3, 4]);
 
@@ -849,8 +856,13 @@ export class EdsrFtsService {
     justiceKind: number | undefined,
     legs: YearLeg[],
     dbPool: any,
-  ): Promise<{ keys: PartyNameKeys; role: number; covered: boolean[]; otherKinds: boolean } | null> {
-    if (!partyName || !partyRole || partyRole === 'any') return null;
+    opts: { allowAny?: boolean } = {},
+  ): Promise<{ keys: PartyNameKeys; roles: number[]; covered: boolean[]; otherKinds: boolean } | null> {
+    if (!partyName) return null;
+    // 'any' (or no role) is served only where the caller asks for it: countByParty counts a
+    // party in any extracted slot; search keeps its full-text path for an unscoped name.
+    const anyRole = !partyRole || partyRole === 'any';
+    if (anyRole && !opts.allowAny) return null;
     if (justiceKind !== undefined && justiceKind !== null && !PARTIES_JUSTICE_KINDS.has(Number(justiceKind))) return null;
     const keys = partyNameKeys(partyName);
     if (!keys || legs.length === 0) return null;
@@ -862,7 +874,8 @@ export class EdsrFtsService {
     // No justice_kind filter: edrsr_parties holds only kinds 1/3/4, so a covered leg must still
     // take kinds 2/5 (and rows without a kind) from the full-text predicate.
     const otherKinds = justiceKind === undefined || justiceKind === null;
-    return { keys, role: PARTY_ROLE_CODE[partyRole], covered, otherKinds };
+    const roles = anyRole ? [...PARTY_ANY_ROLE_CODES] : [PARTY_ROLE_CODE[partyRole as Exclude<PartyRole, 'any'>]];
+    return { keys, roles, covered, otherKinds };
   }
 
   /**
@@ -1137,7 +1150,7 @@ export class EdsrFtsService {
           yearLegPredicate(leg, 'p'), `p.role = $${k + 2}`, partiesNameMatchSql('p', `$${k}`, `$${k + 1}`),
         ].join(' AND ')})`,
       ];
-      params.push(partiesPlan.keys.key, partiesPlan.keys.like, partiesPlan.role);
+      params.push(partiesPlan.keys.key, partiesPlan.keys.like, partiesPlan.roles[0]);
       paramIdx += 3;
     }
     const ftsLegConds: string[] = [];
@@ -1565,7 +1578,10 @@ export class EdsrFtsService {
     // LEXAI-1760: a plaintiff/defendant count is answered from edrsr_parties for every year
     // leg listed in edrsr_parties_coverage (an index lookup instead of regex-scanning the
     // TOASTed full texts); the remaining years keep the full-text path below.
-    const partiesPlan = await this.partiesLegPlan(partyName, partyRole, filters.justice_kind, legs, dbPool);
+    // LEXAI-1760: party_type 'any' too — a mass litigant has thousands of bare-name mentions a
+    // quarter (Бізнес Позика: 4,421 in Q1 2024), and rechecking each from the HDD-backed TOAST
+    // cannot finish inside the budget, while edrsr_parties answers it from an index.
+    const partiesPlan = await this.partiesLegPlan(partyName, partyRole, filters.justice_kind, legs, dbPool, { allowAny: true });
 
     const params: any[] = [partyName];
     let p = 2;
@@ -1669,7 +1685,8 @@ export class EdsrFtsService {
     const partiesParams: any[] = [];
     const partiesDocConds: string[] = [];
     if (partiesPlan) {
-      partiesParams.push(partiesPlan.keys.key, partiesPlan.keys.like, partiesPlan.role);
+      partiesParams.push(partiesPlan.keys.key, partiesPlan.keys.like,
+        partiesPlan.roles.length === 1 ? partiesPlan.roles[0] : partiesPlan.roles);
       let q = 4;
       if (filters.date_from) { partiesDocConds.push(...kyivDayBoundsSql('d.adjudication_date', `$${q}`)); partiesParams.push(filters.date_from); q++; }
       if (filters.date_to) { partiesDocConds.push(...kyivDayBoundsSql('d.adjudication_date', undefined, `$${q}`)); partiesParams.push(filters.date_to); q++; }
@@ -1681,7 +1698,8 @@ export class EdsrFtsService {
           FROM edrsr_documents d
           WHERE d.doc_id IN (
                   SELECT p.doc_id FROM edrsr_parties p
-                  WHERE ${[yearLegPredicate(leg, 'p'), 'p.role = $3', partiesNameMatchSql('p', '$1', '$2')].join(' AND ')}
+                  WHERE ${[yearLegPredicate(leg, 'p'), partiesPlan && partiesPlan.roles.length > 1 ? 'p.role = ANY($3::smallint[])' : 'p.role = $3',
+                           partiesNameMatchSql('p', '$1', '$2')].join(' AND ')}
                 )
             AND ${[...yearLegDocPredicate(leg), ...partiesDocConds].join(' AND ')}
         )${legAggSql}`;
@@ -1789,7 +1807,7 @@ export class EdsrFtsService {
 
     if (counted === 0 && pending.length > 0) {
       logger.warn('[EdsrFtsService] countByParty statement timeout', { party_name: partyName, party_role: partyRole ?? 'any' });
-      throw new Error('підрахунок не вклався в ліміт часу. Звузьте період (date_from/date_to) або приберіть фільтр ролі сторони і повторіть запит.');
+      throw new Error('підрахунок не вклався в ліміт часу. Звузьте період (date_from/date_to) або вкажіть вид судочинства (justice_kind) і повторіть запит — уже пораховані роки зберігаються, тож повторний виклик продовжить з них.');
     }
 
     const total = cum.length ? cum[cum.length - 1] : 0;
