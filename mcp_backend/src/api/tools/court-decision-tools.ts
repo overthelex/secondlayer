@@ -1673,7 +1673,7 @@ total_resolved_links=0 означає відсутність даних граф
 
       // LEXAI-1760: years answered from the structured parties table vs the full-text anchor.
       const partiesYears = counts.parties_years ?? [];
-      const partiesAll = partiesYears.length > 0 && counts.fts_legs === 0;
+      const partiesAll = partiesYears.length > 0 && counts.fts_legs === 0 && !counts.kinds_pending_years?.length;
       const partiesNote = partiesYears.length
         ? ` За ${partiesYears.length === 1 ? 'рік' : 'роки'} ${[...partiesYears].sort().join(', ')} сторони взято зі структурованої таблиці сторін (позивач, відповідач, третя особа з шапки рішення) для цивільних, господарських і адміністративних справ${partiesAll ? '' : '; кримінальні справи та справи про адмінправопорушення в ці роки рахуються FTS-прив\'язкою'}. Стягувач/боржник у наказному провадженні в таблиці поки не виділяються.`
         : '';

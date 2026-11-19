@@ -107,5 +107,6 @@ describe('count_cases_by_party (LEXAI-2177)', () => {
     expect(out.note).toContain('justice_kind 2 і 5');
     expect(out.note).toContain('НИЖНІ МЕЖІ');
     expect(out.note).toContain('Повторіть той самий запит');
+    expect(out.method).toBe('parties_table+fts_party_anchor');
   });
 });

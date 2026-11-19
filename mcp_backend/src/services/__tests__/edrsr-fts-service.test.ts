@@ -1261,6 +1261,49 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     expect(calls[0]).toContain('FROM edrsr_parties p');
   });
 
+  it('countByParty runs every parties statement before any kinds-2/5 supplement', async () => {
+    const svc = new EdsrFtsService();
+    const calls: string[] = [];
+    const db = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2024 }, { adj_year: 2025 }] });
+        calls.push(sql.includes('FROM edrsr_parties p') ? 'parties' : 'fts');
+        return Promise.resolve({ rows: [{ n: 1, causes: [sql.length.toString()], by_court: [] }] });
+      }),
+    };
+    const res = await svc.countByParty('Бізнес Позика', 'any', db, { date_from: '2024-01-01', date_to: '2025-12-31' });
+    expect(calls).toEqual(['parties', 'parties', 'fts', 'fts']);
+    expect(res).toMatchObject({ total: 4, parties_years: [2025, 2024], fts_legs: 2 });
+    expect(res.kinds_pending_years).toBeUndefined();
+  });
+
+  it('countByParty does not stop parties legs at the full-text candidate cap', async () => {
+    const svc = new EdsrFtsService();
+    const db = {
+      query: jest.fn((sql: string) => {
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2024 }, { adj_year: 2025 }, { adj_year: 2026 }] });
+        return Promise.resolve({ rows: [{ n: 30_000, causes: [], by_court: [] }] });
+      }),
+    };
+    const res = await svc.countByParty('Бізнес Позика', 'plaintiff', db, { date_from: '2024-01-01', date_to: '2026-12-31', justice_kind: 1 });
+    expect(res.total).toBe(90_000);
+    expect(res.capped).toBeUndefined();
+    expect(res.parties_years).toEqual([2026, 2025, 2024]);
+  });
+
+  it('countByParty still caps full-text legs, and skips every older leg after the first skip', async () => {
+    const svc = new EdsrFtsService();
+    const db = {
+      query: jest.fn((sql: string) => {
+        // 2025 is covered (30k ≥ cap); 2024 is full text, so it is skipped — and so is the covered 2023.
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2025 }, { adj_year: 2023 }] });
+        return Promise.resolve({ rows: [{ n: 30_000, causes: [], by_court: [] }] });
+      }),
+    };
+    const res = await svc.countByParty('Бізнес Позика', 'plaintiff', db, { date_from: '2022-01-01', date_to: '2025-12-31', justice_kind: 1 });
+    expect(res).toMatchObject({ total: 30_000, capped: true, counted_from_year: 2025, parties_years: [2025] });
+  });
+
   it('countByParty with a parties kind runs no full-text statement at all', async () => {
     const svc = new EdsrFtsService();
     const db = makeCoveredDb([2024]);
