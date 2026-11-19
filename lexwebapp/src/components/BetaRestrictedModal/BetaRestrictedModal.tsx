@@ -7,8 +7,9 @@
  * BETA_RESTRICTED).
  *
  * While the account can still claim the welcome bonus, the main action is
- * linking a card (a refundable 1 UAH Monobank check) to get it; otherwise
- * the user is sent to top up.
+ * linking a card: a Monobank payment that is credited to the balance (not
+ * refunded) plus the bonus on top. The terms (CardLinkNotice) are shown in the
+ * modal before the pay button. Otherwise the user is sent to top up.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -18,13 +19,7 @@ import { useAccessGateStore } from '../../stores/accessGateStore';
 import { api } from '../../utils/api-client';
 import showToast from '../../utils/toast';
 import { getErrorMessage } from '../../utils/errors';
-
-interface BonusStatus {
-  amount_uah: number;
-  verify_amount_uah: number;
-  status?: 'available' | 'credited' | 'pending_review' | 'rejected';
-  available: boolean;
-}
+import { CardLinkNotice, type WelcomeBonusStatus as BonusStatus } from '../billing/CardLinkNotice';
 
 export const BetaRestrictedModal: React.FC = () => {
   const { modalOpen, closeModal, isBetaTester, isAdministrator } = useAccessGateStore();
@@ -63,7 +58,7 @@ export const BetaRestrictedModal: React.FC = () => {
     <Modal
       isOpen={modalOpen}
       onClose={closeModal}
-      title={offer ? `Отримайте ${offer.amount_uah} грн на старт` : 'Поповніть баланс, щоб продовжити'}
+      title={offer ? `Отримайте ${offer.total_uah} ₴ на баланс` : 'Поповніть баланс, щоб продовжити'}
       size="md"
       closeOnBackdrop={false}
       showCloseButton={true}
@@ -72,20 +67,14 @@ export const BetaRestrictedModal: React.FC = () => {
         {offer ? (
           <>
             <p>
-              Щоб користуватися чатом і завантажувати документи, <strong>прив'яжіть картку</strong>.
-              На баланс одразу зарахується <strong>{offer.amount_uah} грн</strong> вітального бонусу.
+              Щоб користуватися чатом і завантажувати документи, <strong>прив'яжіть картку</strong>:
+              сплатіть {offer.payment_uah} ₴ і отримайте на баланс <strong>{offer.total_uah} ₴</strong>.
             </p>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700">
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Monobank спише {offer.verify_amount_uah} ₴ для перевірки картки й одразу поверне їх.</li>
-                <li>Підписки немає: далі ви платите лише за виконані запити.</li>
-                <li>Один бонус на людину.</li>
-              </ul>
-            </div>
+            <CardLinkNotice offer={offer} />
           </>
         ) : bonus?.status === 'pending_review' ? (
           <p>
-            Вітальний бонус {bonus.amount_uah} грн на перевірці: ми нараховуємо його один раз одній
+            Вітальний бонус {bonus.amount_uah} ₴ на перевірці: ми нараховуємо його один раз одній
             людині й підтвердимо найближчим часом. Щоб працювати вже зараз, поповніть баланс через Monobank.
           </p>
         ) : (
@@ -102,7 +91,7 @@ export const BetaRestrictedModal: React.FC = () => {
                 Поповнити баланс
               </Button>
               <Button variant="primary" onClick={linkCard} disabled={isProcessing}>
-                {isProcessing ? 'Відкриваємо Monobank…' : `Прив'язати картку й отримати ${offer.amount_uah} грн`}
+                {isProcessing ? 'Відкриваємо Monobank…' : `Сплатити ${offer.payment_uah} ₴ і отримати ${offer.total_uah} ₴`}
               </Button>
             </>
           ) : (

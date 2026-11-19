@@ -28,7 +28,7 @@ export function handleStreamError(
   let toastMessage: string;
 
   if (error.code === 'BETA_RESTRICTED') {
-    content = `⚠️ **Потрібен баланс**\n\nЩоб користуватися чатом, прив'яжіть картку й отримайте 430 грн вітального бонусу або поповніть баланс. [Перейти до білінгу](/billing).`;
+    content = `⚠️ **Потрібен баланс**\n\nЩоб користуватися чатом, прив'яжіть картку й отримайте вітальний бонус або поповніть баланс. [Перейти до білінгу](/billing).`;
     toastMessage = 'Прив\'яжіть картку або поповніть баланс';
   } else if (error.code === 'INSUFFICIENT_BALANCE') {
     const balance = error.current_balance_usd != null

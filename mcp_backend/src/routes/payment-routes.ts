@@ -4,8 +4,8 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { MonobankService, CARD_VERIFY_AMOUNT_UAH } from '../services/monobank-service.js';
-import { WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
+import { MonobankService } from '../services/monobank-service.js';
+import { CARD_LINK_PAYMENT_UAH, CARD_LINK_TOTAL_UAH, WELCOME_BONUS_UAH } from '../config/welcome-bonus.js';
 import { normalizeDeviceId } from '../services/welcome-bonus-service.js';
 import { callerFromHeaders } from '../services/mcp-access-log.js';
 import { MetaMaskService } from '../services/metamask-service.js';
@@ -93,7 +93,8 @@ export function createPaymentRouter(
       const status = await monobankService.welcomeBonus.status(userId);
       return res.json({
         amount_uah: WELCOME_BONUS_UAH,
-        verify_amount_uah: CARD_VERIFY_AMOUNT_UAH,
+        payment_uah: CARD_LINK_PAYMENT_UAH,
+        total_uah: CARD_LINK_TOTAL_UAH,
         status,
         available: status === 'available',
       });
@@ -105,8 +106,8 @@ export function createPaymentRouter(
 
   /**
    * @route   POST /api/billing/payment/monobank/card-verify
-   * @desc    1 UAH invoice that verifies a card; the welcome bonus is credited
-   *          by the webhook and the 1 UAH is refunded
+   * @desc    Card-link invoice for CARD_LINK_PAYMENT_UAH. Not refunded: the webhook
+   *          credits it to the balance and adds the welcome bonus on top
    * @access  Protected (JWT required)
    */
   router.post('/monobank/card-verify', async (req: any, res: Response) => {
