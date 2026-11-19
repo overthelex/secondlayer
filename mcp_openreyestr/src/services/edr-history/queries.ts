@@ -174,6 +174,28 @@ export function tokensMatch(q: string, stored: string | null): boolean {
     || lcsRatio(w, x) >= 0.75));
 }
 
+// Abbreviations the register spells out in founder names ("НАК" for "Національна акціонерна
+// компанія"). Expanded on the query side only: stored keys stay as loaded, so no history value
+// changes its hash.
+const QUERY_ABBREVIATIONS: Record<string, string> = {
+  'нак': 'національна акціонерна компанія',
+  'дак': 'державна акціонерна компанія',
+  'дхк': 'державна холдингова компанія',
+};
+
+/** The query's match key with the abbreviations above written out. */
+export function queryMatchKey(query: string): string {
+  const expanded = query.split(/\s+/).map(w => QUERY_ABBREVIATIONS[w.toLowerCase().replace(/["«».,]/g, '')] ?? w).join(' ');
+  return uaMatchKey(expanded);
+}
+
+/** Days since the snapshot date (YYYY-MM-DD) to `now`. */
+function daysSince(date: string, now = new Date()): number {
+  return Math.floor((now.getTime() - new Date(`${date}T00:00:00Z`).getTime()) / 86_400_000);
+}
+
+const STALE_DAYS = 45;
+
 export interface PartySearchParams { query?: string; country?: string; code?: string; current_only?: boolean; limit?: number }
 
 async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: PartySearchParams): Promise<any> {
@@ -185,7 +207,7 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
   if (countryIn && !cc) {
     return { found: false, message: `Країну «${countryIn}» не розпізнано. Вкажіть код ISO (CY, GB, VG) або назву українською, як у ЄДР («Кіпр»).` };
   }
-  const key = uaMatchKey(query);
+  const key = queryMatchKey(query);
   const byCode = table === 'founder' && code.length >= 6;
   if (!byCode && key.replace(/ /g, '').length < 4 && !(cc && !query)) {
     return {
@@ -206,11 +228,15 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
     // whole-name similarity, or the query as a word run inside a longer name ("scaramander" in
     // "scaramander holdings limited"); tokensMatch below decides
     where.push(`(x.name_latn % ${k} OR ${k} <% x.name_latn OR x.name_latn = ${k})`);
-    simExpr = `GREATEST(similarity(x.name_latn, ${k}), word_similarity(${k}, x.name_latn))`;
+    // Whole-name similarity ranks first: a longer name that merely contains the query
+    // ("дочірня компанія ... НАК «Нафтогаз України»") scores 1.0 on word_similarity and must
+    // not push the exact name out of the candidate window.
+    simExpr = `(x.name_latn = ${k})::int + similarity(x.name_latn, ${k}) + 0.1 * word_similarity(${k}, x.name_latn)`;
   }
   if (cc) where.push(`x.country_code = ${add(cc)}`);
   if (table === 'beneficiary') where.push('x.name IS NOT NULL');
-  if (p.current_only) where.push('x.last_seen = c.last_seen');
+  const latestOf = `(SELECT max(s.snapshot_date) FROM edr_hist.snapshot s WHERE s.kind = c.kind)`;
+  if (p.current_only) where.push(`x.last_seen = ${latestOf}`);
   const lim = add(byCode || !key ? limit : limit * 3);
 
   const client = await pool.connect();
@@ -222,7 +248,7 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
     const rows = (await client.query(
       `SELECT x.*, ${simExpr} AS sim, c.name AS company_name, c.status AS company_status, c.kind AS company_kind,
               to_char(x.first_seen, 'YYYY-MM-DD') AS first_seen_d, to_char(x.last_seen, 'YYYY-MM-DD') AS last_seen_d,
-              (x.last_seen = c.last_seen) AS current
+              (x.last_seen = ${latestOf}) AS current
        FROM edr_hist.${table} x LEFT JOIN edr_hist.company c USING (edrpou)
        WHERE ${where.join(' AND ')}
        ORDER BY sim DESC, x.last_seen DESC, x.edrpou LIMIT ${lim}`, vals)).rows;
@@ -257,6 +283,8 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
     if (!snaps.length) return { found: false, message: NOT_LOADED };
     const seen = new Map<string, string>();
     for (const s of snaps) seen.set(s.snapshot_date, s.source);
+    const latest = snaps[snaps.length - 1].snapshot_date;
+    const age = daysSince(latest);
     return {
       found: out.length > 0,
       query: query || undefined,
@@ -265,8 +293,12 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
       country: cc || undefined,
       results: out,
       snapshots: [...seen.entries()].map(([date, source]) => ({ date, source })),
+      latest_snapshot: latest,
       warning: NAME_MATCH_WARNING,
-      note: SNAPSHOT_NOTE + ' current = запис є в останньому знімку, де є ця юрособа.',
+      stale_warning: age > STALE_DAYS
+        ? `Найновіший завантажений знімок ЄДР — ${latest} (${age} дн. тому): current означає «є у знімку ${latest}», а не «є в реєстрі сьогодні». Поточний стан дивіться в openreyestr_get_by_edrpou.`
+        : undefined,
+      note: SNAPSHOT_NOTE + ` current = запис є в найновішому завантаженому знімку ЄДР (${latest}).`,
       message: out.length ? undefined : 'У завантажених знімках ЄДР збігів не знайдено.',
     };
   } catch (e) {
