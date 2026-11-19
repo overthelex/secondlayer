@@ -1,0 +1,8 @@
+# Weekly archive + import of the Держстат/ДПС financial statements on legal_prod (cthulhu, user vovkes).
+# Install (merge into the existing crontab):
+#   crontab -l | cat - ~/SecondLayer/deployment/cron/finzvit-crontab | crontab -
+# Script: deployment/cron/finzvit-weekly-archive.sh (archives new data.gov.ua files, then
+# imports them and runs the incremental financial_figures backfill).
+
+# Wednesday 04:15 server time, after the Tuesday ЄДР sync.
+15 4 * * 3 mkdir -p "$HOME/logs" /mnt/bulk_storage/opendata/finzvit && /home/vovkes/SecondLayer/deployment/cron/finzvit-weekly-archive.sh >> "$HOME/logs/finzvit-weekly-archive.log" 2>&1

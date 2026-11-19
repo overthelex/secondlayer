@@ -49,7 +49,8 @@ export const ROW_FIELDS: Record<string, (r: any) => any> = {
   // ten labelled values for every filing.
   financial_statements: (r) => ({
     period: r.period, period_year: r.period_year, period_month: r.period_month,
-    form_type: r.form_type, form_name: r.form_name, report_date: r.report_date ?? null,
+    form_type: r.form_type ?? r.form, form_name: r.form_name, report_date: r.report_date ?? null,
+    filed_on: r.filed_on ?? null, source: r.source_name ?? null,
   }),
   spending_recipient: (r) => ({
     payer_edrpou: r.edrpou, doc_type: r.doc_type_label ?? r.doc_type, document_number: r.document_number,
@@ -145,9 +146,12 @@ export const SECTION_SPECS: SectionSpec[] = [
   { key: 'large_taxpayer', title: 'Великий платник податків', tool: 'search_registry',
     args: (c) => ({ registry: 'large_taxpayers', filters: { edrpou: c } }),
     source: { name: 'Перелік великих платників податків (ДПС)' } },
-  { key: 'financial_statements', title: 'Фінансова звітність', tool: 'search_registry',
-    args: (c) => ({ registry: 'financial_statements', filters: { tin: c }, limit: 30 }),
-    source: { name: 'Фінансова звітність юридичних осіб (ДПС/ДССУ)' } },
+  // Normalized figures (financial_figures), with on-the-fly parsing of filings not
+  // normalized yet; interim periods included so a company without an annual report
+  // still shows its latest one (latestFigures prefers the annual).
+  { key: 'financial_statements', title: 'Фінансова звітність', tool: 'get_financial_statements',
+    args: (c) => ({ edrpou: c, include_interim: true }),
+    source: { name: 'Фінансова звітність юридичних осіб (Держстат/ДПС, data.gov.ua)' } },
   // Публічні кошти та діяльність
   { key: 'prozorro_supplier', title: 'ProZorro: договори як постачальник', tool: 'openreyestr_search_prozorro',
     args: (c) => ({ supplier_edrpou: c, limit: 50 }),

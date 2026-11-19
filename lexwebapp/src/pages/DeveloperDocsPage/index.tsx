@@ -14,8 +14,8 @@ const API_BASE = 'https://platform.legal.org.ua/api/tools';
  */
 const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
 
-/** Кількість інструментів за сервісами — звірено зі списком toolGroups нижче, 18.11.2026. */
-const TOOL_COUNTS = { total: 128, backend: 93, rada: 5, openreyestr: 30 };
+/** Кількість інструментів за сервісами — звірено зі списком toolGroups нижче, 19.11.2026. */
+const TOOL_COUNTS = { total: 129, backend: 94, rada: 5, openreyestr: 30 };
 /** Курс НБУ на 14.11.2026, за яким перераховані гривневі суми нижче. */
 const USD_UAH = '45,43';
 
@@ -174,6 +174,7 @@ const toolGroups: ToolGroup[] = [
       { name: 'openreyestr_search_entities', description: 'Юридичні особи та ФОП у ЄДР', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'record' }, { name: 'entityType' }, { name: 'stan' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_get_entity_details', description: 'Повна картка суб’єкта: засновники, бенефіціари, керівники', params: [{ name: 'record', required: true }, { name: 'entityType' }], cost: '₴0.50 · до ₴0.75' },
       { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴8.00 · до ₴12.00' },
+      { name: 'get_financial_statements', description: 'Фінансова звітність за ЄДРПОУ: активи, капітал, зобов’язання, дохід і прибуток за роками (Ф1/Ф2, 1-м, 1-мс), тис. грн; джерело й дата подання на кожен звіт', params: [{ name: 'edrpou', required: true }, { name: 'year_from' }, { name: 'year_to' }, { name: 'include_interim' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0.50 · до ₴0.75' },
       { name: 'openreyestr_search_beneficiaries', description: 'Кінцеві бенефіціарні власники компаній', params: [{ name: 'query', required: true }, { name: 'limit' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_founders', description: 'Зворотний пошук за засновниками, зокрема іноземними: країна, частка, юрособа', params: [{ name: 'query' }, { name: 'country' }, { name: 'foreign_only' }, { name: 'entity_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
