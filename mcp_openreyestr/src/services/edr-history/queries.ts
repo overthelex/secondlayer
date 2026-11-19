@@ -46,6 +46,13 @@ async function snapshots(pool: Pool, kind?: string): Promise<SnapshotRow[]> {
   return r.rows;
 }
 
+/** YYYY-MM-DD that exists in the calendar (2024-02-31 does not). */
+export function isCalendarDate(s: unknown): s is string {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
 function normEdrpou(s: unknown): string {
   return String(s ?? '').replace(/\D/g, '');
 }
@@ -54,7 +61,7 @@ function normEdrpou(s: unknown): string {
 export async function companyAsOf(pool: Pool, edrpouIn: string, date: string): Promise<any> {
   const edrpou = normEdrpou(edrpouIn);
   if (!/^\d{6,10}$/.test(edrpou)) return { found: false, message: 'Вкажіть код ЄДРПОУ (8 цифр).' };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { found: false, message: 'Вкажіть дату у форматі YYYY-MM-DD.' };
+  if (!isCalendarDate(date)) return { found: false, message: 'Вкажіть дійсну дату у форматі YYYY-MM-DD.' };
   try {
     const co = (await pool.query(`SELECT * FROM edr_hist.company WHERE edrpou = $1`, [edrpou])).rows[0];
     if (!co) return { found: false, edrpou, message: 'Цього коду немає в жодному завантаженому знімку ЄДР.' };
@@ -170,7 +177,7 @@ export function tokensMatch(q: string, stored: string | null): boolean {
 export interface PartySearchParams { query?: string; country?: string; code?: string; current_only?: boolean; limit?: number }
 
 async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: PartySearchParams): Promise<any> {
-  const limit = Math.min(Math.max(Number(p.limit) || 50, 1), 200);
+  const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 50, 1), 200);
   const query = (p.query || '').trim();
   const code = normEdrpou(p.code);
   const countryIn = (p.country || '').trim();
@@ -196,8 +203,10 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
   if (byCode) where.push(`x.code = ${add(code)}`);
   else if (key) {
     const k = add(key);
-    where.push(`(x.name_latn % ${k} OR x.name_latn = ${k})`);
-    simExpr = `similarity(x.name_latn, ${k})`;
+    // whole-name similarity, or the query as a word run inside a longer name ("scaramander" in
+    // "scaramander holdings limited"); tokensMatch below decides
+    where.push(`(x.name_latn % ${k} OR ${k} <% x.name_latn OR x.name_latn = ${k})`);
+    simExpr = `GREATEST(similarity(x.name_latn, ${k}), word_similarity(${k}, x.name_latn))`;
   }
   if (cc) where.push(`x.country_code = ${add(cc)}`);
   if (table === 'beneficiary') where.push('x.name IS NOT NULL');
@@ -208,6 +217,7 @@ async function searchParty(pool: Pool, table: 'founder' | 'beneficiary', p: Part
   try {
     await client.query('BEGIN');
     await client.query(`SET LOCAL pg_trgm.similarity_threshold = ${SIMILAR}`);
+    await client.query(`SET LOCAL pg_trgm.word_similarity_threshold = 0.6`);
     await client.query(`SET LOCAL statement_timeout = '30s'`);
     const rows = (await client.query(
       `SELECT x.*, ${simExpr} AS sim, c.name AS company_name, c.status AS company_status, c.kind AS company_kind,

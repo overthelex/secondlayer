@@ -139,6 +139,25 @@ describe('dump formats', () => {
     expect(recs[1][0].name).toBe('ПРИВАТНЕ ПІДПРИЄМСТВО "ДЕЛЬТА"');
   });
 
+  it('members keep their class with an appointment date; reason-only beneficiaries are history values', async () => {
+    expect(parseHead('ТЕСТОВИЧ ТЕСТ; 01.02.2020 - член наглядової ради', 'member')).toMatchObject({ name: 'ТЕСТОВИЧ ТЕСТ', role_class: 'member' });
+    expect(parseHead('ТЕСТОВИЧ ТЕСТ; 01.02.2020', 'member').role_class).toBe('member');
+    expect(parseHead('ТЕСТОВИЧ ТЕСТ; ЧЛЕН РАДИ', 'member').role_class).toBe('member');
+    const s = subject({ record: '1', edrpou: '12340001', name: 'ТОВ "ПРИКЛАДОВА"', benefs: ['Кінцевий бенефіціарний власник відсутній: учасники - юридичні особи'] });
+    const [[x]] = await collect(subjectDump(s));
+    const e = entryRows(x);
+    const hv = historyValues(x, e.founders, e.beneficiaries, e.heads).filter(v => v.field === 'beneficiary');
+    expect(hv.map(v => v.value)).toEqual([expect.stringMatching(/^КБВ не встановлено: /)]);
+  });
+
+  it('2016 dump without an encoding declaration: windows-1251 is sniffed', async () => {
+    const undeclared = ROW_UO.replace('<?xml version="1.0" encoding="windows-1251"?>', '<?xml version="1.0" ?>');
+    const recs = await collect(iconv.encode(undeclared, 'win1251'));
+    expect(recs.map(([s]) => s.name)).toEqual(['ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "АЛЬФА"', 'ПРИВАТНЕ ПІДПРИЄМСТВО "ДЕЛЬТА"']);
+    const utf = await collect(Buffer.from(undeclared, 'utf8'));
+    expect(utf[0][0].name).toBe('ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "АЛЬФА"');
+  });
+
   it('zip with a folder and several XML members; ФОП members skipped', async () => {
     expect(isFopMember('17-ufop_full_25.10.2021/17.2-EX_XML_EDR_FOP_FULL_25.10.2021.xml')).toBe(true);
     expect(isFopMember('17-ufop_full_25.10.2021/17.1-EX_XML_EDR_UO_FULL_25.10.2021.xml')).toBe(false);

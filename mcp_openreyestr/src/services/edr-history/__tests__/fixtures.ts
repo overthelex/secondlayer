@@ -3,8 +3,19 @@
  * the shapes follow the data.gov.ua dumps (current SUBJECT, 2020-2022 SUBJECT with
  * addresses, 2018-2019 flat RECORD, 2016 ROWDATA/ROW with Ukrainian tags).
  */
-import { crc32 } from 'zlib';
 import iconv from 'iconv-lite';
+
+// zlib.crc32 needs Node >= 20.15; the package supports Node >= 20.0
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (const b of buf) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
 
 export const SCARA_NEW = 'СКАРАМАНДЕР ЛІМІТЕД; HE123456; резиденство: Кіпр; розмір частки - 1000,00 грн.';
 export const SCARA_2021 = 'СКАРАМАНДЕР ЛІМІТЕД, Кіпр, Кіпр, Нікосія, вул. Тестова, 5, розмір внеску до статутного фонду - 1000,00 грн.';

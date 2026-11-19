@@ -156,14 +156,30 @@ export function parseRowNode(n: XNode): EdrSubject | null {
 
 /**
  * Bytes -> text decoded by the encoding named in the XML declaration (looked up in the
- * first bytes; UTF-8 without a declaration or with a BOM).
+ * first bytes; UTF-8 with a BOM). Without a declaration (the 2016 dumps: `<?xml version="1.0" ?>`
+ * over windows-1251 text) the first 64 KB decide: valid UTF-8, else windows-1251.
  */
+const SNIFF = 65536;
+
+function isUtf8(buf: Buffer): boolean {
+  let end = buf.length;
+  // do not fail on a multi-byte sequence cut at the end of the sample
+  for (let i = 0; i < 3 && end > 0 && (buf[end - 1] & 0xc0) === 0x80; i++) end--;
+  if (end > 0 && buf[end - 1] >= 0xc0) end--;
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(buf.subarray(0, end));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function xmlDecoder(): Transform {
   let head: Buffer | null = Buffer.alloc(0);
   let decoder: { write(b: Buffer): string; end(): string | undefined } | null = null;
   const start = (buf: Buffer) => {
     const m = buf.subarray(0, 300).toString('latin1').match(/<\?xml[^>]*encoding\s*=\s*['"]([^'"]+)['"]/i);
-    let enc = (m?.[1] || 'utf-8').toLowerCase();
+    let enc = (m?.[1] || (isUtf8(buf.subarray(0, SNIFF)) ? 'utf-8' : 'windows-1251')).toLowerCase();
     if (buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) enc = 'utf-8';
     if (!iconv.encodingExists(enc)) throw new Error(`Unsupported XML encoding: ${enc}`);
     decoder = iconv.getDecoder(enc) as any;
@@ -176,7 +192,7 @@ export function xmlDecoder(): Transform {
       try {
         if (!decoder) {
           head = Buffer.concat([head!, chunk]);
-          if (head.length < 300) return cb();
+          if (head.length < SNIFF) return cb();
           start(head);
           const out = decoder!.write(head);
           head = null;

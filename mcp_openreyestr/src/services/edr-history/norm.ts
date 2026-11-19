@@ -120,5 +120,7 @@ export function countryIso(s: string | null | undefined): string | null {
   if (/^[A-Za-z]{2}$/.test(t)) return t.toUpperCase();
   const n = normUa(t);
   if (!n) return null;
-  return COUNTRY[n] || COUNTRY[n.replace(/^республіка /, '')] || null;
+  // own keys only: 'constructor' / '__proto__' are not countries
+  const get = (k: string) => (Object.prototype.hasOwnProperty.call(COUNTRY, k) ? COUNTRY[k] : null);
+  return get(n) || get(n.replace(/^республіка /, '')) || null;
 }

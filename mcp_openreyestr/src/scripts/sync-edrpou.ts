@@ -508,27 +508,34 @@ async function main() {
 
     // Step 8: history snapshot (edr_hist) of the imported UO (+ FSU)
     if (EDR_HISTORY && !args.dryRun) {
+      let keepInputs = false;
       if (!historyXml.UO) {
         console.log('\nEDR history: UO was not imported in this run, no snapshot recorded');
+      } else if (ENV_URLS.UO && !process.env.EDR_HISTORY_SNAPSHOT_DATE) {
+        // an overridden URL may be any dump: the CKAN date of the current UO.zip does not describe it
+        console.log('\nEDR history: EDRPOU_UO_URL is overridden, set EDR_HISTORY_SNAPSHOT_DATE to record a snapshot');
+        results.push({ type: 'HISTORY', status: 'skipped', error: 'EDRPOU_UO_URL override without EDR_HISTORY_SNAPSHOT_DATE' });
       } else {
         const snapshot = process.env.EDR_HISTORY_SNAPSHOT_DATE
           || (datasetModified.UO || '').slice(0, 10)
           || new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Kyiv' });
         const files = [historyXml.UO, historyXml.FSU].filter(Boolean);
+        const origin = ENV_URLS.UO
+          ? `EDRPOU_UO_URL ${ENV_URLS.UO}`
+          : `data.gov.ua ${EDRPOU_DATASET_ID}${datasetModified.UO ? `, UO.zip last_modified ${datasetModified.UO}` : ''}`;
         console.log(`\n=== EDR history snapshot ${snapshot}: ${files.map(f => path.basename(f)).join(', ')} ===`);
         try {
-          const r = await loadEdrSnapshot(pool, {
-            snapshot,
-            source: `data.gov.ua ${EDRPOU_DATASET_ID} (weekly sync${datasetModified.UO ? `, UO.zip last_modified ${datasetModified.UO}` : ''})`,
-            files,
-          });
+          const r = await loadEdrSnapshot(pool, { snapshot, source: `${origin} (weekly sync)`, files });
           results.push({ type: 'HISTORY', status: r.skipped ? 'skipped' : 'completed', error: r.skipped });
         } catch (err) {
           console.error('EDR history snapshot failed:', (err as Error).message);
+          // keep the inputs for a manual retry (the next run downloads afresh over the same paths)
+          keepInputs = true;
+          console.error(`Kept for a retry with load-edr-snapshot --snapshot ${snapshot}: ${files.join(', ')}`);
           results.push({ type: 'HISTORY', status: 'failed', error: (err as Error).message });
         }
       }
-      for (const p of deferredCleanup) fs.rmSync(p, { recursive: true, force: true });
+      if (!keepInputs) for (const p of deferredCleanup) fs.rmSync(p, { recursive: true, force: true });
     }
 
     // Summary

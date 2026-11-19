@@ -61,6 +61,17 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
     if (dir) fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  // every test starts from its own state: no test depends on another having run
+  const reset = async () => {
+    await pool.query('DROP SCHEMA IF EXISTS edr_hist CASCADE');
+    await pool.query(fs.readFileSync(path.join(__dirname, '../../../migrations/027_edr_history.sql'), 'utf8'));
+  };
+  const seedOutOfOrder = async () => {
+    await reset();
+    await load(S3, files.s3);
+    await load(S1, files.s1);
+    await load(S2, files.s2);
+  };
   const load = (snapshot: string, file: string) => loadEdrSnapshot(pool, { snapshot, source: 'test', files: [file], log: () => undefined });
   const runs = async (field: string) => {
     const r = await pool.query(
@@ -70,6 +81,7 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
   };
 
   it('loads newest, then oldest, then the one in between', async () => {
+    await reset();
     const r3 = await load(S3, files.s3);
     expect(r3.subjects).toEqual({ uo: 2, fsu: 1 });
     expect((await load(S3, files.s3)).skipped).toMatch(/already loaded/);
@@ -104,10 +116,10 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
   });
 
   it('gives the same runs when loaded in date order (open runs)', async () => {
+    await seedOutOfOrder();
     const before: Record<string, unknown> = {};
     for (const f of ['name', 'status', 'founder', 'beneficiary', 'address', 'head']) before[f] = await runs(f);
-    await pool.query('DROP SCHEMA edr_hist CASCADE');
-    await pool.query(fs.readFileSync(path.join(__dirname, '../../../migrations/027_edr_history.sql'), 'utf8'));
+    await reset();
     await load(S1, files.s1);
     await load(S2, files.s2);
     await load(S3, files.s3);
@@ -120,6 +132,7 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
   });
 
   it('as of a date', async () => {
+    await seedOutOfOrder();
     const a = await companyAsOf(pool, '11111111', '2022-01-01');
     expect(a.snapshot.date).toBe(S2);
     expect(a.fields.name.values).toEqual(['ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "АЛЬФА-ПЛЮС"']);
@@ -135,6 +148,7 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
   });
 
   it('a field-absent snapshot loaded later does not split runs', async () => {
+    await seedOutOfOrder();
     // another current-format snapshot (no address) between 2021 and 2026
     const f = path.join(dir, 'UO-2026-01.xml');
     fs.writeFileSync(f, subjectDump(subject({ record: '10', edrpou: '11111111', name: ALFA, founders: [SCARA_NEW] })));
@@ -152,6 +166,7 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
   });
 
   it('reverse search across scripts, with country and code', async () => {
+    await seedOutOfOrder();
     const f = await searchFoundersHistory(pool, { query: 'Scaramander Limited', country: 'CY' });
     expect(new Set(f.results.map((r: any) => r.edrpou))).toEqual(new Set(['11111111']));
     expect(f.results.every((r: any) => /наводка/.test(r.match))).toBe(true);
@@ -166,5 +181,27 @@ d('edr_hist fold (out-of-order loads, field-absent snapshots)', () => {
     expect(b.results.some((r: any) => r.current)).toBe(true);
     expect((await searchFoundersHistory(pool, { query: 'ab' })).found).toBe(false);
     expect((await searchFoundersHistory(pool, { query: 'Scaramander', country: 'Атлантида' })).message).toMatch(/не розпізнано/);
+  });
+
+  it('a --limit run is rolled back; kinds are loaded per date; bad limits are refused', async () => {
+    await reset();
+    const r = await loadEdrSnapshot(pool, { snapshot: S3, source: 'test', files: [files.s3], limit: 1, log: () => undefined });
+    expect(r.dryRun).toBe(true);
+    expect((await pool.query('SELECT count(*)::int n FROM edr_hist.snapshot')).rows[0].n).toBe(0);
+    expect((await pool.query('SELECT count(*)::int n FROM edr_hist.history')).rows[0].n).toBe(0);
+    await expect(loadEdrSnapshot(pool, { snapshot: S3, source: 'test', files: [files.s3], limit: 0.5 })).rejects.toThrow(/positive integer/);
+    // only UO of the date is recorded: the full load adds FSU and leaves UO alone
+    await pool.query(`INSERT INTO edr_hist.snapshot (kind, snapshot_date, source, fields) VALUES ('uo', $1, 'earlier', '{name}')`, [S3]);
+    const full = await load(S3, files.s3);
+    expect(full.skipped).toBeUndefined();
+    const kinds = (await pool.query(`SELECT kind, source FROM edr_hist.snapshot ORDER BY kind`)).rows;
+    expect(kinds).toEqual([{ kind: 'fsu', source: 'test' }, { kind: 'uo', source: 'earlier' }]);
+    expect((await load(S3, files.s3)).skipped).toMatch(/already loaded/);
+  });
+
+  it('refuses impossible dates', async () => {
+    await seedOutOfOrder();
+    expect((await companyAsOf(pool, '11111111', '2024-02-31')).message).toMatch(/дійсну дату/);
+    expect((await searchFoundersHistory(pool, { query: 'Scaramander Limited', limit: 2.7 })).results.length).toBeLessThanOrEqual(2);
   });
 });

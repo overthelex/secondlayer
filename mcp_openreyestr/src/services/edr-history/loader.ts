@@ -5,9 +5,10 @@
  * 1. Stream every subject into TEMP staging tables (batched INSERT ... SELECT FROM unnest).
  * 2. Pick one subject per code (a code repeats when cancelled duplicates sit next to the live
  *    record): the most alive status, then the latest registration, then the highest RECORD.
- * 3. Per kind (uo, fsu), in ONE transaction: upsert company/founder/beneficiary/head and fold the
- *    staged values into edr_hist.history, then record the snapshot row. A failed load leaves
- *    nothing behind.
+ * 3. In ONE transaction for both kinds (uo, fsu): upsert company/founder/beneficiary/head and
+ *    fold the staged values into edr_hist.history, then record the snapshot rows. A failed load
+ *    leaves nothing behind; a kind already loaded for the date is not folded again. A run cut at
+ *    --limit (or dryRun) is rolled back.
  *
  * History fold, for snapshot S and field F, with prev/next = the loaded snapshots of this kind
  * just before/after S that publish F (edr_hist.snapshot.fields). A run with last_snapshot NULL is
@@ -35,13 +36,15 @@ export interface LoadOptions {
   files: string[];
   statementTimeout?: string;   // default '60min'
   batchSize?: number;          // staged subjects per INSERT batch, default 5000
-  limit?: number;              // stop after N subjects (smoke tests)
+  limit?: number;              // stop after N subjects (smoke tests); implies dryRun
+  dryRun?: boolean;            // run everything, then roll back: nothing is recorded
   log?: (msg: string) => void;
 }
 
 export interface LoadResult {
   snapshot: string;
   skipped?: string;
+  dryRun?: boolean;            // rolled back, nothing recorded
   subjects: Record<'uo' | 'fsu', number>;
   noCode: number;
   formats: Record<DumpFormat, number>;
@@ -178,8 +181,7 @@ const KEY = 'h.edrpou = t.edrpou AND h.field = t.field AND h.value_hash = t.valu
 async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields: string[], meta: {
   source: string; file: string; md5: string; format: string; subjects: number;
 }, log: (m: string) => void): Promise<void> {
-  await c.query('BEGIN');
-  try {
+  {
     await c.query(`DROP TABLE IF EXISTS stg_nb`);
     await c.query(
       `CREATE TEMP TABLE stg_nb AS
@@ -231,10 +233,6 @@ async function finalizeKind(c: PoolClient, kind: 'uo' | 'fsu', S: string, fields
       `INSERT INTO edr_hist.snapshot (kind, snapshot_date, source, file, md5, format, subjects, fields)
        VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8)`,
       [kind, S, meta.source, meta.file, meta.md5, meta.format, meta.subjects, fields]);
-    await c.query('COMMIT');
-  } catch (e) {
-    await c.query('ROLLBACK');
-    throw e;
   }
 }
 
@@ -335,17 +333,24 @@ export async function loadEdrSnapshot(pool: Pool, opts: LoadOptions): Promise<Lo
     snapshot: S, subjects: { uo: 0, fsu: 0 }, noCode: 0, formats: { subject: 0, record: 0, row: 0 },
     fields: { uo: [], fsu: [] }, members: [], skippedMembers: [], seconds: { read: 0, fold: 0 },
   };
+  if (opts.limit !== undefined && !(Number.isInteger(opts.limit) && opts.limit > 0)) {
+    throw new Error(`limit must be a positive integer, got ${opts.limit}`);
+  }
+  // a load cut at --limit is not the snapshot: it is measured, then rolled back
+  const dryRun = Boolean(opts.dryRun || opts.limit);
   const c = await pool.connect();
   let locked = false;
   try {
+    // session settings of a pooled connection: reset in finally
     await c.query(`SET statement_timeout = '${(opts.statementTimeout || '60min').replace(/'/g, '')}'`);
     await c.query(`SET work_mem = '512MB'`);
     const lock = await c.query(`SELECT pg_try_advisory_lock(hashtext('edr_hist_loader')) AS ok`);
     if (!lock.rows[0].ok) throw new Error('another edr_hist load is running');
     locked = true;
-    const existing = await c.query(`SELECT kind FROM edr_hist.snapshot WHERE snapshot_date = $1::date`, [S]);
-    if (existing.rows.length) {
-      result.skipped = `snapshot ${S} already loaded (${existing.rows.map(r => r.kind).join(', ')})`;
+    // per kind: a date may hold UO and FSU from separate loads
+    const loaded = new Set<string>((await c.query(`SELECT kind FROM edr_hist.snapshot WHERE snapshot_date = $1::date`, [S])).rows.map(r => r.kind));
+    if (loaded.has('uo') && loaded.has('fsu')) {
+      result.skipped = `snapshot ${S} already loaded (uo, fsu)`;
       log(result.skipped);
       return result;
     }
@@ -384,20 +389,38 @@ export async function loadEdrSnapshot(pool: Pool, opts: LoadOptions): Promise<Lo
     const t1 = Date.now();
     await prepare(c);
     const format = (Object.entries(stats.formats) as Array<[DumpFormat, number]>).filter(([, v]) => v > 0).map(([k]) => k).join(',');
-    for (const kind of ['uo', 'fsu'] as const) {
-      if (!st.subjects[kind]) continue;
-      const fields = [...st.fields[kind]].sort();
-      result.fields[kind] = fields;
-      log(`Folding ${kind} (${st.subjects[kind]} subjects; fields: ${fields.join(', ')})`);
-      await finalizeKind(c, kind, S, fields, {
-        source: opts.source, file: opts.files.map(f => path.basename(f)).join(', '), md5: md5s.join(','),
-        format, subjects: st.subjects[kind],
-      }, log);
+    const kinds = (['uo', 'fsu'] as const).filter(k => st.subjects[k] && !loaded.has(k));
+    const already = (['uo', 'fsu'] as const).filter(k => st.subjects[k] && loaded.has(k));
+    if (already.length) log(`  ${already.join(', ')} of ${S} already loaded: not folded again`);
+    if (!kinds.length) {
+      result.skipped = `snapshot ${S} already loaded (${[...loaded].join(', ')})`;
+      log(result.skipped);
+      return result;
+    }
+    // both kinds in one transaction: a failed load leaves nothing behind
+    await c.query('BEGIN');
+    try {
+      for (const kind of kinds) {
+        const fields = [...st.fields[kind]].sort();
+        result.fields[kind] = fields;
+        log(`Folding ${kind} (${st.subjects[kind]} subjects; fields: ${fields.join(', ')})`);
+        await finalizeKind(c, kind, S, fields, {
+          source: opts.source, file: opts.files.map(f => path.basename(f)).join(', '), md5: md5s.join(','),
+          format, subjects: st.subjects[kind],
+        }, log);
+      }
+      await c.query(dryRun ? 'ROLLBACK' : 'COMMIT');
+    } catch (e) {
+      await c.query('ROLLBACK').catch(() => undefined);
+      throw e;
     }
     result.seconds.fold = (Date.now() - t1) / 1000;
-    log(`Snapshot ${S} loaded in ${(result.seconds.read + result.seconds.fold).toFixed(0)}s (fold ${result.seconds.fold.toFixed(0)}s)`);
+    if (dryRun) result.dryRun = true;
+    log(`Snapshot ${S} ${dryRun ? 'folded and rolled back (dry run)' : 'loaded'} in ${(result.seconds.read + result.seconds.fold).toFixed(0)}s (fold ${result.seconds.fold.toFixed(0)}s)`);
     return result;
   } finally {
+    await c.query('RESET statement_timeout').catch(() => undefined);
+    await c.query('RESET work_mem').catch(() => undefined);
     if (locked) await c.query(`SELECT pg_advisory_unlock(hashtext('edr_hist_loader'))`).catch(() => undefined);
     for (const t of [...Object.keys(STG), 'stg_pick', 'stg_nb', 'stg_h']) await c.query(`DROP TABLE IF EXISTS ${t}`).catch(() => undefined);
     c.release();

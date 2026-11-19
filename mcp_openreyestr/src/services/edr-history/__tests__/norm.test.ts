@@ -63,5 +63,8 @@ describe('normUa / uaMatchKey (golden, from the Python original)', () => {
     expect(countryIso('cy')).toBe('CY');
     expect(countryIso('Атлантида')).toBeNull();
     expect(countryIso('')).toBeNull();
+    expect(countryIso('constructor')).toBeNull();
+    expect(countryIso('__proto__')).toBeNull();
+    expect(countryIso('toString')).toBeNull();
   });
 });

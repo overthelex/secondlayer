@@ -230,7 +230,7 @@ export function parseHead(raw: string, source: HeadSource): Head {
   let t = clean(raw) || '';
   let role: string | null = null;
   const m = /\s[-–]\s*([^-–;()]+)$/.exec(t);
-  if (m && source !== 'member') {
+  if (m) {
     role = m[1].trim();
     t = t.slice(0, m.index);
   }
@@ -244,7 +244,9 @@ export function parseHead(raw: string, source: HeadSource): Head {
     role = name.slice(i + 3);
     name = name.slice(0, i);
   }
-  return { name, role, role_class: roleClass(role), appointed_on: uaDate(t) };
+  // a MEMBER without a recognisable role (or with only a date) is still a member, not the head
+  const cls = roleClass(role);
+  return { name, role, role_class: source === 'member' && (cls === 'head' && !role || cls === 'other') ? 'member' : cls, appointed_on: uaDate(t) };
 }
 
 /** A subject as read from any dump format. */
@@ -344,6 +346,9 @@ export function historyValues(
   for (const b of beneficiaries) {
     if (b.name_latn) {
       out.push({ field: 'beneficiary', value_hash: md5(historyNameKey(b.name)).slice(0, 16), value: (b.name || '') + (b.country ? ` (${b.country})` : '') });
+    } else if (b.reason) {
+      // the register states why there is no beneficial owner: that is the value for the period
+      out.push({ field: 'beneficiary', value_hash: md5(`reason|${normUa(b.reason)}`).slice(0, 16), value: `КБВ не встановлено: ${b.reason}` });
     }
   }
   const seen = new Set<string>();
