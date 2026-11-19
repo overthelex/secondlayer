@@ -508,9 +508,55 @@ export function attachHearings(groups: CaseGroup[], rows: any[]): void {
       const cands = (byBase.get(b) ?? []).filter((c) => suffixCompatible(c.case_number, num));
       if (isCourtCodedNumber(b) && cands.length === 1) g = cands[0];
     }
-    if (g) g.hearings.push(h);
+    if (g) { g.hearings.push(h); g.sources.add(SESSIONS_SOURCE_LABEL); }
   }
   for (const g of groups) g.hearings = dedupeHearings(g.hearings);
+}
+
+const DECISIONS_CAP = 200;
+
+const SEARCH_NEXT_STEPS = {
+  case_card: 'Повна картка справи з усіма стадіями, засіданнями, рішеннями та авторозподілом: get_case_status_details з case_number і court_name',
+  decisions: 'Судові рішення у справі: search_court_decisions з mode="structured", cause_num=<case_number>',
+  hearings: 'Розклад засідань: search_court_hearing_schedule з case_number=<case_number>',
+};
+
+const AUTO_DISTRIBUTION_NOTE = 'Звіти про автоматизований розподіл — з відкритого набору ДСА, що в нас охоплює розподіли ' +
+  'приблизно з 2021 до лютого 2026 року і не всі суди; порожній перелік не означає, що розподілу не було. ' +
+  'Актуальні звіти — на court.gov.ua/fair (посилання «Звіти авторозподілу» в картці справи).';
+
+/** EDRSR / auto-distribution dates are timestamptz at Kyiv midnight (21:00 or 22:00 UTC): format in Kyiv time. */
+const kyivDateSql = (col: string) => `to_char((${col})::timestamptz AT TIME ZONE 'Europe/Kyiv', 'YYYY-MM-DD')`;
+
+const isoDate = (v: unknown): string | null => {
+  const m = v ? String(v).match(/^\d{4}-\d{2}-\d{2}/) : null;
+  return m ? m[0] : null;
+};
+
+export function toDecision(r: any) {
+  return {
+    doc_id: String(r.doc_id),
+    case_number: r.cause_num ?? null,
+    court: r.court_name ?? null,
+    form: r.form ?? null,
+    adjudication_date: isoDate(r.adjudication_date),
+    receipt_date: isoDate(r.receipt_date),
+    url: `https://reyestr.court.gov.ua/Review/${r.doc_id}`,
+  };
+}
+
+export function toDistribution(r: any) {
+  return {
+    date: isoDate(r.distribution_start),
+    court: r.court_name ?? null,
+    basis: r.distribution_basis ?? null,
+    presiding_judge: r.presiding_judge ?? null,
+    panel_judges: r.panel_judges ?? null,
+    participating_judges: r.participating_judges ?? null,
+    excluded_judges: r.excluded_judges ?? null,
+    case_category: r.case_category ?? null,
+    report_doc_id: r.doc_id ?? null,
+  };
 }
 
 export class CourtStatusTools extends BaseToolHandler {
@@ -620,10 +666,10 @@ export class CourtStatusTools extends BaseToolHandler {
       {
         name: 'get_case_status_details',
         annotations: { title: 'Картка справи: стадії розгляду', readOnlyHint: true },
-        description: `Картка судової справи за номером: усі стадії розгляду в хронологічному порядку, сторони, судді, предмет і всі засідання з архіву розкладу.
+        description: `Картка судової справи за номером: усі стадії розгляду в хронологічному порядку, сторони, судді, предмет, усі засідання з архіву розкладу, перелік судових рішень у справі з ЄДРСР (з посиланнями) і звіти про автоматизований розподіл (де є у відкритих даних).
 
 💰 Орієнтовна вартість: $0.024 USD (≈1 грн за виклик)
-Джерела: відкриті дані ДСА «Інформація щодо стану розгляду справ» (накопичена історія) та архів розкладу засідань. Покриття: переважно цивільні, господарські, адміністративні справи та справи про адмінправопорушення, події останніх років. Якщо справу не знайдено, це НЕ означає, що її немає: повна історія — на court.gov.ua/fair.`,
+Джерела: відкриті дані ДСА «Інформація щодо стану розгляду справ» (накопичена історія) та архів розкладу засідань; рішення — з ЄДРСР; авторозподіл — з відкритих даних ДСА. Покриття: переважно цивільні, господарські, адміністративні справи та справи про адмінправопорушення, події останніх років. Якщо справу не знайдено, це НЕ означає, що її немає: повна історія — на court.gov.ua/fair.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -979,9 +1025,12 @@ export class CourtStatusTools extends BaseToolHandler {
         'перевірте на court.gov.ua/fair.';
     } else if (tooBroad) {
       status = 'too_broad';
+      const notes = [
+        ...(estimatedTotal !== null ? [`усього у джерелах близько ${estimatedTotal} справ із цими словами`] : []),
+        ...(capped ? ['прочитано лише найновіші записи, тому повний перелік недоступний'] : []),
+      ];
       message = `Запит дуже широкий: знайдено ${capped ? 'понад ' : ''}${groups.length} справ` +
-        (estimatedTotal !== null ? ` (усього у джерелах близько ${estimatedTotal} справ із цими словами)` : '') +
-        (capped ? ' (прочитано лише найновіші записи, тому повний перелік недоступний)' : '') +
+        (notes.length ? ` (${notes.join('; ')})` : '') +
         '. Уточніть пошук: додайте ініціали або повне ПІБ, регіон (region), суд, номер справи чи період. Нижче — перша сторінка найновіших справ.';
     } else {
       message = `Знайдено справ: ${groups.length}.`;
@@ -1016,6 +1065,7 @@ export class CourtStatusTools extends BaseToolHandler {
         (stemmed ? ' Точного збігу не було, тому пошук повторено за основою слів (інша форма / відмінок): перевірте, що знайдена сторона — та сама особа.' : '') +
         (rejected > 0 ? ` Відкинуто записів, де слова запиту належать різним сторонам або ініціали не збіглися: ${rejected}.` : '') +
         (procNumber && includeSessions ? ' В архіві засідань немає номера провадження, тому з фільтром proceeding_number справи шукаються лише в стані розгляду.' : ''),
+      ...(results.length ? { next_steps: SEARCH_NEXT_STEPS } : {}),
       source: this.sourceBlock(src, includeSessions),
       as_of: await this.asOf(src, includeSessions),
       coverage_note: COVERAGE_NOTE,
@@ -1132,17 +1182,56 @@ export class CourtStatusTools extends BaseToolHandler {
     const today = kyivToday();
     const { last, next } = lastAndNext(hearings, today);
 
+    // Spec 4.2: the decisions of the case with links, and the auto-distribution reports.
+    const numberVariants = [...new Set(caseNumberVariants(raw, known))];
+    let decisions: any[] = [];
+    let decisionsTotal = 0;
+    try {
+      const vals: unknown[] = [numberVariants];
+      let extra = '';
+      if (courtName) { vals.push(`%${escapeLike(courtName)}%`); extra = ` AND c.name ILIKE $2`; }
+      const rows = await timedQuery(this.db,
+        `SELECT d.doc_id, d.cause_num, ${kyivDateSql('d.adjudication_date')} AS adjudication_date,
+                ${kyivDateSql('d.receipt_date')} AS receipt_date, c.name AS court_name, f.name AS form
+           FROM edrsr_documents d
+           LEFT JOIN edrsr_courts c ON c.court_code = d.court_code
+           LEFT JOIN edrsr_judgment_forms f ON f.judgment_code = d.judgment_code
+          WHERE d.cause_num = ANY($1::text[])${extra}
+          ORDER BY d.adjudication_date ASC NULLS LAST, d.doc_id ASC LIMIT ${DECISIONS_CAP + 1}`, vals);
+      decisionsTotal = rows.length;
+      decisions = rows.slice(0, DECISIONS_CAP).map(toDecision);
+    } catch (error: any) {
+      logger.error('get_case_status_details decisions query failed', { error: error.message });
+      warnings.push(`Перелік судових рішень не завантажено: ${dbErrorText(error)}`);
+    }
+    let distribution: any[] = [];
+    try {
+      const vals: unknown[] = [numberVariants];
+      let extra = '';
+      if (courtName) { vals.push(`%${escapeLike(courtName)}%`); extra = ` AND court_name ILIKE $2`; }
+      const rows = await timedQuery(this.db,
+        `SELECT doc_id, court_name, ${kyivDateSql('distribution_start')} AS distribution_start, distribution_basis, presiding_judge, panel_judges,
+                participating_judges, excluded_judges, case_category
+           FROM dsa_case_distribution WHERE cause_number = ANY($1::text[])${extra}
+          ORDER BY distribution_start ASC NULLS LAST LIMIT 100`, vals);
+      distribution = rows.map(toDistribution);
+    } catch (error: any) {
+      logger.error('get_case_status_details distribution query failed', { error: error.message });
+      warnings.push(`Звіти про автоматизований розподіл не завантажено: ${dbErrorText(error)}`);
+    }
+
     const caseList = [...cards.values()].map(({ _seen, ...c }) => ({
       ...c,
       last_stage: c.stages[c.stages.length - 1] ?? null,
       stages_count: c.stages.length,
     }));
-    const found = caseList.length > 0 || hearings.length > 0;
+    const found = caseList.length > 0 || hearings.length > 0 || decisions.length > 0;
 
     return this.wrapResponse({
       status: found ? 'found' : 'not_found',
       message: found
-        ? `Справа ${raw}: карток стану розгляду — ${caseList.length}, засідань в архіві — ${hearings.length}.`
+        ? `Справа ${raw}: карток стану розгляду — ${caseList.length}, засідань в архіві — ${hearings.length}, ` +
+          `судових рішень у ЄДРСР — ${decisionsTotal > DECISIONS_CAP ? `понад ${DECISIONS_CAP}` : decisions.length}.`
         : `Справу ${raw} у відкритих даних не знайдено. Це НЕ означає, що її немає: перевірте номер або court.gov.ua/fair.`,
       case_number: raw,
       ...(courtName ? { court_name: courtName } : {}),
@@ -1151,8 +1240,15 @@ export class CourtStatusTools extends BaseToolHandler {
       hearings_total: hearings.length,
       last_hearing: last,
       next_hearing: next,
+      decisions,
+      decisions_total: decisions.length,
+      ...(decisionsTotal > DECISIONS_CAP ? { decisions_truncated: true } : {}),
+      auto_distribution: distribution,
+      auto_distribution_note: AUTO_DISTRIBUTION_NOTE,
       next_steps: {
-        decisions: `Тексти судових рішень у справі: search_court_decisions з case_number="${raw}"`,
+        decision_text: 'Повний текст рішення: get_court_decision з doc_id з переліку decisions',
+        decisions: `Пошук рішень у справі: search_court_decisions з mode="structured", cause_num="${raw}"`,
+        hearings: `Розклад засідань: search_court_hearing_schedule з case_number="${raw}"`,
         documents_chain: `Усі документи справи в усіх інстанціях: get_case_documents_chain з case_number="${raw}"`,
       },
       source: this.sourceBlock(src, true),

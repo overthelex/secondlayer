@@ -312,7 +312,10 @@ describe('search_case_status_by_party', () => {
     });
     expect(r.matched_parties).toEqual([{ role: 'позивач', name: 'ПАТ КБ"Приватбанк"', match_variant: 'повний збіг' }]);
     expect(r.last_hearing.date).toBe('2015-05-20');
-    expect(r.sources).toEqual(['ДСА: стан розгляду справ (відкриті дані)']);
+    // The hearing came from the archive lookup, so the archive is a source of this card too.
+    expect(r.sources).toEqual(['ДСА: стан розгляду справ (відкриті дані)', 'розклад засідань']);
+    expect(res.next_steps.case_card).toContain('get_case_status_details');
+    expect(res.next_steps.decisions).toContain('cause_num');
     expect(res.query.ignored_legal_forms).toEqual(['пат', 'кб']);
     expect(res.as_of).toEqual({ case_status: '2026-11-17', case_status_snapshot: 'stan-17-11-2026.zip', hearings_archive: '2026-11-17' });
     expect(res.coverage_note).toContain('НЕ означає');
@@ -390,6 +393,7 @@ describe('search_case_status_by_party', () => {
     expect(res.total_is_lower_bound).toBe(true);
     expect(res.estimated_total_cases).toBe(16734);
     expect(res.message).toContain('близько 16734');
+    expect(res.message).not.toContain(') (');
     // One count over both sources; session placeholders shifted past the status ones.
     const count = calls.find((c) => c.sql.includes('count(*)::int AS n'))!;
     expect(count.sql).toContain('UNION SELECT court_name');
@@ -491,6 +495,45 @@ describe('get_case_status_details', () => {
     expect(res.next_steps.decisions).toContain('search_court_decisions');
     expect(res.next_steps.documents_chain).toContain('get_case_documents_chain');
     expect(res.verify.url).toBe('https://court.gov.ua/fair/');
+  });
+
+  it('lists the decisions from ЄДРСР and the auto-distribution reports', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('FROM edrsr_documents')) {
+        return [{ doc_id: 140246833, cause_num: '533/318/15-ц', adjudication_date: '2015-06-05',
+          receipt_date: '2015-06-08', court_name: 'Козельщинський районний суд Полтавської області', form: 'Рішення' }];
+      }
+      if (sql.includes('FROM dsa_case_distribution')) {
+        return [{ doc_id: '77', court_name: 'Козельщинський районний суд Полтавської області',
+          distribution_start: '2015-04-07', distribution_basis: 'первинний розподіл',
+          presiding_judge: 'Іваненко І.І.', panel_judges: null, participating_judges: null, excluded_judges: null, case_category: null }];
+      }
+      return isStatusSql(sql) ? [statusRow()] : [];
+    });
+    const res = parse(await new CourtStatusTools(db).executeTool('get_case_status_details', { case_number: '533/318/15' }));
+    const dq = calls.find((c) => c.sql.includes('FROM edrsr_documents'))!;
+    expect(dq.sql).toContain('d.cause_num = ANY($1::text[])');
+    // Stored at Kyiv midnight (21:00 UTC the day before): the date must be taken in Kyiv time.
+    expect(dq.sql).toContain("AT TIME ZONE 'Europe/Kyiv'");
+    expect(dq.values[0]).toEqual(expect.arrayContaining(['533/318/15', '533/318/15-ц']));
+    expect(res.decisions).toEqual([{ doc_id: '140246833', case_number: '533/318/15-ц',
+      court: 'Козельщинський районний суд Полтавської області', form: 'Рішення', adjudication_date: '2015-06-05',
+      receipt_date: '2015-06-08', url: 'https://reyestr.court.gov.ua/Review/140246833' }]);
+    expect(res.auto_distribution[0]).toMatchObject({ date: '2015-04-07', basis: 'первинний розподіл', presiding_judge: 'Іваненко І.І.' });
+    expect(res.auto_distribution_note).toContain('court.gov.ua/fair');
+    expect(res.message).toContain('судових рішень у ЄДРСР — 1');
+    expect(res.next_steps.decisions).toContain('mode="structured", cause_num="533/318/15"');
+  });
+
+  it('a failed decisions lookup is a warning, not an error or an empty list', async () => {
+    const { db } = makeDb((sql) => {
+      if (sql.includes('FROM edrsr_documents')) return new Error('canceling statement due to statement timeout');
+      return isStatusSql(sql) ? [statusRow()] : [];
+    });
+    const res = parse(await new CourtStatusTools(db).executeTool('get_case_status_details', { case_number: '533/318/15' }));
+    expect(res.status).toBe('found');
+    expect(res.incomplete).toBe(true);
+    expect(res.warnings.join(' ')).toContain('Перелік судових рішень не завантажено');
   });
 
   it('one card per proceeding: -ц and -а of the same court and base are not mixed', async () => {
