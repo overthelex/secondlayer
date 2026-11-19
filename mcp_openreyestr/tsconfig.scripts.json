@@ -8,6 +8,7 @@
   },
   "include": [
     "src/scripts/**/*",
+    "src/types/yauzl.d.ts",
     "src/config/**/*",
     "src/services/generic-xml-importer.ts",
     "src/services/csv-importer.ts",

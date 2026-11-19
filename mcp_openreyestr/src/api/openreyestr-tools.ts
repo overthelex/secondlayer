@@ -6,6 +6,9 @@ import { formatSingleTaxPayerRow, tinLookupCandidates } from '../utils/single-ta
 import { PLAUSIBLE_OPENING_DATE_SQL } from '../utils/enforcement';
 import { ARMA_OWNER_NOT_PUBLISHED, buildArmaFilters, deriveArmaStatusCategory } from '../services/arma-mapping';
 import { normalizeNazkRegion, nazkRegionCodesMatching } from '../utils/nazk-region';
+import {
+  companyAsOf, companyHistory, PartySearchParams, searchBeneficiariesHistory, searchFoundersHistory,
+} from '../services/edr-history/queries';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -837,6 +840,26 @@ export class OpenReyestrTools {
       }];
     }
     return result.rows;
+  }
+
+  /** ЄДР history (edr_hist): the company as published in the latest snapshot on or before a date. */
+  async companyAsOf(edrpou: string, date: string): Promise<any> {
+    return companyAsOf(this.pool, edrpou, date);
+  }
+
+  /** ЄДР history: every value of every tracked field with its run of snapshots. */
+  async companyHistory(edrpou: string): Promise<any> {
+    return companyHistory(this.pool, edrpou);
+  }
+
+  /** History-aware reverse search by founder (name in any script, country, or founder's code). */
+  async searchFoundersHistory(params: PartySearchParams): Promise<any> {
+    return searchFoundersHistory(this.pool, params);
+  }
+
+  /** History-aware search of ultimate beneficial owners (name in any script, country). */
+  async searchBeneficiariesHistory(params: PartySearchParams): Promise<any> {
+    return searchBeneficiariesHistory(this.pool, params);
   }
 
   /**

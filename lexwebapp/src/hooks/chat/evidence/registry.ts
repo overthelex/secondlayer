@@ -6,6 +6,10 @@ const REGISTRY_TOOLS = [
   'openreyestr_get_entity_details',
   'openreyestr_search_beneficiaries',
   'openreyestr_search_founders',
+  'openreyestr_company_as_of',
+  'openreyestr_company_history',
+  'openreyestr_search_founders_history',
+  'openreyestr_search_beneficiaries_history',
   'openreyestr_get_by_edrpou',
   'openreyestr_get_statistics',
   'openreyestr_search_enforcement_proceedings',
@@ -52,11 +56,85 @@ function ipObjectToDocument(o: any): VaultDocument {
   };
 }
 
+const HISTORY_SEARCH_TOOLS = ['openreyestr_search_founders_history', 'openreyestr_search_beneficiaries_history'];
+
+function snapshotSources(parsed: any): string {
+  const snaps = Array.isArray(parsed.snapshots) ? parsed.snapshots : [];
+  const sources = [...new Set(snaps.map((s: any) => s.source).filter(Boolean))];
+  const dates = snaps.map((s: any) => s.date).filter(Boolean);
+  return [dates.length && `Знімки ЄДР: ${dates.join(', ')}`, sources.length && `Джерело: ${sources.join('; ')}`].filter(Boolean).join('. ');
+}
+
+/** ЄДР history (edr_hist): keeps the snapshot dates, the source and the match caveat. */
+function extractHistoryEvidence(toolName: string, parsed: any): EvidenceResult {
+  const citations: Citation[] = [];
+  const documents: VaultDocument[] = [];
+  if (HISTORY_SEARCH_TOOLS.includes(toolName)) {
+    const role = toolName === 'openreyestr_search_founders_history' ? 'Засновник' : 'КБВ';
+    for (const r of Array.isArray(parsed.results) ? parsed.results : []) {
+      documents.push({
+        id: `edrhist-${r.edrpou}-${r.name || ''}-${r.first_seen || ''}`,
+        title: r.company_name || `ЄДРПОУ ${r.edrpou}`,
+        type: 'other',
+        metadata: {
+          snippet: [
+            `${role}: ${r.name || r.code || '—'}${r.country ? ` (${r.country})` : ''}`,
+            r.edrpou && `ЄДРПОУ: ${r.edrpou}`,
+            r.company_status && `Стан: ${r.company_status}`,
+            (r.first_seen || r.last_seen) && `У знімках: ${r.first_seen || '?'} – ${r.last_seen || '?'}`,
+            r.current ? 'є в останньому знімку' : 'колишній запис',
+            r.match && `Збіг: ${r.match}`,
+          ].filter(Boolean).join(' \u2022 '),
+          edrpou: r.edrpou,
+          status: r.company_status,
+        },
+      });
+    }
+  } else if (parsed.found && parsed.edrpou) {
+    const f = parsed.fields || {};
+    const first = (k: string) => {
+      const v = toolName === 'openreyestr_company_as_of' ? f[k]?.values?.[0] : (Array.isArray(f[k]) ? f[k][f[k].length - 1]?.value : undefined);
+      return v || undefined;
+    };
+    const snippet = toolName === 'openreyestr_company_as_of'
+      ? [
+          `ЄДРПОУ: ${parsed.edrpou}`,
+          parsed.snapshot?.date && `Знімок ЄДР: ${parsed.snapshot.date} (на ${parsed.as_of})`,
+          first('status') && `Стан: ${first('status')}`,
+          first('address'),
+          f.head?.values?.length && `Керівники: ${f.head.values.join('; ')}`,
+          f.founder?.values?.length && `Засновники: ${f.founder.values.join('; ')}`,
+          f.beneficiary?.values?.length && `КБВ: ${f.beneficiary.values.join('; ')}`,
+        ]
+      : [
+          `ЄДРПОУ: ${parsed.edrpou}`,
+          parsed.status && `Стан: ${parsed.status}`,
+          `У знімках: ${parsed.first_seen || '?'} – ${parsed.last_seen || '?'}`,
+          ...Object.entries(f).map(([k, runs]: [string, any]) => `${parsed.field_labels?.[k] || k}: ${Array.isArray(runs) ? runs.length : 0} серій`),
+        ];
+    documents.push({
+      id: `edrhist-${toolName}-${parsed.edrpou}-${parsed.as_of || ''}`,
+      title: first('name') || parsed.name || `ЄДРПОУ ${parsed.edrpou}`,
+      type: 'other',
+      metadata: { snippet: snippet.filter(Boolean).join(' \u2022 '), edrpou: parsed.edrpou, status: first('status') || parsed.status },
+    });
+  }
+  const source = toolName === 'openreyestr_company_as_of' && parsed.snapshot
+    ? `Знімок ЄДР ${parsed.snapshot.date}. Джерело: ${parsed.snapshot.source}`
+    : snapshotSources(parsed);
+  const text = [parsed.warning, parsed.note, parsed.message].filter(Boolean).join(' ');
+  if (text || source) citations.push({ text: text || source, source: source || 'Історія ЄДР' });
+  return { decisions: [], citations, documents };
+}
+
 export function extractRegistryEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
   const citations: Citation[] = [];
   const documents: VaultDocument[] = [];
   if (!REGISTRY_TOOLS.some((t) => toolName === t)) {
     return { decisions: [], citations, documents };
+  }
+  if (toolName.startsWith('openreyestr_') && (toolName.endsWith('_history') || toolName === 'openreyestr_company_as_of')) {
+    return extractHistoryEvidence(toolName, parsed);
   }
 
   // IP registry objects (trademarks / patents / utility models / designs)

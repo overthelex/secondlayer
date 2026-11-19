@@ -15,7 +15,7 @@ const API_BASE = 'https://platform.legal.org.ua/api/tools';
 const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
 
 /** Кількість інструментів за сервісами — звірено зі списком toolGroups нижче, 19.11.2026. */
-const TOOL_COUNTS = { total: 129, backend: 94, rada: 5, openreyestr: 30 };
+const TOOL_COUNTS = { total: 133, backend: 94, rada: 5, openreyestr: 34 };
 /** Курс НБУ на 14.11.2026, за яким перераховані гривневі суми нижче. */
 const USD_UAH = '45,43';
 
@@ -178,6 +178,10 @@ const toolGroups: ToolGroup[] = [
       { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0.50 · до ₴0.75' },
       { name: 'openreyestr_search_beneficiaries', description: 'Кінцеві бенефіціарні власники компаній', params: [{ name: 'query', required: true }, { name: 'limit' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_founders', description: 'Зворотний пошук за засновниками, зокрема іноземними: країна, частка, юрособа', params: [{ name: 'query' }, { name: 'country' }, { name: 'foreign_only' }, { name: 'entity_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_company_as_of', description: 'Юрособа станом на дату за знімками ЄДР (2016–2021, щотижнево з 2026): назва, стан, адреса, керівники, засновники; дата знімка і джерело', params: [{ name: 'edrpou', required: true }, { name: 'date', required: true }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_company_history', description: 'Історія змін юрособи за знімками ЄДР: кожне значення з першим і останнім знімком', params: [{ name: 'edrpou', required: true }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_search_founders_history', description: 'Засновники, зокрема колишні: пошук латиницею чи кирилицею, за країною або кодом ЄДРПОУ засновника', params: [{ name: 'query' }, { name: 'code' }, { name: 'country' }, { name: 'current_only' }, { name: 'limit' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'openreyestr_search_beneficiaries_history', description: 'Кінцеві бенефіціари, зокрема колишні: пошук латиницею чи кирилицею, за країною', params: [{ name: 'query' }, { name: 'country' }, { name: 'current_only' }, { name: 'limit' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_termination_started', description: 'Юрособи, щодо яких розпочато процедуру припинення', params: [{ name: 'query', required: true }, { name: 'entity_type' }, { name: 'signer_name' }, { name: 'reason' }, { name: 'limit' }, { name: 'offset' }] },
       { name: 'openreyestr_get_statistics', description: 'Агрегована статистика по ЄДР', cost: '₴0.01 · до ₴0.01' },
       { name: 'openreyestr_search_debtors', description: 'Єдиний реєстр боржників', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'collection_category' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
