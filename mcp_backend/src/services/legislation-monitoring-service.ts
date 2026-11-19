@@ -1,5 +1,4 @@
 import { diffWords } from 'diff';
-import { createHash } from 'crypto';
 import type { IDatabase } from '../domain/ports/index.js';
 import type { RadaLegislationAdapter, LegislationArticle } from '../adapters/rada-legislation-adapter.js';
 import type { EmailService } from './email-service.js';
@@ -21,8 +20,22 @@ function generateDiffHtml(oldText: string, newText: string): string {
   }).join('');
 }
 
-function hashText(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
+/**
+ * Editorial notes zakon.rada.gov.ua adds in [...] or {...}: "[Закон доповнено статтею 32-2 згідно із
+ * Законом № 340-IX від 05.12.2019]", "{Із змінами, внесеними згідно із Законом ...}". They say which
+ * act amended the article, not what the article says, and one import keeps them while another drops them.
+ */
+const EDITORIAL_NOTE = /[\[{][^\]{}]*?(?:згідно\s+і?з|внесеними|в\s+редакції|доповнено|виключено|втратил)[^\]{}]*[\]}]/giu;
+
+/**
+ * The page trailer the parser leaves on the last article carries the fetch date ("станом на
+ * 19.11.2026 чинний"), so without this the last article of every act "changes" every day.
+ */
+const AS_OF_DATE = /станом\s+на\s+\d{2}\.\d{2}\.\d{4}/giu;
+
+/** The article text as compared: editorial notes and the as-of date dropped, whitespace collapsed. */
+export function normalizeForCompare(text: string): string {
+  return text.replace(EDITORIAL_NOTE, ' ').replace(AS_OF_DATE, 'станом на').replace(/\s+/g, ' ').trim();
 }
 
 export interface Subscription {
@@ -179,7 +192,7 @@ export class LegislationMonitoringService {
           old_text: oldText, new_text: null, diff_html: null,
           detected_at: now, version_date: now,
         });
-      } else if (hashText(oldText) !== hashText(newText)) {
+      } else if (normalizeForCompare(oldText) !== normalizeForCompare(newText)) {
         // Article modified
         const diffHtml = generateDiffHtml(oldText, newText);
         changes.push({
