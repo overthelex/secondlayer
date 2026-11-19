@@ -1194,11 +1194,40 @@ describe('EdsrFtsService parties table read path (LEXAI-1760)', () => {
     expect(res.total).toBe(0);
   });
 
-  it('countByParty keeps the full-text path for role any and for an uncovered justice kind', async () => {
+  it('countByParty keeps the full-text path for an uncovered justice kind', async () => {
     const svc = new EdsrFtsService();
     const db = makeCoveredDb([2025]);
-    await svc.countByParty('Нова Пошта', 'any', db, { date_from: '2025-01-01', date_to: '2025-12-31' });
     await svc.countByParty('Нова Пошта', 'plaintiff', db, { date_from: '2025-01-01', date_to: '2025-12-31', justice_kind: 2 });
+    await svc.countByParty('Нова Пошта', 'any', db, { date_from: '2025-01-01', date_to: '2025-12-31', justice_kind: 5 });
+    expect(db.calls.some((c) => c.sql.includes('FROM edrsr_parties'))).toBe(false);
+  });
+
+  it('countByParty answers role any from edrsr_parties with every extracted role', async () => {
+    const svc = new EdsrFtsService();
+    const calls: { sql: string; params: any[] }[] = [];
+    const db = {
+      query: jest.fn((sql: string, params: any[]) => {
+        if (sql.includes(COVERAGE_SQL)) return Promise.resolve({ rows: [{ adj_year: 2024 }] });
+        calls.push({ sql, params });
+        return Promise.resolve({ rows: [{ n: 5, causes: ['a'], by_court: [{ court_code: 9, count: 5 }] }] });
+      }),
+    };
+    for (const role of ['any', undefined] as const) {
+      calls.length = 0;
+      const res = await svc.countByParty('Бізнес Позика', role, db, { date_from: '2024-01-01', date_to: '2024-03-31', justice_kind: 1 });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].sql).toContain('FROM edrsr_parties p');
+      expect(calls[0].sql).toContain('p.role = ANY($3::smallint[])');
+      expect(calls[0].sql).not.toContain('full_text');
+      expect(calls[0].params).toEqual(['бізнес позика', '% бізнес позика', [1, 2, 3], '2024-01-01', '2024-03-31', 1]);
+      expect(res).toMatchObject({ total: 5, by_court: [{ court_code: 9, count: 5 }] });
+    }
+  });
+
+  it('search keeps the full-text path for an unscoped party name', async () => {
+    const svc = new EdsrFtsService();
+    const db = makeCoveredDb([2025]);
+    await svc.searchFulltext('позика', db, { party_name: 'Нова Пошта', date_from: '2025-01-01', date_to: '2025-12-31' }).catch(() => {});
     expect(db.calls.some((c) => c.sql.includes('FROM edrsr_parties'))).toBe(false);
   });
 
