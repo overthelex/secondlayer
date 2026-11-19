@@ -61,13 +61,35 @@ describe('cellsFromTags', () => {
     expect(c.cur).toMatchObject({ '1300': 2, '2000': 5, '2350': 0.3 });
     expect(c.prev).toMatchObject({ '1300': 1, '2000': 4 });
   });
-  it('the refactored parser gives the same figures as the stored cells', () => {
-    for (const [sub, xml] of [['001', FORM1], ['002', FORM2], ['100', SMALL], ['110', MICRO]]) {
-      const parsed = parseStatementFigures(sub, xml)!;
-      const cells = cellsFromTags(sub, readTags(xml));
-      const stored = statementFromStored(sub, { ...cells, report_date: parsed.report_date, period_name: parsed.period_name })!;
-      expect(stored).toEqual(parsed);
-    }
+  it('stored cells (as read back from jsonb) give the expected figures per form', () => {
+    // Round-trip through JSON, as financial_figures.cur/prev come back from PostgreSQL.
+    const stored = (sub: string, xml: string) => {
+      const cells = JSON.parse(JSON.stringify(cellsFromTags(sub, readTags(xml))));
+      const s = statementFromStored(sub, { ...cells, report_date: '2024-12-31', period_name: 'Рік 2024' })!;
+      return { s, f: Object.fromEntries(s.figures.map((x) => [x.key, x])) };
+    };
+    const f1 = stored('001', FORM1);
+    expect(f1.f.total_assets).toMatchObject({ line: '1300', current: 120, prior: 100 });
+    expect(f1.f.equity).toMatchObject({ current: 45, prior: 30 });
+    expect(f1.f.current_assets).toMatchObject({ current: 70, prior: 60 });
+    expect(f1.s.balance_check).toBe(true);
+    expect(f1.s.report_date).toBe('2024-12-31');
+    const f2 = stored('002', FORM2);
+    expect(f2.f.net_revenue).toMatchObject({ current: 500, prior: 400 });
+    expect(f2.f.gross_profit).toMatchObject({ current: 80, prior: -10 });
+    expect(f2.f.profit_before_tax).toMatchObject({ current: 30, prior: -12 });
+    expect(f2.f.net_profit).toMatchObject({ line: '2350/2355', current: 25, prior: -12 });
+    const sm = stored('100', SMALL);
+    expect(sm.f.total_assets).toMatchObject({ current: 12.5, prior: 10.5 });
+    expect(sm.f.equity).toMatchObject({ current: -4.5, prior: -3 });
+    expect(sm.f.net_revenue).toMatchObject({ current: 80.4, prior: 70 });
+    expect(sm.f.net_profit).toMatchObject({ line: '2350', current: -1.5, prior: 2 });
+    expect(sm.f.gross_profit).toBeUndefined();
+    const mi = stored('110', MICRO);
+    expect(mi.f.total_assets).toMatchObject({ current: 2, prior: 1 });
+    expect(mi.f.net_profit).toMatchObject({ current: 0.3, prior: null });
+    // The XML path agrees with these independent expectations.
+    expect(parseStatementFigures('100', SMALL)!.figures).toEqual(sm.s.figures);
   });
 });
 
@@ -105,6 +127,9 @@ describe('figureRowFromFiling', () => {
     expect(figureRowFromFiling(filing(1, '040', FORM1))).toBeNull();
     expect(figureRowFromFiling(filing(1, '110', doc('110', '<A1300_3 xsi:nil="true"/>')))).toBeNull();
     expect(figureRowFromFiling(filing(1, '001', FORM1, '1234', 2024, 0))).toBeNull();
+    // Only quarter and year ends are reporting periods.
+    expect(figureRowFromFiling(filing(1, '001', FORM1, '1234', 2024, 1))).toBeNull();
+    expect(figureRowFromFiling(filing(1, '001', FORM1, '1234', 2024, 6))!.period).toBe(6);
   });
   it('reads C_DOC_STAN when present', () => {
     expect(readHeader(doc('001', '', '<C_DOC_STAN>3</C_DOC_STAN>')).doc_stan).toBe(3);
@@ -174,15 +199,26 @@ describe('ДПС 2020 CSV', () => {
       edrpou: '00001234', year: 2020, period: 12, form: '1-ms', source: 'dps2020', name: 'ТОВ "ТЕСТ; СЕРВІС"',
       filed_on: '2021-02-24', source_id: null, assets: 2000.5, equity: 0, liabilities: 2000.5, revenue: 0, net_profit: -3.25,
     });
-    expect(row.cur).toEqual({ '1300': 2000.5, '1900': 2000.5, '2350': -3.25 });
+    // An explicit zero is a filed value, as in the XML filings.
+    expect(row.cur).toEqual({ '1300': 2000.5, '1495': 0, '1900': 2000.5, '2350': -3.25 });
     expect(row.prev).toEqual({ '1300': 1.5 });
     expect(dpsRow(header, recs[2], '1-ms', 'x')).toBeNull();
+    // A record with nothing but zeros and nulls is an empty statement.
+    const empty = '1234;"ТОВ";"S0111005";12;2020;"24.02.2021";0;0;null;0;0;0';
+    expect(dpsRow(header, [...csvRecords(empty)][0], '1-ms', 'x')).toBeNull();
+    // A bad filing date does not break the row (or the batch insert).
+    const badDate = '1234;"ТОВ";"S0111005";12;2020;"31.02.2021";1;1;1;1;1;1';
+    expect(dpsRow(header, [...csvRecords(badDate)][0], '1-ms', 'x')!.filed_on).toBeNull();
   });
   it('helpers', () => {
     expect(csvNumber(' 1 234,5 ')).toBe(1234.5);
     expect(csvNumber('null')).toBeUndefined();
-    expect(csvNumber('0')).toBeUndefined();
+    expect(csvNumber('')).toBeUndefined();
+    expect(csvNumber('0')).toBe(0);
     expect(dmyDots('01.03.2021')).toBe('2021-03-01');
+    expect(dmyDots('29.02.2020')).toBe('2020-02-29');
+    expect(dmyDots('29.02.2021')).toBeNull();
+    expect(dmyDots('00.13.2021')).toBeNull();
     expect(dmyDots('2021-03-01')).toBeNull();
   });
 });

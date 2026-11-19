@@ -205,7 +205,8 @@ export class FinancialStatementsTool extends BaseToolHandler {
         `SELECT o.id, o.tin, o.c_doc_sub, o.period_year, o.period_month, o.raw_xml
          FROM opendata_financial_statements o
          WHERE o.tin = ANY($1) AND o.c_doc_sub = ANY($2) AND o.period_year BETWEEN $3 AND $4
-           AND NOT EXISTS (SELECT 1 FROM financial_figures f WHERE f.source = 'dssu' AND f.source_id = o.id)
+           AND NOT EXISTS (SELECT 1 FROM financial_figures f WHERE f.source = 'dssu' AND f.source_id = o.id
+                             AND f.updated_at >= COALESCE(o.imported_at, '-infinity'))
          ORDER BY o.id
          LIMIT 500`,
         [[edrpou, edrpou.replace(/^0+(?=\d)/, '')], [...FIGURE_FORMS], yearFrom, yearTo],

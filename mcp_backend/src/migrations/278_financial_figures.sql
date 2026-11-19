@@ -63,15 +63,18 @@ CREATE INDEX IF NOT EXISTS idx_finfig_edrpou_year ON financial_figures (edrpou, 
 -- search_registry(financial_statements) finds the figures of a filing by its id.
 CREATE INDEX IF NOT EXISTS idx_finfig_dssu_source_id ON financial_figures (source_id) WHERE source = 'dssu';
 
--- Resumable batch jobs: the last processed opendata_financial_statements.id and the
--- start of the last completed run (rows re-imported after it are processed again).
+-- Resumable batch jobs: the last processed opendata_financial_statements.id, the start
+-- of the last completed run (rows re-imported after it are processed again; NULL until
+-- the first full pass completes) and the start of a full pass still in progress.
 CREATE TABLE IF NOT EXISTS financial_figures_progress (
     job                 TEXT PRIMARY KEY,
     last_id             BIGINT NOT NULL DEFAULT 0,
     last_run_started_at TIMESTAMPTZ,
+    pass_started_at     TIMESTAMPTZ,
     rows_written        BIGINT NOT NULL DEFAULT 0,
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE financial_figures_progress ADD COLUMN IF NOT EXISTS pass_started_at TIMESTAMPTZ;
 
 -- get_financial_statements: one indexed read of a company's statements. 1,00 грн at the
 -- NBU rate of migration 266 (45,4274 грн/$), the price of one registry search.

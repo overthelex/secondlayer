@@ -537,12 +537,18 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     // Figures come from financial_figures (normalized cells, migration 278). raw_xml is
     // read only for a figure form not normalized yet, and transformRow drops it: the
     // XML never reaches the caller. One figures row per filing, found by source_id
-    // (partial index idx_finfig_dssu_source_id).
+    // (partial index idx_finfig_dssu_source_id). A stored row older than the filing's
+    // imported_at (XML refreshed in place, backfill not run yet) is ignored and the XML
+    // parsed instead.
     selectColumns: "tin, c_doc, c_doc_sub, c_doc_ver, period_year, period_month, period_type, c_reg, c_raj, form_type, "
       + "(SELECT jsonb_build_object('cur', f.cur, 'prev', f.prev, 'report_date', f.report_date, 'period_name', f.period_name) "
-      + "FROM financial_figures f WHERE f.source = 'dssu' AND f.source_id = opendata_financial_statements.id LIMIT 1) AS stored_figures, "
+      + "FROM financial_figures f WHERE f.source = 'dssu' AND f.source_id = opendata_financial_statements.id "
+      + "AND f.updated_at >= COALESCE(opendata_financial_statements.imported_at, '-infinity') LIMIT 1) AS stored_figures, "
       + "CASE WHEN c_doc_sub IN ('001', '002', '100', '110') AND NOT EXISTS (SELECT 1 FROM financial_figures f "
-      + "WHERE f.source = 'dssu' AND f.source_id = opendata_financial_statements.id) THEN raw_xml END AS raw_xml",
+      + "WHERE f.source = 'dssu' AND f.source_id = opendata_financial_statements.id "
+      + "AND f.updated_at >= COALESCE(opendata_financial_statements.imported_at, '-infinity')) THEN raw_xml END AS raw_xml",
+    // Sole traders' personal tax numbers (loaded by an older importer) are personal data.
+    baseWhere: 'length(tin) <= 8',
     orderBy: 'period_year DESC, period_month DESC, form_type',
     transformRow: financialStatementRow,
     emptyMessage: 'Фінансову звітність не знайдено',

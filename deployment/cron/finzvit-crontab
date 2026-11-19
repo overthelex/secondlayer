@@ -5,4 +5,4 @@
 # imports them and runs the incremental financial_figures backfill).
 
 # Wednesday 04:15 server time, after the Tuesday ЄДР sync.
-15 4 * * 3 mkdir -p $HOME/logs && /home/vovkes/SecondLayer/deployment/cron/finzvit-weekly-archive.sh >> $HOME/logs/finzvit-weekly-archive.log 2>&1
+15 4 * * 3 mkdir -p "$HOME/logs" /mnt/bulk_storage/opendata/finzvit && /home/vovkes/SecondLayer/deployment/cron/finzvit-weekly-archive.sh >> "$HOME/logs/finzvit-weekly-archive.log" 2>&1

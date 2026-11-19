@@ -342,6 +342,12 @@ export function readHeader(xml: string): FilingHeader {
 
 export type FigureSource = 'dssu' | 'dps2020' | 'smida';
 
+/**
+ * Months a reporting period can end in: I квартал, півріччя, 9 місяців, рік. The only
+ * values in opendata_financial_statements (checked 2026-11-18).
+ */
+export const REPORT_PERIODS: readonly number[] = [3, 6, 9, 12];
+
 /** One row of financial_figures, keys as the table's columns. */
 export interface FinancialFigureRow extends KeyAmounts, FilingHeader {
   edrpou: string;
@@ -386,7 +392,7 @@ export function figureRowFromFiling(r: {
   const edrpou = normalizeEdrpou(r.tin);
   const year = Number(r.period_year);
   const period = Number(r.period_month);
-  if (!form || !edrpou || !r.raw_xml || !(year > 1990 && year < 2100) || !(period >= 1 && period <= 12)) return null;
+  if (!form || !edrpou || !r.raw_xml || !(year > 1990 && year < 2100) || !REPORT_PERIODS.includes(period)) return null;
   return buildFigureRow(
     { edrpou, year, period, form, source: 'dssu', source_ref: `opendata_financial_statements:${r.id}`, source_id: Number(r.id) },
     readHeader(r.raw_xml),

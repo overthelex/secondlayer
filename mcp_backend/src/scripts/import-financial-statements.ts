@@ -83,7 +83,7 @@ function parseFiling(buf: Buffer): any | null {
  * (outer zip → per-form inner zip → XML). The nested archives hold the main
  * annual річні звіти, so both must be walked.
  */
-function* collectXmls(zip: AdmZip): Generator<Buffer> {
+function* collectXmls(zip: AdmZip, stats: { badNested: number }): Generator<Buffer> {
   for (const en of zip.getEntries()) {
     if (en.isDirectory) continue;
     const name = en.entryName.toLowerCase();
@@ -91,19 +91,19 @@ function* collectXmls(zip: AdmZip): Generator<Buffer> {
       yield en.getData();
     } else if (name.endsWith('.zip')) {
       let inner: AdmZip;
-      try { inner = new AdmZip(en.getData()); } catch { continue; }
-      yield* collectXmls(inner);
+      try { inner = new AdmZip(en.getData()); } catch { stats.badNested++; continue; }
+      yield* collectXmls(inner, stats);
     }
   }
 }
 
 async function insertBatch(rows: any[]): Promise<number> {
   if (rows.length === 0) return 0;
-  const seen = new Set<string>();
-  const deduped = rows.filter(r => {
-    const k = `${r.tin}|${r.period_year}|${r.period_month}|${r.form_type}|${r.c_doc_sub}`;
-    if (seen.has(k)) return false; seen.add(k); return true;
-  });
+  // One row per key, the LAST one read: archives are passed oldest first and each is
+  // flushed before the next, so a later filing replaces an earlier one.
+  const byKey = new Map<string, any>();
+  for (const r of rows) byKey.set(`${r.tin}|${r.period_year}|${r.period_month}|${r.form_type}|${r.c_doc_sub}`, r);
+  const deduped = [...byKey.values()];
   const values: any[] = [];
   const ph: string[] = [];
   let i = 1;
@@ -151,10 +151,18 @@ async function main(): Promise<void> {
 
   let total = 0, parsed = 0, skipped = 0;
   let batch: any[] = [];
+  const failed: string[] = [];
   for (const zp of zips) {
+    const base = path.basename(zp);
     let zip: AdmZip;
-    try { zip = new AdmZip(zp); } catch (e: any) { console.warn(`   ⚠️ ${path.basename(zp)}: ${e.message}`); continue; }
-    for (const xmlBuf of collectXmls(zip)) {
+    try { zip = new AdmZip(zp); } catch (e: any) {
+      console.warn(`   ⚠️ ${base}: ${e.message}`);
+      failed.push(base);
+      continue;
+    }
+    const stats = { badNested: 0 };
+    const parsedBefore = parsed;
+    for (const xmlBuf of collectXmls(zip, stats)) {
       let row: any = null;
       try { row = parseFiling(xmlBuf); } catch { /* skip corrupt */ }
       if (!row) { skipped++; continue; }
@@ -162,11 +170,22 @@ async function main(): Promise<void> {
       batch.push(row);
       if (batch.length >= BATCH_SIZE) { total += await insertBatch(batch); batch = []; }
     }
-    console.log(`   ${path.basename(zp)}: parsed ${parsed}, upserted ${total}, skipped ${skipped}`);
+    // Flush at the archive boundary, so a later archive's filing always lands after this one's.
+    if (batch.length) { total += await insertBatch(batch); batch = []; }
+    if (stats.badNested > 0 || parsed === parsedBefore) {
+      console.warn(`   ⚠️ ${base}: ${stats.badNested} unreadable nested archive(s), ${parsed - parsedBefore} filings`);
+      failed.push(base);
+    }
+    console.log(`   ${base}: parsed ${parsed}, upserted ${total}, skipped ${skipped}`);
   }
-  if (batch.length) total += await insertBatch(batch);
   console.log(`✅ Financial statements: ${total} rows upserted (${parsed} parsed, ${skipped} skipped)`);
   await pool.end();
+  // Explicit archives are the weekly job's input: an unreadable or empty one fails the run,
+  // so the job keeps it pending instead of reporting success.
+  if (explicit && failed.length) {
+    console.error(`❌ ${failed.length} archive(s) unreadable or without filings: ${failed.join(', ')}`);
+    process.exit(1);
+  }
 }
 
 main().catch(err => { console.error('❌ Fatal:', err); process.exit(1); });
