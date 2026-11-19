@@ -78,7 +78,7 @@ export function McpToolsPage() {
                       {tool.name === 'get_legal_advice' && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">Main</span>}
                     </div>
                     <p className="text-sm text-txt-secondary mt-1">{tool.description}</p>
-                    {tool.cost && <p className="text-xs text-txt-muted mt-1">Вартість: {tool.cost}</p>}
+                    {tool.cost && <p className="text-xs text-txt-muted mt-1">Вартість: {tool.cost} за виклик за прайсом, плюс націнка тарифу</p>}
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${categoryColors[tool.category] || 'bg-gray-50 text-gray-700'}`}>
                     {tool.category}

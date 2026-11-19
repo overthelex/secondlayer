@@ -44,7 +44,7 @@ export const tools: Tool[] = [
       { name: 'limit', type: 'number', required: false, description: 'Кількість результатів' },
     ],
   },
-  { name: 'find_similar_fact_pattern_cases', category: 'Court', description: 'Пошук справ за подібними фактами', cost: '$0.03–$0.10',
+  { name: 'find_similar_fact_pattern_cases', category: 'Court', description: 'Пошук справ за подібними фактами', cost: '$0.066',
     params: [
       { name: 'procedure_code', type: 'string', required: true, description: 'Код процесу' },
       { name: 'facts_text', type: 'string', required: true, description: 'Опис фактів' },
@@ -52,7 +52,7 @@ export const tools: Tool[] = [
       { name: 'limit', type: 'number', required: false, description: 'Кількість результатів' },
     ],
   },
-  { name: 'compare_practice_pro_contra', category: 'Court', description: 'Підбірка практики "за/проти" за тезою', cost: '$0.05–$0.15',
+  { name: 'compare_practice_pro_contra', category: 'Court', description: 'Підбірка практики "за/проти" за тезою', cost: '$0.110',
     params: [
       { name: 'procedure_code', type: 'string', required: true, description: 'Код процесу' },
       { name: 'query', type: 'string', required: true, description: 'Теза для порівняння' },
@@ -91,23 +91,23 @@ export const tools: Tool[] = [
       { name: 'date_to', type: 'string', required: false, description: 'Дата до' },
     ],
   },
-  { name: 'get_citation_graph', category: 'Analysis', description: 'Граф цитувань між справами', cost: '$0.005–$0.02',
+  { name: 'get_citation_graph', category: 'Analysis', description: 'Граф цитувань між справами', cost: '$0.022',
     params: [
       { name: 'case_id', type: 'string', required: true, description: 'ID справи' },
       { name: 'depth', type: 'number', required: false, description: 'Глибина графу' },
     ],
   },
-  { name: 'check_precedent_status', category: 'Analysis', description: 'Актуальність прецеденту: діючий, скасований, сумнівний', cost: '$0.005–$0.015',
+  { name: 'check_precedent_status', category: 'Analysis', description: 'Актуальність прецеденту: діючий, скасований, сумнівний', cost: '$0.033',
     params: [
       { name: 'case_id', type: 'string', required: true, description: 'ID справи' },
     ],
   },
-  { name: 'count_cases_by_party', category: 'Analysis', description: 'Кількість справ за назвою сторони', cost: '$0.002–$0.005' },
-  { name: 'search_court_case_status', category: 'Analysis', description: 'Пошук статусу судової справи', cost: '$0.002–$0.005' },
+  { name: 'count_cases_by_party', category: 'Analysis', description: 'Кількість справ за назвою сторони', cost: '$0.088' },
+  { name: 'search_court_case_status', category: 'Analysis', description: 'Пошук статусу судової справи', cost: '$0.006' },
   {
     name: 'search_case_status_by_party', category: 'Analysis',
     description: 'Справи за стороною (ПІБ або назва): стадії розгляду та засідання',
-    cost: '$0.08',
+    cost: '$0.080',
     params: [
       { name: 'party', type: 'string', required: true, description: 'Сторона справи: прізвище, ПІБ, прізвище з ініціалами або назва юрособи (щонайменше 3 символи)' },
       { name: 'region', type: 'string', required: false, description: 'Регіон: область (напр. «Львівська») або «м. Київ»' },
@@ -124,7 +124,7 @@ export const tools: Tool[] = [
   {
     name: 'get_case_status_details', category: 'Analysis',
     description: 'Картка справи: усі стадії розгляду, сторони, засідання',
-    cost: '₴1',
+    cost: '$0.022',
     params: [
       { name: 'case_number', type: 'string', required: true, description: 'Номер справи (напр. 533/318/15-ц; суфікс провадження можна не вказувати)' },
       { name: 'court_name', type: 'string', required: false, description: 'Назва суду або її частина (для старих номерів без коду суду)' },
@@ -135,7 +135,7 @@ export const tools: Tool[] = [
   {
     name: 'get_court_decision', category: 'Documents',
     description: 'Повний текст рішення з секціями (ФАКТИ, ОБҐРУНТУВАННЯ, РІШЕННЯ)',
-    cost: '$0.01–$0.04',
+    cost: '$0.006',
     params: [
       { name: 'doc_id', type: 'string', required: false, description: 'ID документа' },
       { name: 'case_number', type: 'string', required: false, description: 'Номер справи' },
@@ -149,7 +149,7 @@ export const tools: Tool[] = [
   {
     name: 'get_case_documents_chain', category: 'Documents',
     description: 'Всі документи справи через усі інстанції',
-    cost: '$0.005–$0.02',
+    cost: '$0.017',
     params: [
       { name: 'case_number', type: 'string', required: true, description: 'Номер справи' },
       { name: 'include_full_text', type: 'boolean', required: false, description: 'Включити повні тексти (за замовч.: true)' },
@@ -164,7 +164,7 @@ export const tools: Tool[] = [
   {
     name: 'get_legislation_articles', category: 'Legislation',
     description: 'Текст однієї або декількох статей (аліас: get_legislation_article)',
-    cost: 'Мінімальна',
+    cost: '$0.006',
     params: [
       { name: 'rada_id', type: 'string', required: true, description: 'ID акту в базі ВРУ (напр. "435-15" для ЦК)' },
       { name: 'article_numbers', type: 'string[]', required: true, description: 'Номери статей' },
@@ -174,19 +174,19 @@ export const tools: Tool[] = [
       response: '{"articles": [{"article_number": "625", "title": "Відповідальність за порушення грошового зобов\'язання", "text": "..."}]}',
     },
   },
-  { name: 'get_legislation_section', category: 'Legislation', description: 'Фрагмент за посиланням («ст. 625 ЦК»)', cost: 'Мінімальна' },
+  { name: 'get_legislation_section', category: 'Legislation', description: 'Фрагмент за посиланням («ст. 625 ЦК»)', cost: '$0.006' },
   {
     name: 'search_legislation', category: 'Legislation',
     description: 'Семантичний пошук релевантних статей законодавства',
-    cost: '$0.01–$0.03',
+    cost: '$0.022',
     params: [
       { name: 'query', type: 'string', required: true, description: 'Пошуковий запит' },
       { name: 'rada_id', type: 'string', required: false, description: 'Обмежити пошук конкретним актом' },
       { name: 'limit', type: 'number', required: false, description: 'Кількість результатів' },
     ],
   },
-  { name: 'get_legislation_structure', category: 'Legislation', description: 'Структура акту (зміст, розділи, глави)', cost: 'Мінімальна' },
-  { name: 'get_legislation_history', category: 'Legislation', description: 'Історія змін законодавчого акту', cost: 'Мінімальна' },
+  { name: 'get_legislation_structure', category: 'Legislation', description: 'Структура акту (зміст, розділи, глави)', cost: '$0.006' },
+  { name: 'get_legislation_history', category: 'Legislation', description: 'Історія змін законодавчого акту', cost: '$0.011' },
   { name: 'search_procedural_norms', category: 'Legislation', description: 'Пошук процесуальних норм (ЦПК/ГПК/КАС)', cost: '$0.0005–$0.003' },
   { name: 'find_relevant_law_articles', category: 'Legislation', description: 'Статті, що часто застосовуються у справах за темою (аліас search_legislation)', cost: '$0.001–$0.002' },
   { name: 'search_legal_acts', category: 'Legislation', description: 'Пошук нормативних актів (ЄДРНПА)', cost: '$0.001–$0.005' },
@@ -253,7 +253,7 @@ export const tools: Tool[] = [
   {
     name: 'rada_search_parliament_bills', category: 'RADA',
     description: 'Пошук законопроєктів ВРУ',
-    cost: '$0.001–$0.005',
+    cost: '$0.007',
     params: [
       { name: 'query', type: 'string', required: true, description: 'Пошуковий запит' },
       { name: 'status', type: 'string', required: false, description: 'Статус: registered | first_reading | adopted | rejected | all' },
@@ -263,7 +263,7 @@ export const tools: Tool[] = [
   {
     name: 'rada_get_deputy_info', category: 'RADA',
     description: 'Інформація про депутата (біографія, комітети, фракція)',
-    cost: '$0.0005–$0.001',
+    cost: '$0.006',
     params: [
       { name: 'name', type: 'string', required: true, description: 'Ім\'я депутата' },
     ],
@@ -273,13 +273,13 @@ export const tools: Tool[] = [
     },
   },
   { name: 'rada_search_legislation_text', category: 'RADA', description: 'Пошук у текстах законів з посиланнями на судові рішення', cost: '$0.0005–$0.002' },
-  { name: 'rada_analyze_voting_record', category: 'RADA', description: 'Аналіз голосувань депутата з AI-інсайтами', cost: '$0.002–$0.010' },
+  { name: 'rada_analyze_voting_record', category: 'RADA', description: 'Аналіз голосувань депутата з AI-інсайтами', cost: '$0.011' },
 
   // ========== Registry (remote proxy, openreyestr_ prefix) ==========
   {
     name: 'openreyestr_search_entities', category: 'Registry',
     description: 'Пошук суб\'єктів господарювання (ЮО/ФОП/ГО)',
-    cost: '$0.0001–$0.0005',
+    cost: '$0.022',
     params: [
       { name: 'query', type: 'string', required: true, description: 'Назва або код ЄДРПОУ' },
       { name: 'entityType', type: 'string', required: false, description: 'Тип: UO | FOP | FSU | ALL' },
@@ -293,40 +293,40 @@ export const tools: Tool[] = [
   {
     name: 'openreyestr_get_entity_details', category: 'Registry',
     description: 'Повна інформація: засновники, бенефіціари, керівники',
-    cost: '$0.0001–$0.0003',
+    cost: '$0.017',
     params: [
       { name: 'record', type: 'string', required: true, description: 'Запис або код ЄДРПОУ' },
       { name: 'entityType', type: 'string', required: false, description: 'Тип суб\'єкта' },
     ],
   },
-  { name: 'openreyestr_search_beneficiaries', category: 'Registry', description: 'Пошук бенефіціарних власників компаній', cost: '$0.0002–$0.0005' },
-  { name: 'openreyestr_get_by_edrpou', category: 'Registry', description: 'Пошук за кодом ЄДРПОУ', cost: '$0.0001' },
-  { name: 'openreyestr_search_debtors', category: 'Registry', description: 'Пошук боржників', cost: '$0.0001–$0.0005' },
-  { name: 'openreyestr_search_enforcement_proceedings', category: 'Registry', description: 'Виконавчі провадження', cost: '$0.0001–$0.0005' },
-  { name: 'openreyestr_search_bankruptcy_cases', category: 'Registry', description: 'Справи про банкрутство', cost: '$0.0001–$0.0005' },
-  { name: 'openreyestr_search_notaries', category: 'Registry', description: 'Пошук нотаріусів', cost: '$0.0001' },
+  { name: 'openreyestr_search_beneficiaries', category: 'Registry', description: 'Пошук бенефіціарних власників компаній', cost: '$0.033' },
+  { name: 'openreyestr_get_by_edrpou', category: 'Registry', description: 'Пошук за кодом ЄДРПОУ', cost: '$0.011' },
+  { name: 'openreyestr_search_debtors', category: 'Registry', description: 'Пошук боржників', cost: '$0.022' },
+  { name: 'openreyestr_search_enforcement_proceedings', category: 'Registry', description: 'Виконавчі провадження', cost: '$0.022' },
+  { name: 'openreyestr_search_bankruptcy_cases', category: 'Registry', description: 'Справи про банкрутство', cost: '$0.022' },
+  { name: 'openreyestr_search_notaries', category: 'Registry', description: 'Пошук нотаріусів', cost: '$0.006' },
   { name: 'openreyestr_search_court_experts', category: 'Registry', description: 'Пошук судових експертів', cost: '$0.0001' },
-  { name: 'openreyestr_search_arbitration_managers', category: 'Registry', description: 'Пошук арбітражних керуючих', cost: '$0.0001' },
-  { name: 'openreyestr_search_prozorro', category: 'Registry', description: 'Пошук у системі Prozorro', cost: '$0.001–$0.005' },
+  { name: 'openreyestr_search_arbitration_managers', category: 'Registry', description: 'Пошук арбітражних керуючих', cost: '$0.006' },
+  { name: 'openreyestr_search_prozorro', category: 'Registry', description: 'Пошук у системі Prozorro', cost: '$0.022' },
   { name: 'openreyestr_search_vat_payers', category: 'Registry', description: 'Пошук платників ПДВ', cost: '$0.001' },
-  { name: 'openreyestr_search_single_tax_payers', category: 'Registry', description: 'Пошук платників єдиного податку', cost: '$0.001' },
-  { name: 'openreyestr_search_tax_debt', category: 'Registry', description: 'Пошук податкового боргу', cost: '$0.001' },
-  { name: 'openreyestr_search_rnbo_sanctions', category: 'Registry', description: 'Пошук санкцій РНБО', cost: '$0.0001' },
-  { name: 'openreyestr_search_termination_started', category: 'Registry', description: 'Пошук ЮО у стані припинення', cost: '$0.0001' },
+  { name: 'openreyestr_search_single_tax_payers', category: 'Registry', description: 'Пошук платників єдиного податку', cost: '$0.006' },
+  { name: 'openreyestr_search_tax_debt', category: 'Registry', description: 'Пошук податкового боргу', cost: '$0.022' },
+  { name: 'openreyestr_search_rnbo_sanctions', category: 'Registry', description: 'Пошук санкцій РНБО', cost: '$0.055' },
+  { name: 'openreyestr_search_termination_started', category: 'Registry', description: 'Пошук ЮО у стані припинення', cost: '$0.006' },
   { name: 'openreyestr_get_statistics', category: 'Registry', description: 'Статистика державного реєстру', cost: '$0.0001' },
 
   // ========== Open Data ==========
   { name: 'search_sanctions', category: 'Open Data', description: 'Пошук у реєстрі санкцій', cost: '$0.001' },
   { name: 'search_corruption_register', category: 'Open Data', description: 'Пошук у реєстрі корупціонерів', cost: '$0.001' },
   { name: 'search_lawyers', category: 'Open Data', description: 'Реєстр адвокатів', cost: '$0.001' },
-  { name: 'search_judges', category: 'Open Data', description: 'Реєстр суддів', cost: '$0.0003' },
+  { name: 'search_judges', category: 'Open Data', description: 'Реєстр суддів', cost: '$0.006' },
   { name: 'search_wanted_persons', category: 'Open Data', description: 'Реєстр розшукуваних осіб', cost: '$0.0003' },
   { name: 'search_missing_persons', category: 'Open Data', description: 'Реєстр зниклих безвісти', cost: '$0.0003' },
   { name: 'search_trademarks', category: 'Open Data', description: 'Пошук торгових марок', cost: '$0.001' },
   { name: 'search_patents', category: 'Open Data', description: 'Пошук патентів', cost: '$0.001' },
   { name: 'search_vrp_decisions', category: 'Open Data', description: 'Рішення Вищої ради правосуддя', cost: '$0.0003' },
-  { name: 'search_edrnpa', category: 'Open Data', description: 'Реєстр нормативно-правових актів', cost: '$0.001' },
-  { name: 'search_public_spending', category: 'Open Data', description: 'Пошук державних витрат', cost: '$0.001–$0.005' },
+  { name: 'search_edrnpa', category: 'Open Data', description: 'Реєстр нормативно-правових актів', cost: '$0.006' },
+  { name: 'search_public_spending', category: 'Open Data', description: 'Пошук державних витрат', cost: '$0.017' },
   { name: 'search_nbu_banks', category: 'Open Data', description: 'Реєстр банків НБУ', cost: '$0.001' },
 ];
 
