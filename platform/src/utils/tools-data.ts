@@ -107,7 +107,7 @@ export const tools: Tool[] = [
   {
     name: 'search_case_status_by_party', category: 'Analysis',
     description: 'Справи за стороною (ПІБ або назва): стадії розгляду та засідання',
-    cost: '₴1',
+    cost: '$0.08',
     params: [
       { name: 'party', type: 'string', required: true, description: 'Сторона справи: прізвище, ПІБ, прізвище з ініціалами або назва юрособи (щонайменше 3 символи)' },
       { name: 'region', type: 'string', required: false, description: 'Регіон: область (напр. «Львівська») або «м. Київ»' },
