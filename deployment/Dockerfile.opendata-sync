@@ -26,6 +26,9 @@ RUN npm install --production
 COPY --from=builder /app/dist/ ./dist/
 COPY scripts/court-status/load_case_status.py ./scripts/load_case_status.py
 
+# LEXAI-2301: Cyprus DRCOR register loader (python3 stdlib + psql)
+COPY scripts/cyprus/load_drcor.py ./scripts/load_drcor.py
+
 EXPOSE 3010
 
 CMD ["node", "dist/index.js"]
