@@ -1,4 +1,5 @@
 import { BaseCostTracker, AdditionalCostResult } from '@secondlayer/shared';
+import { createHash } from 'crypto';
 import { CostEstimate, CostBreakdown } from '@secondlayer/shared';
 import { Database } from '../database/database.js';
 import { logger } from '../utils/logger.js';
@@ -6,6 +7,30 @@ import { maskSensitive, sanitizeId, sanitizeClassified } from '../utils/sanitize
 import { BillingService } from './billing-service.js';
 import { getFixedToolPrice } from './tool-fixed-price.js';
 import { getToolListPriceUsd } from './tool-list-price.js';
+
+/**
+ * Tool arguments that name a private person. cost_tracking keeps the call for billing and audit
+ * indefinitely, so these values are stored only as a hash (the same sha256 prefix the tool logs),
+ * never as the name itself. Required by the search-by-party spec (section 6).
+ */
+const PERSONAL_DATA_PARAMS: Record<string, string[]> = {
+  search_case_status_by_party: ['party'],
+};
+
+export function personalDataHash(value: string): string {
+  return 'sha256:' + createHash('sha256').update(value.trim().toLowerCase()).digest('hex').slice(0, 12);
+}
+
+/** Redacted userQuery and queryParams for tools whose arguments name a person; others unchanged. */
+export function redactPersonalParams(toolName: string, userQuery: string, queryParams: any): { userQuery: string; queryParams: any } {
+  const keys = PERSONAL_DATA_PARAMS[toolName];
+  if (!keys || !queryParams || typeof queryParams !== 'object') return { userQuery, queryParams };
+  const redacted: Record<string, unknown> = { ...queryParams };
+  for (const k of keys) {
+    if (typeof redacted[k] === 'string' && redacted[k]) redacted[k] = personalDataHash(redacted[k] as string);
+  }
+  return { userQuery: JSON.stringify(redacted), queryParams: redacted };
+}
 
 export class CostTracker extends BaseCostTracker {
   private billingService?: BillingService;
@@ -43,6 +68,7 @@ export class CostTracker extends BaseCostTracker {
     mcpSessionId?: string | null;
     mcpTransport?: string | null;
   }): Promise<void> {
+    const { userQuery, queryParams } = redactPersonalParams(params.toolName, params.userQuery, params.queryParams);
     await this.db.query(
       `INSERT INTO cost_tracking (
         request_id, tool_name, client_key, user_id, user_query, query_params,
@@ -53,8 +79,8 @@ export class CostTracker extends BaseCostTracker {
         params.toolName,
         params.clientKey || null,
         params.userId || null,
-        sanitizeClassified((params.userQuery?.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') || '').substring(0, 500)),
-        JSON.stringify(params.queryParams),
+        sanitizeClassified((userQuery?.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') || '').substring(0, 500)),
+        JSON.stringify(queryParams),
         'pending',
         params.clientIp ?? null,
         params.userAgent ?? null,
