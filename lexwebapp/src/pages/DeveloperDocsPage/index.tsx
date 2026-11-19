@@ -7,15 +7,45 @@ import { WebAPIJsonLd } from '../../components/seo/WebAPIJsonLd';
    DATA
    ================================================================ */
 
-const API_BASE = 'https://platform.legal.org.ua/api/tools';
 /**
- * Єдиний MCP-ендпоінт (Streamable HTTP, куратований набір). Кількість інструментів
- * не хардкодимо: канонічне джерело — tools/list цього ендпоінта.
+ * Єдиний публічний ендпоінт для розробників (MCP Streamable HTTP, куратований набір).
+ * API-ключі sl_ працюють лише тут: REST /api/tools/* та інші транспорти повертають
+ * 403 API_KEY_V2_ONLY (mcp_backend/src/middleware/client-key-guard.ts).
+ * Канонічний перелік інструментів — tools/list цього ендпоінта.
  */
 const MCP_HTTP_URL = 'https://mcp.legal.org.ua/api/v2/mcp';
 
-/** Кількість інструментів за сервісами — звірено зі списком toolGroups нижче, 19.11.2026. */
-const TOOL_COUNTS = { total: 133, backend: 94, rada: 5, openreyestr: 34 };
+/** Повний цикл MCP-сесії curl-ом: initialize → notifications/initialized → tools/list → tools/call. */
+const QUICKSTART_CURL = `KEY=sl_YOUR_API_KEY
+URL=${MCP_HTTP_URL}
+
+# 1. initialize: id сесії приходить у заголовку відповіді Mcp-Session-Id
+SID=$(curl -s -D - -o /dev/null "$URL" \\
+  -H "Authorization: Bearer $KEY" \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"my-app","version":"1.0"}}}' \\
+  | awk 'tolower($1)=="mcp-session-id:" {print $2}' | tr -d '\\r')
+
+# допоміжна функція: POST у відкриту сесію
+mcp() {
+  curl -s "$URL" \\
+    -H "Authorization: Bearer $KEY" \\
+    -H "Mcp-Session-Id: $SID" \\
+    -H "Content-Type: application/json" \\
+    -H "Accept: application/json, text/event-stream" \\
+    -d "$1"
+}
+
+# 2. підтвердити ініціалізацію
+mcp '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+
+# 3. перелік доступних інструментів зі схемами параметрів
+mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+
+# 4. виклик інструмента: ст. 625 Цивільного кодексу
+mcp '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_legislation_section","arguments":{"rada_id":"435-15","article_number":"625"}}}'`;
+
 /** Курс НБУ на 14.11.2026, за яким перераховані гривневі суми нижче. */
 const USD_UAH = '45,43';
 
@@ -36,11 +66,8 @@ const toolGroups: ToolGroup[] = [
     title: 'Пошук судових рішень (ЄДРСР)',
     tools: [
       { name: 'search_court_decisions', description: 'Єдиний пошук у ЄДРСР (136M+ документів). Режими: structured (метадані), fulltext (FTS), hybrid (FTS+семантика), semantic', params: [{ name: 'mode', required: true }, { name: 'query' }, { name: 'party_name' }, { name: 'party_role' }, { name: 'cause_num' }, { name: 'judge' }, { name: 'court_code' }, { name: 'court_name' }, { name: 'justice_kind' }, { name: 'judgment_code' }, { name: 'category_code' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'instance_code' }, { name: 'court_level' }, { name: 'military_preset' }, { name: 'kupap_preset' }, { name: 'include_fulltext' }, { name: 'limit' }, { name: 'offset' }, { name: 'oversample' }, { name: 'rrf_k' }], cost: '₴0.45 · до ₴0.68' },
-      { name: 'search_legal_precedents', description: 'Пошук прецедентів із семантичним аналізом; фільтри за рівнем суду (ВП/КЦС/КГС/КАС/ККС) та видом судочинства', params: [{ name: 'query', required: true }, { name: 'domain' }, { name: 'court_level' }, { name: 'procedure_code' }, { name: 'time_range' }, { name: 'limit' }, { name: 'offset' }, { name: 'count_all' }, { name: 'sections' }, { name: 'section_focus' }], cost: '₴2.95 · до ₴4.43' },
       { name: 'find_similar_fact_pattern_cases', description: 'Справи зі схожою фабулою: семантичний пошук за описом фактичних обставин', params: [{ name: 'procedure_code', required: true }, { name: 'facts_text', required: true }, { name: 'court_level' }, { name: 'time_range' }, { name: 'limit' }], cost: '₴3.00 · до ₴4.50' },
       { name: 'compare_practice_pro_contra', description: 'Дві лінії практики за правовою тезою — рішення «за» і рішення «проти»', params: [{ name: 'procedure_code', required: true }, { name: 'query', required: true }, { name: 'court_level' }, { name: 'time_range' }, { name: 'limit' }], cost: '₴4.00 · до ₴6.00' },
-      { name: 'edrsr_court_decisions_by_court', description: 'Рішення конкретного суду за FTS-запитом у заданому вікні дат', params: [{ name: 'court_code', required: true }, { name: 'fts_query', required: true }, { name: 'date_from', required: true }, { name: 'date_to' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'get_similar_reasoning', description: 'Схожі судові обґрунтування за векторною подібністю секцій рішень', params: [{ name: 'query', required: true }, { name: 'section_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'court' }, { name: 'chamber' }, { name: 'dispute_category' }, { name: 'outcome' }, { name: 'deviation_flag' }, { name: 'precedent_status' }, { name: 'case_number' }, { name: 'limit' }], cost: '₴0.91 · до ₴1.36' },
     ],
   },
   {
@@ -48,24 +75,18 @@ const toolGroups: ToolGroup[] = [
     tools: [
       { name: 'get_court_decision', description: 'Повний текст рішення з розбивкою на секції: ФАКТИ, МОТИВУВАННЯ, РІШЕННЯ', params: [{ name: 'doc_id' }, { name: 'case_number' }, { name: 'depth' }, { name: 'reasoning_budget' }, { name: 'include_citations' }], cost: '₴0.25 · до ₴0.38' },
       { name: 'get_case_documents_chain', description: 'Усі документи справи через усі інстанції — перша, апеляція, касація', params: [{ name: 'case_number', required: true }, { name: 'include_full_text' }, { name: 'max_docs' }, { name: 'group_by_instance' }, { name: 'sort' }, { name: 'offset' }, { name: 'document_types' }], cost: '₴0.45 · до ₴0.68' },
-      { name: 'edrsr_get_decision_dispositive', description: 'Лише резолютивна частина: ВИРІШИВ / УХВАЛИВ / ПОСТАНОВИВ / ВИРОК', params: [{ name: 'doc_id', required: true }], cost: '₴0' },
-      { name: 'extract_document_sections', description: 'Розбивка тексту рішення на структуровані секції (з LLM або без)', params: [{ name: 'doc_id' }, { name: 'document_id' }, { name: 'text' }, { name: 'use_llm' }] },
       { name: 'load_full_texts', description: 'Пакетне завантаження повних текстів рішень за масивом doc_id', params: [{ name: 'doc_ids', required: true }, { name: 'max_docs' }, { name: 'batch_size' }, { name: 'return_texts' }, { name: 'snippet_chars' }], cost: '₴0.32 · до ₴0.48' },
-      { name: 'get_decision_cited_norms', description: 'Норми законодавства, на які фактично посилається рішення (граф цитувань)', params: [{ name: 'doc_id', required: true }], cost: '₴0' },
-      { name: 'bulk_ingest_court_decisions', description: 'Масове завантаження та векторизація рішень за запитом (пагінація)', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'max_docs' }, { name: 'max_pages' }, { name: 'page_size' }, { name: 'supreme_court_hint' }] },
     ],
   },
   {
     title: 'Аналіз практики',
     tools: [
-      { name: 'analyze_case_pattern', description: 'Патерни практики: успішні аргументи, ризики, статистика результатів', params: [{ name: 'intent', required: true }, { name: 'query' }, { name: 'case_ids' }, { name: 'documents' }, { name: 'method' }] },
       { name: 'count_cases_by_party', description: 'Точна кількість справ за назвою сторони (позивач/відповідач)', params: [{ name: 'party_name', required: true }, { name: 'party_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'return_cases' }, { name: 'max_cases_to_return' }], cost: '₴0.50 · до ₴0.75' },
       { name: 'check_precedent_status', description: 'Чи не скасовано рішення вищою інстанцією', params: [{ name: 'case_id' }, { name: 'case_number' }, { name: 'doc_id' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'get_citation_graph', description: 'Граф цитувань рішення: на які статті законодавства воно посилається', params: [{ name: 'case_id', required: true }, { name: 'depth' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'search_court_case_status', description: 'Статус судової справи за номером, суддею або судом', params: [{ name: 'case_number' }, { name: 'judge' }, { name: 'description' }, { name: 'court_name' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'search_case_status_by_party', description: 'Справи за стороною (ПІБ або назва юрособи): стадії розгляду, судді, засідання', params: [{ name: 'party', required: true }, { name: 'region' }, { name: 'court_name' }, { name: 'case_number' }, { name: 'proceeding_number' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'include_sessions' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1' },
       { name: 'get_case_status_details', description: 'Картка справи: усі стадії розгляду, сторони, судді, засідання', params: [{ name: 'case_number', required: true }, { name: 'court_name' }], cost: '₴1' },
-      { name: 'analyze_data', description: 'Read-only SQL для аналітики: GROUP BY, COUNT, агрегати, JOIN (таймаут 45с)', params: [{ name: 'sql', required: true }], cost: '₴0' },
     ],
   },
   {
@@ -77,7 +98,6 @@ const toolGroups: ToolGroup[] = [
       { name: 'get_legislation_structure', description: 'Структура акту: розділи, глави, параграфи з лічильником статей', params: [{ name: 'rada_id', required: true }, { name: 'include_articles' }, { name: 'offset' }, { name: 'limit' }], cost: '₴0.10 · до ₴0.15' },
       { name: 'get_legislation_history', description: 'Історія редакцій акту: які статті змінювались і коли', params: [{ name: 'rada_id', required: true }, { name: 'article_number' }], cost: '₴0.10 · до ₴0.15' },
       { name: 'list_legislation_editions', description: 'Перелік доступних історичних редакцій акту з датами', params: [{ name: 'rada_id', required: true }], cost: '₴0.10 · до ₴0.15' },
-      { name: 'search_procedural_norms', description: 'Процесуальні норми ЦПК/ГПК/КАС через RADA MCP', params: [{ name: 'code', required: true }, { name: 'query' }, { name: 'article' }, { name: 'limit' }] },
     ],
   },
   {
@@ -86,53 +106,18 @@ const toolGroups: ToolGroup[] = [
       { name: 'search_npa', description: 'Повний корпус НПА України (293K актів): закони, підзаконні акти, редакції', params: [{ name: 'query' }, { name: 'title' }, { name: 'status' }, { name: 'doc_type' }, { name: 'as_of_date' }, { name: 'limit' }], cost: '₴0.10 · до ₴0.15' },
       { name: 'get_npa_act', description: 'Картка акта НПА за nreg: метадані, редакції, текст, окрема стаття', params: [{ name: 'nreg', required: true }, { name: 'mode' }, { name: 'article_number' }, { name: 'as_of_date' }, { name: 'offset' }, { name: 'limit' }], cost: '₴0.04 · до ₴0.06' },
       { name: 'search_edrnpa', description: 'Реєстр нормативно-правових актів ЄДРНПА (141K записів)', params: [{ name: 'name' }, { name: 'number' }, { name: 'publisher' }, { name: 'doc_type' }, { name: 'keywords' }, { name: 'include_text' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'search_legal_acts', description: 'Пошук НПА: закони, кодекси, укази, постанови', params: [{ name: 'query', required: true }, { name: 'target' }, { name: 'date_before' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'get_legal_act_meta', description: 'Кількість і метадані НПА за запитом без завантаження результатів', params: [{ name: 'query', required: true }, { name: 'target' }], cost: '₴0' },
     ],
   },
   {
     title: 'Процесуальні інструменти',
     tools: [
-      { name: 'calculate_procedural_deadlines', description: 'Калькулятор процесуальних строків з аналізом практики їх поновлення', params: [{ name: 'procedure_code', required: true }, { name: 'event_type' }, { name: 'event_date', required: true }, { name: 'received_full_text_date' }, { name: 'appeal_type', required: true }, { name: 'time_range' }, { name: 'practice_limit' }, { name: 'practice_queries_max' }, { name: 'practice_broad_queries_max' }, { name: 'practice_disable_time_range' }, { name: 'practice_use_court_practice' }, { name: 'practice_case_map_max' }, { name: 'practice_expand_docs' }, { name: 'practice_expand_depth' }, { name: 'reasoning_budget' }] },
-      { name: 'build_procedural_checklist', description: 'Чекліст для стадії справи з посиланням на норму', params: [{ name: 'procedure_code', required: true }, { name: 'stage', required: true }, { name: 'case_category' }] },
-      { name: 'calculate_monetary_claims', description: '3% річних, інфляційні втрати та інші грошові вимоги', params: [{ name: 'amount', required: true }, { name: 'date_from', required: true }, { name: 'date_to', required: true }, { name: 'claim_type' }] },
       { name: 'search_court_hearing_schedule', description: 'Розклад судових засідань: дата, час, зал, учасники', params: [{ name: 'query' }, { name: 'source' }, { name: 'target' }, { name: 'case_number' }, { name: 'judge' }, { name: 'participant' }, { name: 'court_name' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'bulk_ingest_court_sessions', description: 'Масовий імпорт судових засідань у локальну базу', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'max_sessions' }, { name: 'max_pages' }] },
-      { name: 'build_legal_decision', description: 'Decision Layer: структурована правова позиція з результатів пошуку (таймаут 120с)', params: [{ name: 'query', required: true }, { name: 'context', required: true }, { name: 'pro_cases' }, { name: 'contra_cases' }, { name: 'legislation' }], cost: '₴24 · до ₴26' },
-    ],
-  },
-  {
-    title: 'Обробка документів',
-    tools: [
-      { name: 'parse_document', description: 'Парсинг PDF/DOCX/HTML з витягом тексту та метаданих, OCR через Google Vision', params: [{ name: 'fileBase64', required: true }, { name: 'mimeType' }, { name: 'filename' }] },
-      { name: 'extract_key_clauses', description: 'Ключові положення договору з класифікацією за типами клауз', params: [{ name: 'documentText', required: true }, { name: 'documentId' }] },
-      { name: 'summarize_document', description: 'Резюме документа: executive summary, посекційний розбір, ключові факти', params: [{ name: 'documentText', required: true }, { name: 'detailLevel' }] },
-      { name: 'compare_documents', description: 'Семантичне порівняння двох версій документа з класифікацією змін', params: [{ name: 'oldDocumentText', required: true }, { name: 'newDocumentText', required: true }] },
-      { name: 'batch_process_documents', description: 'Пакетна обробка документів із контролем конкурентності та повторами', params: [{ name: 'files', required: true }, { name: 'operations', required: true }, { name: 'concurrency' }, { name: 'retryAttempts' }, { name: 'skipErrors' }] },
-    ],
-  },
-  {
-    title: 'Due Diligence',
-    tools: [
-      { name: 'bulk_review_runner', description: 'Пакетна DD-перевірка масиву документів (batch orchestration)', params: [{ name: 'documentIds', required: true }, { name: 'maxConcurrency' }, { name: 'trace_id' }] },
-      { name: 'risk_scoring', description: 'Risk score за findings: Critical +25, High +15 тощо', params: [{ name: 'documentIds', required: true }, { name: 'findings' }, { name: 'trace_id' }] },
-      { name: 'generate_dd_report', description: 'DD-звіт: executive summary плюс таблиця findings', params: [{ name: 'findings', required: true }, { name: 'riskScores', required: true }, { name: 'reportTitle', required: true }, { name: 'format' }, { name: 'trace_id' }] },
-    ],
-  },
-  {
-    title: 'Pipeline',
-    tools: [
-      { name: 'classify_intent', description: 'Класифікація запиту (service/task/depth) — точка входу в pipeline', params: [{ name: 'query', required: true }, { name: 'context' }, { name: 'reasoning_budget' }], cost: '₴0.09 · до ₴0.14' },
-      { name: 'retrieve_legal_sources', description: 'RAG retrieval: сирі джерела (справи, закони, роз’яснення) без аналізу', params: [{ name: 'context', required: true }, { name: 'limits' }], cost: '₴0.45 · до ₴0.68' },
-      { name: 'validate_response', description: 'Trust layer: перевірка, що відповідь спирається на надані джерела', params: [{ name: 'answer', required: true }, { name: 'sources', required: true }] },
-      { name: 'format_answer_pack', description: 'Пакування результату у структуру norm / position / conclusion / risks', params: [{ name: 'desired_output' }, { name: 'norm' }, { name: 'position' }, { name: 'conclusion' }, { name: 'risks' }] },
     ],
   },
   {
     title: 'Інтелектуальна власність',
     tools: [
       { name: 'search_ip_objects', description: 'Реєстр об’єктів права інтелектуальної власності: ТМ, патенти, промзразки', params: [{ name: 'query' }, { name: 'obj_type' }, { name: 'obj_state' }, { name: 'classes' }, { name: 'owner' }, { name: 'owner_edrpou' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
-      { name: 'search_trademarks', description: 'Свідоцтва на знаки для товарів і послуг за класами МКТП та власником', params: [{ name: 'query' }, { name: 'nice_classes' }, { name: 'owner' }, { name: 'owner_edrpou' }, { name: 'obj_state' }, { name: 'limit' }], cost: '₴0' },
       { name: 'find_similar_trademarks', description: 'Тотожні та схожі ТМ у тих самих класах — перевірка на «зіткнення»', params: [{ name: 'app_number' }, { name: 'query' }, { name: 'classes' }, { name: 'obj_state' }, { name: 'min_similarity' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
       { name: 'get_ip_object', description: 'Картка об’єкта ІВ за номером заявки або реєстрації', params: [{ name: 'app_number' }, { name: 'registration_number' }, { name: 'obj_type' }], cost: '₴0.01 · до ₴0.01' },
       { name: 'get_trademark_dossier', description: 'Повне досьє ТМ за одним номером: заявка, діловодство, публікації', params: [{ name: 'number', required: true }], cost: '₴0.02 · до ₴0.03' },
@@ -147,15 +132,7 @@ const toolGroups: ToolGroup[] = [
       { name: 'search_vrp_judges_discipline', description: 'Дисциплінарні дані суддів ВРП: звільнені, відсторонені, втручання', params: [{ name: 'judge_name' }, { name: 'court_name' }, { name: 'type' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'search_public_spending', description: 'Публічні витрати spending.gov.ua: 12.6M+ записів (таймаут 120с)', params: [{ name: 'edrpou' }, { name: 'contractor_name' }, { name: 'contractor_edrpou' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'min_amount' }, { name: 'max_amount' }, { name: 'doc_type' }, { name: 'limit' }], cost: '₴0.02 · до ₴0.03' },
       { name: 'search_invalid_passports', description: 'Недійсні паспорти МВС: 2.9M внутрішніх документів', params: [{ name: 'd_series' }, { name: 'd_number' }, { name: 'ovd' }, { name: 'd_status' }, { name: 'include_foreign' }, { name: 'limit' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'search_terrorism_list', description: 'Перелік осіб і організацій, пов’язаних з тероризмом (ДСФМУ)', params: [{ name: 'name', required: true }, { name: 'limit' }], cost: '₴0' },
       { name: 'search_amcu_practice', description: 'Семантичний пошук по рішеннях Антимонопольного комітету', params: [{ name: 'query', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
-    ],
-  },
-  {
-    title: 'ЄСПЛ',
-    tools: [
-      { name: 'search_echr_practice', description: 'Практика Європейського суду з прав людини', params: [{ name: 'query', required: true }, { name: 'type_id' }, { name: 'limit' }], cost: '₴0' },
-      { name: 'get_echr_document', description: 'Повний текст документа ЄСПЛ за ID', params: [{ name: 'id', required: true }] },
     ],
   },
   {
@@ -164,7 +141,6 @@ const toolGroups: ToolGroup[] = [
       { name: 'rada_search_parliament_bills', description: 'Законопроєкти Верховної Ради з семантичним аналізом', params: [{ name: 'query', required: true }, { name: 'status' }, { name: 'initiator' }, { name: 'committee' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
       { name: 'rada_search_bill_documents', description: 'Супровідні документи законопроєктів: висновки ГНЕУ, комітетів, порівняльні таблиці', params: [{ name: 'query' }, { name: 'bill_number' }, { name: 'doc_kind' }, { name: 'convocation' }, { name: 'initiator' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
       { name: 'rada_get_deputy_info', description: 'Дані народного депутата: фракція, помічники, історія голосувань', params: [{ name: 'name' }, { name: 'rada_id' }, { name: 'faction' }, { name: 'include_voting_record' }, { name: 'include_assistants' }], cost: '₴0.02 · до ₴0.03' },
-      { name: 'rada_search_legislation_text', description: 'Тексти законів із посиланнями на судові рішення', params: [{ name: 'law_identifier', required: true }, { name: 'article' }, { name: 'search_text' }, { name: 'include_court_citations' }], cost: '₴0.07 · до ₴0.10' },
       { name: 'rada_analyze_voting_record', description: 'Аналіз голосувань депутата з AI-інсайтами', params: [{ name: 'deputy_name', required: true }, { name: 'date_from' }, { name: 'date_to' }, { name: 'bill_number' }, { name: 'analyze_patterns' }] },
     ],
   },
@@ -191,66 +167,27 @@ const toolGroups: ToolGroup[] = [
       { name: 'openreyestr_search_rnbo_sanctions', description: 'Санкційні списки РНБО', params: [{ name: 'query', required: true }, { name: 'schema_type' }, { name: 'country' }, { name: 'identifier' }, { name: 'limit' }, { name: 'offset' }], cost: '₴2.50 · до ₴3.75' },
       { name: 'openreyestr_search_nazk_declarations', description: 'Декларації НАЗК', params: [{ name: 'declarant_name' }, { name: 'declarant_workplace' }, { name: 'declaration_year' }, { name: 'declaration_type' }, { name: 'declarant_region' }, { name: 'min_income' }, { name: 'limit' }, { name: 'offset' }], cost: '₴2.50 · до ₴3.75' },
       { name: 'openreyestr_search_prozorro', description: 'Тендери ProZorro з переможцями', params: [{ name: 'query' }, { name: 'buyer_edrpou' }, { name: 'buyer_name' }, { name: 'supplier_edrpou' }, { name: 'supplier_name' }, { name: 'supplier_phone' }, { name: 'supplier_email' }, { name: 'status' }, { name: 'cpv_code' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
-      { name: 'openreyestr_search_vat_payers', description: 'Реєстр платників ПДВ (ДПС)', params: [{ name: 'query' }, { name: 'vat_code' }, { name: 'limit' }, { name: 'offset' }] },
       { name: 'openreyestr_search_single_tax_payers', description: 'Реєстр платників єдиного податку (ДПС)', params: [{ name: 'query' }, { name: 'tin' }, { name: 'tax_group' }, { name: 'limit' }, { name: 'offset' }] },
       { name: 'openreyestr_search_tax_debt', description: 'Реєстр податкового боргу (ДПС)', params: [{ name: 'query' }, { name: 'tin' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_search_esv_debt', description: 'Реєстр боргу зі сплати ЄСВ', params: [{ name: 'query' }, { name: 'tin' }, { name: 'limit' }, { name: 'offset' }] },
       { name: 'openreyestr_search_notaries', description: 'Єдиний реєстр нотаріусів', params: [{ name: 'query' }, { name: 'region' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'openreyestr_search_court_experts', description: 'Атестовані судові експерти', params: [{ name: 'query' }, { name: 'region' }, { name: 'expertise_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'openreyestr_search_arbitration_managers', description: 'Арбітражні керуючі (банкрутство)', params: [{ name: 'query' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'openreyestr_search_forensic_methods', description: 'Методики судових експертиз', params: [{ name: 'query' }, { name: 'expertise_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
       { name: 'openreyestr_search_special_forms', description: 'Спеціальні бланки нотаріальних документів', params: [{ name: 'series' }, { name: 'form_number' }, { name: 'recipient' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'openreyestr_search_legal_acts', description: 'Нормативно-правові акти в реєстрі НАІС', params: [{ name: 'query' }, { name: 'act_type' }, { name: 'publisher' }, { name: 'status' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.02' },
-      { name: 'openreyestr_search_administrative_units', description: 'Адміністративно-територіальні одиниці (КОАТУУ)', params: [{ name: 'query' }, { name: 'region' }, { name: 'unit_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.01' },
-      { name: 'openreyestr_search_streets', description: 'Реєстр вулиць НАІС', params: [{ name: 'query' }, { name: 'settlement' }, { name: 'region' }, { name: 'street_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.01 · до ₴0.01' },
-      { name: 'openreyestr_search_street_renamings', description: 'Історія перейменувань вулиць (дані OpenStreetMap)', params: [{ name: 'query' }, { name: 'min_renames' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'openreyestr_search_exchange_data', description: 'Реєстр обміну даними з державними органами', params: [{ name: 'entity_record' }, { name: 'entity_type' }, { name: 'tax_payer_type' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'openreyestr_search_me_datasets', description: 'Каталог датасетів Мінекономіки', params: [{ name: 'query' }, { name: 'limit' }], cost: '₴0.05 · до ₴0.07' },
-      { name: 'openreyestr_search_me_records', description: 'Рядки всередині датасету Мінекономіки', params: [{ name: 'dataset' }, { name: 'resource_id' }, { name: 'query' }, { name: 'limit' }, { name: 'offset' }] },
-    ],
-  },
-  {
-    title: 'Суди Індії',
-    tools: [
-      { name: 'search_india_supreme_court', description: 'Рішення Верховного суду Індії: 38K+ актів, 1950–2026', params: [{ name: 'query' }, { name: 'petitioner' }, { name: 'respondent' }, { name: 'judge' }, { name: 'citation' }, { name: 'case_id' }, { name: 'cnr' }, { name: 'disposal_nature' }, { name: 'year_from' }, { name: 'year_to' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'search_india_high_courts', description: 'Рішення 25 High Courts Індії: 16M+ актів, 1950–2025', params: [{ name: 'query' }, { name: 'court' }, { name: 'court_code' }, { name: 'judge' }, { name: 'cnr' }, { name: 'disposal_nature' }, { name: 'bench' }, { name: 'year_from' }, { name: 'year_to' }, { name: 'limit' }, { name: 'offset' }] },
-      { name: 'india_court_stats', description: 'Агрегована статистика судів Індії за роками, судами, суддями', params: [{ name: 'source' }, { name: 'court' }, { name: 'year_from' }, { name: 'year_to' }, { name: 'group_by' }, { name: 'limit' }] },
-    ],
-  },
-  {
-    title: 'Vault',
-    tools: [
-      { name: 'store_document', description: 'Зберегти документ у Vault: парсинг, секціонування, векторизація', params: [{ name: 'fileBase64', required: true }, { name: 'mimeType' }, { name: 'title', required: true }, { name: 'type', required: true }, { name: 'metadata' }] },
-      { name: 'get_document', description: 'Документ із Vault за ID: текст, метадані, теги, секції', params: [{ name: 'documentId', required: true }, { name: 'includeSections' }, { name: 'includePatterns' }], cost: '₴0.05 · до ₴0.07' },
-      { name: 'list_documents', description: 'Список документів Vault з фільтрами та текстовим пошуком', params: [{ name: 'query' }, { name: 'type' }, { name: 'tags' }, { name: 'category' }, { name: 'uploadedAfter' }, { name: 'uploadedBefore' }, { name: 'limit' }, { name: 'offset' }, { name: 'sortBy' }, { name: 'sortOrder' }, { name: 'folderPath' }, { name: 'matterId' }], cost: '₴0.05 · до ₴0.07' },
-      { name: 'semantic_search', description: 'Семантичний пошук по документах Vault через векторні ембедінги', params: [{ name: 'query', required: true }, { name: 'type' }, { name: 'tags' }, { name: 'limit' }, { name: 'threshold' }], cost: '₴0.91 · до ₴1.36' },
-      { name: 'update_document', description: 'Оновити метадані документа: назву, теги, тип, категорію, теку', params: [{ name: 'documentId', required: true }, { name: 'title' }, { name: 'tags' }, { name: 'type' }, { name: 'category' }, { name: 'folderPath' }, { name: 'matterId' }] },
-      { name: 'delete_document', description: 'Soft-delete документа разом із векторними ембедінгами', params: [{ name: 'documentId', required: true }] },
-      { name: 'auto_tag_vault_documents', description: 'Автотегування документів Vault, у яких немає тегів', params: [{ name: 'userId', required: true }, { name: 'limit' }, { name: 'type' }, { name: 'force' }] },
-    ],
-  },
-  {
-    title: 'Службові та адміністративні',
-    tools: [
-      { name: 'list_import_sources', description: 'Каталог джерел даних для імпорту (data.gov.ua, НІПО тощо)', cost: '₴0' },
-      { name: 'start_import', description: 'Запустити фонову задачу імпорту з багатопотоковим завантаженням', params: [{ name: 'source_name', required: true }, { name: 'from_page' }, { name: 'threads_per_ip' }], cost: '₴0' },
-      { name: 'get_import_status', description: 'Прогрес, швидкість та ETA імпортних задач', params: [{ name: 'task_id' }, { name: 'status' }], cost: '₴0' },
-      { name: 'cancel_import', description: 'Скасувати задачу імпорту зі збереженням прогресу', params: [{ name: 'task_id', required: true }] },
-      { name: 'workflow_memory_query', description: 'Семантичний пошук по трирівневій workflow memory', params: [{ name: 'query', required: true }, { name: 'layers' }, { name: 'tags' }, { name: 'top_k' }, { name: 'session_id' }] },
-      { name: 'workflow_memory_ingest', description: 'Додати запис до workflow memory (principle / pattern / knowledge)', params: [{ name: 'layer', required: true }, { name: 'title', required: true }, { name: 'body', required: true }, { name: 'principle_key' }, { name: 'pattern_type' }, { name: 'knowledge_type' }, { name: 'source' }, { name: 'source_ref' }, { name: 'tags' }, { name: 'session_id' }, { name: 'commit_range' }, { name: 'files_touched' }, { name: 'tools_used' }, { name: 'pattern_data' }] },
-      { name: 'workflow_memory_reconcile', description: 'Post-session reconciliation workflow memory', params: [{ name: 'session_id', required: true }, { name: 'files_touched', required: true }, { name: 'commit_range' }, { name: 'tools_used' }, { name: 'prompts_count' }] },
-      { name: 'workflow_memory_push_refresh', description: 'Push-mode refresh для неактивних задач', params: [{ name: 'max_age_days' }, { name: 'task_ids' }] },
-      { name: 'workflow_memory_push_sync_tasks', description: 'Синхронізація задач Plane у push-watchlist', params: [{ name: 'tasks', required: true }] },
-      { name: 'workflow_memory_stats', description: 'Статистика записів по шарах workflow memory' },
-      { name: 'ab_create_experiment', description: 'Створити A/B експеримент: моделі, промпти, конфігурації', params: [{ name: 'name', required: true }, { name: 'description' }, { name: 'experiment_type' }, { name: 'config', required: true }, { name: 'target_budget' }, { name: 'traffic_pct' }] },
-      { name: 'ab_list_experiments', description: 'Список A/B експериментів із фільтром за статусом', params: [{ name: 'status' }] },
-      { name: 'ab_update_status', description: 'Змінити статус експерименту: running / paused / completed', params: [{ name: 'experiment_id', required: true }, { name: 'status', required: true }] },
-      { name: 'ab_get_results', description: 'Агреговані результати по варіантах експерименту', params: [{ name: 'experiment_id', required: true }] },
-      { name: 'nextcloud_upload', description: 'Завантажити файл у сховище Nextcloud', params: [{ name: 'remote_path', required: true }, { name: 'content_base64' }, { name: 'local_file_path' }, { name: 'content_type' }] },
-      { name: 'nextcloud_share', description: 'Створити посилання для спільного доступу в Nextcloud', params: [{ name: 'path', required: true }, { name: 'share_type' }, { name: 'share_with' }, { name: 'password' }, { name: 'expire_date' }, { name: 'permissions' }] },
     ],
   },
 ];
+
+/**
+ * Каталог вище — українська частина V2_TOOL_NAMES (mcp_backend/src/api/curated-mcp-tools.ts),
+ * звірено 19.11.2026. Лічильники рахуються з нього, а не хардкодяться.
+ */
+const ALL_TOOLS = toolGroups.flatMap(g => g.tools);
+const TOOL_COUNTS = {
+  total: ALL_TOOLS.length,
+  rada: ALL_TOOLS.filter(t => t.name.startsWith('rada_')).length,
+  openreyestr: ALL_TOOLS.filter(t => t.name.startsWith('openreyestr_')).length,
+  backend: ALL_TOOLS.filter(t => !t.name.startsWith('rada_') && !t.name.startsWith('openreyestr_')).length,
+};
 
 /* ================================================================
    TABLE OF CONTENTS
@@ -276,7 +213,7 @@ export function DeveloperDocsPage() {
 
   useDocumentMeta({
     title: `LEX AI API — документація MCP сервера | ${TOOL_COUNTS.total} юридичних інструментів`,
-    description: `Підключіть Claude Desktop, Cursor, VS Code або ChatGPT до MCP сервера LEX AI (mcp.legal.org.ua). ${TOOL_COUNTS.total} інструментів: 136M+ судових рішень ЄДРСР, законодавство, державні реєстри, відкриті дані, due diligence. REST API та MCP Streamable HTTP.`,
+    description: `Підключіть Claude Desktop, Cursor, VS Code або ChatGPT до MCP сервера LEX AI (mcp.legal.org.ua). ${TOOL_COUNTS.total} інструментів: 136M+ судових рішень ЄДРСР, законодавство, державні реєстри, відкриті дані, інтелектуальна власність. MCP Streamable HTTP, API-ключ або OAuth.`,
     ogTitle: 'LEX AI API — MCP сервер для юридичного аналізу',
     ogDescription: `Підключіть Claude, Cursor або ChatGPT до ${TOOL_COUNTS.total} інструментів юридичного аналізу через MCP. Судова практика, законодавство, реєстри України.`,
     ogImage: 'https://legal.org.ua/og-image.png',
@@ -314,7 +251,7 @@ export function DeveloperDocsPage() {
     <div ref={contentRef} className="flex-1 h-full overflow-y-auto">
       <WebAPIJsonLd
         name="LEX AI MCP Server"
-        description={`MCP сервер для юридичного аналізу: ${TOOL_COUNTS.total} інструментів — судова практика (136M+ документів ЄДРСР), законодавство, державні реєстри, відкриті дані, due diligence. Підключається через MCP Streamable HTTP до Claude Desktop, Cursor, VS Code, ChatGPT.`}
+        description={`MCP сервер для юридичного аналізу: ${TOOL_COUNTS.total} інструментів — судова практика (136M+ документів ЄДРСР), законодавство, державні реєстри, відкриті дані, інтелектуальна власність. Підключається через MCP Streamable HTTP до Claude Desktop, Cursor, VS Code, ChatGPT.`}
         url={MCP_HTTP_URL}
         documentationUrl="https://legal.org.ua/developer/docs"
         provider={{ name: "SecondLayer", url: "https://legal.org.ua" }}
@@ -371,14 +308,15 @@ function OverviewSection() {
         LEX AI Platform API
       </h1>
       <p className="mt-3 text-[15px] text-claude-subtext leading-relaxed max-w-[640px]">
-        Доступ до {TOOL_COUNTS.total} інструментів юридичного аналізу через уніфікований API.
-        Судова практика, законодавство, державні реєстри, відкриті дані, парламентські дані.
+        Доступ до {TOOL_COUNTS.total} інструментів юридичного аналізу через MCP-сервер{' '}
+        <Code>{MCP_HTTP_URL}</Code>. Судова практика, законодавство, державні реєстри, відкриті
+        дані, парламентські дані, інтелектуальна власність.
       </p>
 
       <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-px bg-claude-border rounded-xl overflow-hidden border border-claude-border">
         <InfoCell label="Інструменти" value={String(TOOL_COUNTS.total)} />
         <InfoCell label="Мікросервіси" value="3" />
-        <InfoCell label="Транспорти" value="REST, MCP, SSE" />
+        <InfoCell label="Транспорт" value="MCP Streamable HTTP" />
       </div>
 
       <h2 className="mt-10 text-[20px] font-semibold text-claude-text">Дані</h2>
@@ -411,10 +349,6 @@ function OverviewSection() {
             <Td>Державні реєстри</Td>
             <Td>29 реєстрів OpenReyestr: ЄДР, боржники, АРМА, НАЗК, ДПС, ProZorro, санкції РНБО</Td>
           </tr>
-          <tr className="border-b border-claude-border/50">
-            <Td>Суди Індії</Td>
-            <Td>38 тис. рішень Верховного суду, 16 млн рішень 25 High Courts</Td>
-          </tr>
         </tbody>
       </table>
       <p className="mt-2 text-[12px] text-zinc-400">Станом на 20.08.2026.</p>
@@ -422,43 +356,23 @@ function OverviewSection() {
       <h2 className="mt-10 text-[20px] font-semibold text-claude-text">Сервіси</h2>
 
       <div className="mt-4 space-y-3">
-        <ServiceRow name="mcp_backend" count={TOOL_COUNTS.backend} description="Судова практика, аналіз, законодавство, НПА, ІВ, парсинг, Vault, відкриті дані, due diligence" />
+        <ServiceRow name="mcp_backend" count={TOOL_COUNTS.backend} description="Судова практика, законодавство, НПА, ІВ, відкриті дані, досьє компанії" />
         <ServiceRow name="mcp_rada" count={TOOL_COUNTS.rada} description="Законопроєкти, супровідні документи, депутати, голосування, тексти законів" />
         <ServiceRow name="mcp_openreyestr" count={TOOL_COUNTS.openreyestr} description="Юридичні особи, ФОП, бенефіціари, боржники, ProZorro, податки, АРМА, НАЗК, санкції" />
       </div>
 
-      <h2 className="mt-10 text-[20px] font-semibold text-claude-text">Транспорти</h2>
-
-      <table className="mt-4 w-full text-[13px]">
-        <thead>
-          <tr className="border-b border-claude-border text-left">
-            <Th>Протокол</Th>
-            <Th>Ендпоінт</Th>
-            <Th>Призначення</Th>
-          </tr>
-        </thead>
-        <tbody className="text-claude-subtext">
-          <tr className="border-b border-claude-border/50">
-            <Td>HTTP REST</Td>
-            <Td><Code>POST {API_BASE}/:tool</Code></Td>
-            <Td>Вебдодатки, серверні інтеграції. Усі {TOOL_COUNTS.total} інструментів</Td>
-          </tr>
-          <tr className="border-b border-claude-border/50">
-            <Td>SSE Streaming</Td>
-            <Td><Code>POST {API_BASE}/:tool/stream</Code></Td>
-            <Td>Тривалі операції з поточною відповіддю</Td>
-          </tr>
-          <tr className="border-b border-claude-border/50">
-            <Td>MCP Streamable HTTP</Td>
-            <Td><Code>{MCP_HTTP_URL}</Code></Td>
-            <Td>Claude, Cursor, VS Code, ChatGPT. Куратований набір інструментів</Td>
-          </tr>
-        </tbody>
-      </table>
-      <p className="mt-2 text-[12px] text-zinc-400">
-        MCP-клієнти за замовчуванням отримують куратований набір: повний список із {TOOL_COUNTS.total} інструментів
-        перевантажує вибір моделі та впирається в ліміти клієнтів на кількість інструментів.
+      <h2 className="mt-10 text-[20px] font-semibold text-claude-text">Транспорт</h2>
+      <p className="mt-3 text-[14px] text-claude-subtext leading-relaxed">
+        Єдиний публічний ендпоінт &mdash; <Code>{MCP_HTTP_URL}</Code>, протокол{' '}
+        <a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http" target="_blank" rel="noopener noreferrer" className="text-claude-accent hover:underline">MCP Streamable HTTP</a>{' '}
+        (JSON-RPC 2.0). Підходить і для MCP-клієнтів (Claude, Cursor, VS Code, ChatGPT), і для
+        власного коду: через офіційні SDK або напряму HTTP-запитами.
       </p>
+      <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-4 py-3 text-[13px] text-claude-text">
+        REST-шлях <Code>/api/tools/:toolName</Code> обслуговує лише вебзастосунок. API-ключ на ньому
+        (як і на будь-якому іншому шляху, крім <Code>/api/v2/mcp</Code>) отримує{' '}
+        <Code>403 API_KEY_V2_ONLY</Code>.
+      </div>
     </section>
   );
 }
@@ -476,11 +390,11 @@ function GettingStartedSection() {
       <div id="authentication" data-section>
         <h2 className="text-[20px] font-semibold text-claude-text">Автентифікація</h2>
         <p className="mt-2 text-[14px] text-claude-subtext leading-relaxed">
-          Всі запити потребують автентифікації через Bearer Token. Згенеруйте API ключ
-          у розділі <strong>Профіль &rarr; API токени</strong>.
+          Згенеруйте API-ключ (<Code>sl_…</Code>) у розділі <strong>Профіль &rarr; API токени</strong>{' '}
+          і передавайте його в кожному запиті до <Code>{MCP_HTTP_URL}</Code>:
         </p>
 
-        <CodeBlock lang="http" code={`Authorization: Bearer YOUR_API_KEY`} />
+        <CodeBlock lang="http" code={`Authorization: Bearer sl_YOUR_API_KEY`} />
 
         <h3 className="mt-6 text-[15px] font-semibold text-claude-text">Методи автентифікації</h3>
         <table className="mt-3 w-full text-[13px]">
@@ -492,34 +406,45 @@ function GettingStartedSection() {
           </thead>
           <tbody className="text-claude-subtext">
             <tr className="border-b border-claude-border/50">
-              <Td>Bearer Token</Td>
-              <Td>API клієнти, MCP клієнти, скрипти</Td>
+              <Td>API-ключ (Bearer)</Td>
+              <Td>Скрипти, серверні інтеграції, MCP-клієнти з налаштуванням заголовків</Td>
             </tr>
             <tr className="border-b border-claude-border/50">
-              <Td>JWT / Google OAuth</Td>
-              <Td>Вебдодатки з інтерактивною авторизацією</Td>
+              <Td>OAuth 2.1</Td>
+              <Td>MCP-клієнти з інтерактивним входом (ChatGPT, Claude): клієнт сам відкриває вхід в акаунт LEX AI</Td>
             </tr>
           </tbody>
         </table>
+        <p className="mt-3 text-[13px] text-claude-subtext leading-relaxed">
+          API-ключ дійсний лише на <Code>/api/v2/mcp</Code>. Запит із ключем на будь-який інший шлях
+          (зокрема REST <Code>/api/tools/*</Code>) отримує <Code>403</Code> з кодом{' '}
+          <Code>API_KEY_V2_ONLY</Code>.
+        </p>
 
         <h3 className="mt-6 text-[15px] font-semibold text-claude-text">Ліміти</h3>
         <div className="mt-3 text-[13px] text-claude-subtext space-y-1">
-          <p>Rate limit залежить від тарифного плану.</p>
+          <p>Ліміти викликів на хвилину та на день задаються для кожного ключа; кожен виклик списується з балансу акаунта.</p>
           <p>Максимальний розмір тіла запиту: <Code>10 MB</Code></p>
           <p>
             Timeout інструмента: <Code>60 с</Code> за замовчуванням. Важкі інструменти мають
             власний ліміт: <Code>120 с</Code> для <Code>search_court_decisions</Code>,{' '}
             <Code>get_case_documents_chain</Code>, <Code>compare_practice_pro_contra</Code>,{' '}
-            <Code>find_similar_fact_pattern_cases</Code>, <Code>build_legal_decision</Code>,{' '}
-            <Code>search_public_spending</Code>; <Code>45 с</Code> для <Code>analyze_data</Code>.
+            <Code>find_similar_fact_pattern_cases</Code>, <Code>search_public_spending</Code>.
           </p>
-          <p>SSE streaming &mdash; без обмеження на тривалість відповіді.</p>
+          <p>
+            Сесія MCP живе в пам’яті сервера. Якщо запит із <Code>Mcp-Session-Id</Code> повернув{' '}
+            <Code>400</Code> (сесію втрачено, наприклад після оновлення сервера), просто повторіть{' '}
+            <Code>initialize</Code>. Офіційні SDK роблять це самі.
+          </p>
         </div>
       </div>
 
       {/* Endpoints */}
       <div id="endpoints" data-section className="mt-10">
         <h2 className="text-[20px] font-semibold text-claude-text">Ендпоінти</h2>
+        <p className="mt-2 text-[13px] text-claude-subtext">
+          Хост: <Code>https://mcp.legal.org.ua</Code>
+        </p>
 
         <table className="mt-4 w-full text-[13px]">
           <thead>
@@ -530,26 +455,27 @@ function GettingStartedSection() {
             </tr>
           </thead>
           <tbody className="text-claude-subtext">
-            <EndpointTableRow method="POST" path="/api/tools/:toolName" desc="Виконати інструмент" />
-            <EndpointTableRow method="POST" path="/api/tools/:toolName/stream" desc="Виконати з SSE streaming" />
-            <EndpointTableRow method="POST" path="/api/tools/batch" desc="Пакетне виконання" />
-            <EndpointTableRow method="GET" path="/api/tools" desc="Список доступних інструментів зі схемами параметрів" />
-            <EndpointTableRow method="POST" path="/api/v2/mcp" desc="MCP Streamable HTTP — куратований набір" />
-            <EndpointTableRow method="GET" path="/health" desc="Перевірка стану сервісу" />
+            <EndpointTableRow method="POST" path="/api/v2/mcp" desc="JSON-RPC: initialize, tools/list, tools/call. Перший запит — initialize без Mcp-Session-Id; id сесії повертається в заголовку відповіді Mcp-Session-Id" />
+            <EndpointTableRow method="GET" path="/api/v2/mcp" desc="SSE-потік серверних повідомлень для відкритої сесії (заголовок Mcp-Session-Id)" />
+            <EndpointTableRow method="DELETE" path="/api/v2/mcp" desc="Закрити сесію" />
           </tbody>
         </table>
+        <p className="mt-3 text-[13px] text-claude-subtext leading-relaxed">
+          Кожен POST має містити заголовки <Code>Content-Type: application/json</Code> та{' '}
+          <Code>Accept: application/json, text/event-stream</Code>. Відповідь приходить як SSE:
+          рядок <Code>data: {'{…}'}</Code> із JSON-RPC-відповіддю.
+        </p>
       </div>
 
       {/* Quick Start */}
       <div id="quick-start" data-section className="mt-10">
         <h2 className="text-[20px] font-semibold text-claude-text">Швидкий старт</h2>
         <p className="mt-2 text-[14px] text-claude-subtext leading-relaxed">
-          Отримайте API ключ та зробіть перший запит:
+          Найпростіше &mdash; підключити ключ до MCP-клієнта (див.{' '}
+          <a href="#mcp-clients" className="text-claude-accent hover:underline">MCP клієнти</a>). Напряму з
+          терміналу повний цикл виглядає так:
         </p>
-        <CodeBlock lang="bash" code={`curl -X POST ${API_BASE}/search_legal_precedents \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"arguments": {"query": "відшкодування збитків ДТП", "limit": 5}}'`} />
+        <CodeBlock lang="bash" code={QUICKSTART_CURL} />
       </div>
     </section>
   );
@@ -564,13 +490,14 @@ function ToolsSection() {
     <section id="tools" data-section>
       <h1 className="text-[24px] font-bold text-claude-text tracking-tight">Інструменти</h1>
       <p className="mt-2 text-[14px] text-claude-subtext leading-relaxed">
-        Всі {TOOL_COUNTS.total} інструментів доступні через <Code>POST /api/tools/:toolName</Code> з тілом <Code>{`{"arguments": {...}}`}</Code>.
+        Інструменти викликаються методом <Code>tools/call</Code> з{' '}
+        <Code>{`{"name": "…", "arguments": {…}}`}</Code>.
         Зірочка <span className="text-claude-accent">*</span> позначає обов’язковий параметр.
       </p>
       <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
-        Канонічне джерело — <Code>GET /api/tools</Code>: повертає актуальні імена, описи та JSON-схеми
-        параметрів. Список нижче звірено з ним 20.08.2026. Вартість — фактичні заміри на проді,
-        див. розділ <a href="#pricing" className="text-claude-accent hover:underline">Вартість</a>.
+        Канонічне джерело &mdash; <Code>tools/list</Code>: повертає актуальні імена, описи та JSON-схеми
+        параметрів. Список нижче звірено з ним 19.11.2026. Вартість &mdash; див. розділ{' '}
+        <a href="#pricing" className="text-claude-accent hover:underline">Вартість</a>.
       </p>
 
       {toolGroups.map((group, i) => (
@@ -622,40 +549,94 @@ function ExamplesSection() {
   return (
     <section id="examples" data-section>
       <h1 className="text-[24px] font-bold text-claude-text tracking-tight">Приклади коду</h1>
+      <p className="mt-2 text-[14px] text-claude-subtext leading-relaxed">
+        Для власного коду найзручніше брати офіційні MCP SDK: вони самі відкривають сесію,
+        передають <Code>Mcp-Session-Id</Code> і розбирають SSE-відповіді.
+      </p>
 
-      <div id="example-curl" data-section className="mt-8">
+      <div id="example-js" data-section className="mt-8">
+        <h2 className="text-[17px] font-semibold text-claude-text">JavaScript / TypeScript</h2>
+        <CodeBlock lang="bash" code={`npm install @modelcontextprotocol/sdk`} />
+        <CodeBlock lang="typescript" code={`import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+
+const transport = new StreamableHTTPClientTransport(
+  new URL('${MCP_HTTP_URL}'),
+  { requestInit: { headers: { Authorization: 'Bearer sl_YOUR_API_KEY' } } },
+);
+const client = new Client({ name: 'my-app', version: '1.0.0' });
+await client.connect(transport);
+
+const { tools } = await client.listTools();
+console.log(tools.map(t => t.name));
+
+const result = await client.callTool({
+  name: 'search_court_decisions',
+  arguments: {
+    mode: 'hybrid',
+    query: 'стягнення заборгованості за кредитом',
+    limit: 5,
+  },
+});
+console.log(result.content);
+
+await client.close();`} />
+      </div>
+
+      <div id="example-python" data-section className="mt-10">
+        <h2 className="text-[17px] font-semibold text-claude-text">Python</h2>
+        <CodeBlock lang="bash" code={`pip install mcp`} />
+        <CodeBlock lang="python" code={`import asyncio
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
+
+URL = '${MCP_HTTP_URL}'
+HEADERS = {'Authorization': 'Bearer sl_YOUR_API_KEY'}
+
+async def main():
+    async with streamablehttp_client(URL, headers=HEADERS) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            tools = await session.list_tools()
+            print([t.name for t in tools.tools])
+
+            result = await session.call_tool(
+                'get_npa_act',
+                {'nreg': '435-15', 'mode': 'article', 'article_number': '625'},
+            )
+            for block in result.content:
+                print(block.text)
+
+asyncio.run(main())`} />
+      </div>
+
+      <div id="example-curl" data-section className="mt-10">
         <h2 className="text-[17px] font-semibold text-claude-text">cURL</h2>
+        <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
+          Спершу відкрийте сесію і визначте функцію <Code>mcp</Code>, як у розділі{' '}
+          <a href="#quick-start" className="text-claude-accent hover:underline">Швидкий старт</a>.
+          Далі кожен виклик &mdash; один рядок.
+        </p>
+
         <h3 className="mt-4 text-[14px] font-medium text-claude-text">Пошук судових рішень</h3>
-        <CodeBlock lang="bash" code={`curl -X POST ${API_BASE}/search_court_decisions \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "arguments": {
-      "mode": "hybrid",
-      "query": "відшкодування моральної шкоди при ДТП",
-      "date_from": "2023-01-01",
-      "date_to": "2024-12-31",
-      "limit": 10
-    }
-  }'`} />
+        <CodeBlock lang="bash" code={`mcp '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"search_court_decisions","arguments":{
+  "mode": "hybrid",
+  "query": "відшкодування моральної шкоди при ДТП",
+  "date_from": "2023-01-01",
+  "date_to": "2024-12-31",
+  "limit": 10
+}}}'`} />
 
         <h3 className="mt-6 text-[14px] font-medium text-claude-text">Практика «за» і «проти»</h3>
-        <CodeBlock lang="bash" code={`curl -X POST ${API_BASE}/compare_practice_pro_contra \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "arguments": {
-      "procedure_code": "ЦПК",
-      "query": "орендар не сплачує оренду понад три місяці — підстава для розірвання договору",
-      "limit": 10
-    }
-  }'`} />
+        <CodeBlock lang="bash" code={`mcp '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"compare_practice_pro_contra","arguments":{
+  "procedure_code": "ЦПК",
+  "query": "орендар не сплачує оренду понад три місяці — підстава для розірвання договору",
+  "limit": 10
+}}}'`} />
 
         <h3 className="mt-6 text-[14px] font-medium text-claude-text">Стаття закону</h3>
-        <CodeBlock lang="bash" code={`curl -X POST ${API_BASE}/get_legislation_section \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"arguments": {"rada_id": "435-15", "article_number": "625"}}'`} />
+        <CodeBlock lang="bash" code={`mcp '{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_legislation_section","arguments":{"rada_id":"435-15","article_number":"625"}}}'`} />
 
         <div className="mt-3 text-[12px] text-zinc-400">
           Той самий виклик приймає вільне посилання: <Code>{`{"query": "ст. 625 ЦК"}`}</Code>.
@@ -665,86 +646,13 @@ function ExamplesSection() {
         </div>
 
         <h3 className="mt-6 text-[14px] font-medium text-claude-text">Пошук у реєстрі</h3>
-        <CodeBlock lang="bash" code={`curl -X POST ${API_BASE}/openreyestr_search_entities \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{"arguments": {"query": "Приватбанк", "entityType": "UO", "limit": 5}}'`} />
-      </div>
+        <CodeBlock lang="bash" code={`mcp '{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"openreyestr_search_entities","arguments":{"query":"Приватбанк","entityType":"UO","limit":5}}}'`} />
 
-      <div id="example-js" data-section className="mt-10">
-        <h2 className="text-[17px] font-semibold text-claude-text">JavaScript / TypeScript</h2>
-        <CodeBlock lang="typescript" code={`const response = await fetch('${API_BASE}/search_legal_precedents', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_API_KEY',
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    arguments: {
-      query: 'стягнення заборгованості за кредитом',
-      limit: 5,
-    },
-  }),
-});
-
-const data = await response.json();
-console.log(data.result);`} />
-      </div>
-
-      <div id="example-python" data-section className="mt-10">
-        <h2 className="text-[17px] font-semibold text-claude-text">Python</h2>
-        <CodeBlock lang="python" code={`import requests
-
-response = requests.post(
-    '${API_BASE}/search_legal_precedents',
-    headers={
-        'Authorization': 'Bearer YOUR_API_KEY',
-        'Content-Type': 'application/json',
-    },
-    json={
-        'arguments': {
-            'query': 'стягнення заборгованості за кредитом',
-            'limit': 5,
-        }
-    }
-)
-
-print(response.json()['result'])`} />
-      </div>
-
-      <div id="example-sse" data-section className="mt-10">
-        <h2 className="text-[17px] font-semibold text-claude-text">SSE Streaming</h2>
-        <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
-          Для тривалих операцій використовуйте SSE endpoint. Відповідь надходить потоком подій.
+        <p className="mt-4 text-[13px] text-claude-subtext leading-relaxed">
+          Відповідь &mdash; SSE-подія; корисне навантаження в полі <Code>result.content</Code> рядка{' '}
+          <Code>data:</Code>. Витягти текст можна так:{' '}
+          <Code>{`mcp '…' | sed -n 's/^data: //p' | jq -r '.result.content[].text'`}</Code>
         </p>
-        <CodeBlock lang="typescript" code={`const response = await fetch('${API_BASE}/build_legal_decision/stream', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer YOUR_API_KEY',
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    arguments: {
-      query: 'трудовий спір: звільнення за прогул',
-      context: 'Працівника звільнено за п. 4 ч. 1 ст. 40 КЗпП без вимоги письмових пояснень.',
-    },
-  }),
-});
-
-const reader = response.body!.getReader();
-const decoder = new TextDecoder();
-
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  const chunk = decoder.decode(value);
-  for (const line of chunk.split('\\n')) {
-    if (line.startsWith('data: ')) {
-      const event = JSON.parse(line.slice(6));
-      console.log(event.type, event.data);
-    }
-  }
-}`} />
       </div>
     </section>
   );
@@ -777,9 +685,8 @@ function MCPClientsSection() {
       <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
         Через MCP клієнт отримує куратований набір інструментів: законодавство і повний корпус
         НПА, судова практика ЄДРСР, <Code>search_registry</Code> та державні реєстри OpenReyestr,
-        відкриті дані, інтелектуальна власність, парламентські дані, швейцарський корпус
-        (<Code>ch_*</Code>). Актуальний перелік повертає
-        сам ендпоінт (<Code>tools/list</Code>). Повний набір інструментів &mdash; через REST.
+        відкриті дані, інтелектуальна власність, парламентські дані. Актуальний перелік повертає
+        сам ендпоінт (<Code>tools/list</Code>).
       </p>
 
       <div id="mcp-claude-code" data-section className="mt-8">
@@ -862,35 +769,35 @@ function PricingSection() {
         <thead>
           <tr className="border-b border-claude-border text-left">
             <Th>Категорія</Th>
-            <Th>Медіана</Th>
-            <Th>p95</Th>
+            <Th>За прайсом</Th>
+            <Th>З націнкою</Th>
             <Th>Приклади</Th>
           </tr>
         </thead>
         <tbody className="text-claude-subtext">
           <tr className="border-b border-claude-border/50 align-top">
-            <Td>Без LLM</Td>
-            <Td>₴0</Td>
-            <Td>₴0</Td>
-            <Td>Законодавство, реєстри, <Code>openreyestr_*</Code>, <Code>rada_*</Code>, Vault, <Code>analyze_data</Code></Td>
+            <Td>Довідкові запити</Td>
+            <Td>₴0.01–0.10</Td>
+            <Td>до ₴0.15</Td>
+            <Td>Законодавство, НПА, <Code>search_registry</Code>, ІВ, розклад засідань, судді</Td>
           </tr>
           <tr className="border-b border-claude-border/50 align-top">
-            <Td>Пошук з реранкінгом</Td>
-            <Td>₴0–0.15</Td>
-            <Td>до ₴1</Td>
+            <Td>Пошук судової практики</Td>
+            <Td>₴0.45–4.00</Td>
+            <Td>до ₴6</Td>
             <Td><Code>search_court_decisions</Code>, <Code>search_legislation</Code>, <Code>compare_practice_pro_contra</Code></Td>
           </tr>
           <tr className="border-b border-claude-border/50 align-top">
-            <Td>Обробка документів</Td>
-            <Td>₴0.2–0.9</Td>
-            <Td>до ₴2</Td>
-            <Td><Code>summarize_document</Code>, <Code>extract_key_clauses</Code>, <Code>compare_documents</Code>, <Code>generate_dd_report</Code></Td>
+            <Td>Державні реєстри</Td>
+            <Td>₴0.50–2.50</Td>
+            <Td>до ₴3.75</Td>
+            <Td><Code>openreyestr_*</Code>: ЄДР, бенефіціари, боржники, ProZorro, санкції РНБО, НАЗК</Td>
           </tr>
           <tr className="border-b border-claude-border/50 align-top">
-            <Td>Глибокий аналіз</Td>
-            <Td>₴24</Td>
-            <Td>до ₴29</Td>
-            <Td><Code>build_legal_decision</Code>, <Code>search_legal_precedents</Code> з повним розбором секцій</Td>
+            <Td>Досьє компанії</Td>
+            <Td>₴8</Td>
+            <Td>до ₴12</Td>
+            <Td><Code>get_company_dossier</Code> &mdash; один виклик збирає всі реєстри за ЄДРПОУ</Td>
           </tr>
         </tbody>
       </table>
