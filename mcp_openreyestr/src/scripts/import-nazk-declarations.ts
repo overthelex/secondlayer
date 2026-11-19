@@ -9,7 +9,10 @@
  *    date and corruption_affected; property/income flags keep their value (NULL if unknown).
  * 2. Details (--details): /documents/{id} for rows already in the table. The full document
  *    has every section, so it fills has_real_estate / has_vehicles / has_securities /
- *    has_corporate_rights / has_income and total_income_declared.
+ *    has_corporate_rights / has_income and total_income_declared, and replaces the relation
+ *    rows of the declaration (migration 028, LEXAI-2295): family members (step_2) into
+ *    nazk_family_members; securities (step_7), corporate rights (step_8) and beneficial
+ *    ownership (step_9) into nazk_corporate_rights; then sets relations_extracted_at.
  *
  * Both passes are UPSERT only (no DELETE/TRUNCATE) and resume from a checkpoint file.
  *
@@ -18,9 +21,10 @@
  *   node dist/scripts/import-nazk-declarations.js --year=2020-2024 --types=1,2
  *   node dist/scripts/import-nazk-declarations.js --year=2024 --types=1 --max-pages=1   # 100 docs
  *   node dist/scripts/import-nazk-declarations.js --resume               # continue from checkpoint
- *   node dist/scripts/import-nazk-declarations.js --details              # rows with has_income IS NULL
+ *   node dist/scripts/import-nazk-declarations.js --details              # rows with relations_extracted_at IS NULL
  *   node dist/scripts/import-nazk-declarations.js --details --all        # every row
  *   node dist/scripts/import-nazk-declarations.js --details --limit=100 --name=Железняк
+ *   node dist/scripts/import-nazk-declarations.js --dry-run --ids=<uuid>,<uuid>   # print relations, no DB
  *
  * Env: NAZK_DELAY_MS (default 300) pause after each request per worker; NAZK_CONCURRENCY
  *      (default 2) parallel requests in --details; NAZK_CHECKPOINT checkpoint file path.
@@ -31,6 +35,9 @@ dotenv.config();
 import fs from 'fs';
 import { Pool, PoolClient } from 'pg';
 import https from 'https';
+import {
+  buildInsert, CORPORATE_RIGHT_COLUMNS, extractNazkRelations, FAMILY_MEMBER_COLUMNS,
+} from './lib/nazk-relations';
 
 const API_ROOT = 'https://public-api.nazk.gov.ua/v2/documents';
 const CURRENT_YEAR = new Date().getFullYear();
@@ -54,12 +61,15 @@ interface CliArgs {
   limit: number | null;
   name: string | null;
   checkpoint: string;
+  dryRun: boolean;
+  ids: string[];
 }
 
 function parseArgs(): CliArgs {
   const args: CliArgs = {
     yearStart: 2015, yearEnd: CURRENT_YEAR, types: DECLARATION_TYPES, maxPages: MAX_PAGES,
     resume: false, details: false, all: false, limit: null, name: null, checkpoint: '',
+    dryRun: false, ids: [],
   };
 
   for (const arg of process.argv.slice(2)) {
@@ -90,6 +100,10 @@ function parseArgs(): CliArgs {
       args.name = val;
     } else if (key === '--checkpoint') {
       args.checkpoint = val;
+    } else if (key === '--dry-run') {
+      args.dryRun = true;
+    } else if (key === '--ids') {
+      args.ids = val.split(',').map(s => s.trim()).filter(Boolean);
     }
   }
   if (!args.checkpoint) {
@@ -341,6 +355,49 @@ async function upsertDeclaration(
   return result.rows[0]?.is_insert ? 'insert' : 'update';
 }
 
+// One INSERT stays far below the 65 535 bind-parameter limit of PostgreSQL.
+const RELATION_INSERT_CHUNK = 500;
+
+/**
+ * Replace the relation rows of one declaration (DELETE + INSERT, so a re-run is idempotent)
+ * and mark it extracted. Runs inside the caller's transaction.
+ */
+async function replaceRelations(client: PoolClient, doc: any): Promise<{ family: number; rights: number }> {
+  const declId = String(doc.id || doc.declaration_id);
+  const { familyMembers, corporateRights } = extractNazkRelations(doc);
+  await client.query('DELETE FROM nazk_family_members WHERE declaration_id = $1', [declId]);
+  await client.query('DELETE FROM nazk_corporate_rights WHERE declaration_id = $1', [declId]);
+  for (let i = 0; i < familyMembers.length; i += RELATION_INSERT_CHUNK) {
+    const q = buildInsert('nazk_family_members', FAMILY_MEMBER_COLUMNS, familyMembers.slice(i, i + RELATION_INSERT_CHUNK));
+    await client.query(q.text, q.values);
+  }
+  for (let i = 0; i < corporateRights.length; i += RELATION_INSERT_CHUNK) {
+    const q = buildInsert('nazk_corporate_rights', CORPORATE_RIGHT_COLUMNS, corporateRights.slice(i, i + RELATION_INSERT_CHUNK));
+    await client.query(q.text, q.values);
+  }
+  await client.query(
+    'UPDATE nazk_declarations SET relations_extracted_at = CURRENT_TIMESTAMP WHERE declaration_id = $1', [declId],
+  );
+  return { family: familyMembers.length, rights: corporateRights.length };
+}
+
+/** --dry-run --ids=…: fetch the documents and print the extracted relations, without a database. */
+async function dryRun(args: CliArgs) {
+  if (args.ids.length === 0) throw new Error('--dry-run needs --ids=<declaration id>[,<id>…]');
+  for (const id of args.ids) {
+    const doc = await getJson(`${API_ROOT}/${encodeURIComponent(id)}`);
+    if (!doc || !doc.data) {
+      console.log(`\n${id}: not found on NAZK`);
+    } else {
+      const { familyMembers, corporateRights } = extractNazkRelations(doc);
+      console.log(`\n${id} (${doc.declaration_year}, schema ${doc.schema_version}): ${familyMembers.length} family, ${corporateRights.length} rights`);
+      for (const m of familyMembers) console.log('  family', JSON.stringify(m));
+      for (const r of corporateRights) console.log('  right ', JSON.stringify(r));
+    }
+    await sleep(REQUEST_DELAY_MS);
+  }
+}
+
 interface ListCheckpoint { done: string[]; current: string | null; page: number }
 
 async function importList(pool: Pool, args: CliArgs) {
@@ -431,7 +488,10 @@ async function importList(pool: Pool, args: CliArgs) {
   console.log(`TOTAL: ${totalImported} new, ${totalUpdated} updated, ${totalErrors} errors`);
 }
 
-interface DetailsCheckpoint { lastId: number; processed: number; missing: number; errors: number }
+interface DetailsCheckpoint {
+  lastId: number; processed: number; missing: number; errors: number;
+  familyRows?: number; rightRows?: number;
+}
 
 async function importDetails(pool: Pool, args: CliArgs) {
   const cp: DetailsCheckpoint = args.resume
@@ -441,7 +501,8 @@ async function importDetails(pool: Pool, args: CliArgs) {
   // $1 is the cursor (id > lastId); the rest are fixed filters.
   const where: string[] = ['id > $1', 'declaration_year BETWEEN $2 AND $3', 'declaration_type = ANY($4)'];
   const filters: any[] = [args.yearStart, args.yearEnd, args.types];
-  if (!args.all) where.push('has_income IS NULL');
+  // relations_extracted_at IS NULL also covers every row whose flags were never filled.
+  if (!args.all) where.push('relations_extracted_at IS NULL');
   if (args.name) {
     filters.push(`${args.name}%`);
     where.push(`declarant_name ILIKE $${filters.length + 1}`);
@@ -476,7 +537,15 @@ async function importDetails(pool: Pool, args: CliArgs) {
           } else {
             const client = await pool.connect();
             try {
+              await client.query('BEGIN');
               await upsertDeclaration(client, doc, row.declaration_type, row.declaration_year);
+              const r = await replaceRelations(client, doc);
+              await client.query('COMMIT');
+              cp.familyRows = (cp.familyRows || 0) + r.family;
+              cp.rightRows = (cp.rightRows || 0) + r.rights;
+            } catch (err) {
+              await client.query('ROLLBACK').catch(() => undefined);
+              throw err;
             } finally {
               client.release();
             }
@@ -497,7 +566,7 @@ async function importDetails(pool: Pool, args: CliArgs) {
 
     const rate = session / Math.max(1, (Date.now() - startedAt) / 1000);
     const etaMin = Math.round((target - session) / Math.max(rate, 0.001) / 60);
-    console.log(`  ${session}/${target} | ${rate.toFixed(1)} doc/s | ETA ${etaMin} min | lastId ${cp.lastId} | missing ${cp.missing} | errors ${cp.errors}`);
+    console.log(`  ${session}/${target} | ${rate.toFixed(1)} doc/s | ETA ${etaMin} min | lastId ${cp.lastId} | missing ${cp.missing} | errors ${cp.errors} | family ${cp.familyRows || 0} | rights ${cp.rightRows || 0}`);
   }
 
   console.log('\n' + '='.repeat(60));
@@ -506,6 +575,7 @@ async function importDetails(pool: Pool, args: CliArgs) {
 
 async function importNazk() {
   const args = parseArgs();
+  if (args.dryRun) return dryRun(args);
   console.log('='.repeat(60));
   console.log(`NAZK Declarations Import: ${args.details ? 'details (/documents/{id})' : 'list crawl'}`);
   console.log(`Years: ${args.yearStart}-${args.yearEnd}, Types: ${args.types.join(',')}`);
