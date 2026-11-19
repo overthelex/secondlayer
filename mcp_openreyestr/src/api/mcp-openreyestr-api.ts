@@ -175,7 +175,7 @@ export class MCPOpenReyestrAPI {
             query: { type: 'string', description: 'Назва компанії або ПІБ засновника, будь-якою мовою' },
             code: { type: 'string', description: 'Код ЄДРПОУ засновника-юрособи (замість query)' },
             country: { type: 'string', description: 'Країна: ISO-код (CY, GB, VG) або назва українською («Кіпр»)' },
-            current_only: { type: 'boolean', description: 'Лише записи з останнього знімка, де є юрособа' },
+            current_only: { type: 'boolean', description: 'Лише записи, що є в найновішому завантаженому знімку ЄДР (див. latest_snapshot у відповіді)' },
             limit: { type: 'integer', default: 50, minimum: 1, maximum: 200, description: 'Кількість результатів (1-200)' },
           },
         },
@@ -193,7 +193,7 @@ export class MCPOpenReyestrAPI {
           properties: {
             query: { type: 'string', description: 'ПІБ бенефіціара, будь-якою мовою' },
             country: { type: 'string', description: 'Країна громадянства: ISO-код або назва українською' },
-            current_only: { type: 'boolean', description: 'Лише записи з останнього знімка, де є юрособа' },
+            current_only: { type: 'boolean', description: 'Лише записи, що є в найновішому завантаженому знімку ЄДР (див. latest_snapshot у відповіді)' },
             limit: { type: 'integer', default: 50, minimum: 1, maximum: 200, description: 'Кількість результатів (1-200)' },
           },
         },
