@@ -45,3 +45,13 @@ test('court case status: history script enabled, broken start_import source disa
   assert.ok(cron.validate(history.cron));
   assert.equal(ALL_SOURCES.find((s) => s.name === 'court_case_status')?.enabled, false);
 });
+
+// LEXAI-2299: EU / UK / OFAC sanctions lists load daily through a script baked into this image.
+test('intl sanctions: daily script source runs load_sanctions.py for all lists', async () => {
+  const { ALL_SOURCES } = await import('../config.js');
+  const cron = (await import('node-cron')).default;
+  const s = ALL_SOURCES.find((x) => x.name === 'intl_sanctions');
+  assert.ok(s && s.enabled && s.target === 'script');
+  assert.ok(cron.validate(s.cron));
+  assert.deepEqual(s.command, ['python3', '-I', '/app/scripts/load_sanctions.py', '--list', 'all']);
+});
