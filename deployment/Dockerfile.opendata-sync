@@ -15,7 +15,7 @@ RUN npx tsc
 FROM node:20-alpine
 
 # Script sources (target 'script' in config.ts) run inside this container:
-# load_case_status.py and load_sanctions.py need python3 (stdlib only) and the psql client (COPY FROM STDIN).
+# the load_*.py scripts need python3 (stdlib only) and the psql client (COPY FROM STDIN).
 RUN apk add --no-cache python3 postgresql-client
 
 WORKDIR /app
@@ -31,6 +31,7 @@ COPY scripts/sanctions/load_sanctions.py ./scripts/load_sanctions.py
 COPY scripts/cyprus/load_drcor.py ./scripts/load_drcor.py
 # load_nbu_fin.py (LEXAI-2296): python3 stdlib + psql, like load_case_status.py
 COPY scripts/nbu-fin/load_nbu_fin.py ./scripts/load_nbu_fin.py
+COPY scripts/icij/load_icij.py ./scripts/load_icij.py
 
 EXPOSE 3010
 
