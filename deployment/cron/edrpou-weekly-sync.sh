@@ -8,7 +8,8 @@
 #
 # Runs in a one-off container from the deployed openreyestr image, not inside
 # openreyestr-app-local: a deploy recreates the app container and would kill a
-# multi-hour sync halfway. DB credentials are copied from the running app
+# multi-hour sync halfway. EDR_HISTORY_SNAPSHOT=1 also records each week's UO/FSU
+# as a dated snapshot in openreyestr's edr_hist schema. DB credentials are copied from the running app
 # container, so nothing secret lives in this file or in the crontab.
 #
 # Install (merge into the existing crontab):
@@ -55,6 +56,7 @@ docker run -d --rm --name "$JOB_CONTAINER" \
   --network "$NETWORK" \
   --env-file "$ENV_FILE" \
   -e EDRPOU_DATA_DIR=/work/data \
+  -e EDR_HISTORY_SNAPSHOT=1 \
   -v "$WORK_DIR:/work" \
   --cpu-shares 256 \
   --no-healthcheck \
