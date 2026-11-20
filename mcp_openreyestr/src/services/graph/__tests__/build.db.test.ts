@@ -9,11 +9,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Pool } from 'pg';
 import { buildGraph, checkPersonalIds } from '../builder';
+import { checkPassportsAndDob } from '../foreign-founders';
+import { ICIJ_CAVEAT, officerEndpoint, OFFICER_KEY_VERSION } from '../foreign-refs';
 import { neighbourhood } from '../neighbourhood';
 import { connectionPath, findConnections } from '../connections';
 import {
-  addressKeyRow, addressKeyVersion, CODE8_RE_SOURCE, isOrganisationName, isPlaceholderName, normName, ORG_FORM_RE_SOURCE,
-  organisationKey, PATRONYMIC_RE_SOURCE, PLACEHOLDER_RE_SOURCE, personKey, WEAK_PLACEHOLDER_RE_SOURCE,
+  addressKeyRow, addressKeyVersion, BODY_RE_SOURCE, CODE8_RE_SOURCE, isFounderOrganisationName, isOrganisationName, isPlaceholderName,
+  normName, ORG_FORM_RE_SOURCE, organisationKey, PATRONYMIC_RE_SOURCE, PLACEHOLDER_RE_SOURCE, personKey, WEAK_PLACEHOLDER_RE_SOURCE,
 } from '../keys';
 import { uaMatchKey } from '../../edr-history/norm';
 
@@ -67,6 +69,7 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     await q(fs.readFileSync(path.join(MIG, '027_edr_history.sql'), 'utf8'));
     await q(fs.readFileSync(path.join(MIG, '030_graph_schema.sql'), 'utf8'));
     await q(fs.readFileSync(path.join(MIG, '031_graph_hubs_and_organisations.sql'), 'utf8'));
+    await q(fs.readFileSync(path.join(MIG, '034_graph_foreign_refs.sql'), 'utf8'));
     // the columns of the current dump tables the builder reads
     await q(`CREATE TABLE legal_entities (id serial PRIMARY KEY, record varchar(50) UNIQUE NOT NULL, edrpou varchar(20), name text,
              short_name text, opf text, stan varchar(100), registration text, updated_at timestamp)`);
@@ -120,6 +123,26 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     await q(`INSERT INTO graph.address_flag (address_key, flag, source) VALUES ($1, 'mass_registration', 'test')`,
       [addressKeyRow(ADDR_OLD, addressKeyVersion(null)).address_key]);
     await address('22222220', ADDR_A2, S18, null);
+    // LEXAI-2321: B's founders written as foreign organisations that are individuals (a beneficiary
+    // entry with passport data, a date of birth as the code), a foreign company with its number,
+    // a party and a decree written as persons, a person with a date of birth in the name
+    await founder('22222220', 'f-bo', { kind: 'organisation', name: 'КІНЦЕВИЙ БЕНЕФІЦІАРНИЙ ВЛАСНИК (КОНТРОЛЕР) - ТЕСТЕР ТЕСТ ТЕСТОВИЧ', code: 'ПАСПОРТ 1234 567890', cc: 'RU' });
+    await founder('22222220', 'f-dob', { kind: 'organisation', name: 'ТЕСТЕРОВ ТЕСТ', code: '01.02.1980 Р.Н.', cc: 'MD' });
+    await founder('22222220', 'f-de', { kind: 'organisation', name: 'ТЕСТ ГМБХ', code: 'HRB 12345', cc: 'DE' });
+    await founder('22222220', 'f-party', { kind: 'person', name: 'ПАРТІЯ ТЕСТІВ' });
+    await founder('22222220', 'f-decree', { kind: 'person', name: 'УКАЗ ПРЕЗИДЕНТА' });
+    await founder('22222220', 'f-p-dob', { kind: 'person', name: 'ТЕСТЕРЕНКО ТЕСТ ТЕСТОВИЧ, 01.02.1980 р.н.' });
+    // links of the Cypriot founder of A (import-foreign-refs.ts writes them): the register record,
+    // its director and corporate secretary, an officer keyed with an old key version, an ICIJ candidate
+    await q(`INSERT INTO graph.foreign_ref (node_key, source, ref_id, match, candidate, name, jurisdiction, status, url, source_date, attrs) VALUES
+      ('CY|name:skaramander', 'cy_drcor', 'C/123456', 'code', false, 'SCARAMANDER LIMITED', 'CY', 'Εγγεγραμμένη', 'https://example.org/cy', '2026-11-02', '{"registration_no": "HE 123456"}'),
+      ('CY|name:skaramander', 'icij', '99000001', 'name', true, 'SCARAMANDER LIMITED', 'Cyprus', NULL, 'https://example.org/icij', '2026-09-09', '{"leak": "Test Leaks"}')`);
+    for (const [name, role, v] of [['JOHN TESTER', 'director', OFFICER_KEY_VERSION], ['TEST SECRETARIAL LIMITED', 'secretary', OFFICER_KEY_VERSION],
+      ['JANE TESTER', 'director', 'p1']] as const) {
+      const ep = officerEndpoint(name, 'CY')!;
+      await q(`INSERT INTO graph.foreign_officer (source, ref_id, name, role, position, ep_kind, ep_key, key_version, source_date, url)
+               VALUES ('cy_drcor', 'C/123456', $1, $2, NULL, $3, $4, $5, '2026-11-02', 'https://example.org/cy')`, [ep.name, role, ep.ep_kind, ep.ep_key, v]);
+    }
     // current dump (2026): A keeps Іваненко and Скарамандер, loses Петренко; new company E is founded by A
     await current('r1', '11111110', 'ТОВ "АЛЬФА"', '01.01.2010; 01.01.2010; 1', {
       founders: [`${IVANENKO}; громадянство: Україна; розмір частки - 100,00 грн.`,
@@ -249,13 +272,73 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     expect(await node('company', '1234567890')).toBeUndefined();
     expect((await q(`SELECT count(*)::int n FROM graph.node WHERE label ~ '[0-9]{10}' OR key ~ '[0-9]{10}'`)).rows[0].n).toBe(0);
     const build = (await q('SELECT counts FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0];
-    expect(build.counts).toMatchObject({ person_key_version: 'p2', id_numbers_nodes: 0, id_numbers_edges: 0, names_with_ids: 3, texts_with_ids: 1 });
+    expect(build.counts).toMatchObject({ person_key_version: 'p3', id_numbers_nodes: 0, id_numbers_edges: 0, names_with_ids: 4, texts_with_ids: 1 });
     // the check fails loudly on a leaked number (foreign entity codes and amounts are exempt)
     await expect(checkPersonalIds(pool, 'graph')).resolves.toEqual({ id_numbers_nodes: 0, id_numbers_edges: 0 });
     await q(`INSERT INTO graph.node (kind, key, label) VALUES ('foreign_entity', 'RU|code:1234567890', 'ТОВ АЛЬФА')`);
     await q(`INSERT INTO graph.node (kind, key, label) VALUES ('person_name', 'leak test', 'ТЕСТ 1234567890')`);
     await expect(checkPersonalIds(pool, 'graph')).rejects.toThrow(/1 nodes \(person_name 1\)/);
     await q(`DELETE FROM graph.node WHERE key IN ('RU|code:1234567890', 'leak test')`);
+  });
+
+  it('the founder organisation rule reads the same in PostgreSQL as in JS (LEXAI-2321)', async () => {
+    const names = ['ПАРТІЯ ТЕСТІВ', 'СЛУЖБА БЕЗПЕКИ УКРАЇНИ', 'КАБІНЕТ МІНІСТРІВ УКРАЇНИ', 'УКАЗ ПРЕЗИДЕНТА', 'ТЕСТОВСЬКИЙ ОБЛАСНИЙ ЦЕНТР ЗАЙНЯТОСТІ',
+      'ВИКОНКОМ ТЕСТІВСЬКОЇ МІСЬКОЇ РАДИ', "ТЕСТОВЕ ОБ'ЄДНАННЯ", 'МІСЬКО ТЕСТ ТЕСТОВИЧ', 'ГРОМАДСЬКА ТЕСТА ТЕСТІВНА', 'СУДАК ТЕСТ', 'ТЕСТЕНКО ТЕСТ',
+      'ТОВ ТЕСТ', 'РАДА ТЕСТА ТЕСТІВНА'];
+    const r = await q(`SELECT n <> '' AND n !~ $2 AND (n ~ $3 OR n ~ $4) AS org FROM unnest($1::text[]) AS t(n)`,
+      [names.map(normName), PATRONYMIC_RE_SOURCE, ORG_FORM_RE_SOURCE, BODY_RE_SOURCE]);
+    expect(r.rows.map((x, i) => [names[i], x.org])).toEqual(names.map(n => [n, isFounderOrganisationName(n)]));
+  });
+
+  it('foreign founders that are individuals, founders that are bodies, no passport data (LEXAI-2321)', async () => {
+    const b = await edgesOf('22222220');
+    const founders = b.filter(e => e.kind === 'founder');
+    const tester = personKey('ТЕСТЕР ТЕСТ ТЕСТОВИЧ')!;
+    // the beneficiary entry and the date-of-birth "code" are persons, with the country, without codes
+    expect(founders.find(e => e.src_key === tester)).toMatchObject({ src_kind: 'person_name', attrs: { country: 'RU' } });
+    expect(await node('person_name', tester)).toMatchObject({ label: 'ТЕСТЕР ТЕСТ ТЕСТОВИЧ' });
+    expect(founders.find(e => e.src_key === personKey('ТЕСТЕРОВ ТЕСТ'))).toMatchObject({ src_kind: 'person_name' });
+    expect(await node('person_name', personKey('ТЕСТЕРЕНКО ТЕСТ ТЕСТОВИЧ')!)).toMatchObject({ label: 'ТЕСТЕРЕНКО ТЕСТ ТЕСТОВИЧ' });
+    // a foreign company keeps its registration number
+    expect(await node('foreign_entity', 'DE|name:test')).toMatchObject({ attrs: { country_code: 'DE', codes: ['HRB12345'] } });
+    // a party and a decree: organisation nodes, not persons
+    for (const n of ['ПАРТІЯ ТЕСТІВ', 'УКАЗ ПРЕЗИДЕНТА']) {
+      expect(founders.find(e => e.src_key === organisationKey(n))).toMatchObject({ src_kind: 'organisation' });
+      expect(await node('person_name', personKey(n) || '-')).toBeUndefined();
+    }
+    // nothing of the passport / date of birth is left anywhere
+    expect((await q(`SELECT count(*)::int n FROM graph.node WHERE label ~* 'паспорт|1980' OR key ~* 'pasport|паспорт|1980|567890'
+      OR attrs::text ~* 'паспорт|567890|1980'`)).rows[0].n).toBe(0);
+    expect((await q(`SELECT count(*)::int n FROM graph.edge WHERE attrs::text ~* 'паспорт|567890|1980'`)).rows[0].n).toBe(0);
+    const build = (await q('SELECT counts FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0];
+    expect(build.counts).toMatchObject({ passport_dob_nodes: 0, foreign_founder_values_to_person: 2, founder_entries_to_organisation: 2 });
+    // the check fails loudly on passport data left in a person's label or a foreign entity's codes
+    await expect(checkPassportsAndDob(pool, 'graph')).resolves.toEqual({ passport_dob_nodes: 0 });
+    await q(`INSERT INTO graph.node (kind, key, label) VALUES ('person_name', 'leak a', 'ТЕСТ ТЕСТ АА123456'), ('person_name', 'leak b', 'ТЕСТ 01.02.1980')`);
+    await q(`INSERT INTO graph.node (kind, key, label, attrs) VALUES ('foreign_entity', 'CY|name:leak', 'ТЕСТ ЛТД НЕ 123456', '{"codes": ["ПАСПОРТ123"]}'),
+      ('foreign_entity', 'CY|name:ok', 'ТЕСТ ЛТД НЕ 123456', '{"codes": ["HE123456"]}')`);
+    await expect(checkPassportsAndDob(pool, 'graph')).rejects.toThrow(/3 nodes \(foreign_entity 1, person_name 2\)/);
+    await q(`DELETE FROM graph.node WHERE key IN ('leak a', 'leak b', 'CY|name:leak', 'CY|name:ok')`);
+  });
+
+  it('links of a foreign entity to the Cypriot register and ICIJ, officials as head edges (LEXAI-2321)', async () => {
+    const sk = await node('foreign_entity', 'CY|name:skaramander');
+    expect(sk.attrs.links.map((l: any) => [l.source, l.ref, l.match, l.candidate])).toEqual([
+      ['cy_drcor', 'C/123456', 'code', false], ['icij', '99000001', 'name', true]]);
+    expect(sk.attrs.links[0]).toMatchObject({ registration_no: 'HE 123456', source_date: '2026-11-02', url: 'https://example.org/cy' });
+    expect(sk.attrs.icij.caveat).toBe(ICIJ_CAVEAT);
+    const e = await edgesOf('CY|name:skaramander');
+    const heads = e.filter(x => x.kind === 'head').map(x => [x.src_kind, x.src_key, x.source, x.attrs.role]);
+    expect(heads).toEqual([
+      ['person_name', personKey('JOHN TESTER'), 'cy_drcor', 'director'],
+      ['foreign_entity', officerEndpoint('TEST SECRETARIAL LIMITED', 'CY')!.ep_key, 'cy_drcor', 'secretary'],
+    ].sort((a, b) => String(a[1]).localeCompare(String(b[1]))));
+    expect(e.find(x => x.kind === 'head')!.source_ref.cy_drcor).toMatchObject({ ref: 'C/123456', snapshot: '2026-11-02' });
+    // the officer keyed with an old person key version is skipped
+    expect(await node('person_name', personKey('JANE TESTER')!)).toBeUndefined();
+    const build = (await q('SELECT counts FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0];
+    expect(build.counts).toMatchObject({ foreign_officer_edges: 2, foreign_officers_stale_key_version: 1, foreign_entities_linked: 1,
+      foreign_linked_cy_drcor: 1, foreign_linked_icij_candidate: 1 });
   });
 
   it('computed hub thresholds and the curated mass registration address (LEXAI-2319)', async () => {
