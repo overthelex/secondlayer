@@ -22,6 +22,9 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dsc_doc ON decision_statute_citation
 -- (law_number, law_article) without doc_id on purpose: btree deduplication keeps it at
 -- about the size of idx_dsc_doc; with doc_id every key is unique and it was 80 GB.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dsc_law_article ON decision_statute_citations (law_number, law_article);
+-- ANALYZE's sample badly underestimates distinct doc_ids (193K vs 118M): pin the ratio, or
+-- per-decision lookups get a parallel plan (migration 298).
+ALTER TABLE decision_statute_citations ALTER COLUMN doc_id SET (n_distinct = -0.146);
 VACUUM (ANALYZE) decision_statute_citations;
 
 CREATE TABLE IF NOT EXISTS statute_article_stats (
