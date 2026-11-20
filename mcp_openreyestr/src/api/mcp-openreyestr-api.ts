@@ -160,6 +160,75 @@ export class MCPOpenReyestrAPI {
         },
       },
       {
+        name: 'find_connections',
+        description: `Пошук зв'язків: граф зв'язків юрособи, особи чи адреси за ЄДР
+
+Від компанії (код ЄДРПОУ), особи (повний ПІБ) або адреси — зв'язки до 3 кроків: засновники,
+кінцеві бенефіціари, керівники, підписанти, місцезнаходження, сусідні коди реєстрації того ж дня.
+Кожне ребро — з типом, датами (перший / останній знімок ЄДР), джерелом і посиланням на запис;
+кожен вузол — з кількістю зв'язків і ознакою хаба; paths — шляхи від початку до знайдених компаній.
+
+Обмеження даних: знімки ЄДР 2016–2018, 2021 і поточний 2026, дати між знімками наближені; дамп 2026
+не містить адрес (зв'язки «місцезнаходження» — станом не пізніше 2021); ФОП у графі немає. Хаби
+(адреси масової реєстрації, номінальні особи, поширені ПІБ) показуються, але пошук крізь них не йде,
+якщо не задано include_hubs. Особи згруповані за ПІБ: вузол person_name об'єднує тезок, тому збіг за
+ПІБ — лише кандидат (match_level "name_only"); підтвердження потребує другої ознаки (спільна
+компанія, адреса, дата народження).`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            start: { type: 'string', description: 'Код ЄДРПОУ, повний ПІБ особи або адреса. Можна з префіксом: company:, person:, address:, foreign:CY:<назва>, node:<id> (id вузла з попередньої відповіді без «n»)' },
+            start_type: { type: 'string', enum: ['auto', 'company', 'person', 'address'], default: 'auto', description: 'Тип початку; auto: лише цифри — ЄДРПОУ, текст із цифрами — адреса, інакше ПІБ. Пошук компанії за назвою не підтримується — вкажіть ЄДРПОУ' },
+            depth: { type: 'integer', default: 2, minimum: 1, maximum: 3, description: 'Кількість кроків від початку (1-3)' },
+            as_of: { type: 'string', description: 'Лише зв\'язки, чинні на дату YYYY-MM-DD (за знімками ЄДР)' },
+            kinds: {
+              type: 'array',
+              items: { type: 'string', enum: ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour'] },
+              description: 'Типи зв\'язків: founder (засновник), beneficiary (КБВ), head (керівник), signer (підписант), registered_at (адреса), reg_neighbour (сусідній код реєстрації). Без фільтра — усі',
+            },
+            max_nodes: { type: 'integer', default: 200, minimum: 1, maximum: 1000, description: 'Максимум вузлів у відповіді (1-1000)' },
+            max_fanout: { type: 'integer', default: 50, minimum: 1, maximum: 200, description: 'Максимум зв\'язків одного вузла (1-200)' },
+            max_paths: { type: 'integer', default: 20, minimum: 0, maximum: 100, description: 'Скільки шляхів від початку до знайдених компаній показати в paths (0-100)' },
+            include_hubs: { type: 'boolean', default: false, description: 'Іти крізь хаби (масові адреси, номінальні особи). Може дати тисячі зайвих зв\'язків' },
+            include_source_refs: { type: 'boolean', default: false, description: 'Повні посилання на вихідні записи (хеші записів історії ЄДР) у кожному ребрі' },
+          },
+          required: ['start'],
+        },
+      },
+      {
+        name: 'connection_path',
+        description: `Шлях зв'язку між двома компаніями чи особами за ЄДР
+
+Найкоротші шляхи (до 4 кроків) між двома початками: код ЄДРПОУ, повний ПІБ або адреса. Кожен шлях —
+ланцюжок вузлів і ребер (засновник, КБВ, керівник, підписант, адреса, сусідній код реєстрації) з
+датами знімків ЄДР і джерелом. Пошук двобічний, крізь хаби не йде, якщо не задано include_hubs.
+
+Обмеження ті самі, що в find_connections: знімки 2016–2018, 2021, 2026, дати наближені; адреси — станом
+не пізніше 2021. Шлях через особу (person_name, match_level "name_only") — лише гіпотеза: це можуть
+бути різні люди з однаковим ПІБ; підтвердження потребує другої ознаки.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            from: { type: 'string', description: 'Перший початок: код ЄДРПОУ, повний ПІБ або адреса' },
+            to: { type: 'string', description: 'Другий початок: код ЄДРПОУ, повний ПІБ або адреса' },
+            from_type: { type: 'string', enum: ['auto', 'company', 'person', 'address'], default: 'auto', description: 'Тип першого початку' },
+            to_type: { type: 'string', enum: ['auto', 'company', 'person', 'address'], default: 'auto', description: 'Тип другого початку' },
+            max_depth: { type: 'integer', default: 3, minimum: 1, maximum: 4, description: 'Максимальна довжина шляху в кроках (1-4)' },
+            as_of: { type: 'string', description: 'Лише зв\'язки, чинні на дату YYYY-MM-DD' },
+            kinds: {
+              type: 'array',
+              items: { type: 'string', enum: ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour'] },
+              description: 'Типи зв\'язків, якими можна йти. Без фільтра — усі',
+            },
+            max_fanout: { type: 'integer', default: 50, minimum: 1, maximum: 200, description: 'Максимум зв\'язків одного вузла (1-200)' },
+            max_paths: { type: 'integer', default: 5, minimum: 1, maximum: 20, description: 'Скільки найкоротших шляхів повернути (1-20)' },
+            include_hubs: { type: 'boolean', default: false, description: 'Іти крізь хаби (масові адреси, номінальні особи)' },
+            include_source_refs: { type: 'boolean', default: false, description: 'Повні посилання на вихідні записи (хеші записів історії ЄДР) у кожному ребрі' },
+          },
+          required: ['from', 'to'],
+        },
+      },
+      {
         name: 'search_founders_history',
         description: `Зворотний пошук за засновником з урахуванням минулих знімків ЄДР
 
@@ -752,6 +821,12 @@ status — стан заходу АРМА (null, якщо заходу не бу
           break;
         case 'company_history':
           result = await this.tools.companyHistory(args.edrpou);
+          break;
+        case 'find_connections':
+          result = await this.tools.findConnections(args);
+          break;
+        case 'connection_path':
+          result = await this.tools.connectionPath(args);
           break;
         case 'search_founders_history':
           result = await this.tools.searchFoundersHistory(args);

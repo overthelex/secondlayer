@@ -406,6 +406,8 @@ export class ToolRegistry {
       { clientName: 'openreyestr_search_founders', serviceName: 'search_founders' },
       { clientName: 'openreyestr_company_as_of', serviceName: 'company_as_of' },
       { clientName: 'openreyestr_company_history', serviceName: 'company_history' },
+      { clientName: 'openreyestr_find_connections', serviceName: 'find_connections' },
+      { clientName: 'openreyestr_connection_path', serviceName: 'connection_path' },
       { clientName: 'openreyestr_search_founders_history', serviceName: 'search_founders_history' },
       { clientName: 'openreyestr_search_beneficiaries_history', serviceName: 'search_beneficiaries_history' },
       { clientName: 'openreyestr_get_by_edrpou', serviceName: 'get_by_edrpou' },

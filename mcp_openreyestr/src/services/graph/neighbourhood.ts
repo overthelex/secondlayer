@@ -14,7 +14,7 @@
  */
 import { normAddress } from '../graph-norm/address';
 import type { StreetRenamingLookup } from '../graph-norm/address';
-import { companyKey, EDGE_KINDS, EdgeKind, foreignEntityKey, NodeKind, organisationKey, personKey } from './keys';
+import { companyKey, EDGE_KINDS, EdgeKind, EdgeSource, foreignEntityKey, NodeKind, organisationKey, personKey } from './keys';
 
 export interface Queryable { query(sql: string, params?: unknown[]): Promise<{ rows: any[] }> }
 
@@ -23,7 +23,7 @@ export interface GraphNode {
 }
 export interface GraphEdge {
   id: number; src: number; dst: number; kind: EdgeKind; valid_from: string | null; valid_to: string | null;
-  source: 'edr_hist' | 'edr_current' | 'prozorro'; source_ref: Record<string, unknown>; attrs: Record<string, unknown>;
+  source: EdgeSource; source_ref: Record<string, unknown>; attrs: Record<string, unknown>;
 }
 export interface EdgeFilter { kinds: EdgeKind[] | null; asOf: string | null; currentOnly: boolean }
 

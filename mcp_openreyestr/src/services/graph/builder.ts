@@ -40,6 +40,7 @@ import {
   REG_NEIGHBOUR_MAX_GAP, REG_NEIGHBOUR_MAX_PER_DAY,
 } from './keys';
 import { prozorroAddressEdges, stageProzorroAddresses } from './prozorro-addresses';
+import { buildCourtEdges, CourtEdgeOptions } from './court';
 
 export interface BuildOptions {
   /** sample build: only the first N companies by code (from fromEdrpou) */
@@ -67,6 +68,8 @@ export interface BuildOptions {
   batchSize?: number;          // JS batches, default 20000
   /** ProZorro supplier addresses as registered_at edges (prozorro-addresses.ts); default true */
   prozorroAddresses?: boolean;
+  /** co_party edges from graph.court_party (court.ts, LEXAI-2304); false = none */
+  court?: CourtEdgeOptions | false;
   /** leave graph_stage in place after the swap (debugging) */
   keepStage?: boolean;
   log?: (m: string) => void;
@@ -85,7 +88,7 @@ export interface BuildResult {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
 
-/** DDL of graph.node / graph.edge (identical to migrations 030 + 031), created in the staging schema. */
+/** DDL of graph.node / graph.edge (identical to migrations 030 + 031 + 032), created in the staging schema. */
 export function stageDdl(schema: string): string[] {
   return [
     `CREATE TABLE ${schema}.node (
@@ -100,10 +103,10 @@ export function stageDdl(schema: string): string[] {
       id          bigserial,
       src         bigint NOT NULL,
       dst         bigint NOT NULL,
-      kind        text NOT NULL CHECK (kind IN ('founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour')),
+      kind        text NOT NULL CHECK (kind IN ('founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour', 'co_party')),
       valid_from  date,
       valid_to    date,
-      source      text NOT NULL CHECK (source IN ('edr_hist', 'edr_current', 'prozorro')),
+      source      text NOT NULL CHECK (source IN ('edr_hist', 'edr_current', 'edrsr', 'prozorro')),
       source_ref  jsonb NOT NULL DEFAULT '{}'::jsonb,
       attrs       jsonb NOT NULL DEFAULT '{}'::jsonb)`,
   ];
@@ -615,6 +618,11 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         JOIN graph_stage.node d ON d.kind = e.dst_kind AND d.key = e.dst_key`);
       await c.query('DROP TABLE graph_stage.e_raw, graph_stage.deg, graph_stage.ep_label, graph_stage.addr_label, graph_stage.addr_run, graph_stage.pz_run');
     });
+    if (opts.court !== false) {
+      await timed('court_edges', async () => {
+        Object.assign(counts, await buildCourtEdges(c, opts.court || {}));
+      });
+    }
     await timed('indexes', async () => {
       await c.query(`SET maintenance_work_mem = '1GB'`);
       for (const ddl of stageIndexDdl('graph_stage').filter(d => !d.includes('node_kind_key'))) await c.query(ddl);

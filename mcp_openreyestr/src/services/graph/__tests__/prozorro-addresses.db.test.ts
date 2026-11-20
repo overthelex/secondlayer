@@ -45,7 +45,7 @@ d('graph build: ProZorro supplier addresses (real PostgreSQL)', () => {
     pool = new Pool({ connectionString: URL, max: 3 });
     for (const s of ['edr_hist', 'graph', 'graph_stage']) await q(`DROP SCHEMA IF EXISTS ${s} CASCADE`);
     for (const t of ['legal_entities', 'founders', 'signers', 'beneficiaries', 'prozorro_contracts']) await q(`DROP TABLE IF EXISTS public.${t}`);
-    for (const f of ['027_edr_history.sql', '030_graph_schema.sql', '031_graph_hubs_and_organisations.sql', '032_graph_prozorro_source.sql', '025_prozorro_contracts.sql']) {
+    for (const f of ['027_edr_history.sql', '030_graph_schema.sql', '031_graph_hubs_and_organisations.sql', '032_graph_court_parties.sql', '033_graph_prozorro_source.sql', '025_prozorro_contracts.sql']) {
       await q(fs.readFileSync(path.join(MIG, f), 'utf8'));
     }
     await q(`CREATE TABLE legal_entities (id serial PRIMARY KEY, record varchar(50) UNIQUE NOT NULL, edrpou varchar(20), name text,
