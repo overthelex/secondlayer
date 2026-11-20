@@ -128,7 +128,7 @@ const toolGroups: ToolGroup[] = [
   {
     title: 'Відкриті дані та реєстри',
     tools: [
-      { name: 'search_registry', description: 'Єдиний вхід у 37 реєстрів відкритих даних: санкції, адвокати, корупціонери, банки НБУ, фінзвітність та ін.', params: [{ name: 'registry', required: true }, { name: 'filters' }, { name: 'aggregate' }, { name: 'limit' }], cost: '₴0.50 · до ₴0.75' },
+      { name: 'search_registry', description: 'Єдиний вхід у 30 реєстрів відкритих даних: санкції, адвокати, особи, які вчинили корупційні правопорушення, банки НБУ, фінзвітність та ін.', params: [{ name: 'registry', required: true }, { name: 'filters' }, { name: 'aggregate' }, { name: 'limit' }], cost: '₴0.50 · до ₴0.75' },
       { name: 'search_judges', description: 'Реєстр суддів ВККС: 6K чинних плюс 417K історичних записів', params: [{ name: 'full_name' }, { name: 'court_name' }, { name: 'dossier_number' }, { name: 'gender' }, { name: 'include_history' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
       { name: 'search_vkks', description: 'Дані ВККС у 5 категоріях: judges, evaluations, declarations, vacancies, efficiency', params: [{ name: 'category', required: true }, { name: 'judge_name' }, { name: 'court_name' }, { name: 'year' }, { name: 'region' }, { name: 'court_level' }, { name: 'dossier_number' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
       { name: 'search_vrp_judges_discipline', description: 'Дисциплінарні дані суддів ВРП: звільнені, відсторонені, втручання', params: [{ name: 'judge_name' }, { name: 'court_name' }, { name: 'type' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
@@ -345,7 +345,7 @@ function OverviewSection() {
           </tr>
           <tr className="border-b border-claude-border/50">
             <Td>Відкриті дані</Td>
-            <Td>37 реєстрів через <Code>search_registry</Code>, 12,6 млн записів публічних витрат</Td>
+            <Td>30 реєстрів через <Code>search_registry</Code>, 12,6 млн записів публічних витрат</Td>
           </tr>
           <tr className="border-b border-claude-border/50">
             <Td>Державні реєстри</Td>

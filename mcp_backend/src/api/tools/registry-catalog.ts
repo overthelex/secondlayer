@@ -328,19 +328,39 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
     ],
   },
 
+  // Backed by opendata_corruption_offenders (LEXAI-2312), not opendata_corruption.
+  // Both come from the same NAZK feed, but this one is reloaded as a whole (CKAN
+  // DELETE+INSERT swap), so a record NAZK takes out of the register leaves it.
+  // opendata_corruption is upserted by record_id and never deletes: on prod
+  // 2026-11-20 it held all 31,302 current records (identical field by field) plus
+  // 35,190 that NAZK no longer publishes (28,726 of them from the March import
+  // with codex_articles mangled to ": ст."). Showing those as corruption offenders
+  // would name people the register itself no longer lists.
+  // codex_articles is a jsonb array of {codexArticleId, codexArticleName}: the id is
+  // NAZK's internal one, not an article number, so the article is matched by title.
   corruption_register: {
-    title: 'Реєстр корупціонерів',
-    description: 'Пошук у Єдиному реєстрі осіб, які вчинили корупційні правопорушення\n\n58K записів. Пошук за прізвищем, статтею КК, назвою суду, видом покарання.',
-    table: 'opendata_corruption',
-    selectColumns: 'last_name, first_name, patronymic, entity_type, offense_name, punishment_type, punishment, codex_articles, court_case_number, sentence_date, court_name',
-    orderBy: 'sentence_date DESC NULLS LAST',
-    emptyMessage: 'Записів у реєстрі корупціонерів не знайдено',
+    title: 'Реєстр осіб, які вчинили корупційні правопорушення',
+    description: 'Пошук у Єдиному державному реєстрі осіб, які вчинили корупційні або пов\'язані з корупцією правопорушення (НАЗК)\n\n31K записів. Пошук за ПІБ, складом правопорушення, статтею кодексу (за назвою статті), судом, номером справи, датою вироку, видом покарання (судове рішення / дисциплінарне стягнення).\nУ результатах: склад правопорушення, покарання, номер справи, дата і номер вироку, дата початку покарання, суд. Номер справи дозволяє знайти судові рішення у цій справі.',
+    table: 'opendata_corruption_offenders',
+    selectColumns: `source_id AS record_id, last_name, first_name, patronymic, entity_type, punishment_type, offense_name, punishment,
+      (SELECT string_agg(a->>'codexArticleName', '; ') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(codex_articles) = 'array' THEN codex_articles ELSE '[]'::jsonb END) a) AS codex_articles,
+      court_case_number, sentence_date, sentence_number, punishment_start, court_name`,
+    orderBy: 'sentence_date DESC NULLS LAST, id DESC',
+    emptyMessage: 'Записів у реєстрі осіб, які вчинили корупційні правопорушення, не знайдено',
     fields: [
-      { name: 'last_name', description: 'Прізвище', match: 'ilike', columns: ['last_name'] },
+      { name: 'full_name', description: 'ПІБ повністю або частково, слова в будь-якому порядку (напр. «Іваненко Петро»)', match: 'fts_simple', columns: ["concat_ws(' ', last_name, first_name, patronymic)"] },
+      { name: 'last_name', description: 'Прізвище (підрядок)', match: 'ilike', columns: ['last_name'] },
       { name: 'first_name', description: "Ім'я", match: 'ilike', columns: ['first_name'] },
-      { name: 'offense_name', description: 'Назва правопорушення', match: 'ilike', columns: ['offense_name'] },
-      { name: 'codex_articles', description: 'Статті кодексу', match: 'ilike', columns: ['codex_articles'] },
+      { name: 'patronymic', description: 'По батькові', match: 'ilike', columns: ['patronymic'] },
+      { name: 'offense_name', description: 'Склад правопорушення (ключові слова)', match: 'ilike', columns: ['offense_name'] },
+      { name: 'codex_articles', description: 'Стаття кодексу за назвою (напр. «неправомірної вигоди», «фінансового контролю»); номерів статей реєстр не містить', match: 'ilike_cast', columns: ['codex_articles'] },
+      { name: 'punishment', description: 'Покарання (ключові слова, напр. «штраф», «позбавлення права»)', match: 'ilike', columns: ['punishment'] },
       { name: 'court_name', description: 'Назва суду', match: 'ilike', columns: ['court_name'] },
+      { name: 'court_case_number', description: 'Номер судової справи (точно, напр. 359/9747/26)', match: 'exact', columns: ['court_case_number'] },
+      { name: 'date_from', description: 'Дата вироку від (YYYY-MM-DD)', match: 'gte', columns: ['sentence_date'] },
+      { name: 'date_to', description: 'Дата вироку до (YYYY-MM-DD)', match: 'lte', columns: ['sentence_date'] },
+      { name: 'punishment_type', description: 'Вид: «Судове рішення» або «Дисциплінарне стягнення»', match: 'exact_ci', columns: ['punishment_type'] },
+      { name: 'entity_type', description: 'Тип особи: «Фізична особа» або «Юридична особа»', match: 'exact_ci', columns: ['entity_type'] },
     ],
   },
 
