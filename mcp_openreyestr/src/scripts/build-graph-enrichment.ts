@@ -1,5 +1,5 @@
 /**
- * Build the enrichment layer of the relationship graph (LEXAI-2305, migration 032): node flags
+ * Build the enrichment layer of the relationship graph (LEXAI-2305, migration 035): node flags
  * (sanctions, tax / ЄСВ debt, debtors, enforcement, termination, НБУ licences, НАЗК declarants) and
  * extra edges (creditor, supplier, declared_owner, family, shareholder). Run AFTER build-graph.js:
  * only rows whose nodes are in the current graph are kept. See services/graph/enrichment.ts.

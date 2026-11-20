@@ -1,5 +1,5 @@
 /**
- * Enrichment layer of the relationship graph (LEXAI-2305, migration 032): flags on graph nodes and
+ * Enrichment layer of the relationship graph (LEXAI-2305, migration 035): flags on graph nodes and
  * extra dated edges from registers other than the ЄДР. Built after the ЄДР graph
  * (scripts/build-graph-enrichment.ts), staged in schema graph_enrich_stage and swapped in with one
  * transaction, like builder.ts; it never touches graph.node / graph.edge.
@@ -79,7 +79,7 @@ export const AMOUNT_ATTRS = ['amount_uah', 'debt_total', 'debt_amount'];
 
 export const STAGE = 'graph_enrich_stage';
 
-/** DDL of graph.node_flag / graph.enrich_edge (identical to migration 032) in a schema, without indexes. */
+/** DDL of graph.node_flag / graph.enrich_edge (identical to migration 035) in a schema, without indexes. */
 export function enrichDdl(schema: string): string[] {
   return [
     `CREATE TABLE ${schema}.node_flag (
@@ -106,7 +106,7 @@ export function enrichDdl(schema: string): string[] {
   ];
 }
 
-/** Constraints and indexes, added after the bulk load (names as in migration 032). */
+/** Constraints and indexes, added after the bulk load (names as in migration 035). */
 export function enrichIndexDdl(schema: string): string[] {
   return [
     `ALTER TABLE ${schema}.node_flag ADD CONSTRAINT node_flag_pkey PRIMARY KEY (kind, key, flag, source)`,
@@ -532,7 +532,7 @@ export async function buildEnrichment(pool: Pool, opts: EnrichmentOptions = {}):
     if (!lock.ok) throw new Error('another graph enrichment build is running');
     locked = true;
     if (!(await tableExists(c, `${schema}.node`))) throw new Error(`${schema}.node missing: build the graph first (build-graph.ts)`);
-    if (!(await tableExists(c, `${schema}.enrich_build`))) throw new Error(`${schema}.enrich_build missing: run migration 032_graph_enrichment.sql`);
+    if (!(await tableExists(c, `${schema}.enrich_build`))) throw new Error(`${schema}.enrich_build missing: run migration 035_graph_enrichment.sql`);
 
     await c.query(`DROP SCHEMA IF EXISTS ${S} CASCADE`);
     await c.query(`CREATE SCHEMA ${S}`);
@@ -659,7 +659,7 @@ const iso = (d: unknown): string | null => (d instanceof Date ? d.toISOString().
 
 /**
  * Flags of the nodes and the enrichment edges between them (both ends among the nodes), for the
- * output of the graph tools. Empty when migration 032 / the enrichment build is missing.
+ * output of the graph tools. Empty when migration 035 / the enrichment build is missing.
  */
 export async function enrichmentFor(db: Queryable, nodes: Array<{ id: number; kind: string; key: string }>, schema = 'graph',
   o: { maxEdges?: number } = {}): Promise<{ flags: Map<number, OutFlag[]>; edges: OutEnrichEdge[]; available: boolean }> {

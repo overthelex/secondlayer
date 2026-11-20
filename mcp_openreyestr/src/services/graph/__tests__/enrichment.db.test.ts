@@ -39,7 +39,7 @@ d('graph enrichment build (real PostgreSQL)', () => {
     await q('CREATE SCHEMA enrich_src');
     for (const ddl of stageDdl(G)) await q(ddl);
     await q(`ALTER TABLE ${G}.node ADD CONSTRAINT node_kind_key UNIQUE (kind, key)`);
-    await q(fs.readFileSync(path.join(MIG, '032_graph_enrichment.sql'), 'utf8').replace(/graph\./g, `${G}.`));
+    await q(fs.readFileSync(path.join(MIG, '035_graph_enrichment.sql'), 'utf8').replace(/graph\./g, `${G}.`));
     // graph nodes: three companies, the persons, a Russian founder
     const nodes: Array<[string, string, string]> = [
       ['company', '11111110', 'ТОВ "АЛЬФА"'], ['company', '22222220', 'ТОВ "БЕТА"'], ['company', '33333330', 'КП "ГАММА"'],

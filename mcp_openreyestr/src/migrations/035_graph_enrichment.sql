@@ -1,4 +1,4 @@
--- 032: enrichment layer of the relationship graph (LEXAI-2305): flags on nodes and extra dated
+-- 035: enrichment layer of the relationship graph (LEXAI-2305): flags on nodes and extra dated
 -- edges from registers other than the ЄДР (sanctions, debts, enforcement, ProZorro, НАЗК
 -- declarations, НБУ licences, НКЦПФР shareholders).
 --

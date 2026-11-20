@@ -42,9 +42,9 @@ describe('graph enrichment helpers (LEXAI-2305)', () => {
     }
   });
 
-  it('staged DDL is identical to migration 032', () => {
+  it('staged DDL is identical to migration 035', () => {
     const norm = (s: string) => s.replace(/--.*$/gm, '').replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')').trim();
-    const mig = norm(fs.readFileSync(path.join(__dirname, '../../../migrations/032_graph_enrichment.sql'), 'utf8'));
+    const mig = norm(fs.readFileSync(path.join(__dirname, '../../../migrations/035_graph_enrichment.sql'), 'utf8'));
     const [flagDdl, edgeDdl] = enrichDdl('graph').map(norm);
     const [flagPk, edgePk] = enrichIndexDdl('graph').map(norm);
     const cols = (ddl: string) => ddl.replace(/^CREATE TABLE graph\.\w+ \(/, '').replace(/\)$/, '');
