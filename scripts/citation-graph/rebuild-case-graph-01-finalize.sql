@@ -38,15 +38,15 @@ SET jit = off;
 -- since the extractor emits only the two shapes above).
 CREATE OR REPLACE FUNCTION pg_temp.cg_norm(c text) RETURNS text
 LANGUAGE sql IMMUTABLE AS $f$
+  -- One expression, no sub-SELECT, so the planner inlines it: the first version (a LATERAL
+  -- sub-select) could not be inlined and took 42 min over 49.8M cause_nums.
   SELECT CASE
     WHEN btrim(c) ~ '^\d{1,4}/\d{1,10}/\d{2,4}$' THEN btrim(c)
-    ELSE (
-      SELECT m[1] || '-' || s
-        FROM (SELECT regexp_match(btrim(c),
-                '^(\d{1,4}/\d{1,10}/\d{2,4})\s*[-‐‑‒–—―−]\s*([A-Za-zА-Яа-яІіЇїЄєҐґ]{1,3})$') AS m) x,
-             LATERAL (SELECT translate(lower(m[2]), 'aekcopxhwrgf', 'аексорхнцкпа') AS s) y
-       WHERE m IS NOT NULL
-         AND s IN ('ц','к','п','а','г','е','ап','нр','б','н','на','зн','кр'))
+    WHEN btrim(c) ~ '^\d{1,4}/\d{1,10}/\d{2,4}\s*[-‐‑‒–—―−]\s*[A-Za-zА-Яа-яІіЇїЄєҐґ]{1,3}$'
+     AND translate(lower(regexp_replace(btrim(c), '^.*[-‐‑‒–—―−]\s*', '')), 'aekcopxhwrgf', 'аексорхнцкпа')
+         IN ('ц','к','п','а','г','е','ап','нр','б','н','на','зн','кр')
+    THEN substring(btrim(c) from '^(\d{1,4}/\d{1,10}/\d{2,4})') || '-' ||
+         translate(lower(regexp_replace(btrim(c), '^.*[-‐‑‒–—―−]\s*', '')), 'aekcopxhwrgf', 'аексорхнцкпа')
   END
 $f$;
 
@@ -100,10 +100,12 @@ SELECT DISTINCT ON (from_case_id, to_case_number)
  ORDER BY from_case_id, to_case_number;
 
 -- justice_kind from edrsr_documents (edrsr_fulltext carries it for ~2% of rows).
+-- edrsr_documents can hold a doc_id twice (seen: 137910810); the latest row wins.
 CREATE TEMP TABLE cg_doc AS
-SELECT d.doc_id, d.justice_kind, d.cause_num, pg_temp.cg_norm(d.cause_num) AS own_norm
+SELECT DISTINCT ON (d.doc_id) d.doc_id, d.justice_kind, d.cause_num, pg_temp.cg_norm(d.cause_num) AS own_norm
   FROM edrsr_documents d
- WHERE d.doc_id IN (SELECT DISTINCT from_case_id FROM case_citation_edges_new);
+  JOIN (SELECT DISTINCT from_case_id FROM case_citation_edges_new) e ON e.from_case_id = d.doc_id
+ ORDER BY d.doc_id, d.adjudication_date DESC NULLS LAST;
 CREATE UNIQUE INDEX ON cg_doc (doc_id);
 ANALYZE cg_doc;
 
