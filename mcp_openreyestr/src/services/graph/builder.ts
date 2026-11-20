@@ -13,7 +13,12 @@
  *     (graph-norm/personal-ids, LEXAI-2322): the few values carrying them go through JS into
  *     graph_stage.name_fix / text_fix, which the participation SQL joins. Before the swap the
  *     build FAILS if a 10-digit run is left in a node label / key (foreign entities excepted: their
- *     codes are registration numbers) or in an edge attribute (amounts excepted): checkPersonalIds.
+ *     codes are registration numbers) or in an edge attribute (amounts excepted): checkPersonalIds;
+ *     or passport data / a date of birth in a node (foreign-founders.ts checkPassportsAndDob);
+ *   - foreign founder entries that are individuals (LEXAI-2321, foreign-founders.ts): JS into
+ *     graph_stage.foreign_fix, which the founder SQL joins. Links of foreign entities to foreign
+ *     registers (graph.foreign_ref / graph.foreign_officer, filled by import-foreign-refs.ts) become
+ *     attrs.links and 'head' edges with source 'cy_drcor' (foreign-refs.ts).
  *
  * Sources and dates:
  *   hist     edr_hist.founder / beneficiary / head (one row per distinct entry text per company,
@@ -31,8 +36,10 @@ import { countryIso, uaMatchKey } from '../edr-history/norm';
 import { StreetRenamingsCache } from '../graph-norm/street-renamings';
 import type { StreetRenamingLookup } from '../graph-norm/address';
 import { NAME_ID_PROBE_SQL, stripIdNumbers, stripPersonIds, TEN_DIGITS_SQL, TEXT_ID_PROBE_SQL } from '../graph-norm/personal-ids';
+import { checkPassportsAndDob, stageForeignFix } from './foreign-founders';
+import { addForeignOfficerEdges, applyForeignRefs } from './foreign-refs';
 import {
-  addressKeyRow, addressKeyVersion, CODE8_RE_SOURCE, computeHubThresholds, ComputedHubThresholds, hubPercentiles,
+  addressKeyRow, addressKeyVersion, BODY_RE_SOURCE, CODE8_RE_SOURCE, computeHubThresholds, ComputedHubThresholds, hubPercentiles,
   HubThresholds, NODE_KINDS, NodeKind, ORG_FORM_RE_SOURCE, PATRONYMIC_RE_SOURCE, PERSON_KEY_VERSION, PLACEHOLDER_RE_SOURCE,
   WEAK_PLACEHOLDER_RE_SOURCE,
   REG_NEIGHBOUR_MAX_GAP, REG_NEIGHBOUR_MAX_PER_DAY,
@@ -98,7 +105,7 @@ export function stageDdl(schema: string): string[] {
       kind        text NOT NULL CHECK (kind IN ('founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour')),
       valid_from  date,
       valid_to    date,
-      source      text NOT NULL CHECK (source IN ('edr_hist', 'edr_current')),
+      source      text NOT NULL CHECK (source IN ('edr_hist', 'edr_current', 'cy_drcor')),
       source_ref  jsonb NOT NULL DEFAULT '{}'::jsonb,
       attrs       jsonb NOT NULL DEFAULT '{}'::jsonb)`,
   ];
@@ -132,6 +139,10 @@ const STAGE_FUNCS = [
   `CREATE FUNCTION graph_stage.org_name(t text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
    SELECT n <> '' AND n !~ ${lit(PATRONYMIC_RE_SOURCE)}
           AND (n ~ ${lit(ORG_FORM_RE_SOURCE)} OR coalesce(substring(t FROM ${lit(CODE8_RE_SOURCE)}), '0') !~ '^0+$')
+   FROM (SELECT graph_stage.norm_name(t) AS n) x $$`,
+  // keys.ts isFounderOrganisationName (LEXAI-2321): a legal form or a body word, and no patronymic
+  `CREATE FUNCTION graph_stage.founder_org(t text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+   SELECT n <> '' AND n !~ ${lit(PATRONYMIC_RE_SOURCE)} AND (n ~ ${lit(ORG_FORM_RE_SOURCE)} OR n ~ ${lit(BODY_RE_SOURCE)})
    FROM (SELECT graph_stage.norm_name(t) AS n) x $$`,
 ];
 
@@ -310,6 +321,9 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         const clean = stripIdNumbers(v);
         return clean === v ? null : [clean, null];
       });
+      // LEXAI-2321: foreign "organisations" that are individuals (passport data, a date of birth,
+      // a beneficiary entry) -> persons; personal codes are dropped (keys.ts foreignFounderFix)
+      Object.assign(counts, await stageForeignFix(c, inScope('edrpou')));
     });
     // the cleaned name / key of an entry (foreign organisations keep theirs: see personal-ids.ts)
     const fixedName = (t: string, nf: string, cond = 'TRUE') =>
@@ -333,16 +347,30 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
           UNION ALL
           SELECT edrpou, kind, name, name_latn, code, country_code, contribution, contribution_uah, ${cd}, ${cd}, 'edr_current', ref
           FROM graph_stage.cur_founder
+        ), f1 AS (
+          -- LEXAI-2321: a foreign "organisation" re-read by keys.ts foreignFounderFix (graph_stage.foreign_fix)
+          SELECT f0.edrpou, coalesce(ff.kind, f0.kind) AS kind,
+                 CASE WHEN ff.name IS NOT NULL THEN ff.clean ELSE f0.name END AS name,
+                 CASE WHEN ff.name IS NOT NULL THEN ff.clean_key ELSE f0.name_latn END AS name_latn,
+                 CASE WHEN ff.drop_code THEN NULL ELSE f0.code END AS code,
+                 f0.country_code, f0.contribution, f0.contribution_uah, f0.first_seen, f0.last_seen, f0.src, f0.ref,
+                 ff.name IS NOT NULL AS fixed
+          FROM f0 LEFT JOIN graph_stage.foreign_fix ff
+            ON f0.kind = 'organisation' AND coalesce(f0.country_code, 'UA') <> 'UA'
+           AND ff.name = coalesce(f0.name, '') AND ff.code = coalesce(f0.code, '')
         ), f AS (
-          SELECT f0.edrpou, f0.kind, ${fixedName('f0', 'nf', "NOT (f0.kind = 'organisation' AND coalesce(f0.country_code, 'UA') <> 'UA')")},
-                 f0.code, f0.country_code, f0.contribution, f0.contribution_uah, f0.first_seen, f0.last_seen, f0.src, f0.ref
-          FROM f0 LEFT JOIN graph_stage.name_fix nf ON nf.raw = f0.name
+          SELECT f1.edrpou, f1.kind,
+                 ${fixedName('f1', 'nf', "NOT f1.fixed AND NOT (f1.kind = 'organisation' AND coalesce(f1.country_code, 'UA') <> 'UA')")},
+                 f1.code, f1.country_code, f1.contribution, f1.contribution_uah, f1.first_seen, f1.last_seen, f1.src, f1.ref
+          FROM f1 LEFT JOIN graph_stage.name_fix nf ON nf.raw = f1.name
         ), k AS (
           SELECT f.*, graph_stage.placeholder(f.name) AS placeholder,
                  upper(regexp_replace(coalesce(f.code, ''), '[^0-9A-Za-zА-Яа-яІіЇїЄєҐґ]', '', 'g')) AS fcode,
                  CASE WHEN f.kind = 'organisation' AND coalesce(f.country_code, 'UA') = 'UA' THEN
                         CASE WHEN f.code ~ '^0*\\d{1,8}$' AND f.code !~ '^0+$' THEN 'company' ELSE 'ua_org' END
                       WHEN f.kind = 'organisation' THEN 'foreign_entity'
+                      -- LEXAI-2321: a party, a public body, an act written as a person
+                      WHEN coalesce(f.country_code, 'UA') = 'UA' AND graph_stage.founder_org(f.name) THEN 'ua_body'
                       ELSE 'person_name' END AS ep
           FROM f
         ), e AS (
@@ -350,6 +378,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
                  CASE k.ep
                    WHEN 'company' THEN lpad(right(regexp_replace(k.code, '^0+(?=\\d{8})', ''), 8), 8, '0')
                    WHEN 'ua_org' THEN u.edrpou
+                   WHEN 'ua_body' THEN CASE WHEN NOT k.placeholder THEN coalesce(u.edrpou, nullif(k.name_latn, '')) END
                    WHEN 'foreign_entity' THEN
                      CASE WHEN k.country_code !~ '^[A-Z]{2}$' THEN NULL
                           WHEN NOT k.placeholder AND coalesce(k.name_latn, '') <> '' THEN k.country_code || '|name:' || k.name_latn
@@ -357,9 +386,11 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
                    ELSE CASE WHEN NOT k.placeholder THEN nullif(k.name_latn, '') END
                  END AS ep_key,
                  u.edrpou IS NOT NULL AS by_name
-          FROM k LEFT JOIN graph_stage.uniq_name u ON k.ep = 'ua_org' AND NOT k.placeholder AND u.name_latn = k.name_latn
+          FROM k LEFT JOIN graph_stage.uniq_name u ON k.ep IN ('ua_org', 'ua_body') AND NOT k.placeholder AND u.name_latn = k.name_latn
         )
-        SELECT edrpou, 'founder', CASE WHEN ep = 'ua_org' THEN 'company' ELSE ep END, ep_key, name, first_seen, last_seen, src, ref, NULL,
+        SELECT edrpou, 'founder',
+               CASE WHEN ep = 'ua_org' THEN 'company' WHEN ep = 'ua_body' THEN CASE WHEN by_name THEN 'company' ELSE 'organisation' END ELSE ep END,
+               ep_key, name, first_seen, last_seen, src, ref, NULL,
                CASE WHEN ep = 'foreign_entity' AND length(fcode) >= 4 THEN fcode END,
                jsonb_strip_nulls(jsonb_build_object('contribution', contribution, 'contribution_uah', contribution_uah,
                  'country', country_code, 'resolved_by', CASE WHEN by_name THEN 'unique_name' END))
@@ -410,6 +441,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         FROM b WHERE coalesce(name_latn, '') <> '' AND NOT graph_stage.placeholder(name)`);
       await count('participation_rows', 'SELECT count(*) AS n FROM graph_stage.p_entry');
       await count('founder_resolved_by_name', `SELECT count(*) AS n FROM graph_stage.p_entry WHERE rel = 'founder' AND attrs ? 'resolved_by'`);
+      await count('founder_entries_to_organisation', `SELECT count(*) AS n FROM graph_stage.p_entry WHERE rel = 'founder' AND ep_kind = 'organisation'`);
       // LEXAI-2318: head / signer entries that name an organisation, by endpoint
       for (const r of (await c.query(`SELECT ep_kind || coalesce('_' || (attrs->>'resolved_by'), '') AS k, count(*) AS n,
           count(DISTINCT (ep_key, edrpou, rel)) AS rels
@@ -512,12 +544,14 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
                jsonb_build_object('gap', serial - prev_serial, 'day_registrations', day_n),
                NULL, NULL
         FROM l WHERE prev_code IS NOT NULL AND serial - prev_serial <= ${gap} AND day_n <= ${perDay}`);
+      // LEXAI-2321: officials of the Cypriot companies linked to foreign entities (graph.foreign_officer)
+      Object.assign(counts, await addForeignOfficerEdges(c));
       await count('edges', 'SELECT count(*) AS n FROM graph_stage.e_raw');
       for (const r of (await c.query('SELECT kind, count(*) AS n FROM graph_stage.e_raw GROUP BY kind ORDER BY kind')).rows) counts[`edges_${r.kind}`] = Number(r.n);
       counts.edges_current = Number((await one('SELECT count(*) AS n FROM graph_stage.e_raw WHERE valid_to IS NULL')).n);
       // intermediates are dropped as soon as they are used: the staging peak stays near the size of the graph
       await c.query(`DROP TABLE graph_stage.p_entry, graph_stage.cur_founder, graph_stage.cur_head, graph_stage.cur_beneficiary, graph_stage.addr_todo,
-        graph_stage.name_fix, graph_stage.text_fix`);
+        graph_stage.name_fix, graph_stage.text_fix, graph_stage.foreign_fix`);
     });
 
     // ------------------------------------------------------------ nodes with degree and hub flag
@@ -590,6 +624,8 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         counts[`hubs_${r.kind}`] = Number(r.hubs);
       }
       counts.mass_registration_addresses = Number((await one(`SELECT count(*) AS n FROM graph_stage.node WHERE kind = 'address' AND attrs ? 'mass_registration'`)).n);
+      // LEXAI-2321: links of the foreign entities to CY / ICIJ / Companies House (graph.foreign_ref)
+      Object.assign(counts, await applyForeignRefs(c, 'graph_stage'));
       await c.query('ALTER TABLE graph_stage.node ADD CONSTRAINT node_kind_key UNIQUE (kind, key)');
     });
 
@@ -610,6 +646,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
     });
     await timed('check_personal_ids', async () => {
       Object.assign(counts, await checkPersonalIds(c, 'graph_stage'));
+      Object.assign(counts, await checkPassportsAndDob(c, 'graph_stage'));
     });
     const size = await one(`SELECT pg_total_relation_size('graph_stage.node') AS n, pg_total_relation_size('graph_stage.edge') AS e`);
     counts.bytes_node = Number(size.n);

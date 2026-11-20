@@ -15,7 +15,10 @@
  * and --mass-address override them. Personal numbers (РНОКПП, passport series) are stripped from
  * names and text attributes (graph-norm/personal-ids.ts, LEXAI-2322); the build FAILS before the
  * swap if a 10-digit run is left in a node label / key or an edge attribute (builder.ts
- * checkPersonalIds, which also documents the same check as SQL for the live graph). Heavy queries: run off-peak, e.g. under
+ * checkPersonalIds, which also documents the same check as SQL for the live graph), or passport
+ * data / a date of birth in a node (graph/foreign-founders.ts checkPassportsAndDob, LEXAI-2321).
+ * Links to foreign registers come from graph.foreign_ref (run import-foreign-refs.js before the
+ * build; without migration 034 the build has none). Heavy queries: run off-peak, e.g. under
  * `nice` and with a statement timeout (default 3h per statement).
  *
  * Environment: POSTGRES_HOST / POSTGRES_PORT / POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB.
