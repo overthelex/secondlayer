@@ -1,21 +1,22 @@
 /**
  * Decision↔case citation graph (LEXAI-2314), read from Postgres.
  *
- * Source: case_citation_links (73.5M rows), built by
- * scripts/citation-graph/build-case-citation-links.sql from case_citation_edges, which
- * extract-citations.py fills with every "№ 123/456/18" it finds in a decision's text.
- *   from_doc_id     — the citing decision (ЄДРСР doc_id)
- *   to_case_number  — the cited case number exactly as the regex captured it
- *   adj_year        — the citing decision's year (Kyiv time), i.e. its edrsr_documents and
- *                     edrsr_fulltext partition, which the queries below use for pruning
+ * Source: case_citation_links, built by scripts/citation-graph/rebuild-case-graph-01-finalize.sql
+ * from case_citation_edges, which rebuild-case-edges.py / extract-citations.py fill with every
+ * "№ 761/9584/15-ц" found anywhere in a decision's text (case_numbers.py has the pattern).
+ *   from_doc_id      — the citing decision (ЄДРСР doc_id)
+ *   to_case_number   — resolved: the cited case's cause_num exactly as edrsr_case_index spells it;
+ *                      unresolved: the cited number normalized ("base" or "base-suffix", lowercase)
+ *   resolved         — the number (or its unique suffixed / bare counterpart) is a case in the index
+ *   is_self_citation — the citing decision belongs to the cited case (suffix-aware)
+ *   citation_context — the reference as written in the text, so it can be found again with strpos
+ *   adj_year         — the citing decision's year (Kyiv time), i.e. its edrsr_documents and
+ *                      edrsr_fulltext partition, which the queries below use for pruning
  *
  * Things measured on prod that shape this module:
- * - The extractor regex has no suffix group, so to_case_number is ALWAYS bare
- *   ("761/9584/15", never "761/9584/15-ц"); `resolved` is an exact join, so it is false for
- *   every suffixed case and `is_self_citation` misses them too. Lookups therefore go by the
- *   bare number and self-citations are excluded by the citing decision's own cause_num.
- * - citation_context holds only the matched "№ …" text (≤40 chars), so the context
- *   snippet is cut from the citing decision's full text instead.
+ * - Bare citations ("№ 761/9584/15") of a base number that several real cases share
+ *   ("…-ц" and "…-к") are left unresolved (unresolved_reason = ambiguous_suffix) rather than
+ *   attributed to either; asked about the bare number, both cases are answered together.
  * - A cited case is a case, not a decision: which decision of the cited case is meant is
  *   not recorded. For outgoing citations the top decision of the cited case (highest
  *   instance, final form first) stands in for it.
@@ -26,7 +27,7 @@
  *   ~1.4s to a 200ms query; they run in a read-only transaction with jit off.
  */
 import { logger } from '../utils/logger.js';
-import { causeNumRangeEnd, formatCourtDate, generateCaseNumberVariations } from './tool-utils.js';
+import { causeNumRangeEnd, formatCourtDate } from './tool-utils.js';
 
 /** How many most recent incoming citations are ranked by instance (all are counted). */
 export const CITED_BY_WINDOW = 10000;
@@ -39,9 +40,9 @@ const GRAND_CHAMBER = 9951;
 const SUPREME_COURT_CODES = new Set([9901, 9911, 9921, 9931, 9941, 9951]);
 
 export const COVERAGE_NOTE =
-  'Граф цитувань між справами побудовано у червні–липні 2026 р. за текстами рішень, ухвалених до травня 2026 р.: ' +
-  'пізніші рішення в ньому ще не враховано. Посилання розпізнано за номером справи у перших 10 000 символах тексту ' +
-  'рішення, тому цитування з дальших частин довгих рішень можуть бути відсутні.';
+  'Граф цитувань між справами перебудовано 20.11.2026 за повними текстами рішень ЄДРСР, наявних у корпусі на цю дату ' +
+  '(найновіші — від 13.11.2026): пізніші рішення в ньому ще не враховано. Посилання розпізнано за номером справи ' +
+  'з процесуальним суфіксом (наприклад, 761/9584/15-ц) у всьому тексті рішення.';
 
 const INSTANCE_LABELS: Record<number, string> = { 1: 'касаційна', 2: 'апеляційна', 3: 'перша' };
 const JUDGMENT_FORMS: Record<number, string> = {
@@ -80,18 +81,49 @@ export async function withCitationSession<T>(db: any, fn: (q: Query) => Promise<
   }
 }
 
-const SUFFIXED_RE = /^\d+\/\d+\/\d{2,4}-.+$/;
-const MODERN_RE = /^\d+\/\d+\/\d{2,4}$/;
+/** Suffixes kept by the extractor (case_numbers.py SUFFIXES), lowercased Cyrillic. */
+const SUFFIXES = new Set(['ц', 'к', 'п', 'а', 'г', 'е', 'ап', 'нр', 'б', 'н', 'на', 'зн', 'кр']);
+/** Latin look-alikes and the w/r/g/f layout typos for ц/к/п/а (case_numbers.py _SUFFIX_MAP). */
+const SUFFIX_MAP: Record<string, string> = {
+  a: 'а', e: 'е', k: 'к', c: 'с', o: 'о', p: 'р', x: 'х', h: 'н', w: 'ц', r: 'к', g: 'п', f: 'а',
+};
+const CASE_NUMBER_RE = /^(\d{1,4}\/\d{1,10}\/\d{2,4})(?:\s*[-\u2010-\u2015\u2212]\s*([A-Za-zА-Яа-яІіЇїЄєҐґ]{1,3}))?$/;
 
 /**
- * The spellings a citation of this case is stored under: the case number without its
- * procedural suffix, in both year spellings. Empty when the number has a shape the
- * extractor never captures (e.g. pre-2017 "5-15кс12" or "2а-2258/2011").
+ * The key a case number is stored under in case_citation_edges and matched by in the
+ * resolver: "base" or "base-suffix" with an ASCII hyphen and a lowercased Cyrillic suffix.
+ * Null for shapes the extractor never captures (e.g. pre-2017 "5-15кс12" or "2а-2258/2011")
+ * or for a suffix outside the measured set.
+ */
+export function normalizeCaseNumber(caseNumber: string): string | null {
+  const m = String(caseNumber || '').trim().match(CASE_NUMBER_RE);
+  if (!m) return null;
+  if (!m[2]) return m[1];
+  const suffix = [...m[2].toLowerCase()].map((ch) => SUFFIX_MAP[ch] ?? ch).join('');
+  return SUFFIXES.has(suffix) ? `${m[1]}-${suffix}` : null;
+}
+
+function baseOf(normalized: string): string {
+  return normalized.split('-')[0];
+}
+
+/** The same number in its other year spelling ("…/15" ↔ "…/2015"), suffix kept. */
+function yearVariants(normalized: string): string[] {
+  const m = normalized.match(/^(\d+\/\d+\/)(\d{2}|\d{4})(-.+)?$/);
+  if (!m) return [normalized];
+  const [, prefix, year, suffix = ''] = m;
+  const other = year.length === 2 ? `20${year}` : year.startsWith('20') ? year.slice(2) : null;
+  return other ? [normalized, `${prefix}${other}${suffix}`] : [normalized];
+}
+
+/**
+ * The normalized spellings a citation of this case can be stored under when it did not
+ * resolve: the number itself in both year spellings. Empty when the number has a shape the
+ * extractor never captures.
  */
 export function citationKeys(caseNumber: string): string[] {
-  const keys = generateCaseNumberVariations(String(caseNumber || '').trim())
-    .filter((v) => !SUFFIXED_RE.test(v) && MODERN_RE.test(v));
-  return [...new Set(keys)];
+  const n = normalizeCaseNumber(caseNumber);
+  return n ? [...new Set(yearVariants(n))] : [];
 }
 
 /** Real case numbers in edrsr_case_index that share one of these bare numbers. */
@@ -116,7 +148,7 @@ async function siblingCases(q: Query, bases: string[]): Promise<Map<string, Arra
           WHERE cause_num >= x.base AND cause_num < x.hi
             AND (cause_num = x.base OR cause_num LIKE x.base || '-%')
           ORDER BY member_count DESC NULLS LAST
-          LIMIT 4) s ON true`,
+          LIMIT 20) s ON true`,
     [lo, hi],
   );
   for (const r of rows) {
@@ -169,6 +201,7 @@ function decisionView(r: any) {
 
 export interface CitedByResult {
   case_number: string;
+  /** The to_case_number values looked up: the case's spellings in the index, plus its normalized form. */
   citation_keys: string[];
   /** Citing decisions outside the case itself, over the whole graph. */
   total_citing_decisions: number;
@@ -179,7 +212,42 @@ export interface CitedByResult {
     by_instance: { cassation: number; supreme_court: number; grand_chamber: number; appeal: number; first: number };
   };
   citing_decisions: any[];
+  /** Asked by a bare number that several real cases share: all of them, answered together. */
   same_number_cases?: string[];
+}
+
+/**
+ * Which edrsr_case_index spellings a citation of `caseNumber` is stored under, and whether
+ * the answer is the union of several real cases (a bare number shared by "…-ц" and "…-к").
+ */
+async function caseSpellings(q: Query, caseNumber: string): Promise<{ keys: string[]; sameNumber: string[] } | null> {
+  const norm = normalizeCaseNumber(caseNumber);
+  if (!norm) return null;
+  const variants = yearVariants(norm);
+  const siblings = await siblingCases(q, [...new Set(variants.map(baseOf))]);
+  const all = [...siblings.values()].flat().map((s) => s.cause_num);
+  const byNorm = new Map<string, string[]>();
+  for (const c of all) {
+    const n = normalizeCaseNumber(c);
+    if (!n) continue;
+    byNorm.set(n, [...(byNorm.get(n) ?? []), c]);
+  }
+  const exact = variants.flatMap((v) => byNorm.get(v) ?? []);
+  let spellings: string[];
+  let sameNumber: string[] = [];
+  if (exact.length > 0) {
+    spellings = exact;
+  } else if (norm === baseOf(norm) && byNorm.size > 0) {
+    // Bare number, stored only with suffixes: one case completes it, several are answered together.
+    spellings = [...byNorm.values()].flat();
+    if (byNorm.size > 1) sameNumber = [...byNorm.values()].map((v) => v[0]);
+  } else if (byNorm.size === 1 && [...byNorm.keys()][0] === baseOf(norm)) {
+    // Suffix typed, EDRSR keeps the case bare (the resolver drops it the same way).
+    spellings = [...byNorm.values()][0];
+  } else {
+    spellings = [];
+  }
+  return { keys: [...new Set([...spellings, ...variants, ...(sameNumber.length ? variants.map(baseOf) : [])])], sameNumber };
 }
 
 /** Which decisions cite the case (by number), highest instance first, newest first. */
@@ -188,23 +256,21 @@ export async function citedBy(
   caseNumber: string,
   opts: { limit: number; window?: number; withContext?: boolean; onlySupremeCourt?: boolean },
 ): Promise<CitedByResult | null> {
-  const keys = citationKeys(caseNumber);
-  if (keys.length === 0) return null;
+  const spell = await caseSpellings(q, caseNumber);
+  if (!spell) return null;
+  const { keys, sameNumber } = spell;
   const window = opts.window ?? CITED_BY_WINDOW;
-
-  const siblings = await siblingCases(q, keys);
-  const ownNumbers = [...new Set([...keys, caseNumber, ...[...siblings.values()].flat().map((s) => s.cause_num)])];
 
   const { rows } = await q(
     `WITH l AS MATERIALIZED (
-       SELECT from_doc_id, adj_year, to_case_number, count(*) OVER () AS total
+       SELECT from_doc_id, adj_year, to_case_number, citation_context, count(*) OVER () AS total
          FROM case_citation_links
         WHERE to_case_number = ANY($1::text[]) AND NOT is_self_citation AND adj_year IS NOT NULL
         ORDER BY from_doc_id + 0 DESC
         LIMIT $2
      ), j AS (
        SELECT d.doc_id, d.court_code, d.judgment_code, d.cause_num, d.adjudication_date,
-              l.adj_year, l.to_case_number, l.total, c.instance_code, c.name AS court_name
+              l.adj_year, l.to_case_number, l.citation_context, l.total, c.instance_code, c.name AS court_name
          FROM l
          JOIN edrsr_documents d ON d.doc_id = l.from_doc_id
           AND d.adjudication_date >= make_timestamptz(l.adj_year, 1, 1, 0, 0, 0, 'Europe/Kyiv')
@@ -222,31 +288,20 @@ export async function citedBy(
          FROM j
      )
      SELECT doc_id::text AS doc_id, court_code, judgment_code, cause_num, adjudication_date, adj_year,
-            to_case_number, instance_code, court_name, total::int, scanned::int,
+            to_case_number, citation_context, instance_code, court_name, total::int, scanned::int,
             n_cass::int, n_sc::int, n_gc::int, n_app::int, n_first::int
        FROM ranked
       WHERE NOT $6::boolean OR court_code = ANY($5::int[])
       ORDER BY instance_code NULLS LAST, (court_code = ${GRAND_CHAMBER}) DESC, adjudication_date DESC
       LIMIT $4`,
-    [keys, window, ownNumbers, opts.limit, [...SUPREME_COURT_CODES], Boolean(opts.onlySupremeCourt)],
-  );
-
-  // Self-citations of a suffixed case are not flagged in the table (exact match against
-  // the bare number), so they are part of `total`; count them to subtract.
-  const { rows: selfRows } = await q(
-    `SELECT count(*)::int AS n
-       FROM case_citation_links l
-      WHERE l.to_case_number = ANY($1::text[]) AND NOT l.is_self_citation
-        AND l.from_doc_id IN (SELECT doc_id FROM edrsr_documents WHERE cause_num = ANY($2::text[]))`,
-    [keys, ownNumbers],
+    [keys, window, keys, opts.limit, [...SUPREME_COURT_CODES], Boolean(opts.onlySupremeCourt)],
   );
 
   const first = rows[0];
   let total = first ? Number(first.total) : 0;
   let scanned = first ? Number(first.scanned) : 0;
   if (!first) {
-    // Nothing ranked (no citations, or only self-citations / no supreme-court ones): the total
-    // still has to come from somewhere.
+    // Nothing ranked (no citations, or no supreme-court ones): the total still has to come from somewhere.
     const { rows: t } = await q(
       `SELECT count(*)::int AS n FROM case_citation_links WHERE to_case_number = ANY($1::text[]) AND NOT is_self_citation`,
       [keys],
@@ -254,18 +309,16 @@ export async function citedBy(
     total = Number(t[0]?.n ?? 0);
     scanned = 0;
   }
-  total = Math.max(0, total - Number(selfRows[0]?.n ?? 0));
 
   let ctx = new Map<string, string>();
   if (opts.withContext !== false && rows.length > 0) {
     try {
-      ctx = await snippets(q, rows.map((r) => ({ doc_id: r.doc_id, adj_year: Number(r.adj_year), key: r.to_case_number })));
+      ctx = await snippets(q, rows.map((r) => ({ doc_id: r.doc_id, adj_year: Number(r.adj_year), key: snippetKey(r) })));
     } catch (error: any) {
       logger.warn('[case-citation-graph] context snippets failed (non-fatal)', { caseNumber, error: error?.message });
     }
   }
 
-  const sameNumber = [...siblings.values()].flat().map((s) => s.cause_num);
   return {
     case_number: caseNumber,
     citation_keys: keys,
@@ -283,11 +336,17 @@ export async function citedBy(
       },
     },
     citing_decisions: rows.map((r) => {
-      const snippet = ctx.get(`${r.doc_id}|${r.to_case_number}`);
+      const snippet = ctx.get(`${r.doc_id}|${snippetKey(r)}`);
       return { ...decisionView(r), ...(snippet ? { context: snippet } : {}) };
     }),
     ...(sameNumber.length > 1 ? { same_number_cases: sameNumber } : {}),
   };
+}
+
+/** What to look for in the citing text: the reference as written, else the stored number. */
+function snippetKey(r: { citation_context?: string | null; to_case_number: string }): string {
+  const c = String(r.citation_context ?? '').trim();
+  return c && !c.startsWith('№') ? c : r.to_case_number;
 }
 
 export interface CitesResult {
@@ -304,10 +363,13 @@ export async function cites(
   ownCaseNumber: string | null,
   opts: { limit: number; withContext?: boolean },
 ): Promise<CitesResult> {
-  const own = ownCaseNumber ? citationKeys(ownCaseNumber) : [];
+  const own = ownCaseNumber ? [...new Set([ownCaseNumber, ...citationKeys(ownCaseNumber)])] : [];
   const { rows: edges } = await q(
-    `SELECT l.to_case_number, count(*)::int AS n_docs, min(l.from_doc_id)::text AS sample_doc_id,
-            min(l.adj_year)::int AS sample_year, count(*) OVER ()::int AS total
+    `SELECT l.to_case_number, bool_or(l.resolved) AS resolved, count(*)::int AS n_docs,
+            (array_agg(l.from_doc_id::text ORDER BY l.from_doc_id))[1] AS sample_doc_id,
+            (array_agg(l.adj_year ORDER BY l.from_doc_id))[1]::int AS sample_year,
+            (array_agg(l.citation_context ORDER BY l.from_doc_id))[1] AS sample_context,
+            count(*) OVER ()::int AS total
        FROM case_citation_links l
       WHERE l.from_doc_id = ANY($1::bigint[]) AND NOT l.is_self_citation
         AND l.to_case_number <> ALL($2::text[])
@@ -319,11 +381,22 @@ export async function cites(
   const total = edges[0] ? Number(edges[0].total) : 0;
   if (edges.length === 0) return { documents_scanned: docIds.length, total_cited_cases: 0, cited_cases: [], truncated: false };
 
-  const siblings = await siblingCases(q, edges.map((e) => e.to_case_number));
-  const unique = new Map<string, any>();
-  for (const [base, list] of siblings) if (list.length === 1) unique.set(base, list[0]);
+  // Resolved edges carry the index spelling itself; unresolved bare ones may still have
+  // several candidate cases on their base, which are listed but not chosen between.
+  const resolvedNums = edges.filter((e) => e.resolved).map((e) => e.to_case_number);
+  const known = new Map<string, any>();
+  if (resolvedNums.length > 0) {
+    const { rows } = await q(
+      `SELECT cause_num, COALESCE(member_count, 0)::int AS member_count, first_date, last_date
+         FROM edrsr_case_index WHERE cause_num = ANY($1::text[])`,
+      [resolvedNums],
+    );
+    for (const r of rows) known.set(r.cause_num, { ...r, member_count: Number(r.member_count) });
+  }
+  const unresolvedBases = edges.filter((e) => !e.resolved).map((e) => baseOf(e.to_case_number));
+  const siblings = unresolvedBases.length > 0 ? await siblingCases(q, [...new Set(unresolvedBases)]) : new Map();
 
-  const resolved = [...unique.values()];
+  const resolved = [...known.values()];
   const top = new Map<string, any>();
   if (resolved.length > 0) {
     // first/last_date bound the case's documents, so each lookup touches its own partitions only.
@@ -345,8 +418,8 @@ export async function cites(
   }
 
   const items = edges.map((e) => {
-    const list = siblings.get(e.to_case_number) ?? [];
-    const match = list.length === 1 ? list[0] : null;
+    const match = e.resolved ? known.get(e.to_case_number) ?? null : null;
+    const candidates: any[] = e.resolved ? [] : siblings.get(baseOf(e.to_case_number)) ?? [];
     const best = match ? top.get(match.cause_num) : null;
     return {
       edge: e,
@@ -356,8 +429,8 @@ export async function cites(
       view: {
         cited_case_number: e.to_case_number,
         ...(match ? { case_number: match.cause_num, documents_in_case: match.member_count } : {}),
-        in_corpus: list.length > 0,
-        ...(list.length > 1 ? { candidate_cases: list.map((s) => s.cause_num) } : {}),
+        in_corpus: Boolean(match),
+        ...(candidates.length > 0 ? { candidate_cases: candidates.map((s) => s.cause_num) } : {}),
         cited_in_documents: e.n_docs,
         ...(best ? { top_decision: decisionView({ ...best, cause_num: match!.cause_num }) } : {}),
       } as any,
@@ -369,9 +442,10 @@ export async function cites(
 
   if (opts.withContext !== false && shown.length > 0) {
     try {
-      const ctx = await snippets(q, shown.map((s) => ({ doc_id: s.edge.sample_doc_id, adj_year: Number(s.edge.sample_year), key: s.edge.to_case_number })));
+      const keyOf = (e: any) => snippetKey({ citation_context: e.sample_context, to_case_number: e.to_case_number });
+      const ctx = await snippets(q, shown.map((s) => ({ doc_id: s.edge.sample_doc_id, adj_year: Number(s.edge.sample_year), key: keyOf(s.edge) })));
       for (const s of shown) {
-        const snippet = ctx.get(`${s.edge.sample_doc_id}|${s.edge.to_case_number}`);
+        const snippet = ctx.get(`${s.edge.sample_doc_id}|${keyOf(s.edge)}`);
         if (snippet) s.view.context = snippet;
       }
     } catch (error: any) {

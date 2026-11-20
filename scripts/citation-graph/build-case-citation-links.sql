@@ -1,3 +1,7 @@
+-- SUPERSEDED (LEXAI-2314, 2026-11-20): use rebuild-case-edges.py + rebuild-case-graph-01-finalize.sql
+-- + rebuild-case-graph-02-swap.sql (suffix-aware resolver, build into *_new, atomic swap).
+-- This script DROPs the live tables and resolves by exact join only; kept for history.
+--
 -- build-case-citation-links.sql  (LEXAI-1777, decision<->decision layer)
 --
 -- Resolves case_citation_edges.to_case_number  ->  edrsr_documents.cause_num (EXACT join).

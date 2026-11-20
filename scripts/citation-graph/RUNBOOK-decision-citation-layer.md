@@ -15,6 +15,46 @@ precedent (decision↔decision) layer on top of the existing legislation citatio
   and `check_precedent_status` are served from Postgres (`edrsr_case_index` / `case_citation_links`);
   Neo4j adds graph traversal.
 
+## Full rebuild with the fixed extractor (LEXAI-2314, 2026-11-20)
+
+The first build stored every cited number WITHOUT its procedural suffix (the regex had no
+suffix group), read only the first 10,000 characters, and took four-part proceeding numbers
+(«Провадження № 3/766/262/16») as case numbers. `case_numbers.py` is the fixed pattern
+(unit tests: `python3 test_case_number_extraction.py`); both `extract-citations.py` and the
+rebuild runner below use it. Semantics after the rebuild:
+
+- `case_citation_edges.to_case_number` — the cited number normalized: `base` or `base-suffix`
+  (ASCII hyphen, lowercased Cyrillic suffix; Latin look-alikes and dash variants folded).
+- `case_citation_links.to_case_number` — when `resolved`, the cited case's `cause_num` exactly as
+  `edrsr_case_index` spells it (so `= cause_num` joins work); otherwise the normalized number.
+  `match_method` = exact | normalized | suffix_completed (bare citation, one suffixed case on that
+  base) | suffix_dropped (suffix cited, EDRSR keeps the case bare). A bare citation of a base that
+  several cases share stays unresolved (`unresolved_reason = ambiguous_suffix`), never merged.
+- `is_self_citation` is suffix-aware; `citation_context` is the reference as written (findable
+  with `strpos` in `edrsr_fulltext.full_text`).
+
+Run on cthulhu (prod), in tmux, from a directory holding the four files
+(`case_numbers.py rebuild-case-edges.py rebuild-case-graph-0{1,2}-*.sql`) and with
+`DATABASE_URL` set from `deployment/.env.local`:
+
+```bash
+# 1. extract into UNLOGGED cce_rebuild_bulk; progress per heap-block chunk in cce_rebuild_progress.
+#    Restart = rerun the same command (done chunks are skipped, nothing is duplicated).
+nice -n 10 ionice -c2 -n7 python3 rebuild-case-edges.py --partitions 2023-2026 --workers 5        # NVMe
+nice -n 10 ionice -c2 -n7 python3 rebuild-case-edges.py --partitions 2005-2022,pre2005,future --workers 4  # HDD
+python3 rebuild-case-edges.py --status
+# 2. build edrsr_case_index_new / case_citation_edges_new / case_citation_links_new (live tables untouched)
+docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -f - < rebuild-case-graph-01-finalize.sql
+# 3. swap in one transaction (lock_timeout 3s; rerun on timeout); live -> *_old
+docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local -f - < rebuild-case-graph-02-swap.sql
+```
+
+`*_old` tables are kept for rollback (reverse renames) until dropped by hand. The staging tables
+`cce_rebuild_bulk` / `cce_rebuild_progress` can be dropped after the swap. Merge the reader
+change (mcp_backend `case-citation-graph.ts`) only after the swap: it expects the new semantics.
+The Neo4j case layer below was NOT reloaded by this rebuild (additive MERGE would keep the old
+bare-number edges); see the follow-up task.
+
 ## Pipeline
 
 ### 1. Build the Postgres resolution layer (on PROD)
