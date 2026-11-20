@@ -1,32 +1,32 @@
 /**
- * CitationGraphService
+ * CitationGraphService — the EDRSR citation graph, served from Postgres (LEXAI-2323).
  *
- * Neo4j-backed citation graph for EDRSR court decisions.
+ * Until November 2026 this class talked to a Neo4j store (neo4j-citation, 156 GB). Every
+ * layer it read now lives in Postgres, in the same database as the EDRSR corpus:
  *
- * Graph model (loaded via neo4j-admin import, see LEXAI-1770).
- * Schema as actually loaded by the Brev rebuild:
- *   (:Decision {doc_id})-[:CITES_ARTICLE {citation_type, citation_context}]->(:Article)
- *   (:Article {art_id, law_number, law_article, total_citations, unique_decisions})-[:OF_LAW]->(:Law {law_number})
- *   (:Decision)-[:CITES_CASE]->(:Case {cause_num, member_count, latest_doc_id, cited_by_count})
- * Case.cited_by_count is the materialized inbound CITES_CASE degree, written by the
- * loader (scripts/citation-graph/backfill-case-cited-by-count.cypher) and only present
- * on cases with at least one inbound edge — read it via coalesce(..., 0), never by
- * counting the edges at query time.
- * The human-readable law name comes from (:Law).law_number, reached via the OF_LAW hop.
- * That property is overloaded: usually a title ("Господарський процесуальний кодекс
- * України"), sometimes a bare date or a "№1961 від 01.07.2004" form — so it is a
- * display value, not a canonical key.
- * (COCITED was dropped in the rebuild; getCocitedArticles degrades to empty.)
+ *   decision -> article     decision_statute_citations (+ statute_article_stats for the
+ *                           old (:Article {total_citations, unique_decisions}) properties)
+ *   decision -> case        case_citation_links (resolved, suffix-aware; LEXAI-2314)
+ *                           + case_citation_counts (the old Case.cited_by_count)
+ *   case dimension          edrsr_case_index (member_count, latest_doc_id)
+ *   instance status         decision_supersession / decision_dissent / decision_instance_status
+ *                           (the old SUPERSEDED_BY / HAS_DISSENT / Decision.status, LEXAI-1861)
+ *   Grand Chamber departure case_position_departures (the old DEPARTS_FROM, LEXAI-1779)
  *
- * Gated behind the CITATION_BACKEND feature flag (postgres | neo4j). When set to
- * `neo4j`, isEnabled() returns true and the driver connects to NEO4J_URI. The
- * Postgres path (CitationValidator / @secondlayer/core) remains the default.
+ * The method names and result shapes are the ones the Neo4j version had, so callers did
+ * not change beyond the `backend` label. Two Neo4j-era behaviours are kept on purpose:
+ * - Articles cited by fewer than MIN_ARTICLE_DECISIONS distinct decisions are left out of
+ *   summaries and graphs: the Neo4j build dropped them as noise (raw law_number values are
+ *   often fragments of decision text), and the raw rows stay in decision_statute_citations.
+ * - Depth 2 used to add COCITED edges; that layer was never loaded (0 edges), so depth is
+ *   accepted and ignored rather than faked.
  *
- * Thin graph: only ids + edge metadata live here; fulltext/vectors stay in
- * Postgres/Qdrant and are joined back by doc_id.
+ * isEnabled() no longer depends on CITATION_BACKEND: the service is on whenever its tables
+ * exist in the database it is given (checked once, lazily), and off otherwise, so a
+ * deployment without them (lawrider.*) degrades exactly as before. CITATION_BACKEND=off
+ * still switches it off.
  */
 
-import neo4j, { type Driver } from 'neo4j-driver';
 import { logger } from '../utils/logger.js';
 
 export interface ArticleCitation {
@@ -34,12 +34,6 @@ export interface ArticleCitation {
   article: string;
   citationType?: string | null;
   context?: string | null;
-}
-
-export interface CocitedArticle {
-  law: string;
-  article: string;
-  weight: number;
 }
 
 export interface CitedArticleStat {
@@ -53,43 +47,36 @@ export interface CitedArticleRef {
   law: string;
   article: string;
   citationType?: string | null;
-  /** How often this cited article is referenced corpus-wide (node stat) — a cheap authority signal. */
+  /** How often this cited article is referenced corpus-wide — a cheap authority signal. */
   popularity: number;
 }
 
 export interface DecisionCitationSummary {
-  /** Total CITES_ARTICLE edges out of this decision. */
+  /** Statute-article citations of this decision (noise-filtered, see MIN_ARTICLE_DECISIONS). */
   citedCount: number;
   /** Top cited articles, ordered by corpus-wide popularity (most authoritative first). */
   topCitedArticles: CitedArticleRef[];
 }
 
-/** Precedent stats for a case from the decision↔case layer (LEXAI-1777). */
+/** Precedent stats for a case from the decision↔case layer. */
 export interface CaseStat {
   causeNum: string;
-  /** How many decisions cite this case (precedent weight / in-degree). */
+  /** How many decisions cite this case (resolved, not self-citations). */
   citingDecisions: number;
-  /** Number of documents in the case across instances (Case.member_count). */
+  /** Number of documents in the case across instances. */
   memberCount: number;
-  /** Most recent document of the case (Case.latest_doc_id); null if unknown. */
+  /** Most recent document of the case; null if unknown. */
   latestDocId: string | null;
-  /**
-   * If the legal position of this case was formally departed from by the Grand
-   * Chamber (DEPARTS_FROM edge, LEXAI-1779) — doc_id of the latest departing
-   * decision and its date. null when the position has not been departed from.
-   */
+  /** Latest Grand Chamber decision that departed from this case's legal position, and when. */
   departedByDecision: string | null;
   departedOn: string | null;
 }
 
-/**
- * Instance-status layer (LEXAI-1861): whether a specific decision was overruled/modified
- * by a higher court, or is a dissent (окрема думка).
- */
+/** Whether a specific decision was overruled/modified by a higher court, or is a dissent. */
 export interface DecisionSupersession {
-  /** Decision.status: 'overruled' | 'dissent' | null (null = no mark = good law / not covered). */
+  /** 'overruled' | 'dissent' | null (null = no mark = good law / not covered). */
   status: string | null;
-  /** The higher-court decision that reversed/modified it, via SUPERSEDED_BY; null if none. */
+  /** The higher-court decision that reversed/modified it; null if none. */
   supersededBy: { docId: string; disposition: string | null; on: string | null } | null;
 }
 
@@ -109,7 +96,7 @@ export interface CitationGraphNode {
 export interface CitationGraphEdge {
   from: string;
   to: string;
-  type: 'CITES_ARTICLE' | 'OF_LAW' | 'COCITED';
+  type: 'CITES_ARTICLE' | 'OF_LAW';
   weight?: number;
 }
 
@@ -123,318 +110,287 @@ export interface CitationGraphResult {
 export interface CitationGraphHealth {
   ok: boolean;
   enabled: boolean;
-  uri: string;
+  backend: 'postgres';
   error?: string;
   counts?: Record<string, number>;
 }
 
-/** Convert a neo4j Integer | bigint | number to a JS number safely. */
+/** Articles cited by fewer distinct decisions are noise (the Neo4j build's min_dec=5). */
+export const MIN_ARTICLE_DECISIONS = 5;
+
+/** Tables the service needs; all must exist for it to switch on. */
+const REQUIRED_TABLES = [
+  'decision_statute_citations',
+  'statute_article_stats',
+  'decision_supersession',
+  'decision_instance_status',
+  'case_position_departures',
+  'case_citation_counts',
+  'case_citation_links',
+  'edrsr_case_index',
+];
+
+type Queryable = { query: (sql: string, params?: any[]) => Promise<{ rows: any[] }> };
+
 function toNum(v: any): number {
   if (v == null) return 0;
-  if (typeof v === 'number') return v;
-  if (typeof v === 'bigint') return Number(v);
-  if (neo4j.isInt(v)) return (v as any).toNumber();
   const n = Number(v);
   return Number.isNaN(n) ? 0 : n;
 }
 
+function iso(v: any): string | null {
+  if (v == null) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? String(v) : d.toISOString();
+}
+
 export class CitationGraphService {
-  private driver: Driver | null = null;
-  private readonly uri: string;
-  private readonly user: string;
-  private readonly password: string;
-  private readonly database: string;
-  private readonly enabled: boolean;
+  private db: Queryable | null;
+  private readonly disabledByEnv: boolean;
+  private ready: Promise<boolean> | null = null;
+  /** Result of the table check: null until it has run. */
+  private known: boolean | null = null;
 
-  constructor() {
-    this.uri = process.env.NEO4J_URI || 'bolt://localhost:7687';
-    this.user = process.env.NEO4J_USER || 'neo4j';
-    this.password = process.env.NEO4J_PASSWORD || '';
-    this.database = process.env.NEO4J_DATABASE || 'neo4j';
-    this.enabled = (process.env.CITATION_BACKEND || 'postgres').toLowerCase() === 'neo4j';
+  constructor(db?: Queryable | null) {
+    this.db = db ?? null;
+    this.disabledByEnv = (process.env.CITATION_BACKEND || '').toLowerCase() === 'off';
   }
 
-  /** True when CITATION_BACKEND=neo4j. Callers fall back to the Postgres path otherwise. */
+  /** Point the service at the pool holding the EDRSR corpus (see edrsrPool in tool-utils). */
+  setDatabase(db: Queryable | null | undefined): void {
+    if (db && db !== this.db) {
+      this.db = db;
+      this.ready = null;
+      this.known = null;
+    }
+  }
+
+  /**
+   * True when the graph can answer. Synchronous for the callers' guards: it reports the
+   * last known state and starts the one-off table check; the first call before that check
+   * completes answers true, and a query against a missing table then fails non-fatally in
+   * the caller, after which isEnabled() turns false.
+   */
   isEnabled(): boolean {
-    return this.enabled;
+    if (this.disabledByEnv || !this.db) return false;
+    if (this.known === false) return false;
+    void this.ensureReady();
+    return true;
   }
 
-  private getDriver(): Driver {
-    if (!this.driver) {
-      this.driver = neo4j.driver(
-        this.uri,
-        neo4j.auth.basic(this.user, this.password),
-        {
-          maxConnectionPoolSize: 20,
-          connectionAcquisitionTimeout: 15_000,
-          maxTransactionRetryTime: 10_000,
+  private ensureReady(): Promise<boolean> {
+    if (!this.ready) {
+      this.ready = (async () => {
+        try {
+          const { rows } = await this.db!.query(
+            `SELECT count(*)::int AS n FROM unnest($1::text[]) t WHERE to_regclass('public.' || t) IS NOT NULL`,
+            [REQUIRED_TABLES],
+          );
+          this.known = Number(rows[0]?.n) === REQUIRED_TABLES.length;
+          if (!this.known) logger.warn('[CitationGraphService] citation-graph tables missing; graph disabled');
+        } catch (error: any) {
+          logger.warn('[CitationGraphService] table check failed; graph disabled', { error: error?.message });
+          this.known = false;
         }
-      );
-      logger.info('[CitationGraphService] Neo4j driver initialized', { uri: this.uri, database: this.database });
+        return this.known;
+      })();
     }
-    return this.driver;
+    return this.ready;
   }
 
-  private async run<T>(cypher: string, params: Record<string, any>, map: (record: any) => T): Promise<T[]> {
-    const session = this.getDriver().session({ database: this.database, defaultAccessMode: neo4j.session.READ });
-    try {
-      const result = await session.run(cypher, params);
-      return result.records.map(map);
-    } finally {
-      await session.close();
-    }
+  private async q(sql: string, params: any[] = []): Promise<any[]> {
+    if (!this.db) throw new Error('citation graph database is not configured');
+    const { rows } = await this.db.query(sql, params);
+    return rows;
   }
 
-  /** Connectivity + node-label counts. Cheap (uses count-store). */
+  /** Connectivity + table sizes (planner estimates, no scans). */
   async healthCheck(): Promise<CitationGraphHealth> {
-    const base = { enabled: this.enabled, uri: this.uri };
+    const base = { enabled: this.isEnabled(), backend: 'postgres' as const };
     try {
-      const rows = await this.run(
-        'MATCH (n) RETURN labels(n)[0] AS label, count(*) AS c',
-        {},
-        (r) => ({ label: r.get('label') as string | null, c: toNum(r.get('c')) })
+      const rows = await this.q(
+        `SELECT c.relname, greatest(c.reltuples, 0)::bigint AS n
+           FROM pg_class c WHERE c.relkind IN ('r', 'p') AND c.relname = ANY($1::text[])`,
+        [REQUIRED_TABLES],
       );
       const counts: Record<string, number> = {};
-      for (const row of rows) if (row.label) counts[row.label] = row.c;
-      return { ...base, ok: true, counts };
+      for (const r of rows) counts[r.relname] = toNum(r.n);
+      return { ...base, ok: (await this.ensureReady()) === true, counts };
     } catch (error: any) {
       logger.error('[CitationGraphService] healthCheck failed', { error: error?.message });
       return { ...base, ok: false, error: error?.message };
     }
   }
 
-  /** Articles cited by a given decision (Decision -> Article). */
+  /** Articles cited by a given decision, most popular first (noise-filtered). */
   async getDecisionCitations(docId: string | number, limit = 200): Promise<ArticleCitation[]> {
-    return this.run(
-      `MATCH (d:Decision {doc_id: $docId})-[c:CITES_ARTICLE]->(a:Article)-[:OF_LAW]->(l:Law)
-       RETURN l.law_number AS law, a.law_article AS article,
-              c.citation_type AS ct, c.citation_context AS ctx
-       LIMIT $limit`,
-      { docId: String(docId), limit: neo4j.int(limit) },
-      (r) => ({
-        law: r.get('law'),
-        article: r.get('article'),
-        citationType: r.get('ct'),
-        context: r.get('ctx'),
-      })
+    const rows = await this.q(
+      `SELECT c.law_number AS law, c.law_article AS article, c.citation_type AS ct
+         FROM decision_statute_citations c
+         JOIN statute_article_stats s USING (law_number, law_article)
+        WHERE c.doc_id = $1::bigint AND s.unique_decisions >= $3
+        ORDER BY s.total_citations DESC, c.law_number, c.law_article
+        LIMIT $2`,
+      [String(docId), limit, MIN_ARTICLE_DECISIONS],
     );
+    return rows.map((r) => ({ law: r.law, article: r.article, citationType: r.ct, context: null }));
   }
 
-  /**
-   * Compact citation summary for a single decision — what articles it cites, with a
-   * corpus-wide popularity (authority) signal, plus the total citation count.
-   * Intended as inline enrichment for get_court_decision (Decision->Article path only,
-   * which is fully loaded today; decision<->decision is a future layer).
-   */
+  /** What a decision cites, with corpus-wide popularity, for get_court_decision. */
   async getDecisionCitationSummary(docId: string | number, limit = 20): Promise<DecisionCitationSummary> {
-    const id = String(docId);
-    const [articles, countRows] = await Promise.all([
-      this.run(
-        `MATCH (d:Decision {doc_id: $docId})-[c:CITES_ARTICLE]->(a:Article)-[:OF_LAW]->(l:Law)
-         RETURN l.law_number AS law, a.law_article AS article,
-                c.citation_type AS ct, a.total_citations AS pop
-         ORDER BY coalesce(a.total_citations, 0) DESC
-         LIMIT $limit`,
-        { docId: id, limit: neo4j.int(limit) },
-        (r) => ({
-          law: r.get('law'),
-          article: r.get('article'),
-          citationType: r.get('ct'),
-          popularity: toNum(r.get('pop')),
-        })
-      ),
-      this.run(
-        `MATCH (:Decision {doc_id: $docId})-[c:CITES_ARTICLE]->() RETURN count(c) AS c`,
-        { docId: id },
-        (r) => toNum(r.get('c'))
-      ),
-    ]);
-    return { citedCount: countRows[0] ?? 0, topCitedArticles: articles };
-  }
-
-  /** Decisions that cite a given article (Article <- Decision), plus total count. */
-  async getArticleCitedBy(
-    law: string,
-    article: string,
-    limit = 100
-  ): Promise<{ count: number; decisions: string[] }> {
-    const [decisions, countRows] = await Promise.all([
-      this.run(
-        `MATCH (:Law {law_number: $law})<-[:OF_LAW]-(a:Article {law_article: $article})<-[:CITES_ARTICLE]-(d:Decision)
-         RETURN d.doc_id AS docId LIMIT $limit`,
-        { law, article, limit: neo4j.int(limit) },
-        (r) => r.get('docId') as string
-      ),
-      this.run(
-        `MATCH (:Law {law_number: $law})<-[:OF_LAW]-(a:Article {law_article: $article})<-[c:CITES_ARTICLE]-()
-         RETURN count(c) AS c`,
-        { law, article },
-        (r) => toNum(r.get('c'))
-      ),
-    ]);
-    return { count: countRows[0] ?? 0, decisions };
-  }
-
-  /** Precomputed citation stats for an article (from the Article node). */
-  async getArticleStats(law: string, article: string): Promise<CitedArticleStat | null> {
-    const rows = await this.run(
-      `MATCH (l:Law {law_number: $law})<-[:OF_LAW]-(a:Article {law_article: $article})
-       RETURN l.law_number AS law, a.law_article AS article,
-              a.total_citations AS tc, a.unique_decisions AS ud
-       LIMIT 1`,
-      { law, article },
-      (r) => ({
-        law: r.get('law'),
-        article: r.get('article'),
-        totalCitations: toNum(r.get('tc')),
-        uniqueDecisions: toNum(r.get('ud')),
-      })
+    const rows = await this.q(
+      `SELECT c.law_number AS law, c.law_article AS article, c.citation_type AS ct,
+              s.total_citations AS pop, count(*) OVER () AS total
+         FROM decision_statute_citations c
+         JOIN statute_article_stats s USING (law_number, law_article)
+        WHERE c.doc_id = $1::bigint AND s.unique_decisions >= $3
+        ORDER BY s.total_citations DESC, c.law_number, c.law_article
+        LIMIT $2`,
+      [String(docId), limit, MIN_ARTICLE_DECISIONS],
     );
-    return rows[0] ?? null;
+    return {
+      citedCount: rows[0] ? toNum(rows[0].total) : 0,
+      topCitedArticles: rows.map((r) => ({ law: r.law, article: r.article, citationType: r.ct, popularity: toNum(r.pop) })),
+    };
+  }
+
+  /** Decisions that cite a given article, plus the total count (from the stats row). */
+  async getArticleCitedBy(law: string, article: string, limit = 100): Promise<{ count: number; decisions: string[] }> {
+    const [stat, rows] = await Promise.all([
+      this.getArticleStats(law, article),
+      this.q(
+        `SELECT doc_id::text AS doc_id FROM decision_statute_citations
+          WHERE law_number = $1 AND law_article = $2 LIMIT $3`,
+        [law, article, limit],
+      ),
+    ]);
+    return { count: stat?.totalCitations ?? 0, decisions: rows.map((r) => r.doc_id) };
+  }
+
+  /** Precomputed citation stats for an article. */
+  async getArticleStats(law: string, article: string): Promise<CitedArticleStat | null> {
+    const rows = await this.q(
+      `SELECT law_number, law_article, total_citations, unique_decisions
+         FROM statute_article_stats WHERE law_number = $1 AND law_article = $2`,
+      [law, article],
+    );
+    const r = rows[0];
+    return r
+      ? { law: r.law_number, article: r.law_article, totalCitations: toNum(r.total_citations), uniqueDecisions: toNum(r.unique_decisions) }
+      : null;
   }
 
   /**
-   * Precedent stats for a case (decision↔case layer, LEXAI-1777). Accepts the
-   * case-number variations and picks the most-cited matching Case node. Returns
-   * how many decisions cite the case + how many documents the case spans.
-   *
-   * `citing` reads the materialized Case.cited_by_count, it does NOT count the
-   * inbound edges at query time. The store is ~168G against a 12G page cache, so
-   * a live `COUNT { (c)<-[:CITES_CASE]-() }` on a hot case degenerates into tens
-   * of thousands of random disk reads (measured up to 97s). The property is
-   * maintained by the case-layer loader; see
-   * scripts/citation-graph/backfill-case-cited-by-count.cypher.
-   * coalesce() because the loader only writes the property on cases that have at
-   * least one inbound precedent edge — an absent property means zero.
+   * Precedent stats for a case. Accepts case-number variations and picks the most-cited
+   * case among them; adds the latest Grand Chamber departure from its legal position.
    */
   async getCaseStats(causeNums: string[]): Promise<CaseStat | null> {
     if (!causeNums || causeNums.length === 0) return null;
-    const rows = await this.run(
-      `MATCH (c:Case) WHERE c.cause_num IN $cns
-       WITH c, coalesce(c.cited_by_count, 0) AS citing
-       ORDER BY citing DESC LIMIT 1
-       OPTIONAL MATCH (c)<-[df:DEPARTS_FROM]-(gc:Decision)
-       WITH c, citing, gc, df ORDER BY df.departed_on DESC
-       RETURN c.cause_num AS cn, c.member_count AS mc, c.latest_doc_id AS ld, citing,
-              head(collect(gc.doc_id)) AS depBy, head(collect(df.departed_on)) AS depOn`,
-      { cns: causeNums },
-      (r) => ({
-        causeNum: r.get('cn'),
-        citingDecisions: toNum(r.get('citing')),
-        memberCount: toNum(r.get('mc')),
-        latestDocId: r.get('ld') != null ? String(toNum(r.get('ld'))) : null,
-        departedByDecision: r.get('depBy') != null ? String(r.get('depBy')) : null,
-        departedOn: r.get('depOn') != null ? String(r.get('depOn')) : null,
-      })
+    const rows = await this.q(
+      `WITH c AS (
+         SELECT i.cause_num, COALESCE(i.member_count, 0) AS member_count, i.latest_doc_id,
+                COALESCE(n.citing_decisions, 0) AS citing
+           FROM edrsr_case_index i
+           LEFT JOIN case_citation_counts n ON n.cause_num = i.cause_num
+          WHERE i.cause_num = ANY($1::text[])
+          ORDER BY citing DESC, member_count DESC
+          LIMIT 1
+       )
+       SELECT c.*, d.departing_doc_id::text AS dep_by, d.departed_on AS dep_on
+         FROM c
+         LEFT JOIN LATERAL (
+           SELECT departing_doc_id, departed_on FROM case_position_departures
+            WHERE departed_cause_num = c.cause_num
+            ORDER BY departed_on DESC NULLS LAST LIMIT 1) d ON true`,
+      [causeNums],
     );
-    return rows[0] ?? null;
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      causeNum: r.cause_num,
+      citingDecisions: toNum(r.citing),
+      memberCount: toNum(r.member_count),
+      latestDocId: r.latest_doc_id != null ? String(r.latest_doc_id) : null,
+      departedByDecision: r.dep_by ?? null,
+      departedOn: iso(r.dep_on),
+    };
   }
 
   /**
-   * Instance-status (LEXAI-1861): whether a specific decision was overruled/modified by a
-   * higher court (SUPERSEDED_BY) or is a dissent. Returns null when the doc_id is not a
-   * node in the graph; {status:null, supersededBy:null} when it exists but carries no mark.
+   * Whether a specific decision was overruled/modified by a higher court, or is a dissent.
+   * {status: null, supersededBy: null} when it carries no mark.
    */
   async getDecisionSupersession(docId: string | number): Promise<DecisionSupersession | null> {
-    const rows = await this.run(
-      `MATCH (d:Decision {doc_id: $docId})
-       OPTIONAL MATCH (d)-[r:SUPERSEDED_BY]->(s:Decision)
-       RETURN d.status AS status,
-              head(collect(CASE WHEN s IS NULL THEN null
-                ELSE {docId: s.doc_id, disposition: r.disposition, on: r.reversed_date} END)) AS sup`,
-      { docId: String(docId) },
-      (r) => {
-        const sup = r.get('sup');
-        return {
-          status: r.get('status') != null ? String(r.get('status')) : null,
-          supersededBy: sup
-            ? {
-                docId: String(sup.docId),
-                disposition: sup.disposition != null ? String(sup.disposition) : null,
-                on: sup.on != null ? String(sup.on) : null,
-              }
-            : null,
-        };
-      }
+    const rows = await this.q(
+      `SELECT (SELECT status FROM decision_instance_status WHERE doc_id = $1::bigint) AS status,
+              s.superseded_by_doc_id::text AS by_doc, s.disposition, s.reversed_date
+         FROM (SELECT 1) one
+         LEFT JOIN LATERAL (
+           SELECT superseded_by_doc_id, disposition, reversed_date FROM decision_supersession
+            WHERE doc_id = $1::bigint ORDER BY reversed_date DESC NULLS LAST LIMIT 1) s ON true`,
+      [String(docId)],
     );
-    return rows[0] ?? null;
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      status: r.status ?? null,
+      supersededBy: r.by_doc
+        ? { docId: r.by_doc, disposition: r.disposition ?? null, on: iso(r.reversed_date) }
+        : null,
+    };
   }
 
   /**
    * The decision of a case to draw the article graph for, when the caller gave a case
-   * number rather than a doc_id. A case is many documents (ухвали about the hearing,
-   * the рішення, the постанова of each instance) and most of them cite nothing: for
-   * 200/2129/24 the newest document was a КАС ухвала with no edges while the постанова
-   * had five, so "latest by date" answered an empty graph for a case the graph covers.
-   * Picks the member with the most CITES_ARTICLE edges, newest doc_id on a tie; null
-   * when the case is not in the graph at all (caller falls back to Postgres).
+   * number: the member with the most article citations, newest doc_id on a tie (a case's
+   * newest document is often an ухвала that cites nothing). Null when the case is unknown.
    */
   async resolveCaseDocId(causeNum: string): Promise<string | null> {
-    const rows = await this.run(
-      `MATCH (c:Case {cause_num: $cn})<-[:IN_CASE]-(d:Decision)
-       OPTIONAL MATCH (d)-[r:CITES_ARTICLE]->(:Article)
-       WITH d, count(r) AS edges
-       RETURN d.doc_id AS docId, edges
-       ORDER BY edges DESC, toInteger(d.doc_id) DESC
-       LIMIT 1`,
-      { cn: causeNum },
-      (r) => ({ docId: String(r.get('docId')), edges: toNum(r.get('edges')) })
+    const rows = await this.q(
+      `SELECT d.doc_id::text AS doc_id,
+              (SELECT count(*) FROM decision_statute_citations c WHERE c.doc_id = d.doc_id) AS edges
+         FROM edrsr_documents d
+        WHERE d.cause_num = $1
+        ORDER BY edges DESC, d.doc_id DESC
+        LIMIT 1`,
+      [causeNum],
     );
-    return rows[0]?.docId ?? null;
+    return rows[0]?.doc_id ?? null;
   }
 
-  /** Decisions that cite a given case (precedent inbound). */
+  /** Decisions that cite a given case (newest first). */
   async getCaseCitedBy(causeNum: string, limit = 100): Promise<string[]> {
-    return this.run(
-      `MATCH (c:Case {cause_num: $cn})<-[:CITES_CASE]-(d:Decision)
-       RETURN d.doc_id AS docId LIMIT $limit`,
-      { cn: causeNum, limit: neo4j.int(limit) },
-      (r) => r.get('docId') as string
+    const rows = await this.q(
+      `SELECT from_doc_id::text AS doc_id FROM case_citation_links
+        WHERE to_case_number = $1 AND resolved AND NOT is_self_citation
+        ORDER BY from_doc_id DESC LIMIT $2`,
+      [causeNum, limit],
     );
+    return rows.map((r) => r.doc_id);
   }
 
-  /** Cases that a given decision cites (precedent outbound). */
+  /** Cases that a given decision cites. */
   async getDecisionCitedCases(docId: string | number, limit = 100): Promise<CitedCaseRef[]> {
-    return this.run(
-      `MATCH (:Decision {doc_id: $docId})-[:CITES_CASE]->(c:Case)
-       RETURN c.cause_num AS cn, c.member_count AS mc, c.latest_doc_id AS ld LIMIT $limit`,
-      { docId: String(docId), limit: neo4j.int(limit) },
-      (r) => ({
-        causeNum: r.get('cn'),
-        memberCount: toNum(r.get('mc')),
-        latestDocId: r.get('ld') != null ? String(toNum(r.get('ld'))) : null,
-      })
+    const rows = await this.q(
+      `SELECT DISTINCT ON (l.to_case_number) l.to_case_number AS cause_num,
+              COALESCE(i.member_count, 0) AS member_count, i.latest_doc_id::text AS latest
+         FROM case_citation_links l
+         LEFT JOIN edrsr_case_index i ON i.cause_num = l.to_case_number
+        WHERE l.from_doc_id = $1::bigint AND l.resolved AND NOT l.is_self_citation
+        ORDER BY l.to_case_number LIMIT $2`,
+      [String(docId), limit],
     );
+    return rows.map((r) => ({ causeNum: r.cause_num, memberCount: toNum(r.member_count), latestDocId: r.latest ?? null }));
   }
 
   /**
-   * Articles co-cited alongside a given article, by descending weight.
-   * NOTE: the resolved id-keyed rebuild dropped the COCITED layer, so this
-   * currently returns nothing. The query is kept schema-correct so it lights up
-   * automatically if a co-citation layer is loaded again. Callers must tolerate
-   * an empty result (getCitationGraph depth>=2 simply adds no co-citation edges).
+   * Bounded decision -> article -> law neighbourhood for visualisation. `depth` is accepted
+   * for compatibility: the co-citation layer it used to add was never loaded.
    */
-  async getCocitedArticles(law: string, article: string, limit = 20): Promise<CocitedArticle[]> {
-    return this.run(
-      `MATCH (:Law {law_number: $law})<-[:OF_LAW]-(a:Article {law_article: $article})-[co:COCITED]-(b:Article)-[:OF_LAW]->(bl:Law)
-       RETURN bl.law_number AS law, b.law_article AS article, co.weight AS weight
-       ORDER BY co.weight DESC
-       LIMIT $limit`,
-      { law, article, limit: neo4j.int(limit) },
-      (r) => ({ law: r.get('law'), article: r.get('article'), weight: toNum(r.get('weight')) })
-    );
-  }
-
-  /**
-   * Build a bounded citation-graph neighborhood around a decision for visualization.
-   * depth 1: decision -> cited articles (+ their laws).
-   * depth >=2: also include the most co-cited articles for each cited article.
-   */
-  async getCitationGraph(docId: string | number, depth = 1, articleLimit = 50): Promise<CitationGraphResult> {
+  async getCitationGraph(docId: string | number, _depth = 1, articleLimit = 50): Promise<CitationGraphResult> {
     const id = String(docId);
     const nodes = new Map<string, CitationGraphNode>();
     const edges: CitationGraphEdge[] = [];
-
     const decisionKey = `decision:${id}`;
     nodes.set(decisionKey, { id: decisionKey, type: 'decision', label: id });
 
@@ -442,42 +398,15 @@ export class CitationGraphService {
     for (const a of cited) {
       const artKey = `article:${a.law}|${a.article}`;
       const lawKey = `law:${a.law}`;
-      if (!nodes.has(artKey)) {
-        nodes.set(artKey, { id: artKey, type: 'article', label: `${a.law} ст.${a.article}` });
-      }
-      if (!nodes.has(lawKey)) {
-        nodes.set(lawKey, { id: lawKey, type: 'law', label: a.law });
-      }
+      if (!nodes.has(artKey)) nodes.set(artKey, { id: artKey, type: 'article', label: `${a.law} ст.${a.article}` });
+      if (!nodes.has(lawKey)) nodes.set(lawKey, { id: lawKey, type: 'law', label: a.law });
       edges.push({ from: decisionKey, to: artKey, type: 'CITES_ARTICLE' });
       edges.push({ from: artKey, to: lawKey, type: 'OF_LAW' });
     }
-
-    if (depth >= 2) {
-      for (const a of cited.slice(0, 15)) {
-        const artKey = `article:${a.law}|${a.article}`;
-        const cocited = await this.getCocitedArticles(a.law, a.article, 5);
-        for (const c of cocited) {
-          const ck = `article:${c.law}|${c.article}`;
-          if (!nodes.has(ck)) {
-            nodes.set(ck, { id: ck, type: 'article', label: `${c.law} ст.${c.article}` });
-          }
-          edges.push({ from: artKey, to: ck, type: 'COCITED', weight: c.weight });
-        }
-      }
-    }
-
-    return {
-      root: { docId: id },
-      nodes: Array.from(nodes.values()),
-      edges,
-      truncated: cited.length >= articleLimit,
-    };
+    return { root: { docId: id }, nodes: Array.from(nodes.values()), edges, truncated: cited.length >= articleLimit };
   }
 
   async close(): Promise<void> {
-    if (this.driver) {
-      await this.driver.close();
-      this.driver = null;
-    }
+    /* the pool belongs to the caller */
   }
 }

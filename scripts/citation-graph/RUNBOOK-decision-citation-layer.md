@@ -1,5 +1,8 @@
 # Decision↔decision citation layer (LEXAI-1777)
 
+> The Neo4j sections further down (Pipeline, steps 2–5) are history: since LEXAI-2323 the
+> graph is served from Postgres only.
+
 Resolves `case_citation_edges.to_case_number` → `edrsr_documents.cause_num` and builds the
 precedent (decision↔decision) layer on top of the existing legislation citation graph.
 
@@ -54,6 +57,47 @@ docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_loc
 change (mcp_backend `case-citation-graph.ts`) only after the swap: it expects the new semantics.
 The Neo4j case layer below was NOT reloaded by this rebuild (additive MERGE would keep the old
 bare-number edges); see the follow-up task.
+
+## The whole graph in Postgres (LEXAI-2323, 2026-11-20)
+
+`CitationGraphService` reads Postgres only; the app no longer connects to Neo4j. Tables
+(migration `297_citation_graph_postgres.sql`) and how each is filled:
+
+| table | from | script |
+|---|---|---|
+| `decision_statute_citations` | full-text re-extraction (statute patterns of `extract-citations.py`, no 10K window) | `rebuild-case-edges.py --layer statute`, then `rebuild-statute-02-finalize.sql` |
+| `statute_article_stats` | aggregate of the above (articles only) | `rebuild-statute-02-finalize.sql` |
+| `decision_supersession`, `decision_dissent`, `decision_instance_status`, `case_position_departures` | Neo4j SUPERSEDED_BY / HAS_DISSENT / Decision.status / DEPARTS_FROM, exported once | `neo4j-export-instance-layer.sh`, `neo4j-load-instance-layer.sh` |
+| `case_citation_counts` | `case_citation_links` (resolved, non-self) | `build-case-citation-counts.sql` |
+
+```bash
+nice -n 10 ionice -c2 -n7 python3 rebuild-case-edges.py --layer statute --partitions 2023-2026 --workers 6
+nice -n 10 ionice -c2 -n7 python3 rebuild-case-edges.py --layer statute --partitions 2006-2022,future --workers 5
+python3 rebuild-case-edges.py --layer statute --status
+docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local < rebuild-statute-02-finalize.sql
+docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local < build-case-citation-counts.sql
+```
+
+The instance-status layer is a one-off copy: the pipeline that produced it
+(`instance-status-0*`) wrote to Neo4j. Rerunning it means pointing its last step at these tables.
+
+### Keeping it current: `incremental-update.py`
+
+Adds every `edrsr_fulltext` decision above the watermark (`citation_graph_watermark`, first run
+starts from `max(case_citation_edges.from_case_id)`) to the case index, case edges/links/counts
+and the statute layer, in one transaction with the watermark. Scheduled nightly on cthulhu by
+`deployment/cron/citation-graph-crontab` (06:30, after the harvest) through
+`deployment/cron/citation-graph-incremental.sh` (password from the postgres container, flock,
+free-disk guard). Install:
+
+```bash
+crontab -l | cat - ~/SecondLayer/deployment/cron/citation-graph-crontab | crontab -
+```
+
+Test without writing: `python3 incremental-update.py --dry-run --since <doc_id> --max-docs 3000 --replay`
+re-derives already-built decisions and diffs the links against the full rebuild's. Not handled
+incrementally (the periodic full rebuild settles them): an older unresolved link whose case
+appears later, and member_count/latest_doc_id on older links.
 
 ## Pipeline
 

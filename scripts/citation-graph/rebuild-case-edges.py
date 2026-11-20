@@ -17,6 +17,13 @@ in the staging table and never duplicates or loses one.
   python3 rebuild-case-edges.py --partitions 2005-2022,pre2005,default,future --workers 4
   python3 rebuild-case-edges.py --status
 
+--layer statute (LEXAI-2323) runs extract-citations.py's statute patterns over the
+full text instead, straight into decision_statute_citations (progress in
+dsc_rebuild_progress); rebuild-statute-02-finalize.sql then indexes it and builds
+statute_article_stats:
+
+  python3 rebuild-case-edges.py --layer statute --partitions 2023-2026 --workers 6
+
 Rows inserted into a partition after its plan was made are only picked up if
 they land in the last (open-ended) chunk; the graph's coverage date is the
 start of the run.
@@ -36,8 +43,51 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from case_numbers import find_case_refs  # noqa: E402
 
 DSN = os.environ.get("DATABASE_URL", "postgresql://secondlayer@localhost:5432/secondlayer_local")
-BULK = "cce_rebuild_bulk"
-PROGRESS = "cce_rebuild_progress"
+# Two layers share the chunking/resume machinery (LEXAI-2323 added the statute one):
+#   case     decision -> case-number edges, into a staging heap finalize-01 turns into the graph
+#   statute  decision -> statute-article citations (extract-citations.py patterns, FULL text),
+#            straight into decision_statute_citations (migration 297), one row per
+#            (doc, citation_type, law_number, law_article)
+LAYERS = {
+    "case": {
+        "table": "cce_rebuild_bulk",
+        "progress": "cce_rebuild_progress",
+        "ddl": """CREATE UNLOGGED TABLE IF NOT EXISTS cce_rebuild_bulk (
+            from_case_id bigint, to_case_number text, citation_context text,
+            justice_kind smallint, adj_year smallint)""",
+        "cols": "from_case_id, to_case_number, citation_context, justice_kind, adj_year",
+    },
+    "statute": {
+        "table": "decision_statute_citations",
+        "progress": "dsc_rebuild_progress",
+        "ddl": """CREATE TABLE IF NOT EXISTS decision_statute_citations (
+            doc_id bigint NOT NULL, citation_type text NOT NULL, law_number text NOT NULL,
+            law_article text NOT NULL DEFAULT '', adj_year smallint)""",
+        "cols": "doc_id, citation_type, law_number, law_article, adj_year",
+        "copy_opts": ", FORCE_NOT_NULL (law_number, law_article)",   # '' is a value here, not NULL
+    },
+}
+LAYER = "case"
+BULK = LAYERS[LAYER]["table"]
+PROGRESS = LAYERS[LAYER]["progress"]
+_EC = None  # extract-citations.py, loaded lazily for the statute layer
+
+
+def _extractor():
+    global _EC
+    if _EC is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "extract_citations", os.path.join(os.path.dirname(os.path.abspath(__file__)), "extract-citations.py"))
+        _EC = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_EC)
+        _EC._MAX_TEXT_LEN = 10 ** 9   # whole text: +19% citations on a 671-decision sample
+    return _EC
+
+
+def use_layer(name: str):
+    global LAYER, BULK, PROGRESS
+    LAYER, BULK, PROGRESS = name, LAYERS[name]["table"], LAYERS[name]["progress"]
 
 
 def connect():
@@ -52,9 +102,7 @@ def connect():
 
 def setup(conn):
     with conn.cursor() as c:
-        c.execute(f"""CREATE UNLOGGED TABLE IF NOT EXISTS {BULK} (
-            from_case_id bigint, to_case_number text, citation_context text,
-            justice_kind smallint, adj_year smallint)""")
+        c.execute(LAYERS[LAYER]["ddl"])
         c.execute(f"""CREATE TABLE IF NOT EXISTS {PROGRESS} (
             part text, blk_lo bigint, blk_hi bigint, rows_read int, docs_with_text int,
             edges int, seconds real, done_at timestamptz DEFAULT now(),
@@ -93,12 +141,13 @@ def plan(conn, parts: list[str], chunk_blocks: int) -> list[tuple]:
             for i, lo in enumerate(los):
                 hi = None if i == len(los) - 1 else lo + chunk_blocks   # last chunk is open-ended
                 if lo not in done:
-                    chunks.append((p, lo, hi))
+                    chunks.append((p, lo, hi, LAYER))
     return chunks
 
 
 def process_chunk(task: tuple) -> dict:
-    part, lo, hi = task
+    part, lo, hi, layer = task
+    use_layer(layer)   # explicit, not inherited: spawn start methods do not copy globals
     t0 = time.time()
     year = part.rsplit("_", 1)[-1]
     part_year = int(year) if year.isdigit() else None
@@ -112,26 +161,37 @@ def process_chunk(task: tuple) -> dict:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     rows = docs = edges = 0
+    ec = _extractor() if LAYER == "statute" else None
     for doc_id, text, jk, adj_year in cur:
         rows += 1
         if not text:
             continue
         docs += 1
+        year_val = adj_year if adj_year is not None else ("" if part_year is None else part_year)
         seen = set()
+        if ec is not None:
+            for c in ec.extract_citations_from_text(doc_id, text):
+                if c.citation_type not in ec._STATUTE_TYPES:
+                    continue
+                key = (c.citation_type, c.law_ref, c.article_ref or "")
+                if key in seen:
+                    continue
+                seen.add(key)
+                edges += 1
+                w.writerow([doc_id, key[0], key[1], key[2], year_val])
+            continue
         for norm, written in find_case_refs(text):
             if norm in seen:
                 continue
             seen.add(norm)
             edges += 1
-            w.writerow([doc_id, norm, written[:200], "" if jk is None else jk,
-                        adj_year if adj_year is not None else ("" if part_year is None else part_year)])
+            w.writerow([doc_id, norm, written[:200], "" if jk is None else jk, year_val])
     cur.close()
 
     buf.seek(0)
     with conn.cursor() as c:
         c.copy_expert(
-            f"COPY {BULK} (from_case_id, to_case_number, citation_context, justice_kind, adj_year) "
-            f"FROM STDIN WITH (FORMAT csv, NULL '')", buf)
+            f"COPY {BULK} ({LAYERS[LAYER]['cols']}) FROM STDIN WITH (FORMAT csv, NULL ''{LAYERS[LAYER].get('copy_opts', '')})", buf)
         c.execute(
             f"INSERT INTO {PROGRESS} (part, blk_lo, blk_hi, rows_read, docs_with_text, edges, seconds) "
             f"VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -157,8 +217,10 @@ def main():
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--chunk-blocks", type=int, default=2000, help="heap blocks per chunk (8 KB each)")
     ap.add_argument("--status", action="store_true")
+    ap.add_argument("--layer", choices=sorted(LAYERS), default="case")
     args = ap.parse_args()
 
+    use_layer(args.layer)
     conn = connect()
     setup(conn)
     if args.status:

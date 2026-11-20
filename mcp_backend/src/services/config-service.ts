@@ -87,10 +87,7 @@ const CONFIG_REGISTRY: ConfigEntry[] = [
   { key: 'POSTGRES_HOST', category: 'database', description: 'PostgreSQL host', is_secret: false, value_type: 'string', default_value: 'localhost' },
   { key: 'POSTGRES_PORT', category: 'database', description: 'PostgreSQL port', is_secret: false, value_type: 'number', default_value: '5432' },
   { key: 'POSTGRES_DB', category: 'database', description: 'PostgreSQL database name', is_secret: false, value_type: 'string', default_value: 'secondlayer' },
-  { key: 'CITATION_BACKEND', category: 'database', description: 'Citation graph backend (postgres = @secondlayer/core, neo4j = CitationGraphService). Requires restart.', is_secret: false, value_type: 'select', default_value: 'postgres', options: ['postgres', 'neo4j'] },
-  { key: 'NEO4J_URI', category: 'database', description: 'Neo4j Bolt URI for citation graph', is_secret: false, value_type: 'string', default_value: 'bolt://localhost:7687' },
-  { key: 'NEO4J_USER', category: 'database', description: 'Neo4j username for citation graph', is_secret: false, value_type: 'string', default_value: 'neo4j' },
-  { key: 'NEO4J_DATABASE', category: 'database', description: 'Neo4j database name for citation graph', is_secret: false, value_type: 'string', default_value: 'neo4j' },
+  { key: 'CITATION_BACKEND', category: 'database', description: 'Citation graph (Postgres tables, LEXAI-2323): off disables it; any other value leaves it on when the tables exist. Requires restart.', is_secret: false, value_type: 'select', default_value: 'postgres', options: ['postgres', 'off'] },
 
   // Redis
   { key: 'REDIS_HOST', category: 'redis', description: 'Redis host', is_secret: false, value_type: 'string', default_value: 'localhost' },
@@ -127,7 +124,6 @@ const CONFIG_REGISTRY: ConfigEntry[] = [
   { key: 'ZAKONONLINE_API_TOKEN', category: 'external_apis', description: 'ZakonOnline API token', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'JWT_SECRET', category: 'auth', description: 'JWT signing secret', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'POSTGRES_PASSWORD', category: 'database', description: 'PostgreSQL password', is_secret: true, value_type: 'string', default_value: '' },
-  { key: 'NEO4J_PASSWORD', category: 'database', description: 'Neo4j password for citation graph', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'SECONDARY_LAYER_KEYS', category: 'auth', description: 'API authentication keys', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'MINIO_ACCESS_KEY', category: 'storage', description: 'MinIO access key', is_secret: true, value_type: 'string', default_value: '' },
   { key: 'MINIO_SECRET_KEY', category: 'storage', description: 'MinIO secret key', is_secret: true, value_type: 'string', default_value: '' },

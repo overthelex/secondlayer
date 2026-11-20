@@ -278,9 +278,9 @@ export class MCPQueryAPI extends BaseToolHandler {
       await this.citationValidator.validatePrecedentStatus(caseId, effectiveCaseNumber || undefined) as any,
     );
 
-    // Best-effort precedent-weight signal from the decision↔case graph (Neo4j,
-    // LEXAI-1777): how many decisions cite this case. Gated by CITATION_BACKEND=neo4j;
-    // non-fatal. The PG shepardization above remains the authoritative validity check.
+    // Best-effort precedent-weight signal from the decision↔case graph (Postgres since
+    // LEXAI-2323, Neo4j before): how many decisions cite this case. Non-fatal.
+    // The PG shepardization above remains the authoritative validity check.
     let citationGraph: any = undefined;
     if (this.citationGraphService?.isEnabled() && caseNumber) {
       try {
@@ -290,7 +290,7 @@ export class MCPQueryAPI extends BaseToolHandler {
         const stat = await this.citationGraphService.getCaseStats(variations);
         if (stat && (stat.citingDecisions > 0 || stat.departedByDecision)) {
           citationGraph = {
-            backend: 'neo4j',
+            backend: 'postgres',
             cited_by_decisions: stat.citingDecisions,
             documents_in_case: stat.memberCount || undefined,
             latest_doc_id: stat.latestDocId || undefined,
@@ -314,7 +314,7 @@ export class MCPQueryAPI extends BaseToolHandler {
     }
 
     // Incoming citations from the Supreme Court (case_citation_links, LEXAI-2314): a weight
-    // signal for the precedent, independent of Neo4j. It never changes the status — a
+    // signal for the precedent, independent of the graph service. It never changes the status — a
     // citation says the court referred to the case, not whether it followed it.
     let incomingCitations: any = undefined;
     const pool = this.edrsrDb();
@@ -348,7 +348,7 @@ export class MCPQueryAPI extends BaseToolHandler {
     }
 
     // Instance-status layer (LEXAI-1861): if a specific doc_id was overruled/modified by a
-    // higher court (SUPERSEDED_BY) or is a dissent, surface it. Gated by CITATION_BACKEND=neo4j;
+    // higher court (SUPERSEDED_BY) or is a dissent, surface it (decision_supersession, LEXAI-2323);
     // non-fatal. This is the direct answer to "чи не скасовано вищою інстанцією".
     let supersession: any = undefined;
     if (this.citationGraphService?.isEnabled() && docId) {
@@ -356,7 +356,7 @@ export class MCPQueryAPI extends BaseToolHandler {
         const sup = await this.citationGraphService.getDecisionSupersession(docId);
         if (sup && (sup.status || sup.supersededBy)) {
           supersession = sup;
-          citationGraph = citationGraph || { backend: 'neo4j' };
+          citationGraph = citationGraph || { backend: 'postgres' };
           if (sup.supersededBy) {
             citationGraph.superseded_by = {
               by_decision: sup.supersededBy.docId,
@@ -380,7 +380,7 @@ export class MCPQueryAPI extends BaseToolHandler {
       }
     }
 
-    // If the Grand Chamber formally departed from this case's legal position (Neo4j
+    // If the Grand Chamber formally departed from this case's legal position (graph
     // DEPARTS_FROM), the precedent is no longer fully good law — downgrade an otherwise
     // valid/unknown status to "limited" so the top-level status reflects it.
     let effectiveStatus: any = status;
@@ -499,7 +499,7 @@ export class MCPQueryAPI extends BaseToolHandler {
       {
         name: 'check_precedent_status',
         annotations: { title: 'Статус прецеденту', readOnlyHint: true, idempotentHint: true },
-        description: `Перевіряє актуальність судового рішення: чи не скасовано вищою інстанцією. Реконструює ланцюг інстанцій з локального реєстру ЄДРСР (перша → апеляція → касація → ВП) і визначає статус: valid, explicitly_overruled, limited, unknown. Статус = остаточний результат справи на найвищій інстанції, до якої вона дійшла (поле decided_by: яке рішення, яка інстанція, коли); overruled_by/distinguished_in містять лише ці визначальні рішення, а інші скасування/зміни в ланцюгу (інші документи чи етапи справи) — у other_reversals; summary пояснює це текстом. Для конкретного doc_id перевіряє граф інстанцій (SUPERSEDED_BY): чи скасовано/змінено це рішення вищою інстанцією та яким рішенням. Додатково враховує відступ від правової позиції Великою Палатою (граф цитувань Neo4j). incoming_citations — скільки рішень цитують справу, скільки з них Верховного Суду та Великої Палати, і останні такі рішення; це показник ваги прецеденту, на статус він не впливає.
+        description: `Перевіряє актуальність судового рішення: чи не скасовано вищою інстанцією. Реконструює ланцюг інстанцій з локального реєстру ЄДРСР (перша → апеляція → касація → ВП) і визначає статус: valid, explicitly_overruled, limited, unknown. Статус = остаточний результат справи на найвищій інстанції, до якої вона дійшла (поле decided_by: яке рішення, яка інстанція, коли); overruled_by/distinguished_in містять лише ці визначальні рішення, а інші скасування/зміни в ланцюгу (інші документи чи етапи справи) — у other_reversals; summary пояснює це текстом. Для конкретного doc_id перевіряє граф інстанцій (SUPERSEDED_BY): чи скасовано/змінено це рішення вищою інстанцією та яким рішенням. Додатково враховує відступ від правової позиції Великою Палатою (граф цитувань). incoming_citations — скільки рішень цитують справу, скільки з них Верховного Суду та Великої Палати, і останні такі рішення; це показник ваги прецеденту, на статус він не впливає.
 
 Приймає: case_number (номер справи, наприклад 922/989/18) або doc_id (ЄДРСР doc_id).
 

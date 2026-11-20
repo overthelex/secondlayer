@@ -27,11 +27,6 @@ services:
       # Прод-Qdrant (bigbox, 296M векторов) через WireGuard-туннель
       QDRANT_URL: http://10.88.0.1:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY}
-      # Neo4j citation graph (bigbox) через WireGuard-туннель
-      NEO4J_URI: bolt://10.88.0.1:7687
-      NEO4J_USER: neo4j
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      NEO4J_DATABASE: neo4j
     deploy:
       resources:
         limits:
