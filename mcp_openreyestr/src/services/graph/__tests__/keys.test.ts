@@ -1,6 +1,7 @@
 import {
-  addressKeyRow, addressKeyVersion, ADDRESS_KEY_VERSION, companyKey, foreignCode, foreignEntityKey, isHub,
-  isPlaceholderName, personKey,
+  addressHubFlags, addressKeyRow, addressKeyVersion, ADDRESS_KEY_VERSION, codeInName, companyKey, computeHubThresholds,
+  DEFAULT_HUB_THRESHOLDS, foreignCode, foreignEntityKey, headEndpoint, hubPercentiles, isHub, isOrganisationName,
+  isPlaceholderName, organisationKey, personKey,
 } from '../keys';
 import { parseStartKey } from '../neighbourhood';
 
@@ -14,6 +15,46 @@ describe('graph keys', () => {
     for (const n of ['ТЕСТЕНКО ОЛЕГ ПЕТРОВИЧ', 'Членов Петро', 'ГРОМАДА ОЛЕНА', 'Власниченко Ірина', 'ПРИКЛАДЯН АРАМ', 'ФОНД ДЕРЖАВНОГО МАЙНА УКРАЇНИ']) {
       expect(isPlaceholderName(n)).toBe(false);
     }
+  });
+
+  it('drops the placeholders found on the full graph (LEXAI-2319)', () => {
+    for (const n of ['НЕВИЗНАЧЕНА ОСОБА', 'НЕВИЧНАЧЕНА ОСОБА', 'НЕВІДОМА ОСОБА', 'НЕВІДОМИЙ НЕВІДОМИЙ', 'НЕ ВІДОМИЙ', 'НЕ ВИЗНАЧЕНО',
+      'НЕ ВКАЗАНО', 'НЕМАЄ', 'НЕ МАЄ ВІДОМОСТЕЙ', 'НЕМОЖЛИВО ВСТАНОВИТИ', 'ВСТАНОВИТИ НЕМОЖЛИВО', 'ВІДОМОСТІ ВІТСУТНІ',
+      'ЮРИДИЧНА ОСОБА', 'ЮРИДИЧНОЇ ОСОБИ', 'ФІЗИЧНИХ ОСІБ', 'ДЕСЯТЬ ФІЗИЧНИХ ОСІБ', 'ФИЗИЧНІ ОСОБИ', 'ФІЗ ОС', 'одна особа',
+      'КЕРІВНИК ПІДПРИЄМСТВА', 'КЕРІНВИК ПІДПРИЄМСТВА', 'КЕРІВНИ К ПІДПРИЄМСТВА', 'КЕРІВНИК К', 'КЕРІВНИК НЕВІДОМИЙ',
+      'ДИРЕКТОР ТОВАРИСТВА', 'ПРИВАТНЕ ПІДПРИЄМСТВО', 'ГОЛОВА АСОЦІАЦІЇ', 'КЕРІНВИК ФОНДУ', 'ТЕРИТОРІАЛЬНА ГРОМАДА', 'територіальна громада села',
+      'СІЛЬСЬКА ТЕРИТОРІАЛЬНА ГРОМАДА', 'РЕЛІГІЙНА ГРОМАДА', 'Релігійна громада парафії', 'ГРОМАДА СЕЛА', 'ЦЕРКОВНА ДЕСЯТКА',
+      'УКРАЇНА', 'ГРОМАДЯНИН УКРАЇНИ', 'ПРЯМЕ', 'ПРЯМИЙ ВИРІШАЛЬНИЙ ВПЛИВ', 'КОНТРОЛЕР', 'КОНТРОЛЕР ЮРИДИЧНОЇ ОСОБИ',
+      'ЗАГАЛЬНА КІЛЬКІСТЬ', 'ФРАНКІВСЬКА ОБЛАСТЬ', '100%', '0.00 грн.', '68004']) {
+      expect([n, isPlaceholderName(n)]).toEqual([n, true]);
+    }
+    // real names next to those words, and organisations that founders name without a code
+    for (const n of ['ГРОМАДА ТЕСТ ТЕСТОВИЧ', 'НЕВІДОМСЬКА ТЕСТА ТЕСТІВНА', 'КОНТРОЛЕР ІВАНЕНКО ІВАН ІВАНОВИЧ',
+      'ЮРИДИЧНОЇ ОСОБИ-ПЕТРЕНКО ПЕТРО ПЕТРОВИЧ', 'УКРАЇНЕЦЬ ТЕСТ ТЕСТОВИЧ', 'ГРОМАДЯНИН УКРАЇНИ ПРИКЛАДЕНКО ТЕСТ ТЕСТОВИЧ',
+      'КОМПАНІЄЦЬ ТЕСТ ТЕСТОВИЧ', 'ПРИКЛАДІШВІЛІ ТЕСТО', 'МІСЬКА ГРОМАДСЬКА ОРГАНІЗАЦІЯ "СВІТАНОК"',
+      'ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "АЛЬФА"', 'ОБЛАСНА РАДА']) {
+      expect([n, isPlaceholderName(n)]).toEqual([n, false]);
+    }
+  });
+
+  it('organisations as heads (LEXAI-2318)', () => {
+    for (const n of ['ПРАТ ГАЄК', 'ТОВ "КУА "ПРИКЛАД КАПІТАЛ"', 'ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "УПРАВИТЕЛЬ"',
+      'ПРИВАТНЕ АКЦІОНЕРНЕ ТОВАРИСТВО "ТЕСТ"', 'ТОВ"АЛЬФА"', 'КОМПАНІЯ З УПРАВЛІННЯ АКТИВАМИ "ПРИКЛАД"', 'EXAMPLE HOLDINGS LIMITED',
+      'УПРАВЛЯЮЧА ФІРМА, 12345678']) {
+      expect([n, isOrganisationName(n)]).toEqual([n, true]);
+    }
+    for (const n of ['ТОВ ТЕСТ ТЕСТОВИЧ', 'БАНК ТЕСТ ТЕСТОВИЧ', 'КОМПАНІЄЦЬ ПРИКЛАД ТЕСТОВИЧ', 'ПРИКЛАДУА ТЕСТО',
+      'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ ЛІКВІДАТОР ПІДПРИЄМСТВА', 'ТЕСТЕНКО ПП', 'ІВАНЕНКО ІВАН ІВАНОВИЧ', 'ТЕСТЕНКО ІВАН 1234567890', '', null]) {
+      expect([n, isOrganisationName(n)]).toEqual([n, false]);
+    }
+    expect(codeInName('ТОВ "АЛЬФА" (код 01234567)')).toBe('01234567');
+    expect(codeInName('ПЕТРЕНКО 2365812898')).toBeNull();
+    expect(codeInName('ТОВ 00000000')).toBeNull();
+    expect(headEndpoint('ТОВ "АЛЬФА", 11111110')).toEqual({ kind: 'company', key: '11111110' });
+    expect(headEndpoint('ПРАТ ГАЄК')).toBe('ua_org_without_code');
+    expect(headEndpoint('КЕРІВНИК ПІДПРИЄМСТВА')).toBe('placeholder');
+    expect(headEndpoint('ІВАНЕНКО ІВАН ІВАНОВИЧ')).toEqual({ kind: 'person_name', key: personKey('ІВАНЕНКО ІВАН ІВАНОВИЧ') });
+    expect(organisationKey('ПРАТ "ГАЄК"')).toBe(organisationKey('Приватне акціонерне товариство ГАЄК'));
   });
 
   it('person key groups spellings of one name (a candidate, namesakes included)', () => {
@@ -54,10 +95,38 @@ describe('graph keys', () => {
   });
 
   it('hub thresholds are per kind', () => {
-    expect(isHub('address', 31)).toBe(true);
-    expect(isHub('address', 30)).toBe(false);
+    expect(isHub('address', 101)).toBe(true);
+    expect(isHub('address', 100)).toBe(false);
+    expect(isHub('person_name', 31)).toBe(true);
     expect(isHub('company', 31)).toBe(false);
-    expect(isHub('person_name', 5, { company: 1, person_name: 4, address: 1, foreign_entity: 1 })).toBe(true);
+    expect(isHub('person_name', 5, { company: 1, person_name: 4, address: 1, foreign_entity: 1, organisation: 1 })).toBe(true);
+  });
+
+  it('hub thresholds from the degree percentiles, with floors and overrides (LEXAI-2319)', () => {
+    expect(hubPercentiles()).toEqual([0.999, 0.9999, 0.99995]);
+    // the first full build
+    const full = {
+      address: { '0.999': 153, '0.9999': 457, '0.99995': 600 }, company: { '0.999': 55, '0.9999': 250, '0.99995': 300 },
+      person_name: { '0.999': 65, '0.9999': 252, '0.99995': 300 }, foreign_entity: { '0.999': 69, '0.9999': 174, '0.99995': 190 },
+    };
+    const t = computeHubThresholds(full);
+    expect(t.thresholds).toEqual({ address: 457, company: 250, person_name: 65, foreign_entity: 69, organisation: 30 });
+    expect(t.massRegistrationMinDegree).toBe(600);
+    expect(t.basis).toMatchObject({ address: 'percentile', organisation: 'floor', mass_registration: 'percentile' });
+    // a small sample: the floors
+    const small = computeHubThresholds({ address: { '0.9999': 12, '0.99995': 14 }, person_name: { '0.999': 4 } });
+    expect(small.thresholds).toEqual(DEFAULT_HUB_THRESHOLDS);
+    expect(small.massRegistrationMinDegree).toBe(500);
+    const o = computeHubThresholds(full, { address: 5 }, 7);
+    expect(o.thresholds.address).toBe(5);
+    expect(o.massRegistrationMinDegree).toBe(7);
+    expect(o.basis.address).toBe('override');
+    // a business centre below the threshold is not a hub; a mass registration address is; the curated list wins
+    expect(addressHubFlags(180, t)).toEqual({ hub: false, massRegistration: false });
+    expect(addressHubFlags(500, t)).toEqual({ hub: true, massRegistration: false });
+    expect(addressHubFlags(3109, t)).toEqual({ hub: true, massRegistration: 'degree' });
+    expect(addressHubFlags(40, t, 'mass_registration')).toEqual({ hub: true, massRegistration: 'list' });
+    expect(addressHubFlags(3109, t, 'not_hub')).toEqual({ hub: false, massRegistration: false });
   });
 
   it('start keys', () => {
@@ -69,6 +138,7 @@ describe('graph keys', () => {
     expect(parseStartKey('foreign:CY|code:HE123456')).toEqual({ kind: 'foreign_entity', key: 'CY|code:HE123456' });
     expect((parseStartKey('address:Україна, 01001, місто Київ, ВУЛИЦЯ ХРЕЩАТИК, будинок 1') as any).key).toMatch(/хрешатик|хрещатик|hreshchatyk|хрищатик/);
     expect(() => parseStartKey('person:АКЦІОНЕРИ')).toThrow();
+    expect(parseStartKey('org:ПРАТ "ГАЄК"')).toEqual({ kind: 'organisation', key: organisationKey('ПРАТ ГАЄК') });
     expect(() => parseStartKey('whatever')).toThrow();
   });
 });
