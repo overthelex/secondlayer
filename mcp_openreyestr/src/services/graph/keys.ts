@@ -11,12 +11,12 @@ import { stripPersonIds } from '../graph-norm/personal-ids';
 
 export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity' | 'organisation';
 export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour' | 'co_party';
-/** edrsr: court decisions (graph.court_party, LEXAI-2304) */
-export type EdgeSource = 'edr_hist' | 'edr_current' | 'edrsr';
+/** edrsr: court decisions (graph.court_party, LEXAI-2304); prozorro: ProZorro supplier addresses (LEXAI-2317) */
+export type EdgeSource = 'edr_hist' | 'edr_current' | 'edrsr' | 'prozorro';
 
 export const NODE_KINDS: NodeKind[] = ['company', 'person_name', 'address', 'foreign_entity', 'organisation'];
 export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour', 'co_party'];
-export const EDGE_SOURCES: EdgeSource[] = ['edr_hist', 'edr_current', 'edrsr'];
+export const EDGE_SOURCES: EdgeSource[] = ['edr_hist', 'edr_current', 'edrsr', 'prozorro'];
 
 /** Bump when normAddress changes in a way that changes keys: every address is re-keyed on the next build. */
 export const ADDRESS_KEY_VERSION = 1;

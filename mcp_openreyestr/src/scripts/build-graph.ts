@@ -5,7 +5,7 @@
  *   node dist/scripts/build-graph.js [--limit N [--from-edrpou CODE]] [--dry-run]
  *        [--current yes|no|auto] [--current-date YYYY-MM-DD] [--rekey-addresses]
  *        [--hub-company N] [--hub-person N] [--hub-address N] [--hub-foreign N] [--hub-organisation N] [--mass-address N]
- *        [--reg-gap N] [--reg-per-day N] [--statement-timeout 3h] [--work-mem 256MB] [--keep-stage]
+ *        [--reg-gap N] [--reg-per-day N] [--statement-timeout 3h] [--work-mem 256MB] [--keep-stage] [--no-prozorro]
  *        [--no-court] [--court-max-parties N] [--hub-court N]
  *
  * A full rebuild stages everything in schema graph_stage and swaps it in with one transaction:
@@ -16,7 +16,9 @@
  * and --mass-address override them. Personal numbers (РНОКПП, passport series) are stripped from
  * names and text attributes (graph-norm/personal-ids.ts, LEXAI-2322); the build FAILS before the
  * swap if a 10-digit run is left in a node label / key or an edge attribute (builder.ts
- * checkPersonalIds, which also documents the same check as SQL for the live graph). Heavy queries: run off-peak, e.g. under
+ * checkPersonalIds, which also documents the same check as SQL for the live graph). ProZorro
+ * supplier addresses are added as registered_at edges with source 'prozorro' (LEXAI-2317,
+ * services/graph/prozorro-addresses.ts); --no-prozorro leaves them out. Heavy queries: run off-peak, e.g. under
  * `nice` and with a statement timeout (default 3h per statement).
  *
  * co_party edges come from graph.court_party, filled by load-court-parties.js (LEXAI-2304);
@@ -62,6 +64,7 @@ function parseArgs(argv: string[]): BuildOptions {
       case '--statement-timeout': o.statementTimeout = val(); break;
       case '--work-mem': o.workMem = val(); break;
       case '--keep-stage': o.keepStage = true; break;
+      case '--no-prozorro': o.prozorroAddresses = false; break;
       case '--no-court': o.court = false; break;
       case '--court-max-parties': o.court = { ...(o.court || {}), maxPartiesPerDecision: int(k, val()) }; break;
       case '--hub-court': o.court = { ...(o.court || {}), hubThreshold: int(k, val()) }; break;

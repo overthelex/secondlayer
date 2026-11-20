@@ -27,6 +27,7 @@ export const NODE_KIND_LABELS: Record<NodeKind, string> = {
 export const EDGE_KIND_LABELS: Record<EdgeKind, string> = {
   founder: 'засновник', beneficiary: 'кінцевий бенефіціар', head: 'керівник', signer: 'підписант (представник)',
   registered_at: 'місцезнаходження', reg_neighbour: 'сусідній код реєстрації того ж дня',
+  co_party: 'сторони однієї судової справи (ЄДРСР)',
 };
 
 export const PERSON_NAME_WARNING =
