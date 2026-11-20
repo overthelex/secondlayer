@@ -172,6 +172,23 @@ CODEX_NAMES = {
     "ЖК": "Житловий кодекс України",
     "КУпАП": "Кодекс України про адміністративні правопорушення",
 }
+# The pattern matches case-insensitively and the match is upper-cased, so the lookup must
+# be too: keyed on the mixed-case spellings above, «КЗпП» / «КУпАП» became 'КЗПП' / 'КУПАП'
+# and were stored under the abbreviation (66M rows in the 20.11.2026 full-text pass).
+CODEX_BY_UPPER = {k.upper(): v for k, v in CODEX_NAMES.items()}
+
+# «2262-ХІІ» and «2262-XII» are the same act: courts type the Roman numeral in Cyrillic
+# or Latin letters. Fold the Cyrillic look-alikes into Latin for act-number references.
+_ACT_NUMBER_RE = re.compile(r"^\d+\s*-\s*[IVXLCХІВМ]+$", re.IGNORECASE)
+_ROMAN_FOLD = str.maketrans({"Х": "X", "І": "I", "В": "V", "М": "M", "С": "C",
+                             "х": "X", "і": "I", "в": "V", "м": "M", "с": "C"})
+
+
+def normalize_law_ref(name: str) -> str:
+    """Canonical spelling of an act-number law reference; anything else unchanged."""
+    if _ACT_NUMBER_RE.match(name):
+        return re.sub(r"\s*-\s*", "-", name).translate(_ROMAN_FOLD).upper()
+    return name
 
 @dataclass
 class Citation:
@@ -328,14 +345,14 @@ def extract_citations_from_text(doc_id: int, text: str) -> list[Citation]:
 
     for m in PATTERNS["law_article"].finditer(text):
         articles_raw = m.group(1)
-        law_name = m.group(2) or m.group(3) or ""
-        for art in parse_article_numbers(articles_raw, law_name.strip()):
-            citations.append(Citation(doc_id, "law_article", law_name.strip(), art, m.group(0)[:200]))
+        law_name = normalize_law_ref((m.group(2) or m.group(3) or "").strip())
+        for art in parse_article_numbers(articles_raw, law_name):
+            citations.append(Citation(doc_id, "law_article", law_name, art, m.group(0)[:200]))
 
     for m in PATTERNS["codex_article"].finditer(text):
         articles_raw = m.group(1)
         codex_abbr = m.group(2).upper()
-        codex_name = CODEX_NAMES.get(codex_abbr, codex_abbr)
+        codex_name = CODEX_BY_UPPER.get(codex_abbr, codex_abbr)
         for art in parse_article_numbers(articles_raw, codex_name):
             citations.append(Citation(doc_id, "codex_article", codex_name, art, m.group(0)[:200]))
 

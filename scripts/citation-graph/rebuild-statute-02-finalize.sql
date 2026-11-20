@@ -6,7 +6,8 @@
 -- which is therefore a no-op on this database.
 --
 --   docker exec -i secondlayer-postgres-local psql -U secondlayer -d secondlayer_local < rebuild-statute-02-finalize.sql
--- Run in tmux: the indexes take hours over ~1B rows.
+-- Run in tmux. Measured 20.11.2026 (808.6M rows): indexes ~30 min, stats ~4 min.
+-- Needs ~150 GB free on the data volume during the build (heap 95 GB, indexes, sort spill).
 
 \set ON_ERROR_STOP on
 \timing on
@@ -18,7 +19,9 @@ SET work_mem = '1GB';
 SET jit = off;
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dsc_doc ON decision_statute_citations (doc_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dsc_law_article ON decision_statute_citations (law_number, law_article, doc_id);
+-- (law_number, law_article) without doc_id on purpose: btree deduplication keeps it at
+-- about the size of idx_dsc_doc; with doc_id every key is unique and it was 80 GB.
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dsc_law_article ON decision_statute_citations (law_number, law_article);
 VACUUM (ANALYZE) decision_statute_citations;
 
 CREATE TABLE IF NOT EXISTS statute_article_stats (
@@ -33,8 +36,7 @@ CREATE TABLE IF NOT EXISTS statute_article_stats (
 -- graph had no node for them either. They stay in decision_statute_citations.
 BEGIN;
 CREATE TEMP TABLE sas_new ON COMMIT DROP AS
--- Two levels instead of count(DISTINCT): the inner GROUP BY streams off the
--- (law_number, law_article, doc_id) index in order, nothing has to be sorted.
+-- Two levels instead of count(DISTINCT), so the planner can hash/parallelize the inner one.
 SELECT law_number, law_article, sum(n)::bigint AS total_citations, count(*) AS unique_decisions
   FROM (SELECT law_number, law_article, doc_id, count(*) AS n
           FROM decision_statute_citations

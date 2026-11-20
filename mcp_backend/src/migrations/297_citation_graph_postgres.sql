@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS decision_statute_citations (
   adj_year      smallint
 );
 CREATE INDEX IF NOT EXISTS idx_dsc_doc ON decision_statute_citations (doc_id);
-CREATE INDEX IF NOT EXISTS idx_dsc_law_article ON decision_statute_citations (law_number, law_article, doc_id);
+CREATE INDEX IF NOT EXISTS idx_dsc_law_article ON decision_statute_citations (law_number, law_article);
 
 CREATE TABLE IF NOT EXISTS statute_article_stats (
   law_number       text   NOT NULL,
