@@ -53,6 +53,7 @@ import { Tier1OpenDataTools } from '../api/tools/tier1-opendata-tools.js';
 import { RegistrySearchTool } from '../api/tools/registry-search-tool.js';
 import { IpObjectsTools } from '../api/tools/ip-objects-tools.js';
 import { CompanyDossierTool } from '../api/tools/company-dossier-tool.js';
+import { OffshoreLeaksTools } from '../api/tools/offshore-leaks-tools.js';
 import { FinancialStatementsTool } from '../api/tools/financial-statements-tool.js';
 import { AnalyzeDataTool } from '../api/tools/analyze-data-tool.js';
 import { LLMAdapter } from '../infrastructure/adapters/llm-adapter.js';
@@ -201,6 +202,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new IpObjectsTools(coreServices.db, toolRegistry));
   // One-call company dossier by ЄДРПОУ over the registry tools, with sources (LEXAI-2227).
   toolRegistry.registerHandler(new CompanyDossierTool(toolRegistry));
+  // ICIJ Offshore Leaks graph by name (icij_nodes / icij_relationships, migration 287; LEXAI-2311).
+  toolRegistry.registerHandler(new OffshoreLeaksTools(coreServices.db));
   // Key figures of financial statements by ЄДРПОУ, year by year (financial_figures, migration 278).
   toolRegistry.registerHandler(new FinancialStatementsTool(coreServices.db));
   toolRegistry.registerHandler(new AnalyzeDataTool(coreServices.db));
