@@ -1,7 +1,7 @@
 import {
   addressHubFlags, addressKeyRow, addressKeyVersion, ADDRESS_KEY_VERSION, codeInName, companyKey, computeHubThresholds,
-  DEFAULT_HUB_THRESHOLDS, foreignCode, foreignEntityKey, headEndpoint, hubPercentiles, isHub, isOrganisationName,
-  isPlaceholderName, organisationKey, personKey,
+  DEFAULT_HUB_THRESHOLDS, foreignCode, foreignEntityKey, founderEndpoint, headEndpoint, hubPercentiles, isHub, isOrganisationName,
+  isPlaceholderName, organisationKey, PERSON_KEY_VERSION, personKey,
 } from '../keys';
 import { parseStartKey } from '../neighbourhood';
 
@@ -48,7 +48,7 @@ describe('graph keys', () => {
       expect([n, isOrganisationName(n)]).toEqual([n, false]);
     }
     expect(codeInName('ТОВ "АЛЬФА" (код 01234567)')).toBe('01234567');
-    expect(codeInName('ПЕТРЕНКО 2365812898')).toBeNull();
+    expect(codeInName('ПЕТРЕНКО 1234567890')).toBeNull();
     expect(codeInName('ТОВ 00000000')).toBeNull();
     expect(headEndpoint('ТОВ "АЛЬФА", 11111110')).toEqual({ kind: 'company', key: '11111110' });
     expect(headEndpoint('ПРАТ ГАЄК')).toBe('ua_org_without_code');
@@ -61,6 +61,31 @@ describe('graph keys', () => {
     expect(personKey('ІВАНЕНКО ІВАН ІВАНОВИЧ')).toBe(personKey('Іваненко Іван Іванович'));
     expect(personKey('Д\'ЯЧЕНКО ОЛЕНА')).toBe(personKey('Дяченко Олена'));
     expect(personKey('АКЦІОНЕРИ ЗГІДНО РЕЄСТРУ')).toBeNull();
+  });
+
+  it('personal numbers are not part of a key: the same person with and without one is one node (LEXAI-2322)', () => {
+    const k = personKey('ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ');
+    for (const n of ['ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ (1234567890)', 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ, РНОКПП 1234567890', 'Тестенко Тест Тестович ІНД.КОД 1234567890',
+      'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ1234567890', '1234567890 ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ', 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ, паспорт серії АА № 123456']) {
+      expect([n, personKey(n)]).toEqual([n, k]);
+    }
+    expect(personKey('1234567890')).toBeNull();
+    expect(personKey('РНОКПП 1234567890')).toBeNull();
+    expect(founderEndpoint({ kind: 'person', name: 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ (1234567890)', code: null, country_code: 'UA' }))
+      .toEqual({ kind: 'person_name', key: k });
+    expect(headEndpoint('ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ, ІПН 1234567890')).toEqual({ kind: 'person_name', key: k });
+    expect(organisationKey('ПРАТ "ГАЄК" 1234567890')).toBe(organisationKey('ПРАТ "ГАЄК"'));
+    expect(PERSON_KEY_VERSION).toBeGreaterThanOrEqual(2);
+  });
+
+  it('8-digit ЄДРПОУ codes survive the cleaning; foreign registration numbers are kept', () => {
+    expect(headEndpoint('ТОВ "АЛЬФА", 11111110')).toEqual({ kind: 'company', key: '11111110' });
+    expect(headEndpoint('ТОВ "АЛЬФА" (код 11111110), РНОКПП директора 1234567890')).toEqual({ kind: 'company', key: '11111110' });
+    expect(founderEndpoint({ kind: 'organisation', name: 'ТОВ "БЕТА"', code: '22222220', country_code: 'UA' }))
+      .toEqual({ kind: 'company', key: '22222220' });
+    // a Russian company's ИНН has 10 digits: a foreign entity keeps it
+    expect(founderEndpoint({ kind: 'organisation', name: null, code: '1234567890', country_code: 'RU' }))
+      .toEqual({ kind: 'foreign_entity', key: 'RU|code:1234567890' });
   });
 
   it('company key is the 8-digit code; longer numbers are not companies', () => {

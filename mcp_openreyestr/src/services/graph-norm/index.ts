@@ -22,3 +22,4 @@ export {
 export type { OsmArea, OsmPlace, OsmStreet, OsmSettlement, OsmRenamingRow, OsmAggregateStats, OsmPair } from './osm-street-renamings';
 // person names: the ЄДР history module already normalises them
 export { normUa, uaMatchKey, historyNameKey, countryIso } from '../edr-history/norm';
+export { stripPersonIds, stripIdNumbers, hasTenDigits, NAME_ID_PROBE_SQL, TEXT_ID_PROBE_SQL, TEN_DIGITS_SQL } from './personal-ids';
