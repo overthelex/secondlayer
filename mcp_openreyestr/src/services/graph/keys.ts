@@ -7,33 +7,65 @@ import { normEdrpou } from '../graph-norm/edrpou';
 import { normAddress, NormAddressOptions } from '../graph-norm/address';
 import { normUa, uaMatchKey } from '../edr-history/norm';
 import { md5 } from '../edr-history/entries';
+import { stripPersonIds } from '../graph-norm/personal-ids';
 
-export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity';
+export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity' | 'organisation';
 export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour';
 export type EdgeSource = 'edr_hist' | 'edr_current';
 
-export const NODE_KINDS: NodeKind[] = ['company', 'person_name', 'address', 'foreign_entity'];
+export const NODE_KINDS: NodeKind[] = ['company', 'person_name', 'address', 'foreign_entity', 'organisation'];
 export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour'];
 
 /** Bump when normAddress changes in a way that changes keys: every address is re-keyed on the next build. */
 export const ADDRESS_KEY_VERSION = 1;
+/**
+ * Bump when personKey / organisationKey change keys. 2 (LEXAI-2322): personal numbers (РНОКПП,
+ * passport series) are stripped from the name before the key, so 'ТЕСТЕНКО ... (1234567890)' and
+ * 'ТЕСТЕНКО ...' are one node. Recorded in graph.build.counts.person_key_version.
+ */
+export const PERSON_KEY_VERSION = 2;
 
 /**
  * Entries that name a group or a statement instead of a participant ('АКЦІОНЕРИ ЗГІДНО РЕЄСТРУ',
  * '91 акціонер', 'ЧЛЕНИ КООПЕРАТИВУ', 'КІНЦЕВИЙ БЕНЕФІЦІАРНИЙ ВЛАСНИК ВІДСУТНІЙ', 'ТРУДОВИЙ
- * КОЛЕКТИВ'). Applied to normUa(name); the same pattern runs in PostgreSQL (builder.ts), so it
- * uses only POSIX classes both engines read alike.
+ * КОЛЕКТИВ'). Applied to normUa(name); the same patterns run in PostgreSQL (builder.ts
+ * graph_stage.placeholder), so they use only POSIX classes both engines read alike.
  */
+const W = '[а-яіїєґ]*';
 export const PLACEHOLDER_RE_SOURCE =
-  '(^| )(акціонер[а-яіїєґ]*|член(и|ів|а|ами|ам|ом)?|згідно|реєстр[а-яіїєґ]*|трудов[а-яіїєґ]*|колектив[а-яіїєґ]*'
-  + '|фізичн[а-яіїєґ]* (особ[а-яіїєґ]*)|учасник[а-яіїєґ]*|засновник[а-яіїєґ]*|бенефіціар[а-яіїєґ]*'
-  + '|бенефіциар[а-яіїєґ]*|відсутн[а-яіїєґ]*|власник(и|ів|а|ом|ами)?|інші|пайовик[а-яіїєґ]*|співвласник[а-яіїєґ]*'
-  + '|громадяни|мешканц[а-яіїєґ]*|жител[а-яіїєґ]*)( |$)';
+  `(^| )(акціонер${W}|член(и|ів|а|ами|ам|ом)?|згідно|реєстр${W}|трудов${W}|колектив${W}`
+  + `|(фізичн|физичн)${W} (особ${W}|осіб)|фіз (ос|особ${W})|учасник${W}|засновник${W}|бенефіціар${W}`
+  + `|бенефіциар${W}|відсутн${W}|власник(и|ів|а|ом|ами)?|інші|пайовик${W}|співвласник${W}`
+  + `|громадяни|мешканц${W}|жител${W}`
+  // LEXAI-2319, from the high-degree person_name nodes of the first full build: unknown /
+  // undetermined persons, communities and statements written as names
+  + `|неви[зч]начен${W}|невідом(а|ий|і|ого|их|о|е)|неможлив${W}|немає|нема|не (має|маю|вказан${W}|визначен${W}|відом${W}|можлив${W}|встановлен${W})`
+  + `|відомост${W}|(територіальн|релігійн|церковн|сільськ|селищн|міськ)${W} громад(а|и|і|у|ою)`
+  + `|громада (села|селища|міста|сіл|парафії)|церковн${W} десятк${W})( |$)`
+  // whole-name placeholders: a country, a share, a number, a lone legal form or job title
+  // ('ПРИВАТНЕ ПІДПРИЄМСТВО', 'КЕРІВНИК ПІДПРИЄМСТВА' with its typos, 'ДИРЕКТОР ТОВАРИСТВА',
+  // 'ГОЛОВА АСОЦІАЦІЇ', 'КЕРІНВИК ФОНДУ'), 'ГРОМАДЯНИН УКРАЇНИ'
+  + `|^(україна|пряме|прямий|[0-9 ]*)$`
+  + `|^([а-яіїєґ]+ ?){0,2}(підприємств|товариств|кооператив|асоціаці|компані|корпораці|організаці|установ|фонд)${W}$`
+  + `|^громадян(ин|ка) [а-яіїєґ]+$`;
+/**
+ * Words that make a placeholder only without a patronymic: 'НЕВІДОМА ОСОБА', 'КЕРІВНИК К',
+ * 'КОНТРОЛЕР ЮРИДИЧНОЇ ОСОБИ', 'ФРАНКІВСЬКА ОБЛАСТЬ' are placeholders, while 'КОНТРОЛЕР ІВАНЕНКО
+ * ІВАН ІВАНОВИЧ' or 'ЮРИДИЧНОЇ ОСОБИ-ПЕТРЕНКО ПЕТРО ПЕТРОВИЧ' (a beneficiary entry with a
+ * prefix) still name a person.
+ */
+export const WEAK_PLACEHOLDER_RE_SOURCE =
+  `(^| )(юридичн${W} (особ${W}|осіб)|юр (ос|особ${W})|особа|особи|осіб|керівник${W}|контролер${W}|кількіст${W}`
+  + `|вирішальн${W}|област[ьі]|грн)( |$)`;
+/** A patronymic word ('іванович', 'петрівна'): the name is a person's even next to a legal form or a weak placeholder word. */
+export const PATRONYMIC_RE_SOURCE = '(^| )[а-яіїєґ]{2,}(ович|евич|івна|ївна|овна|евна)( |$)';
 const PLACEHOLDER_RE = new RegExp(PLACEHOLDER_RE_SOURCE);
+const WEAK_PLACEHOLDER_RE = new RegExp(WEAK_PLACEHOLDER_RE_SOURCE);
+const PATRONYMIC_RE = new RegExp(PATRONYMIC_RE_SOURCE);
 
 export function isPlaceholderName(name: string | null | undefined): boolean {
   const n = normUa(name);
-  return !n || PLACEHOLDER_RE.test(n);
+  return !n || PLACEHOLDER_RE.test(n) || (WEAK_PLACEHOLDER_RE.test(n) && !PATRONYMIC_RE.test(n));
 }
 
 /** 8-digit ЄДРПОУ key, or null ('32945' -> '00032945'; a 10-digit РНОКПП is not a company). */
@@ -41,10 +73,11 @@ export function companyKey(code: string | null | undefined): string | null {
   return normEdrpou(code).code;
 }
 
-/** Candidate person: uaMatchKey of the full name; null for empty / placeholder names. */
+/** Candidate person: uaMatchKey of the full name without personal numbers; null for empty / placeholder names. */
 export function personKey(name: string | null | undefined): string | null {
-  if (isPlaceholderName(name)) return null;
-  return uaMatchKey(name) || null;
+  const n = stripPersonIds(name);
+  if (isPlaceholderName(n)) return null;
+  return uaMatchKey(n) || null;
 }
 
 /** Registration number of a foreign entity as a key part: letters and digits, upper case, >= 4 chars. */
@@ -80,6 +113,9 @@ export type SkipReason = 'placeholder' | 'no_key' | 'ua_org_without_code';
  */
 export function founderEndpoint(f: { kind: string | null; name: string | null; code: string | null; country_code: string | null }): Endpoint | SkipReason {
   const foreign = !!f.country_code && f.country_code !== 'UA';
+  // a foreign organisation keeps its name and code (registration numbers); every other entry
+  // loses the personal numbers in its name (the builder's graph_stage.name_fix)
+  if (!(f.kind === 'organisation' && foreign)) f = { ...f, name: stripPersonIds(f.name) ?? null };
   if (f.kind === 'organisation') {
     if (!foreign) {
       const c = companyKey(f.code);
@@ -97,6 +133,64 @@ export function founderEndpoint(f: { kind: string | null; name: string | null; c
 /** head / signer edge of a head row: a representative (signatory) is 'signer', every other role 'head'. */
 export function headEdgeKind(roleClass: string | null | undefined): EdgeKind {
   return roleClass === 'representative' ? 'signer' : 'head';
+}
+
+// ---------------------------------------------------------------- organisations as heads (LEXAI-2318)
+
+/**
+ * Legal-form words and abbreviations: a head entry naming one is an organisation (management
+ * company, КУА, ТОВ-управитель), unless the name also has a patronymic ('ТОВ ОЛЕКСАНДР
+ * СЕМЕНОВИЧ' is a person named Тов; 'ТЕСТЕНКО ... ТЕСТОВИЧ ЛІКВІДАТОР ПІДПРИЄМСТВА' a person
+ * with a note). Applied to normName (= graph_stage.norm_name in builder.ts), POSIX classes only.
+ * 'банк', 'фонд' are surnames too; with a patronymic they are persons by the same rule. The
+ * abbreviations count only at the start ('ПРАТ ГАЄК', not 'ТЕСТЕНКО ПП').
+ */
+export const ORG_FORM_RE_SOURCE =
+  `(^| )(товариств${W}|підприємств${W}|корпораці${W}|компані(я|ї|ію|єю)|кооператив${W}|асоціаці${W}|спілк(а|и|у|ою)`
+  + `|установ(а|и|і)|фонд|фонду|банк|банку|куа|limited|ltd|llc|gmbh|inc|corp|plc)( |$)`
+  + `|^(тов|тзов|прат|пат|ат|зат|ват|тдв|пп|дп|кп) `;
+/** An 8-digit ЄДРПОУ in the entry text (not part of a longer number such as a 10-digit РНОКПП). */
+export const CODE8_RE_SOURCE = '(?:^|[^0-9])([0-9]{8})(?:[^0-9]|$)';
+const ORG_FORM_RE = new RegExp(ORG_FORM_RE_SOURCE);
+const CODE8_RE = new RegExp(CODE8_RE_SOURCE);
+
+/** JS twin of graph_stage.norm_name: lower case, ё -> е, apostrophes dropped, other non-letters to single spaces. */
+export function normName(s: string | null | undefined): string {
+  return (s || '').toLowerCase().replace(/ё/g, 'е').replace(/'/g, '').replace(/[^0-9a-zа-яіїєґ]+/g, ' ').trim();
+}
+
+/** The non-zero 8-digit code written in a name, as a company key, or null. */
+export function codeInName(name: string | null | undefined): string | null {
+  const m = CODE8_RE.exec(name || '');
+  return m && !/^0+$/.test(m[1]) ? m[1] : null;
+}
+
+/** A head entry that names a legal entity rather than a person. */
+export function isOrganisationName(name: string | null | undefined): boolean {
+  const n = normName(name);
+  if (!n || PATRONYMIC_RE.test(n)) return false;
+  return ORG_FORM_RE.test(n) || codeInName(name) !== null;
+}
+
+/** Organisation without a code that no unique company name resolves: uaMatchKey of the name (a candidate, like person_name). */
+export function organisationKey(name: string | null | undefined): string | null {
+  return uaMatchKey(stripPersonIds(name)) || null;
+}
+
+/**
+ * The node a head / signer entry points at: a person -> person_name; an organisation with a code
+ * in the text -> company; one without a code -> 'ua_org_without_code', which the builder resolves
+ * by a unique company name (the founders' rule) or else keys as an organisation node.
+ */
+export function headEndpoint(raw: string | null | undefined): Endpoint | SkipReason {
+  const name = stripPersonIds(raw);
+  if (isPlaceholderName(name)) return 'placeholder';
+  if (isOrganisationName(name)) {
+    const c = codeInName(name);
+    return c ? { kind: 'company', key: c } : 'ua_org_without_code';
+  }
+  const p = personKey(name);
+  return p ? { kind: 'person_name', key: p } : 'no_key';
 }
 
 // ---------------------------------------------------------------- addresses
@@ -162,18 +256,80 @@ export function regNeighbourPairs(rows: Array<{ edrpou: string; registered_on: s
 
 // ---------------------------------------------------------------- hubs
 
-export interface HubThresholds { company: number; person_name: number; address: number; foreign_entity: number }
+export type HubThresholds = Record<NodeKind, number>;
 
 /**
- * Defaults set between p99 and p99.9 of the degree distribution (sample build of 179K companies,
- * Nov 2026: p99 / p99.9 of address 21 / 87, person_name 12 / 48, company 16 / 30, foreign_entity
- * 13 / 67; full history person_name 19 / 56).
- * Above them a node is a mass registration address / business centre, a formation agent or nominee
- * name, a name shared by many namesakes, or a company with hundreds of co-owners (ОСББ, former
- * state enterprises); a traversal does not expand through it. Tunable per build (--hub-*).
+ * Hub thresholds are computed per build from the degree distribution of each kind (LEXAI-2319):
+ * threshold = max(floor, degree at the percentile), a node is a hub when its degree is above it.
+ * The fixed thresholds tuned on a 10% sample (address > 30 ...) made 5,812 addresses of the full
+ * graph hubs, business centres among them. First full build (20.11.2026), degree p99.9 / p99.99:
+ * address 153 / 457, company 55 / 250, person_name 65 / 252, foreign_entity 69 / 174. Addresses
+ * and companies use p99.99: a business centre with a few hundred tenants, or a company with a
+ * hundred co-owners, should not stop a traversal; persons and foreign entities p99.9 (formation
+ * agents, nominee directors, names shared by many namesakes). The floors keep a small (--limit)
+ * build from marking ordinary nodes. --hub-* overrides a kind.
  */
-export const DEFAULT_HUB_THRESHOLDS: HubThresholds = { company: 300, person_name: 40, address: 30, foreign_entity: 100 };
+export interface HubPolicy { percentile: number; floor: number }
+export const HUB_POLICY: Record<NodeKind, HubPolicy> = {
+  address: { percentile: 0.9999, floor: 100 },
+  company: { percentile: 0.9999, floor: 100 },
+  person_name: { percentile: 0.999, floor: 30 },
+  foreign_entity: { percentile: 0.999, floor: 30 },
+  organisation: { percentile: 0.999, floor: 30 },
+};
+/** The floors: thresholds of a graph too small for its percentiles to mean anything. */
+export const DEFAULT_HUB_THRESHOLDS: HubThresholds = Object.fromEntries(
+  NODE_KINDS.map(k => [k, HUB_POLICY[k].floor])) as HubThresholds;
+
+/**
+ * Mass registration address: degree at least max(floor, address degree at the percentile)
+ * (first full build: p99.995 = 600, 31 addresses), or listed in graph.address_flag as
+ * 'mass_registration'. Such an address is always a hub and carries attrs.mass_registration.
+ * graph.address_flag 'not_hub' exempts a curated address (a business centre) from both.
+ */
+export const MASS_REGISTRATION_POLICY: HubPolicy = { percentile: 0.99995, floor: 500 };
+
+/** Percentiles the builder reads from the degree distribution (one SQL pass per kind). */
+export function hubPercentiles(): number[] {
+  return [...new Set([...NODE_KINDS.map(k => HUB_POLICY[k].percentile), MASS_REGISTRATION_POLICY.percentile])].sort((a, b) => a - b);
+}
+
+export interface ComputedHubThresholds {
+  thresholds: HubThresholds;
+  massRegistrationMinDegree: number;
+  /** where each value came from: 'override', 'percentile' or 'floor' */
+  basis: Record<string, 'override' | 'percentile' | 'floor'>;
+  /** observed degree at each percentile, per kind (only kinds that have nodes) */
+  observed: Partial<Record<NodeKind, Record<string, number>>>;
+}
+
+/** Thresholds from the observed degree percentiles; overrides win, the floors bound the rest. */
+export function computeHubThresholds(observed: Partial<Record<NodeKind, Record<string, number>>>,
+  overrides: Partial<HubThresholds> = {}, massOverride?: number): ComputedHubThresholds {
+  const basis: ComputedHubThresholds['basis'] = {};
+  const pick = (name: string, pol: HubPolicy, value: number | undefined, override: number | undefined) => {
+    if (override !== undefined) { basis[name] = 'override'; return override; }
+    if (value !== undefined && value > pol.floor) { basis[name] = 'percentile'; return value; }
+    basis[name] = 'floor';
+    return pol.floor;
+  };
+  const thresholds = Object.fromEntries(NODE_KINDS.map(k =>
+    [k, pick(k, HUB_POLICY[k], observed[k]?.[String(HUB_POLICY[k].percentile)], overrides[k])])) as HubThresholds;
+  const massRegistrationMinDegree = pick('mass_registration', MASS_REGISTRATION_POLICY,
+    observed.address?.[String(MASS_REGISTRATION_POLICY.percentile)], massOverride);
+  return { thresholds, massRegistrationMinDegree, basis, observed };
+}
 
 export function isHub(kind: NodeKind, degree: number, t: HubThresholds = DEFAULT_HUB_THRESHOLDS): boolean {
   return degree > t[kind];
+}
+
+export type AddressFlag = 'mass_registration' | 'not_hub';
+
+/** Hub and mass-registration flags of an address node (the SQL in builder.ts does the same). */
+export function addressHubFlags(degree: number, t: ComputedHubThresholds, flag?: AddressFlag | null): { hub: boolean; massRegistration: false | 'degree' | 'list' } {
+  if (flag === 'not_hub') return { hub: false, massRegistration: false };
+  if (flag === 'mass_registration') return { hub: true, massRegistration: 'list' };
+  if (degree >= t.massRegistrationMinDegree) return { hub: true, massRegistration: 'degree' };
+  return { hub: degree > t.thresholds.address, massRegistration: false };
 }

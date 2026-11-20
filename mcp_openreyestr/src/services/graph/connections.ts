@@ -22,6 +22,7 @@ import {
 
 export const NODE_KIND_LABELS: Record<NodeKind, string> = {
   company: 'юрособа', person_name: 'особа (за ПІБ)', address: 'адреса', foreign_entity: 'іноземна особа',
+  organisation: 'організація (не з ЄДР)',
 };
 export const EDGE_KIND_LABELS: Record<EdgeKind, string> = {
   founder: 'засновник', beneficiary: 'кінцевий бенефіціар', head: 'керівник', signer: 'підписант (представник)',

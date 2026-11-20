@@ -85,7 +85,7 @@ const toolGroups: ToolGroup[] = [
     tools: [
       { name: 'count_cases_by_party', description: 'Точна кількість справ за назвою сторони (позивач/відповідач)', params: [{ name: 'party_name', required: true }, { name: 'party_type' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'return_cases' }, { name: 'max_cases_to_return' }], cost: '₴4.00 · до ₴6.00' },
       { name: 'check_precedent_status', description: 'Чи не скасовано рішення вищою інстанцією', params: [{ name: 'case_id' }, { name: 'case_number' }, { name: 'doc_id' }], cost: '₴1.50 · до ₴2.25' },
-      { name: 'get_citation_graph', description: 'Граф цитувань: статті законів у рішенні, хто цитує справу і кого цитує вона', params: [{ name: 'case_id', required: true }, { name: 'direction' }, { name: 'limit' }, { name: 'depth' }], cost: '₴1.00 · до ₴1.50' },
+      { name: 'get_citation_graph', description: 'Граф цитувань, параметр direction: laws — статті законів у рішенні (за замовчуванням), cited_by — хто цитує справу, cites — кого цитує рішення чи справа', params: [{ name: 'case_id', required: true }, { name: 'direction' }, { name: 'limit' }, { name: 'depth' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'search_court_case_status', description: 'Статус судової справи за номером, суддею або судом', params: [{ name: 'case_number' }, { name: 'judge' }, { name: 'description' }, { name: 'court_name' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
       { name: 'search_case_status_by_party', description: 'Справи за стороною (ПІБ або назва юрособи): стадії розгляду, судді, засідання', params: [{ name: 'party', required: true }, { name: 'region' }, { name: 'court_name' }, { name: 'case_number' }, { name: 'proceeding_number' }, { name: 'date_from' }, { name: 'date_to' }, { name: 'include_sessions' }, { name: 'limit' }, { name: 'offset' }], cost: '₴3.63 · до ₴5.45' },
       { name: 'get_case_status_details', description: 'Картка справи: усі стадії розгляду, сторони, судді, засідання', params: [{ name: 'case_number', required: true }, { name: 'court_name' }], cost: '₴1.00 · до ₴1.50' },
@@ -128,7 +128,7 @@ const toolGroups: ToolGroup[] = [
   {
     title: 'Відкриті дані та реєстри',
     tools: [
-      { name: 'search_registry', description: 'Єдиний вхід у 30 реєстрів відкритих даних: санкції, адвокати, особи, які вчинили корупційні правопорушення, банки НБУ, фінзвітність та ін.', params: [{ name: 'registry', required: true }, { name: 'filters' }, { name: 'aggregate' }, { name: 'limit' }], cost: '₴0.50 · до ₴0.75' },
+      { name: 'search_registry', description: 'Єдиний вхід у 30 реєстрів відкритих даних: санкції, адвокати, реєстр корупційних правопорушників НАЗК (corruption_register), банки НБУ, фінзвітність, ЄДЕССБ, рішення АМКУ та ін.', params: [{ name: 'registry', required: true }, { name: 'filters' }, { name: 'aggregate' }, { name: 'limit' }], cost: '₴0.50 · до ₴0.75' },
       { name: 'search_judges', description: 'Реєстр суддів ВККС: 6K чинних плюс 417K історичних записів', params: [{ name: 'full_name' }, { name: 'court_name' }, { name: 'dossier_number' }, { name: 'gender' }, { name: 'include_history' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
       { name: 'search_vkks', description: 'Дані ВККС у 5 категоріях: judges, evaluations, declarations, vacancies, efficiency', params: [{ name: 'category', required: true }, { name: 'judge_name' }, { name: 'court_name' }, { name: 'year' }, { name: 'region' }, { name: 'court_level' }, { name: 'dossier_number' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
       { name: 'search_vrp_judges_discipline', description: 'Дисциплінарні дані суддів ВРП: звільнені, відсторонені, втручання', params: [{ name: 'judge_name' }, { name: 'court_name' }, { name: 'type' }, { name: 'limit' }], cost: '₴0.25 · до ₴0.38' },
@@ -151,8 +151,8 @@ const toolGroups: ToolGroup[] = [
     tools: [
       { name: 'openreyestr_search_entities', description: 'Юридичні особи та ФОП у ЄДР', params: [{ name: 'query' }, { name: 'edrpou' }, { name: 'record' }, { name: 'entityType' }, { name: 'stan' }, { name: 'limit' }, { name: 'offset' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'openreyestr_get_entity_details', description: 'Повна картка суб’єкта: засновники, бенефіціари, керівники', params: [{ name: 'record', required: true }, { name: 'entityType' }], cost: '₴0.75 · до ₴1.12' },
-      { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴8.00 · до ₴12.00' },
-      { name: 'search_offshore_leaks', description: 'ICIJ Offshore Leaks (Panama, Paradise, Pandora Papers…): офшорні компанії, особи, посередники й адреси за назвою, зі зв’язками на 1–2 кроки; ODbL, атрибуція ICIJ', params: [{ name: 'name' }, { name: 'names' }, { name: 'match' }, { name: 'node_type' }, { name: 'jurisdiction' }, { name: 'country' }, { name: 'source_leak' }, { name: 'hops' }, { name: 'limit' }, { name: 'offset' }, { name: 'edges_per_node' }], cost: '₴1.50 · до ₴2.25' },
+      { name: 'get_company_dossier', description: 'Досьє компанії за ЄДРПОУ: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, заплановані перевірки, ICIJ Offshore Leaks, кіпрські засновники з реєстром DRCOR, суди; джерело й дата на кожен розділ', params: [{ name: 'edrpou', required: true }], cost: '₴6.00 · до ₴9.00' },
+      { name: 'search_offshore_leaks', description: 'ICIJ Offshore Leaks (Panama, Paradise, Pandora Papers…): офшорні компанії, особи, посередники й адреси за назвою, зі зв’язками на 1–2 кроки; ODbL, атрибуція ICIJ', params: [{ name: 'name' }, { name: 'names' }, { name: 'match' }, { name: 'node_type' }, { name: 'jurisdiction' }, { name: 'country' }, { name: 'source_leak' }, { name: 'hops' }, { name: 'limit' }, { name: 'offset' }, { name: 'edges_per_node' }], cost: '₴1.00 · до ₴1.50' },
       { name: 'get_financial_statements', description: 'Фінансова звітність за ЄДРПОУ: активи, капітал, зобов’язання, дохід і прибуток за роками (Ф1/Ф2, 1-м, 1-мс), тис. грн; джерело й дата подання на кожен звіт', params: [{ name: 'edrpou', required: true }, { name: 'year_from' }, { name: 'year_to' }, { name: 'include_interim' }], cost: '₴2.00 · до ₴3.00' },
       { name: 'search_cyprus_companies', description: 'Реєстр компаній Кіпру (DRCOR): пошук за назвою, номером HE/AE чи посадовою особою; статус, офіс, директори й секретарі; дата знімка й джерело на кожен запис', params: [{ name: 'query' }, { name: 'registration_number' }, { name: 'person_name' }, { name: 'name_match' }, { name: 'status' }, { name: 'org_type' }, { name: 'limit' }, { name: 'offset' }], cost: '₴0.50 · до ₴0.75' },
       { name: 'openreyestr_get_by_edrpou', description: 'Швидкий пошук суб’єкта за кодом ЄДРПОУ', params: [{ name: 'edrpou', required: true }], cost: '₴0.50 · до ₴0.75' },
@@ -802,7 +802,7 @@ function PricingSection() {
           </tr>
           <tr className="border-b border-claude-border/50 align-top">
             <Td>Досьє</Td>
-            <Td>₴8</Td>
+            <Td>₴6–8</Td>
             <Td>до ₴12</Td>
             <Td><Code>get_company_dossier</Code> (усі реєстри за ЄДРПОУ), <Code>get_trademark_dossier</Code> (ТМ: діловодство, зіткнення, судова практика)</Td>
           </tr>

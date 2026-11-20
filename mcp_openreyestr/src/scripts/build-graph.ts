@@ -4,13 +4,18 @@
  * Usage:
  *   node dist/scripts/build-graph.js [--limit N [--from-edrpou CODE]] [--dry-run]
  *        [--current yes|no|auto] [--current-date YYYY-MM-DD] [--rekey-addresses]
- *        [--hub-company N] [--hub-person N] [--hub-address N] [--hub-foreign N]
+ *        [--hub-company N] [--hub-person N] [--hub-address N] [--hub-foreign N] [--hub-organisation N] [--mass-address N]
  *        [--reg-gap N] [--reg-per-day N] [--statement-timeout 3h] [--work-mem 256MB] [--keep-stage]
  *
  * A full rebuild stages everything in schema graph_stage and swaps it in with one transaction:
  * graph.node / graph.edge stay queryable meanwhile. --limit N builds a sample of the first N
  * companies by code (from --from-edrpou) and SWAPS IT IN as well: run it in a scratch database.
- * --dry-run only counts the sources (read-only). Heavy queries: run off-peak, e.g. under
+ * --dry-run only counts the sources (read-only). Hub thresholds are computed from the degree
+ * distribution of the build (keys.ts HUB_POLICY, stored in graph.build.hub_thresholds); --hub-*
+ * and --mass-address override them. Personal numbers (РНОКПП, passport series) are stripped from
+ * names and text attributes (graph-norm/personal-ids.ts, LEXAI-2322); the build FAILS before the
+ * swap if a 10-digit run is left in a node label / key or an edge attribute (builder.ts
+ * checkPersonalIds, which also documents the same check as SQL for the live graph). Heavy queries: run off-peak, e.g. under
  * `nice` and with a statement timeout (default 3h per statement).
  *
  * Environment: POSTGRES_HOST / POSTGRES_PORT / POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB.
@@ -46,6 +51,8 @@ function parseArgs(argv: string[]): BuildOptions {
       case '--hub-person': hub.person_name = int(k, val()); break;
       case '--hub-address': hub.address = int(k, val()); break;
       case '--hub-foreign': hub.foreign_entity = int(k, val()); break;
+      case '--hub-organisation': hub.organisation = int(k, val()); break;
+      case '--mass-address': o.massRegistrationMinDegree = int(k, val()); break;
       case '--reg-gap': o.regNeighbourMaxGap = int(k, val()); break;
       case '--reg-per-day': o.regNeighbourMaxPerDay = int(k, val()); break;
       case '--statement-timeout': o.statementTimeout = val(); break;
