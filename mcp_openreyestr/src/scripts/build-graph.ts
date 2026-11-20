@@ -6,6 +6,7 @@
  *        [--current yes|no|auto] [--current-date YYYY-MM-DD] [--rekey-addresses]
  *        [--hub-company N] [--hub-person N] [--hub-address N] [--hub-foreign N] [--hub-organisation N] [--mass-address N]
  *        [--reg-gap N] [--reg-per-day N] [--statement-timeout 3h] [--work-mem 256MB] [--keep-stage]
+ *        [--no-court] [--court-max-parties N] [--hub-court N]
  *
  * A full rebuild stages everything in schema graph_stage and swaps it in with one transaction:
  * graph.node / graph.edge stay queryable meanwhile. --limit N builds a sample of the first N
@@ -17,6 +18,9 @@
  * swap if a 10-digit run is left in a node label / key or an edge attribute (builder.ts
  * checkPersonalIds, which also documents the same check as SQL for the live graph). Heavy queries: run off-peak, e.g. under
  * `nice` and with a statement timeout (default 3h per statement).
+ *
+ * co_party edges come from graph.court_party, filled by load-court-parties.js (LEXAI-2304);
+ * --no-court leaves them out, --court-max-parties / --hub-court override the court.ts defaults.
  *
  * Environment: POSTGRES_HOST / POSTGRES_PORT / POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB.
  */
@@ -58,6 +62,9 @@ function parseArgs(argv: string[]): BuildOptions {
       case '--statement-timeout': o.statementTimeout = val(); break;
       case '--work-mem': o.workMem = val(); break;
       case '--keep-stage': o.keepStage = true; break;
+      case '--no-court': o.court = false; break;
+      case '--court-max-parties': o.court = { ...(o.court || {}), maxPartiesPerDecision: int(k, val()) }; break;
+      case '--hub-court': o.court = { ...(o.court || {}), hubThreshold: int(k, val()) }; break;
       default: throw new Error(`unknown argument ${argv[i]}`);
     }
   }
