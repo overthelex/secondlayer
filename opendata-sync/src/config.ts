@@ -52,14 +52,6 @@ const backendDailySources: DataSourceSchedule[] = [
     enabled: true,
   },
   {
-    name: 'nazk_corruption',
-    title: 'НАЗК — Корупціонери',
-    cron: '30 3 * * *', // 03:30 daily
-    target: 'backend',
-    sourceName: 'nazk_corruption',
-    enabled: true,
-  },
-  {
     name: 'invalid_passports',
     title: 'МВС — Недійсні паспорти',
     cron: '0 4 * * *', // 04:00 daily
