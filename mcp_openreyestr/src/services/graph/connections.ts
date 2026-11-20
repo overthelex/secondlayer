@@ -14,6 +14,7 @@
 import type { StreetRenamingLookup } from '../graph-norm/address';
 import { StreetRenamingsCache } from '../graph-norm/street-renamings';
 import { EDGE_KINDS, EdgeKind, NodeKind } from './keys';
+import { enrichmentFor, OutEnrichEdge, OutFlag } from './enrichment';
 import {
   EdgeFilter, GraphEdge, GraphNode, GraphStore, NeighbourhoodResult, parseStartKey, Queryable, sqlGraphStore, traverse,
 } from './neighbourhood';
@@ -151,6 +152,8 @@ export function resolveStartKey(raw: string, type: StartType = 'auto', renamings
 export interface OutNode {
   id: string; type: NodeKind; label: string | null; key?: string; degree: number; hub: boolean;
   depth?: number; match_level?: 'name_only'; attrs?: Record<string, unknown>;
+  /** registers the node is on (LEXAI-2305 enrichment: sanctions, debts, НАЗК, ...) */
+  flags?: OutFlag[];
 }
 export interface OutEdge {
   id: string; from: string; to: string; type: EdgeKind;
@@ -295,6 +298,24 @@ export function pathsFromStart(r: NeighbourhoodResult, maxPaths: number): OutPat
   });
 }
 
+// ---------------------------------------------------------------- enrichment (LEXAI-2305)
+
+export const ENRICHMENT_NOTE = 'flags — реєстри, у яких є вузол (санкції, борги, виконавчі провадження, НАЗК, НБУ); '
+  + 'enrichment.edges — додаткові зв\'язки між уже показаними вузлами з інших реєстрів (стягувач, постачальник ProZorro, '
+  + 'власник за декларацією НАЗК, член сім\'ї декларанта, акціонер ≥5%). Для осіб збіг лише за ПІБ (match: name) — може бути тезка.';
+
+/** Adds the flags to the output nodes (by graph node id) and returns the enrichment edges between them. */
+async function attachEnrichment(db: Queryable, schema: string, graphNodes: GraphNode[], out: OutNode[]):
+  Promise<{ edges: Array<Omit<OutEnrichEdge, 'from' | 'to'> & { from: string; to: string }>; note: string } | undefined> {
+  const e = await enrichmentFor(db, graphNodes, schema);
+  if (!e.available) return undefined;
+  for (const o of out) {
+    const f = e.flags.get(Number(o.id.slice(1)));
+    if (f) o.flags = f;
+  }
+  return { edges: e.edges.map(x => ({ ...x, from: nid(x.from), to: nid(x.to) })), note: ENRICHMENT_NOTE };
+}
+
 // ---------------------------------------------------------------- snapshots
 
 export interface GraphSources { snapshots: string[]; current_dump: string | null; built_at: string | null }
@@ -433,6 +454,8 @@ export async function findConnections(pool: PoolLike, p: FindConnectionsParams, 
       const n = r.nodes.find(x => x.id === id)!;
       return { id: nid(id), type: n.kind, label: n.label, degree: n.degree };
     });
+    const startOut = outNode({ ...start, depth: 0 }, { full: true });
+    const enrichment = await attachEnrichment(db, schema, r.nodes, [...nodes, startOut]);
     const notes: string[] = [];
     if (r.truncated.hubs.length) notes.push(`${r.truncated.hubs.length} хаб(ів) показано, але не розкрито (зв'язків понад поріг). Щоб іти крізь них, задайте include_hubs: true.`);
     if (r.truncated.fanout.length) notes.push(`У ${r.truncated.fanout.length} вузл(ів) показано лише перші ${maxFanout} зв'язків (max_fanout).`);
@@ -440,7 +463,7 @@ export async function findConnections(pool: PoolLike, p: FindConnectionsParams, 
     return {
       found: true,
       query,
-      start: outNode({ ...start, depth: 0 }, { full: true }),
+      start: startOut,
       summary: {
         nodes: nodes.length, edges: edges.length,
         nodes_by_type: countBy(r.nodes, n => n.kind),
@@ -453,6 +476,7 @@ export async function findConnections(pool: PoolLike, p: FindConnectionsParams, 
         nodes, edges,
         truncated: !!(r.truncated.hubs.length || r.truncated.fanout.length || r.truncated.maxNodes),
       },
+      ...(enrichment ? { enrichment } : {}),
       truncated: { hubs: hubLabels, hubs_total: r.truncated.hubs.length, fanout: r.truncated.fanout.map(nid), max_nodes: r.truncated.maxNodes },
       notes,
       warnings: warningsFor(inferred, hasPerson, gap),
@@ -657,6 +681,7 @@ export async function connectionPath(pool: PoolLike, p: ConnectionPathParams, sc
       return outNode({ ...n, depth: da ?? (r.length! - (db2 ?? 0)) });
     });
     const edges = [...edgeIds].sort((x, y) => x - y).map(id => outEdge(r.edges.get(id)!, { sourceRefs: !!p.include_source_refs }));
+    const enrichment = await attachEnrichment(db, schema, [...nodeIds].map(id => r.nodes.get(id)!), [...nodes, base.from, base.to]);
     const hasPerson = [...nodeIds].some(id => r.nodes.get(id)!.kind === 'person_name');
     const notes: string[] = [];
     if (list.length >= maxPaths) notes.push(`Показано перші ${maxPaths} найкоротших шляхів (max_paths); їх може бути більше.`);
@@ -671,6 +696,7 @@ export async function connectionPath(pool: PoolLike, p: ConnectionPathParams, sc
         target: { id: nid(B.node!.id), type: B.node!.kind, key: B.node!.key, label: B.node!.label },
         nodes, edges, truncated: !!(r.truncated.hubs.length || r.truncated.fanout.length || r.truncated.budget),
       },
+      ...(enrichment ? { enrichment } : {}),
       notes,
       warnings: warningsFor(anyPersonStart ? 'person' : 'auto', hasPerson, gap),
       legend: LEGEND,
