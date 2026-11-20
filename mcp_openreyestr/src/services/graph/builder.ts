@@ -8,7 +8,12 @@
  *   - address keys (graph-norm normAddress) for raw addresses not yet keyed with the current key
  *     version, cached in graph.address_key across builds;
  *   - parsing the current dump's text entries (founder_info / signer_info / beneficiary_info)
- *     with the edr_hist parsers into the edr_hist row shape, so one SQL classification serves both.
+ *     with the edr_hist parsers into the edr_hist row shape, so one SQL classification serves both;
+ *   - stripping personal numbers (РНОКПП, passport series) from names and free-text attributes
+ *     (graph-norm/personal-ids, LEXAI-2322): the few values carrying them go through JS into
+ *     graph_stage.name_fix / text_fix, which the participation SQL joins. Before the swap the
+ *     build FAILS if a 10-digit run is left in a node label / key (foreign entities excepted: their
+ *     codes are registration numbers) or in an edge attribute (amounts excepted): checkPersonalIds.
  *
  * Sources and dates:
  *   hist     edr_hist.founder / beneficiary / head (one row per distinct entry text per company,
@@ -25,9 +30,11 @@ import { parseBeneficiary, parseFounder, parseHead } from '../edr-history/entrie
 import { countryIso, uaMatchKey } from '../edr-history/norm';
 import { StreetRenamingsCache } from '../graph-norm/street-renamings';
 import type { StreetRenamingLookup } from '../graph-norm/address';
+import { NAME_ID_PROBE_SQL, stripIdNumbers, stripPersonIds, TEN_DIGITS_SQL, TEXT_ID_PROBE_SQL } from '../graph-norm/personal-ids';
 import {
   addressKeyRow, addressKeyVersion, CODE8_RE_SOURCE, computeHubThresholds, ComputedHubThresholds, hubPercentiles,
-  HubThresholds, NODE_KINDS, NodeKind, ORG_FORM_RE_SOURCE, PATRONYMIC_RE_SOURCE, PLACEHOLDER_RE_SOURCE, WEAK_PLACEHOLDER_RE_SOURCE,
+  HubThresholds, NODE_KINDS, NodeKind, ORG_FORM_RE_SOURCE, PATRONYMIC_RE_SOURCE, PERSON_KEY_VERSION, PLACEHOLDER_RE_SOURCE,
+  WEAK_PLACEHOLDER_RE_SOURCE,
   REG_NEIGHBOUR_MAX_GAP, REG_NEIGHBOUR_MAX_PER_DAY,
 } from './keys';
 
@@ -215,14 +222,15 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       if (scoped) {
         await c.query(`CREATE UNLOGGED TABLE graph_stage.scope AS
           SELECT edrpou FROM (
-            SELECT edrpou FROM edr_hist.company WHERE edrpou >= $1
+            SELECT edrpou FROM edr_hist.company WHERE edrpou >= $1 AND edrpou !~ '[0-9]{10}'
             UNION SELECT edrpou FROM legal_entities WHERE edrpou >= $1 AND edrpou ~ '^\\d{8}$') x
           ORDER BY edrpou LIMIT ${opts.limit}`, [(opts.fromEdrpou || '0').padStart(8, '0')]);
         await c.query('ALTER TABLE graph_stage.scope ADD PRIMARY KEY (edrpou)');
         await count('scope_companies', 'SELECT count(*) AS n FROM graph_stage.scope');
       }
     });
-    const inScope = (col: string) => (scoped ? `${col} IN (SELECT edrpou FROM graph_stage.scope)` : 'TRUE');
+    // a 10-digit code is an individual's РНОКПП, not a company (ЄДРПОУ has 8 digits): such records are skipped
+    const inScope = (col: string) => `${col} !~ '[0-9]{10}'${scoped ? ` AND ${col} IN (SELECT edrpou FROM graph_stage.scope)` : ''}`;
 
     await timed('companies', async () => {
       // the current dump: one record per code, the most alive one
@@ -250,7 +258,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       // Ukrainian organisations named without a code are resolved by a company name that is unique
       await c.query(`CREATE UNLOGGED TABLE graph_stage.uniq_name AS
         SELECT name_latn, min(edrpou) AS edrpou FROM edr_hist.company
-        WHERE name_latn IS NOT NULL AND length(name_latn) >= 4 GROUP BY name_latn HAVING count(*) = 1`);
+        WHERE name_latn IS NOT NULL AND length(name_latn) >= 4 AND edrpou ~ '^\\d{8}$' GROUP BY name_latn HAVING count(*) = 1`);
       await c.query('ALTER TABLE graph_stage.uniq_name ADD PRIMARY KEY (name_latn)');
     });
 
@@ -279,6 +287,36 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       });
     }
 
+    // ------------------------------------------------------------ personal numbers in names and texts (LEXAI-2322)
+    await timed('personal_ids', async () => {
+      counts.person_key_version = `p${PERSON_KEY_VERSION}`;
+      counts.names_with_ids = await fixValues(c, 'graph_stage.name_fix', `
+        SELECT name AS v FROM edr_hist.founder WHERE name ~ $1 AND ${inScope('edrpou')}
+        UNION SELECT name FROM edr_hist.head WHERE name ~ $1 AND ${inScope('edrpou')}
+        UNION SELECT name FROM edr_hist.beneficiary WHERE name ~ $1 AND ${inScope('edrpou')}
+        UNION SELECT name FROM graph_stage.cur_founder WHERE name ~ $1
+        UNION SELECT name FROM graph_stage.cur_head WHERE name ~ $1
+        UNION SELECT name FROM graph_stage.cur_beneficiary WHERE name ~ $1`, NAME_ID_PROBE_SQL, v => {
+        const clean = stripPersonIds(v);
+        return clean === v ? null : [clean, uaMatchKey(clean) || null];
+      });
+      counts.texts_with_ids = await fixValues(c, 'graph_stage.text_fix', `
+        SELECT influence AS v FROM edr_hist.beneficiary WHERE influence ~ $1 AND ${inScope('edrpou')}
+        UNION SELECT share FROM edr_hist.beneficiary WHERE share ~ $1 AND ${inScope('edrpou')}
+        UNION SELECT role FROM edr_hist.head WHERE role ~ $1 AND ${inScope('edrpou')}
+        UNION SELECT influence FROM graph_stage.cur_beneficiary WHERE influence ~ $1
+        UNION SELECT share FROM graph_stage.cur_beneficiary WHERE share ~ $1
+        UNION SELECT role FROM graph_stage.cur_head WHERE role ~ $1`, TEXT_ID_PROBE_SQL, v => {
+        const clean = stripIdNumbers(v);
+        return clean === v ? null : [clean, null];
+      });
+    });
+    // the cleaned name / key of an entry (foreign organisations keep theirs: see personal-ids.ts)
+    const fixedName = (t: string, nf: string, cond = 'TRUE') =>
+      `CASE WHEN ${nf}.raw IS NOT NULL AND ${cond} THEN ${nf}.clean ELSE ${t}.name END AS name,
+       CASE WHEN ${nf}.raw IS NOT NULL AND ${cond} THEN ${nf}.clean_key ELSE ${t}.name_latn END AS name_latn`;
+    const fixedText = (t: string, col: string, tf: string) => `coalesce(${tf}.clean, ${t}.${col}) AS ${col}`;
+
     // ------------------------------------------------------------ participations -> one row per entry with its endpoint
     const cd = curDate ? `${lit(curDate)}::date` : 'NULL::date';
     await timed('participations', async () => {
@@ -288,13 +326,17 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       // founders: Ukrainian organisation with a code -> company, foreign organisation -> foreign_entity,
       // Ukrainian organisation without a code -> company by unique name (else dropped), person -> person_name
       await c.query(`INSERT INTO graph_stage.p_entry
-        WITH f AS (
+        WITH f0 AS (
           SELECT edrpou, kind, name, name_latn, code, country_code, contribution, contribution_uah, first_seen, last_seen,
                  'edr_hist' AS src, entry_hash AS ref
           FROM edr_hist.founder WHERE ${inScope('edrpou')}
           UNION ALL
           SELECT edrpou, kind, name, name_latn, code, country_code, contribution, contribution_uah, ${cd}, ${cd}, 'edr_current', ref
           FROM graph_stage.cur_founder
+        ), f AS (
+          SELECT f0.edrpou, f0.kind, ${fixedName('f0', 'nf', "NOT (f0.kind = 'organisation' AND coalesce(f0.country_code, 'UA') <> 'UA')")},
+                 f0.code, f0.country_code, f0.contribution, f0.contribution_uah, f0.first_seen, f0.last_seen, f0.src, f0.ref
+          FROM f0 LEFT JOIN graph_stage.name_fix nf ON nf.raw = f0.name
         ), k AS (
           SELECT f.*, graph_stage.placeholder(f.name) AS placeholder,
                  upper(regexp_replace(coalesce(f.code, ''), '[^0-9A-Za-zА-Яа-яІіЇїЄєҐґ]', '', 'g')) AS fcode,
@@ -326,11 +368,15 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       // keys.ts headEndpoint) -> company by the code, else by a unique company name (the founders'
       // rule), else an organisation node; never the company itself
       await c.query(`INSERT INTO graph_stage.p_entry
-        WITH h AS (
+        WITH h0 AS (
           SELECT edrpou, source, name, name_latn, role, role_class, appointed_on, first_seen, last_seen, 'edr_hist' AS src, entry_hash AS ref
           FROM edr_hist.head WHERE ${inScope('edrpou')}
           UNION ALL
           SELECT edrpou, source, name, name_latn, role, role_class, appointed_on, ${cd}, ${cd}, 'edr_current', ref FROM graph_stage.cur_head
+        ), h AS (
+          SELECT h0.edrpou, h0.source, ${fixedName('h0', 'nf')}, ${fixedText('h0', 'role', 'tf')},
+                 h0.role_class, h0.appointed_on, h0.first_seen, h0.last_seen, h0.src, h0.ref
+          FROM h0 LEFT JOIN graph_stage.name_fix nf ON nf.raw = h0.name LEFT JOIN graph_stage.text_fix tf ON tf.raw = h0.role
         ), k AS (
           SELECT h.*, graph_stage.org_name(h.name) AS org, substring(h.name FROM ${lit(CODE8_RE_SOURCE)}) AS code8
           FROM h WHERE coalesce(h.name_latn, '') <> '' AND NOT graph_stage.placeholder(h.name)
@@ -348,11 +394,16 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
                  'resolved_by', CASE WHEN ccode IS NOT NULL THEN 'code' WHEN by_name IS NOT NULL THEN 'unique_name' END))
         FROM r WHERE NOT org OR coalesce(ccode, by_name) IS DISTINCT FROM edrpou`);
       await c.query(`INSERT INTO graph_stage.p_entry
-        WITH b AS (
+        WITH b0 AS (
           SELECT edrpou, name, name_latn, country_code, influence, share, first_seen, last_seen, 'edr_hist' AS src, entry_hash AS ref
           FROM edr_hist.beneficiary WHERE name IS NOT NULL AND ${inScope('edrpou')}
           UNION ALL
           SELECT edrpou, name, name_latn, country_code, influence, share, ${cd}, ${cd}, 'edr_current', ref FROM graph_stage.cur_beneficiary
+        ), b AS (
+          SELECT b0.edrpou, ${fixedName('b0', 'nf')}, b0.country_code, ${fixedText('b0', 'influence', 'ti')}, ${fixedText('b0', 'share', 'ts')},
+                 b0.first_seen, b0.last_seen, b0.src, b0.ref
+          FROM b0 LEFT JOIN graph_stage.name_fix nf ON nf.raw = b0.name
+          LEFT JOIN graph_stage.text_fix ti ON ti.raw = b0.influence LEFT JOIN graph_stage.text_fix ts ON ts.raw = b0.share
         )
         SELECT edrpou, 'beneficiary', 'person_name', name_latn, name, first_seen, last_seen, src, ref, NULL, NULL,
                jsonb_strip_nulls(jsonb_build_object('country', country_code, 'influence', influence, 'share', share))
@@ -465,7 +516,8 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       for (const r of (await c.query('SELECT kind, count(*) AS n FROM graph_stage.e_raw GROUP BY kind ORDER BY kind')).rows) counts[`edges_${r.kind}`] = Number(r.n);
       counts.edges_current = Number((await one('SELECT count(*) AS n FROM graph_stage.e_raw WHERE valid_to IS NULL')).n);
       // intermediates are dropped as soon as they are used: the staging peak stays near the size of the graph
-      await c.query('DROP TABLE graph_stage.p_entry, graph_stage.cur_founder, graph_stage.cur_head, graph_stage.cur_beneficiary, graph_stage.addr_todo');
+      await c.query(`DROP TABLE graph_stage.p_entry, graph_stage.cur_founder, graph_stage.cur_head, graph_stage.cur_beneficiary, graph_stage.addr_todo,
+        graph_stage.name_fix, graph_stage.text_fix`);
     });
 
     // ------------------------------------------------------------ nodes with degree and hub flag
@@ -556,6 +608,9 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       await c.query('ANALYZE graph_stage.edge');
       await c.query('RESET maintenance_work_mem');
     });
+    await timed('check_personal_ids', async () => {
+      Object.assign(counts, await checkPersonalIds(c, 'graph_stage'));
+    });
     const size = await one(`SELECT pg_total_relation_size('graph_stage.node') AS n, pg_total_relation_size('graph_stage.edge') AS e`);
     counts.bytes_node = Number(size.n);
     counts.bytes_edge = Number(size.e);
@@ -591,6 +646,53 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
     if (locked) await c.query(`SELECT pg_advisory_unlock(hashtext('graph_builder'))`).catch(() => undefined);
     c.release();
   }
+}
+
+/**
+ * The values matching a prefilter (a small set) cleaned in JS into `target` (raw, clean, clean_key);
+ * fix returns null for a value it leaves unchanged. Returns the number of changed values.
+ */
+async function fixValues(c: PoolClient, target: string, selectSql: string, probe: string,
+  fix: (v: string) => [string, string | null] | null): Promise<number> {
+  await c.query(`CREATE UNLOGGED TABLE ${target} (raw text PRIMARY KEY, clean text NOT NULL, clean_key text)`);
+  const rows: Array<[string, string, string | null]> = [];
+  for (const r of (await c.query(`SELECT v FROM (${selectSql}) x WHERE v IS NOT NULL`, [probe])).rows) {
+    const f = fix(String(r.v));
+    if (f) rows.push([String(r.v), f[0], f[1]]);
+  }
+  for (let i = 0; i < rows.length; i += 20000) {
+    const b = rows.slice(i, i + 20000);
+    await c.query(`INSERT INTO ${target} SELECT * FROM unnest($1::text[], $2::text[], $3::text[]) ON CONFLICT DO NOTHING`,
+      [b.map(x => x[0]), b.map(x => x[1]), b.map(x => x[2])]);
+  }
+  await c.query(`ANALYZE ${target}`);
+  return rows.length;
+}
+
+/**
+ * Post-build check (LEXAI-2322): no standalone 10-digit run (a РНОКПП) in a node label or key, or
+ * in an edge attribute. Foreign entities are exempt (their keys / codes are registration numbers,
+ * a Russian company's ИНН has 10 digits), so are the amounts contribution / contribution_uah and
+ * source_ref (entry hashes). Throws, so a build that leaks personal numbers is never swapped in;
+ * --keep-stage leaves graph_stage for inspection. The same check on the live graph:
+ *
+ *   SELECT count(*) FROM graph.node WHERE kind <> 'foreign_entity'
+ *     AND (label ~ '(^|[^0-9])[0-9]{10}([^0-9]|$)' OR key ~ '(^|[^0-9])[0-9]{10}([^0-9]|$)');
+ *   SELECT count(*) FROM graph.edge WHERE (attrs - 'contribution' - 'contribution_uah')::text ~ '(^|[^0-9])[0-9]{10}([^0-9]|$)';
+ */
+export async function checkPersonalIds(c: Pick<PoolClient, 'query'>, schema: string): Promise<{ id_numbers_nodes: number; id_numbers_edges: number }> {
+  const n = (await c.query(`SELECT kind, count(*) AS n FROM ${schema}.node
+    WHERE kind <> 'foreign_entity' AND (label ~ $1 OR key ~ $1) GROUP BY kind`, [TEN_DIGITS_SQL])).rows as Array<{ kind: string; n: string }>;
+  const e = (await c.query(`SELECT kind, count(*) AS n FROM ${schema}.edge
+    WHERE (attrs - 'contribution' - 'contribution_uah')::text ~ $1 GROUP BY kind`, [TEN_DIGITS_SQL])).rows as Array<{ kind: string; n: string }>;
+  const sum = (rows: Array<{ n: string }>) => rows.reduce((a, r) => a + Number(r.n), 0);
+  const res = { id_numbers_nodes: sum(n), id_numbers_edges: sum(e) };
+  if (res.id_numbers_nodes || res.id_numbers_edges) {
+    const by = (rows: Array<{ kind: string; n: string }>) => rows.map(r => `${r.kind} ${r.n}`).join(', ') || 'none';
+    throw new Error(`personal ID numbers (10-digit runs) left in the graph: ${res.id_numbers_nodes} nodes (${by(n)}), `
+      + `${res.id_numbers_edges} edges (${by(e)}); see graph-norm/personal-ids.ts. Not swapped in.`);
+  }
+  return res;
 }
 
 /** Read one current dump table in id order (keyset batches), parse each entry, insert the rows. */

@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Pool } from 'pg';
-import { buildGraph } from '../builder';
+import { buildGraph, checkPersonalIds } from '../builder';
 import { neighbourhood } from '../neighbourhood';
 import {
   addressKeyRow, addressKeyVersion, CODE8_RE_SOURCE, isOrganisationName, isPlaceholderName, normName, ORG_FORM_RE_SOURCE,
@@ -24,6 +24,7 @@ const S18 = '2018-09-22';
 const S21 = '2021-11-01';
 const CUR = '2026-11-18';
 const IVANENKO = 'ІВАНЕНКО ІВАН ІВАНОВИЧ';
+const TESTENKO = 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ';
 const ADDR_A = 'Україна, 01001, місто Київ, ВУЛИЦЯ ХРЕЩАТИК, будинок 10, офіс 5';
 const ADDR_A2 = 'Україна, 01001, ВУЛ. ХРЕЩАТИК, 10, ОФ. 7, М.КИЇВ';
 const ADDR_OLD = 'Україна, 01001, місто Київ, ВУЛИЦЯ ЛЮТЕРАНСЬКА, будинок 3';
@@ -104,6 +105,16 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     await head('22222220', 'ТОВ "БЕТА", 22222220', 'head');
     await head('22222220', 'КЕРІВНИК ПІДПРИЄМСТВА', 'head');
     await head('22222220', 'НЕВИЗНАЧЕНА ОСОБА', 'representative');
+    // LEXAI-2322: C's founder written with and without a (synthetic) РНОКПП, a beneficiary with one
+    // in the name and in the influence text, a head with an ІПН; a "company" with a 10-digit code
+    await founder('22222233', `${TESTENKO} (1234567890), розмір внеску - 100 грн.`, { kind: 'person', name: `${TESTENKO} (1234567890)` }, S18, S18);
+    await founder('22222233', `${TESTENKO}, розмір внеску - 100 грн.`, { kind: 'person', name: TESTENKO }, S21, S21);
+    await q(`INSERT INTO edr_hist.beneficiary (edrpou, entry_hash, raw, name, name_latn, country_code, influence, share, first_seen, last_seen)
+             VALUES ('22222233', md5('b1'), 'b1', $1, $2, 'UA', $3, '50', $4, $5)`,
+    [`${TESTENKO}, РНОКПП 1234567890`, uaMatchKey(`${TESTENKO}, РНОКПП 1234567890`), 'опосередкований; через ТОВ "БЕТА" (22222220), РНОКПП 1234567890', S18, S21]);
+    await head('22222233', 'ТЕСТОВА ТЕСТА ТЕСТІВНА ІПН 2345678901', 'head');
+    await company('1234567890', 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ', null);
+    await head('1234567890', 'ТЕСТОВА ТЕСТА ТЕСТІВНА', 'head');
     // a curated mass registration address (the old one of A, degree 1)
     await q(`INSERT INTO graph.address_flag (address_key, flag, source) VALUES ($1, 'mass_registration', 'test')`,
       [addressKeyRow(ADDR_OLD, addressKeyVersion(null)).address_key]);
@@ -138,7 +149,7 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     const names = ['НЕВИЗНАЧЕНА ОСОБА', 'НЕВІДОМСЬКА ТЕСТА ТЕСТІВНА', 'КОНТРОЛЕР ЮРИДИЧНОЇ ОСОБИ', 'КОНТРОЛЕР ІВАНЕНКО ІВАН ІВАНОВИЧ',
       'КЕРІВНИК ПІДПРИЄМСТВА', 'ТЕРИТОРІАЛЬНА ГРОМАДА СЕЛА', 'ГРОМАДА ОЛЕНА', 'МІСЬКА ГРОМАДСЬКА ОРГАНІЗАЦІЯ "СВІТАНОК"', '100%',
       'УКРАЇНА', 'ФРАНКІВСЬКА ОБЛАСТЬ', 'ПРАТ ГАЄК', 'ТОВ"АЛЬФА"', 'ТОВ ТЕСТ ТЕСТОВИЧ', 'ТЕСТЕНКО ПП', 'БАНК ТЕСТ ТЕСТОВИЧ',
-      'УПРАВЛЯЮЧА ФІРМА, 12345678', 'ПЕТРЕНКО 2365812898', 'EXAMPLE HOLDINGS LIMITED', 'ІВАНЕНКО ІВАН ІВАНОВИЧ'];
+      'УПРАВЛЯЮЧА ФІРМА, 12345678', 'ПЕТРЕНКО 1234567890', 'EXAMPLE HOLDINGS LIMITED', 'ІВАНЕНКО ІВАН ІВАНОВИЧ'];
     const r = await q(`SELECT n ~ $2 OR (n ~ $3 AND n !~ $4) AS ph,
         n <> '' AND n !~ $4 AND (n ~ $5 OR coalesce(substring(x FROM $6), '0') !~ '^0+$') AS org
       FROM unnest($1::text[], $7::text[]) AS t(x, n)`,
@@ -149,7 +160,7 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
   it('dry run only counts', async () => {
     const r = await buildGraph(pool, { dryRun: true, log: () => undefined });
     expect(r.dryRun).toBe(true);
-    expect(r.counts.hist_companies).toBe(4);
+    expect(r.counts.hist_companies).toBe(5);
     expect(r.counts.current_founder_rows).toBe(3);
     expect((await q(`SELECT to_regnamespace('graph_stage') AS s`)).rows[0].s).toBeNull();
   });
@@ -209,7 +220,7 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     const a = await edgesOf('11111110');
     expect(a.filter(e => e.src_kind === 'organisation')).toMatchObject([{ kind: 'head', src_key: hai }]);
     const c = await edgesOf('22222233');
-    expect(c.filter(e => e.kind === 'head').map(e => [e.src_kind, e.src_key, e.attrs.resolved_by]).sort())
+    expect(c.filter(e => e.kind === 'head' && e.src_kind !== 'person_name').map(e => [e.src_kind, e.src_key, e.attrs.resolved_by]).sort())
       .toEqual([['company', '22222220', 'code'], ['company', '33333330', 'unique_name']]);
     // no self edge, no placeholder heads
     const b = await edgesOf('22222220');
@@ -217,6 +228,33 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     expect(b.filter(e => e.kind === 'head' || e.kind === 'signer').map(e => e.src_kind)).toEqual(['person_name']);
     const build = (await q('SELECT counts, hub_thresholds FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0];
     expect(build.counts).toMatchObject({ head_relations_to_organisation: 1, head_relations_to_company_code: 1, head_relations_to_company_unique_name: 1 });
+  });
+
+  it('personal numbers are stripped from labels, keys and edge attrs; ЄДРПОУ codes stay (LEXAI-2322)', async () => {
+    const t = personKey(TESTENKO)!;
+    expect(t).not.toMatch(/[0-9]/);
+    // the entries with and without the number are one node and one founder edge
+    expect(await node('person_name', t)).toMatchObject({ label: TESTENKO });
+    const c = await edgesOf('22222233');
+    expect(c.filter(e => e.kind === 'founder').map(e => e.src_key)).toEqual([t]);
+    const ben = c.filter(e => e.kind === 'beneficiary');
+    expect(ben.map(e => e.src_key)).toEqual([t]);
+    expect(ben[0].attrs.influence).toBe('опосередкований; через ТОВ "БЕТА" (22222220)');
+    const tk = personKey('ТЕСТОВА ТЕСТА ТЕСТІВНА')!;
+    expect(c.filter(e => e.kind === 'head' && e.src_kind === 'person_name').map(e => e.src_key)).toEqual([tk]);
+    // the company found by the 8-digit code in a head entry is still linked
+    expect(c.some(e => e.kind === 'head' && e.src_key === '22222220')).toBe(true);
+    // a 10-digit "company" code is an individual's number: no node, no edges
+    expect(await node('company', '1234567890')).toBeUndefined();
+    expect((await q(`SELECT count(*)::int n FROM graph.node WHERE label ~ '[0-9]{10}' OR key ~ '[0-9]{10}'`)).rows[0].n).toBe(0);
+    const build = (await q('SELECT counts FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0];
+    expect(build.counts).toMatchObject({ person_key_version: 'p2', id_numbers_nodes: 0, id_numbers_edges: 0, names_with_ids: 3, texts_with_ids: 1 });
+    // the check fails loudly on a leaked number (foreign entity codes and amounts are exempt)
+    await expect(checkPersonalIds(pool, 'graph')).resolves.toEqual({ id_numbers_nodes: 0, id_numbers_edges: 0 });
+    await q(`INSERT INTO graph.node (kind, key, label) VALUES ('foreign_entity', 'RU|code:1234567890', 'ТОВ АЛЬФА')`);
+    await q(`INSERT INTO graph.node (kind, key, label) VALUES ('person_name', 'leak test', 'ТЕСТ 1234567890')`);
+    await expect(checkPersonalIds(pool, 'graph')).rejects.toThrow(/1 nodes \(person_name 1\)/);
+    await q(`DELETE FROM graph.node WHERE key IN ('RU|code:1234567890', 'leak test')`);
   });
 
   it('computed hub thresholds and the curated mass registration address (LEXAI-2319)', async () => {

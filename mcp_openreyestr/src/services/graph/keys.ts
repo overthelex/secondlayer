@@ -7,6 +7,7 @@ import { normEdrpou } from '../graph-norm/edrpou';
 import { normAddress, NormAddressOptions } from '../graph-norm/address';
 import { normUa, uaMatchKey } from '../edr-history/norm';
 import { md5 } from '../edr-history/entries';
+import { stripPersonIds } from '../graph-norm/personal-ids';
 
 export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity' | 'organisation';
 export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour';
@@ -17,6 +18,12 @@ export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer
 
 /** Bump when normAddress changes in a way that changes keys: every address is re-keyed on the next build. */
 export const ADDRESS_KEY_VERSION = 1;
+/**
+ * Bump when personKey / organisationKey change keys. 2 (LEXAI-2322): personal numbers (РНОКПП,
+ * passport series) are stripped from the name before the key, so 'ТЕСТЕНКО ... (1234567890)' and
+ * 'ТЕСТЕНКО ...' are one node. Recorded in graph.build.counts.person_key_version.
+ */
+export const PERSON_KEY_VERSION = 2;
 
 /**
  * Entries that name a group or a statement instead of a participant ('АКЦІОНЕРИ ЗГІДНО РЕЄСТРУ',
@@ -66,10 +73,11 @@ export function companyKey(code: string | null | undefined): string | null {
   return normEdrpou(code).code;
 }
 
-/** Candidate person: uaMatchKey of the full name; null for empty / placeholder names. */
+/** Candidate person: uaMatchKey of the full name without personal numbers; null for empty / placeholder names. */
 export function personKey(name: string | null | undefined): string | null {
-  if (isPlaceholderName(name)) return null;
-  return uaMatchKey(name) || null;
+  const n = stripPersonIds(name);
+  if (isPlaceholderName(n)) return null;
+  return uaMatchKey(n) || null;
 }
 
 /** Registration number of a foreign entity as a key part: letters and digits, upper case, >= 4 chars. */
@@ -105,6 +113,9 @@ export type SkipReason = 'placeholder' | 'no_key' | 'ua_org_without_code';
  */
 export function founderEndpoint(f: { kind: string | null; name: string | null; code: string | null; country_code: string | null }): Endpoint | SkipReason {
   const foreign = !!f.country_code && f.country_code !== 'UA';
+  // a foreign organisation keeps its name and code (registration numbers); every other entry
+  // loses the personal numbers in its name (the builder's graph_stage.name_fix)
+  if (!(f.kind === 'organisation' && foreign)) f = { ...f, name: stripPersonIds(f.name) ?? null };
   if (f.kind === 'organisation') {
     if (!foreign) {
       const c = companyKey(f.code);
@@ -163,7 +174,7 @@ export function isOrganisationName(name: string | null | undefined): boolean {
 
 /** Organisation without a code that no unique company name resolves: uaMatchKey of the name (a candidate, like person_name). */
 export function organisationKey(name: string | null | undefined): string | null {
-  return uaMatchKey(name) || null;
+  return uaMatchKey(stripPersonIds(name)) || null;
 }
 
 /**
@@ -171,7 +182,8 @@ export function organisationKey(name: string | null | undefined): string | null 
  * in the text -> company; one without a code -> 'ua_org_without_code', which the builder resolves
  * by a unique company name (the founders' rule) or else keys as an organisation node.
  */
-export function headEndpoint(name: string | null | undefined): Endpoint | SkipReason {
+export function headEndpoint(raw: string | null | undefined): Endpoint | SkipReason {
+  const name = stripPersonIds(raw);
   if (isPlaceholderName(name)) return 'placeholder';
   if (isOrganisationName(name)) {
     const c = codeInName(name);
