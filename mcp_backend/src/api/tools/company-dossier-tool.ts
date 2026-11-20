@@ -14,6 +14,7 @@ import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handle
 import { logger } from '../../utils/logger.js';
 import { latestFigures, LatestFigures } from './financial-statement-figures.js';
 import { INSPECTION_PLANS_SECTION } from './company-dossier-inspections.js';
+import { icijSection } from './dossier-icij.js';
 
 const SUBTOOL_TIMEOUT_MS = 40_000;
 const ROWS_PER_SECTION = 10;
@@ -321,6 +322,8 @@ export class CompanyDossierTool extends BaseToolHandler {
     const sectionPs = SECTION_SPECS.map((s) => this.call(s.tool, s.args(edrpou)));
     const supplierIdx = SECTION_SPECS.findIndex((s) => s.key === 'prozorro_supplier');
     const markersP = sectionPs[supplierIdx].then((c) => this.sharedContactMarkers(edrpou, c));
+    // ICIJ Offshore Leaks: the company, founders and beneficiaries by exact name (dossier-icij.ts).
+    const icijP = Promise.all([entityP, detailsP]).then(([e, d]) => icijSection((n, a) => this.call(n, a), e, d));
 
     const [edr, entity, details, courts, freshnessCall, markers, ...sectionCalls] = await Promise.all([
       edrP, entityP, detailsP, courtsP, this.call('openreyestr_get_data_freshness', {}), markersP, ...sectionPs,
@@ -333,6 +336,7 @@ export class CompanyDossierTool extends BaseToolHandler {
       sections[spec.key] = this.section(spec.title, spec.tool, spec.source, sectionCalls[i], freshness, spec.key);
     });
     sections.courts = this.courtsSection(courts.party, courts.c);
+    sections.icij_offshore_leaks = await icijP;
     const finIdx = SECTION_SPECS.findIndex((s) => s.key === 'financial_statements');
     if (finIdx >= 0 && sections.financial_statements?.status === 'found') {
       sections.financial_statements.latest = this.latestFinancials(sectionCalls[finIdx]);

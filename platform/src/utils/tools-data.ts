@@ -323,6 +323,22 @@ export const tools: Tool[] = [
     ],
   },
   {
+    name: 'search_offshore_leaks', category: 'Due Diligence',
+    description: 'ICIJ Offshore Leaks (Panama, Paradise, Pandora Papers, Offshore Leaks, Bahamas Leaks): офшорні компанії, особи, посередники й адреси за назвою, зі зв’язками на 1–2 кроки; ODbL, атрибуція ICIJ',
+    cost: '$0.033',
+    params: [
+      { name: 'name', type: 'string', required: false, description: 'Назва чи ім’я латиницею' },
+      { name: 'names', type: 'array', required: false, description: 'До 50 назв для точної перевірки' },
+      { name: 'match', type: 'string', required: false, description: 'contains або exact' },
+      { name: 'node_type', type: 'string', required: false, description: 'entity, officer, intermediary, address, other' },
+      { name: 'jurisdiction', type: 'string', required: false, description: 'Юрисдикція (BVI, PMA, CYP…)' },
+      { name: 'country', type: 'string', required: false, description: 'Країна, ISO alpha-3 (UKR)' },
+      { name: 'source_leak', type: 'string', required: false, description: 'Витік' },
+      { name: 'hops', type: 'number', required: false, description: 'Глибина зв’язків: 0, 1 або 2' },
+      { name: 'limit', type: 'number', required: false, description: 'До 25 вузлів' },
+    ],
+  },
+  {
     name: 'get_financial_statements', category: 'Due Diligence',
     description: 'Фінансова звітність за ЄДРПОУ: баланс (Ф1) і фінрезультати (Ф2) за роками, з 2020',
     cost: '$0.044',
