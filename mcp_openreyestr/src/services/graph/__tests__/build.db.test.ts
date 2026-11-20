@@ -10,7 +10,10 @@ import * as path from 'path';
 import { Pool } from 'pg';
 import { buildGraph } from '../builder';
 import { neighbourhood } from '../neighbourhood';
-import { PLACEHOLDER_RE_SOURCE, personKey } from '../keys';
+import {
+  addressKeyRow, addressKeyVersion, CODE8_RE_SOURCE, isOrganisationName, isPlaceholderName, normName, ORG_FORM_RE_SOURCE,
+  organisationKey, PATRONYMIC_RE_SOURCE, PLACEHOLDER_RE_SOURCE, personKey, WEAK_PLACEHOLDER_RE_SOURCE,
+} from '../keys';
 import { uaMatchKey } from '../../edr-history/norm';
 
 const URL = process.env.GRAPH_TEST_DATABASE_URL;
@@ -61,6 +64,7 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     for (const t of ['legal_entities', 'founders', 'signers', 'beneficiaries']) await q(`DROP TABLE IF EXISTS public.${t}`);
     await q(fs.readFileSync(path.join(MIG, '027_edr_history.sql'), 'utf8'));
     await q(fs.readFileSync(path.join(MIG, '030_graph_schema.sql'), 'utf8'));
+    await q(fs.readFileSync(path.join(MIG, '031_graph_hubs_and_organisations.sql'), 'utf8'));
     // the columns of the current dump tables the builder reads
     await q(`CREATE TABLE legal_entities (id serial PRIMARY KEY, record varchar(50) UNIQUE NOT NULL, edrpou varchar(20), name text,
              short_name text, opf text, stan varchar(100), registration text, updated_at timestamp)`);
@@ -91,6 +95,18 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     await company('22222233', 'ТОВ "ДЕЛЬТА"', '2015-05-05');
     await company('33333330', 'ФОНД УНІКАЛЬНИЙ ГАММА', '2000-01-01');
     await head('22222220', 'Іваненко Іван Іванович', 'head');
+    // organisations and placeholders as heads (LEXAI-2318, LEXAI-2319): A is managed by an
+    // organisation known by name only; C by the fund (unique company name) and by B (code in the
+    // text); B lists itself (dropped) and two placeholders (dropped)
+    await head('11111110', 'ПРАТ ГАЄК', 'head');
+    await head('22222233', 'ФОНД УНІКАЛЬНИЙ ГАММА', 'head');
+    await head('22222233', 'ТОВ "БЕТА" (код 22222220)', 'head');
+    await head('22222220', 'ТОВ "БЕТА", 22222220', 'head');
+    await head('22222220', 'КЕРІВНИК ПІДПРИЄМСТВА', 'head');
+    await head('22222220', 'НЕВИЗНАЧЕНА ОСОБА', 'representative');
+    // a curated mass registration address (the old one of A, degree 1)
+    await q(`INSERT INTO graph.address_flag (address_key, flag, source) VALUES ($1, 'mass_registration', 'test')`,
+      [addressKeyRow(ADDR_OLD, addressKeyVersion(null)).address_key]);
     await address('22222220', ADDR_A2, S18, null);
     // current dump (2026): A keeps Іваненко and Скарамандер, loses Петренко; new company E is founded by A
     await current('r1', '11111110', 'ТОВ "АЛЬФА"', '01.01.2010; 01.01.2010; 1', {
@@ -116,6 +132,18 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
   it('the placeholder pattern reads the same in PostgreSQL', async () => {
     const r = await q(`SELECT x, x ~ $1 AS m FROM unnest($2::text[]) x`, [PLACEHOLDER_RE_SOURCE, ['акціонери згідно реєстру', 'членов петро', 'члени кооперативу', 'іваненко іван']]);
     expect(r.rows.map(x => x.m)).toEqual([true, false, true, false]);
+  });
+
+  it('placeholder and organisation rules read the same in PostgreSQL as in JS', async () => {
+    const names = ['НЕВИЗНАЧЕНА ОСОБА', 'НЕВІДОМСЬКА ТЕСТА ТЕСТІВНА', 'КОНТРОЛЕР ЮРИДИЧНОЇ ОСОБИ', 'КОНТРОЛЕР ІВАНЕНКО ІВАН ІВАНОВИЧ',
+      'КЕРІВНИК ПІДПРИЄМСТВА', 'ТЕРИТОРІАЛЬНА ГРОМАДА СЕЛА', 'ГРОМАДА ОЛЕНА', 'МІСЬКА ГРОМАДСЬКА ОРГАНІЗАЦІЯ "СВІТАНОК"', '100%',
+      'УКРАЇНА', 'ФРАНКІВСЬКА ОБЛАСТЬ', 'ПРАТ ГАЄК', 'ТОВ"АЛЬФА"', 'ТОВ ТЕСТ ТЕСТОВИЧ', 'ТЕСТЕНКО ПП', 'БАНК ТЕСТ ТЕСТОВИЧ',
+      'УПРАВЛЯЮЧА ФІРМА, 12345678', 'ПЕТРЕНКО 2365812898', 'EXAMPLE HOLDINGS LIMITED', 'ІВАНЕНКО ІВАН ІВАНОВИЧ'];
+    const r = await q(`SELECT n ~ $2 OR (n ~ $3 AND n !~ $4) AS ph,
+        n <> '' AND n !~ $4 AND (n ~ $5 OR coalesce(substring(x FROM $6), '0') !~ '^0+$') AS org
+      FROM unnest($1::text[], $7::text[]) AS t(x, n)`,
+    [names, PLACEHOLDER_RE_SOURCE, WEAK_PLACEHOLDER_RE_SOURCE, PATRONYMIC_RE_SOURCE, ORG_FORM_RE_SOURCE, CODE8_RE_SOURCE, names.map(normName)]);
+    expect(r.rows.map((x, i) => [names[i], x.ph, x.org])).toEqual(names.map(n => [n, isPlaceholderName(n), isOrganisationName(n)]));
   });
 
   it('dry run only counts', async () => {
@@ -172,6 +200,36 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     expect((await q(`SELECT count(*)::int n FROM graph.node WHERE kind = 'person_name' AND attrs ? 'codes'`)).rows[0].n).toBe(0);
     expect((await q(`SELECT to_regnamespace('graph_stage') AS s`)).rows[0].s).toBeNull();
     expect((await q('SELECT count(*)::int n FROM graph.build')).rows[0].n).toBe(1);
+  });
+
+  it('organisations as heads and placeholder heads (LEXAI-2318)', async () => {
+    const hai = organisationKey('ПРАТ ГАЄК')!;
+    expect(await node('organisation', hai)).toMatchObject({ label: 'ПРАТ ГАЄК', degree: 1 });
+    expect(await node('person_name', personKey('ПРАТ ГАЄК') || '-')).toBeUndefined();
+    const a = await edgesOf('11111110');
+    expect(a.filter(e => e.src_kind === 'organisation')).toMatchObject([{ kind: 'head', src_key: hai }]);
+    const c = await edgesOf('22222233');
+    expect(c.filter(e => e.kind === 'head').map(e => [e.src_kind, e.src_key, e.attrs.resolved_by]).sort())
+      .toEqual([['company', '22222220', 'code'], ['company', '33333330', 'unique_name']]);
+    // no self edge, no placeholder heads
+    const b = await edgesOf('22222220');
+    expect(b.some(e => e.src_key === '22222220')).toBe(false);
+    expect(b.filter(e => e.kind === 'head' || e.kind === 'signer').map(e => e.src_kind)).toEqual(['person_name']);
+    const build = (await q('SELECT counts, hub_thresholds FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0];
+    expect(build.counts).toMatchObject({ head_relations_to_organisation: 1, head_relations_to_company_code: 1, head_relations_to_company_unique_name: 1 });
+  });
+
+  it('computed hub thresholds and the curated mass registration address (LEXAI-2319)', async () => {
+    const build = (await q('SELECT hub_thresholds FROM graph.build ORDER BY id DESC LIMIT 1')).rows[0].hub_thresholds;
+    // address overridden to 1 in this build, the rest at the floors of a tiny graph
+    expect(build.thresholds).toEqual({ address: 1, company: 100, person_name: 30, foreign_entity: 30, organisation: 30 });
+    expect(build.basis).toMatchObject({ address: 'override', company: 'floor', mass_registration: 'floor' });
+    expect(build.massRegistrationMinDegree).toBe(500);
+    expect(build.observed.address['0.9999']).toBe(2);
+    const old = await node('address', addressKeyRow(ADDR_OLD, addressKeyVersion(null)).address_key!);
+    expect(old).toMatchObject({ degree: 1, hub: true });
+    expect(old.attrs).toMatchObject({ flag: 'mass_registration', mass_registration: 'list' });
+    expect((await q(`SELECT count(*)::int n FROM graph.node WHERE kind = 'address' AND attrs ? 'mass_registration'`)).rows[0].n).toBe(1);
   });
 
   it('neighbourhood: depth, hub stop, asOf and kinds', async () => {

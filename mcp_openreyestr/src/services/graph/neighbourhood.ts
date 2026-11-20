@@ -14,7 +14,7 @@
  */
 import { normAddress } from '../graph-norm/address';
 import type { StreetRenamingLookup } from '../graph-norm/address';
-import { companyKey, EDGE_KINDS, EdgeKind, foreignEntityKey, NodeKind, personKey } from './keys';
+import { companyKey, EDGE_KINDS, EdgeKind, foreignEntityKey, NodeKind, organisationKey, personKey } from './keys';
 
 export interface Queryable { query(sql: string, params?: unknown[]): Promise<{ rows: any[] }> }
 
@@ -178,7 +178,8 @@ export function sqlGraphStore(db: Queryable, schema = 'graph'): GraphStore {
 
 /**
  * Start of a walk: '12345678' or 'company:12345678'; 'person:<full name>'; 'address:<raw address>';
- * 'foreign:<CC>:<name or registration code>'; 'node:<id>'; '<kind>:<key>' with an exact node key.
+ * 'foreign:<CC>:<name or registration code>'; 'org:<name>' (an organisation head node); 'node:<id>';
+ * '<kind>:<key>' with an exact node key.
  */
 export function parseStartKey(s: string, renamings?: StreetRenamingLookup | null): { kind: NodeKind; key: string } | { id: number } {
   const t = (s || '').trim();
@@ -192,6 +193,7 @@ export function parseStartKey(s: string, renamings?: StreetRenamingLookup | null
     case 'node': { if (!/^\d+$/.test(v)) fail(); return { id: Number(v) }; }
     case 'company': return { kind: 'company', key: companyKey(v) ?? fail() };
     case 'person': case 'person_name': return { kind: 'person_name', key: personKey(v) ?? fail() };
+    case 'org': case 'organisation': return { kind: 'organisation', key: organisationKey(v) ?? fail() };
     case 'address': {
       // an exact key ('UA-32|м|...') or a raw address
       if (v.includes('|')) return { kind: 'address', key: v };
