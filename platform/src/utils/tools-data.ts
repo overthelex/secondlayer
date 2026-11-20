@@ -316,8 +316,8 @@ export const tools: Tool[] = [
 
   {
     name: 'get_company_dossier', category: 'Due Diligence',
-    description: 'Досьє юрособи за ЄДРПОУ в одному виклику: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, суди; джерело й дата на кожен розділ',
-    cost: '$0.176',
+    description: 'Досьє юрособи за ЄДРПОУ в одному виклику: ЄДР, санкції, борги, ProZorro, ЄДЕССБ, заплановані перевірки, ICIJ Offshore Leaks, кіпрські засновники з реєстром DRCOR, суди; джерело й дата на кожен розділ',
+    cost: '$0.132',
     params: [
       { name: 'edrpou', type: 'string', required: true, description: 'Код ЄДРПОУ (8 цифр)' },
     ],
@@ -325,7 +325,7 @@ export const tools: Tool[] = [
   {
     name: 'search_offshore_leaks', category: 'Due Diligence',
     description: 'ICIJ Offshore Leaks (Panama, Paradise, Pandora Papers, Offshore Leaks, Bahamas Leaks): офшорні компанії, особи, посередники й адреси за назвою, зі зв’язками на 1–2 кроки; ODbL, атрибуція ICIJ',
-    cost: '$0.033',
+    cost: '$0.022',
     params: [
       { name: 'name', type: 'string', required: false, description: 'Назва чи ім’я латиницею' },
       { name: 'names', type: 'array', required: false, description: 'До 50 назв для точної перевірки' },
@@ -493,7 +493,7 @@ export const tools: Tool[] = [
   { name: 'search_public_spending', category: 'Open Data', description: 'Пошук державних витрат', cost: '$0.017' },
   {
     name: 'search_registry', category: 'Open Data',
-    description: 'Єдиний вхід у 30 реєстрів відкритих даних: санкції, адвокати, особи, які вчинили корупційні правопорушення, банки НБУ, ТМ, патенти, фінзвітність та ін.',
+    description: 'Єдиний вхід у 30 реєстрів відкритих даних: санкції, адвокати, реєстр корупційних правопорушників НАЗК (corruption_register), банки НБУ, ТМ, патенти, фінзвітність та ін.',
     cost: '$0.011',
     params: [
       { name: 'registry', type: 'string', required: true, description: 'Назва реєстру' },
