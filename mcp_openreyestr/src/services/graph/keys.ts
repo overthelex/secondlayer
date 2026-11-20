@@ -11,7 +11,7 @@ import { stripPersonIds } from '../graph-norm/personal-ids';
 
 export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity' | 'organisation';
 export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour';
-export type EdgeSource = 'edr_hist' | 'edr_current';
+export type EdgeSource = 'edr_hist' | 'edr_current' | 'prozorro';
 
 export const NODE_KINDS: NodeKind[] = ['company', 'person_name', 'address', 'foreign_entity', 'organisation'];
 export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour'];

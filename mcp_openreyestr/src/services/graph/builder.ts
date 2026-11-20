@@ -22,6 +22,8 @@
  *            Used when newer than the newest history snapshot; once the weekly sync folds the
  *            dumps into edr_hist (EDR_HISTORY_SNAPSHOT=1) the history itself is current and the
  *            text tables are skipped (includeCurrent 'auto').
+ *   prozorro supplier addresses of prozorro_contracts, dated by the contracts (prozorro-addresses.ts,
+ *            LEXAI-2317): registered_at edges for addresses the ЄДР dumps since 2021 no longer carry.
  * A relation is one edge per (participant, company, kind): its entries over all snapshots and both
  * sources are merged (the 2018 and 2021 dumps spell the same founder differently).
  */
@@ -37,6 +39,7 @@ import {
   WEAK_PLACEHOLDER_RE_SOURCE,
   REG_NEIGHBOUR_MAX_GAP, REG_NEIGHBOUR_MAX_PER_DAY,
 } from './keys';
+import { prozorroAddressEdges, stageProzorroAddresses } from './prozorro-addresses';
 
 export interface BuildOptions {
   /** sample build: only the first N companies by code (from fromEdrpou) */
@@ -62,6 +65,8 @@ export interface BuildOptions {
   statementTimeout?: string;   // default '3h'
   workMem?: string;            // default '256MB'
   batchSize?: number;          // JS batches, default 20000
+  /** ProZorro supplier addresses as registered_at edges (prozorro-addresses.ts); default true */
+  prozorroAddresses?: boolean;
   /** leave graph_stage in place after the swap (debugging) */
   keepStage?: boolean;
   log?: (m: string) => void;
@@ -98,7 +103,7 @@ export function stageDdl(schema: string): string[] {
       kind        text NOT NULL CHECK (kind IN ('founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour')),
       valid_from  date,
       valid_to    date,
-      source      text NOT NULL CHECK (source IN ('edr_hist', 'edr_current')),
+      source      text NOT NULL CHECK (source IN ('edr_hist', 'edr_current', 'prozorro')),
       source_ref  jsonb NOT NULL DEFAULT '{}'::jsonb,
       attrs       jsonb NOT NULL DEFAULT '{}'::jsonb)`,
   ];
@@ -433,6 +438,13 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
       counts.addresses_keyed = await keyAddresses(c, keyVersion, renamings.lookup, batch, !!opts.rekeyAddresses, log);
       await count('address_distinct_raw', 'SELECT count(DISTINCT raw_md5) AS n FROM graph_stage.addr_run');
     });
+    // LEXAI-2317: ProZorro supplier addresses (graph_stage.pz_run; empty when disabled)
+    await timed('prozorro_addresses', async () => {
+      Object.assign(counts, await stageProzorroAddresses(c, {
+        inScope: col => (opts.prozorroAddresses === false ? 'FALSE' : inScope(col)), keyVersion, batch, log,
+        keyRaws: t => keyAddresses(c, keyVersion, renamings.lookup, batch, !!opts.rekeyAddresses, log, t),
+      }));
+    });
 
     // ------------------------------------------------------------ edges by (kind, key)
     const fieldOf: Record<string, keyof typeof ranges> = { founder: 'founder', beneficiary: 'beneficiary', head: 'head', signer: 'head' };
@@ -495,6 +507,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         JOIN graph.address_key k ON k.raw_md5 = a.raw_md5
         WHERE k.address_key IS NOT NULL
         GROUP BY a.edrpou, k.address_key`);
+      Object.assign(counts, await prozorroAddressEdges(c, ranges.address.max));
       // reg_neighbour: same registration day, serials (code div 10) at most maxGap apart, chained to
       // the next code of the day; days with more than maxPerDay registrations are skipped
       await c.query(`INSERT INTO graph_stage.e_raw
@@ -551,7 +564,8 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         GROUP BY 1, 2`);
       await c.query(`CREATE UNLOGGED TABLE graph_stage.addr_label AS
         SELECT k.address_key AS key, mode() WITHIN GROUP (ORDER BY k.label) AS label, min(k.settlement_key) AS settlement_key
-        FROM graph_stage.addr_run a JOIN graph.address_key k ON k.raw_md5 = a.raw_md5
+        FROM (SELECT raw_md5 FROM graph_stage.addr_run UNION ALL SELECT raw_md5 FROM graph_stage.pz_run) a
+        JOIN graph.address_key k ON k.raw_md5 = a.raw_md5
         WHERE k.address_key IS NOT NULL GROUP BY 1`);
       for (const ddl of stageDdl('graph_stage')) await c.query(ddl);
       await c.query(`INSERT INTO graph_stage.node (kind, key, label, degree, hub, attrs)
@@ -599,7 +613,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
         FROM graph_stage.e_raw e
         JOIN graph_stage.node s ON s.kind = e.src_kind AND s.key = e.src_key
         JOIN graph_stage.node d ON d.kind = e.dst_kind AND d.key = e.dst_key`);
-      await c.query('DROP TABLE graph_stage.e_raw, graph_stage.deg, graph_stage.ep_label, graph_stage.addr_label, graph_stage.addr_run');
+      await c.query('DROP TABLE graph_stage.e_raw, graph_stage.deg, graph_stage.ep_label, graph_stage.addr_label, graph_stage.addr_run, graph_stage.pz_run');
     });
     await timed('indexes', async () => {
       await c.query(`SET maintenance_work_mem = '1GB'`);
@@ -741,12 +755,13 @@ async function loadRenamings(c: PoolClient, opts: BuildOptions, log: (m: string)
   }
 }
 
-/** Key the raw addresses of this build that graph.address_key lacks for this key version. */
+/** Key the raw addresses of this build (`source`: columns raw_md5, raw) that graph.address_key lacks for this key version. */
 async function keyAddresses(c: PoolClient, version: string, renamings: StreetRenamingLookup | null, batch: number,
-  rekey: boolean, log: (m: string) => void): Promise<number> {
+  rekey: boolean, log: (m: string) => void, source = 'graph_stage.addr_run'): Promise<number> {
+  await c.query('DROP TABLE IF EXISTS graph_stage.addr_todo');
   await c.query(`CREATE UNLOGGED TABLE graph_stage.addr_todo AS
     SELECT row_number() OVER () AS i, raw_md5, raw FROM (
-      SELECT DISTINCT ON (a.raw_md5) a.raw_md5, a.raw FROM graph_stage.addr_run a
+      SELECT DISTINCT ON (a.raw_md5) a.raw_md5, a.raw FROM ${source} a
       ${rekey ? '' : 'LEFT JOIN graph.address_key k ON k.raw_md5 = a.raw_md5 AND k.key_version = $1 WHERE k.raw_md5 IS NULL'}
       ORDER BY a.raw_md5) x`, rekey ? [] : [version]);
   const total = Number((await c.query('SELECT count(*) AS n FROM graph_stage.addr_todo')).rows[0].n);

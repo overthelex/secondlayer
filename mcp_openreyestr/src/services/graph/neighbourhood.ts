@@ -23,7 +23,7 @@ export interface GraphNode {
 }
 export interface GraphEdge {
   id: number; src: number; dst: number; kind: EdgeKind; valid_from: string | null; valid_to: string | null;
-  source: 'edr_hist' | 'edr_current'; source_ref: Record<string, unknown>; attrs: Record<string, unknown>;
+  source: 'edr_hist' | 'edr_current' | 'prozorro'; source_ref: Record<string, unknown>; attrs: Record<string, unknown>;
 }
 export interface EdgeFilter { kinds: EdgeKind[] | null; asOf: string | null; currentOnly: boolean }
 
