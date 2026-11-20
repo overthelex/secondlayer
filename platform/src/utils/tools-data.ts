@@ -429,6 +429,22 @@ export const tools: Tool[] = [
     ],
   },
   {
+    name: 'openreyestr_search_inspection_plans', category: 'Registry',
+    description: 'Плани планових перевірок державного нагляду (контролю): орган, сфера, дата початку, тривалість',
+    cost: '$0.006',
+    params: [
+      { name: 'query', type: 'string', required: false, description: 'Частина назви суб’єкта' },
+      { name: 'edrpou', type: 'string', required: false, description: 'ЄДРПОУ: зіставлення за повною назвою з ЄДР, лише без однойменних юросіб' },
+      { name: 'supervisory_body', type: 'string', required: false, description: 'Орган нагляду' },
+      { name: 'supervision_area', type: 'string', required: false, description: 'Сфера нагляду' },
+      { name: 'plan_year', type: 'number', required: false, description: 'Рік плану' },
+      { name: 'date_from', type: 'string', required: false, description: 'Дата початку від (YYYY-MM-DD)' },
+      { name: 'date_to', type: 'string', required: false, description: 'Дата початку до (YYYY-MM-DD)' },
+      { name: 'limit', type: 'number', required: false, description: 'Кількість (до 100)' },
+      { name: 'offset', type: 'number', required: false, description: 'Зсув' },
+    ],
+  },
+  {
     name: 'openreyestr_search_special_forms', category: 'Registry',
     description: 'Спеціальні бланки нотаріальних документів',
     cost: '$0.006',

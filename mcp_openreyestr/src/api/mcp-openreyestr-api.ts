@@ -651,6 +651,29 @@ status — стан заходу АРМА (null, якщо заходу не бу
         },
       },
       {
+        name: 'search_inspection_plans',
+        description: `Пошук у річних планах планових заходів державного нагляду (контролю) за суб'єктами господарювання
+
+💰 Примерная стоимость: $0.001-$0.003 USD
+Записи плану: назва суб'єкта, сфера нагляду, орган нагляду (ДСНС, Держпраці, Держпродспоживслужба, Держекоінспекція тощо), дата початку і тривалість перевірки в днях, рік плану.
+Пошук за частиною назви, органом, сферою, роком плану, датою початку або за кодом ЄДРПОУ.
+У планах немає коду ЄДРПОУ. За ЄДРПОУ повна назва юрособи береться з ЄДР і порівнюється з назвою в плані (без урахування регістру, лапок і пробілів); записи повертаються, лише якщо інших чинних юросіб з такою самою назвою в ЄДР немає, інакше відповідь позначено ambiguous з кількістю однойменних юросіб.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Частина назви суб\'єкта господарювання' },
+            edrpou: { type: 'string', description: 'Код ЄДРПОУ юридичної особи (8 цифр): зіставлення за повною назвою з ЄДР' },
+            supervisory_body: { type: 'string', description: 'Орган нагляду (частина назви, напр. "з питань праці")' },
+            supervision_area: { type: 'string', description: 'Сфера нагляду (частина назви, напр. "пожежної безпеки")' },
+            plan_year: { type: 'number', description: 'Рік плану' },
+            date_from: { type: 'string', description: 'Дата початку перевірки від (YYYY-MM-DD)' },
+            date_to: { type: 'string', description: 'Дата початку перевірки до (YYYY-MM-DD)' },
+            limit: { type: 'number', default: 50, maximum: 100, minimum: 1, description: 'Максимальна кількість результатів' },
+            offset: { type: 'number', default: 0, description: 'Зміщення для пагінації' },
+          },
+        },
+      },
+      {
         name: 'search_rnbo_sanctions',
         description: `Пошук у санкційних списках РНБО України
 
@@ -807,6 +830,9 @@ status — стан заходу АРМА (null, якщо заходу не бу
           break;
         case 'search_termination_started':
           result = await this.tools.searchTerminationStarted(args);
+          break;
+        case 'search_inspection_plans':
+          result = await this.tools.searchInspectionPlans(args);
           break;
         case 'search_rnbo_sanctions':
           result = await this.tools.searchRnboSanctions(args);
