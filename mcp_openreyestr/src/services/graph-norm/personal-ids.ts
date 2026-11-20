@@ -1,3 +1,4 @@
+import { uaMatchKey } from '../edr-history/norm';
 /**
  * Personal identification numbers in ЄДР entry texts (LEXAI-2322). Some founder / beneficiary /
  * head entries carry the person's РНОКПП (10 digits) glued into the name: 'ТЕСТЕНКО ТЕСТ
@@ -61,7 +62,8 @@ const NAME_ID_RE = new RegExp(`${LEAD}${MARKERS}(?:${LONG_DIGITS}|${PASSPORT})${
 const NAME_DOB_RE = new RegExp(`\\s*[,(]?\\s*${DOB}\\s*\\)?`, 'gi');
 const NAME_PASSPORT_RE = new RegExp(`${PASSPORT_TAIL}|${PASSPORT_LEAD}`, 'i');
 const TEXT_ID_RE = new RegExp(`${LEAD}${MARKERS}${TEN_DIGITS}${TAIL}`, 'gi');
-const NAME_PROBE_RE = new RegExp(`[0-9]{9}|${PASSPORT}|${DATE}|${PASSPORT_WORD}`, 'i');
+/** JS twin of NAME_ID_PROBE_SQL: names without any of these are returned unchanged */
+const NAME_PROBE_RE = new RegExp(`[0-9]{6}|[0-9]/[0-9]|${PASSPORT}|${DATE}|${PASSPORT_WORD}`, 'i');
 const TEXT_PROBE_RE = /[0-9]{10}/;
 
 /**
@@ -71,7 +73,13 @@ const TEXT_PROBE_RE = /[0-9]{10}/;
  */
 const PASSPORT_WORD_SQL = '[Пп][Аа][Сс][Пп][Оо][Рр][Тт]|[Pp][Aa][Ss][Ss]?[Pp][Oo][Rr][Tt]';
 const DATE_SQL = '[0-9][./][01]?[0-9][./](19|20)[0-9]{2}';
-export const NAME_ID_PROBE_SQL = `[0-9]{9}|[${L}]{2}[ №]*[0-9]{6}|${DATE_SQL}|${PASSPORT_WORD_SQL}`;
+/**
+ * SQL pre-filter of the names sent to stripPersonIds in the build. Names it misses keep their raw label and
+ * key (name_latn from the source row), so it must be a superset of what the post-build checks find:
+ * any six digits in a row, a digit/digit pair (a number split by '/'), a date or the passport word.
+ * The test 'NAME_ID_PROBE_SQL covers every check' pins that.
+ */
+export const NAME_ID_PROBE_SQL = `[0-9]{6}|[0-9]/[0-9]|${DATE_SQL}|${PASSPORT_WORD_SQL}`;
 export const TEXT_ID_PROBE_SQL = '[0-9]{10}';
 
 /** The check after a build (builder.ts): a 10-digit run left in a label, a key or a text attribute. */
@@ -110,8 +118,23 @@ export function stripPersonIds(name: string | null | undefined): string | null |
   if (!name || !NAME_PROBE_RE.test(name)) return name;
   NAME_ID_RE.lastIndex = 0;
   NAME_DOB_RE.lastIndex = 0;
-  const out = name.replace(NAME_ID_RE, ' ').replace(NAME_DOB_RE, ' ').replace(NAME_PASSPORT_RE, ' ');
-  return out === name ? name : tidy(out);
+  let out = name.replace(NAME_ID_RE, ' ').replace(NAME_DOB_RE, ' ').replace(NAME_PASSPORT_RE, ' ');
+  out = out === name ? name : tidy(out);
+  // Safety net: whatever the post-build checks would still find in the name or in its key (uaMatchKey
+  // turns '№' into two letters, drops quotes and brackets) goes with every run of six or more digits:
+  // a person's name has none of its own (decree numbers, codes, documents glued to it on prod).
+  if (failsNameChecks(out)) {
+    LONG_RUN_RE.lastIndex = 0;
+    out = tidy(out.replace(LONG_RUN_RE, ' '));
+  }
+  return out;
+}
+
+const LONG_RUN_RE = /(?:[№#]\s*)?(?<![0-9])[0-9](?:[\/.\s-]?[0-9]){5,}(?![0-9])/g;
+function failsNameChecks(s: string): boolean {
+  if (!s) return false;
+  const key = uaMatchKey(s) || '';
+  return NAME_CHECK_RES.some(r => r.test(s) || r.test(key));
 }
 
 /** A free-text attribute (influence, share, role) without the 10-digit personal numbers in it; 8-digit codes stay. */
@@ -160,3 +183,5 @@ export function hasTenDigits(s: string | null | undefined): boolean {
 export function hasPassportOrDob(s: string | null | undefined): boolean {
   return !!s && (new RegExp(PASSPORT_CHECK_SQL).test(s) || new RegExp(DATE_CHECK_SQL).test(s));
 }
+
+const NAME_CHECK_RES = [new RegExp(PASSPORT_CHECK_SQL), new RegExp(DATE_CHECK_SQL), new RegExp(TEN_DIGITS_SQL)];
