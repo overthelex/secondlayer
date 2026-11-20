@@ -92,7 +92,17 @@ npm run sync:edrpou
 
 # Імпорт перейменувань вулиць (OpenStreetMap)
 npm run import:street-renamings
+
+# Перейменування вулиць з прив'язкою до населеного пункту (street_renamings_scoped):
+# з історії адрес ЄДР і з OpenStreetMap (дамп Geofabrik, див. scripts/osm/README.md)
+npm run derive:street-renamings -- --dry-run --out /tmp/edr.csv
+npm run import:osm-street-renamings -- --dir /mnt/bulk_storage/opendata/osm/extract --dry-run --out /mnt/bulk_storage/opendata/osm/out
 ```
+
+Рядки `street_renamings_scoped` з `source='osm'` і таблиця `street_renamings` — похідні бази даних
+OpenStreetMap під ліцензією [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/):
+усюди, де вони показуються, потрібне посилання «© OpenStreetMap contributors»
+(https://www.openstreetmap.org/copyright). Дані OSM у репозиторій не комітяться.
 
 ## Запуск
 
@@ -213,7 +223,7 @@ curl -X POST http://localhost:3004/api/tools/get_statistics \
 | `search_single_tax_payers` | Реєстр платників єдиного податку |
 | `search_tax_debt` | Реєстр податкового боргу |
 | `search_esv_debt` | Реєстр боргу з ЄСВ |
-| `search_street_renamings` | Історія перейменувань вулиць (OpenStreetMap, ~64K) |
+| `search_street_renamings` | Історія перейменувань вулиць (© OpenStreetMap contributors, ODbL; ~64K) |
 | `search_termination_started` | Юридичні особи у процедурі припинення (148K) |
 
 ## Схема бази даних
