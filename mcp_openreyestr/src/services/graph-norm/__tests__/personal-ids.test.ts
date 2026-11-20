@@ -1,6 +1,7 @@
 /**
  * Personal numbers in ЄДР names and texts (LEXAI-2322). Synthetic names and numbers only.
  */
+import { personKey } from '../../graph/keys';
 import { hasTenDigits, stripIdNumbers, stripPersonIds } from '../personal-ids';
 
 const NAME = 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ';
@@ -29,6 +30,10 @@ describe('stripPersonIds', () => {
     // eight digits after a two-letter word, with or without brackets (seen on prod, 20.11)
     expect(stripPersonIds(`${NAME} (АА 01234567)`)).toBe(NAME);
     expect(stripPersonIds(`${NAME} АА 12345678`)).toBe(NAME);
+    // punctuation between the series and the digits, a slash inside the number (seen on prod, 20.11)
+    expect(stripPersonIds(`${NAME} (АА 1/23456789`)).toBe(NAME);
+    expect(stripPersonIds(`${NAME} АА" 12345678`)).toBe(NAME);
+    expect(personKey(`${NAME} (АА 1/23456789`)).toBe(personKey(NAME));
     // nine digits after two letters stays a different token; an 8-digit code without letters stays
     expect(stripPersonIds(`ТОВ «ТЕСТ» 12345678`)).toBe('ТОВ «ТЕСТ» 12345678');
     expect(stripPersonIds(`ТЕСТЕНКО ТЕСТ/ ТЕСТ ТЕСТОВИЧ/1234567890/АА123456`)).toBe('ТЕСТЕНКО ТЕСТ/ ТЕСТ ТЕСТОВИЧ');
