@@ -36,8 +36,10 @@ const MARKERS = `(?:(?<![${L}])(?:(?:${STEMS.join('|')})[${L}]*|(?:${WORDS.join(
   + `|(?:сері[яїи]|серия)(?=[${L}]{2}[\\s№]*[0-9]{6,8}))\\.?${SEP})*`;
 const LONG_DIGITS = '(?<![0-9])[0-9]{9,}(?![0-9])';
 const TEN_DIGITS = '(?<![0-9])[0-9]{10}(?![0-9])';
-/** a two-letter word (or two letters right after 'серія' / 'паспорт') with six to eight digits (seven and eight seen on prod; in a person's name any such token is a document number) */
-const PASSPORT = `(?:(?<![${L}])|(?<=(?:сері|сери|сер|паспорт)[${L}]*))[${L}]{2}[\\s№]*[0-9]{6,8}(?![0-9])`;
+/** a two-letter word (or two letters right after 'серія' / 'паспорт') with six to eight digits (seven and eight seen on prod; in a person's name any such token is a document number);
+ *  quotes, dots, '/' or '-' may separate the letters from the digits and one '/' may split the digits
+ *  ('АА" 12345678', '(АА 1/2345678'): the person key drops that punctuation, so the check would find it there */
+const PASSPORT = `(?:(?<![${L}])|(?<=(?:сері|сери|сер|паспорт)[${L}]*))[${L}]{2}[\\s№"'«».\\/-]*[0-9](?:\\/?[0-9]){5,8}(?![0-9])`;
 /** an opening bracket or a dot right before the number or its marker ('(1234567890)', ' .1234567890'), not the dot of initials */
 const LEAD = '\\s*[(\\[]?\\s*\\.?';
 const TAIL = '[)\\]/.]*';
