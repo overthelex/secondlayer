@@ -15,6 +15,7 @@ import { logger } from '../../utils/logger.js';
 import { latestFigures, LatestFigures } from './financial-statement-figures.js';
 import { INSPECTION_PLANS_SECTION } from './company-dossier-inspections.js';
 import { icijSection } from './dossier-icij.js';
+import { cyprusFoundersSection } from './dossier-cyprus.js';
 
 const SUBTOOL_TIMEOUT_MS = 40_000;
 const ROWS_PER_SECTION = 10;
@@ -324,9 +325,10 @@ export class CompanyDossierTool extends BaseToolHandler {
     const markersP = sectionPs[supplierIdx].then((c) => this.sharedContactMarkers(edrpou, c));
     // ICIJ Offshore Leaks: the company, founders and beneficiaries by exact name (dossier-icij.ts).
     const icijP = Promise.all([entityP, detailsP]).then(([e, d]) => icijSection((n, a) => this.call(n, a), e, d));
+    const cyprusP = detailsP.then((d) => cyprusFoundersSection(d, (n, a) => this.call(n, a)));
 
-    const [edr, entity, details, courts, freshnessCall, markers, ...sectionCalls] = await Promise.all([
-      edrP, entityP, detailsP, courtsP, this.call('openreyestr_get_data_freshness', {}), markersP, ...sectionPs,
+    const [edr, entity, details, courts, freshnessCall, markers, cyprus, ...sectionCalls] = await Promise.all([
+      edrP, entityP, detailsP, courtsP, this.call('openreyestr_get_data_freshness', {}), markersP, cyprusP, ...sectionPs,
     ]);
     const freshness: Record<string, any> = freshnessCall.status === 'ok' && freshnessCall.data && typeof freshnessCall.data === 'object'
       ? freshnessCall.data : {};
@@ -337,6 +339,7 @@ export class CompanyDossierTool extends BaseToolHandler {
     });
     sections.courts = this.courtsSection(courts.party, courts.c);
     sections.icij_offshore_leaks = await icijP;
+    sections.cyprus_founders = cyprus;
     const finIdx = SECTION_SPECS.findIndex((s) => s.key === 'financial_statements');
     if (finIdx >= 0 && sections.financial_statements?.status === 'found') {
       sections.financial_statements.latest = this.latestFinancials(sectionCalls[finIdx]);

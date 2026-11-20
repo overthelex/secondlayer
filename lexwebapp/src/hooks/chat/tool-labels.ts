@@ -54,6 +54,7 @@ export const TOOL_LABELS: Record<string, string> = {
   openreyestr_search_beneficiaries_history: 'Бенефіціари, зокрема колишні',
   openreyestr_get_by_edrpou: 'Пошук за ЄДРПОУ',
   get_financial_statements: 'Фінансова звітність',
+  search_cyprus_companies: 'Реєстр компаній Кіпру',
   openreyestr_get_statistics: 'Статистика реєстру',
   openreyestr_search_enforcement_proceedings: 'Виконавчі провадження',
   openreyestr_search_debtors: 'Боржники',

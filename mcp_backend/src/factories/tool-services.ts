@@ -55,6 +55,7 @@ import { IpObjectsTools } from '../api/tools/ip-objects-tools.js';
 import { CompanyDossierTool } from '../api/tools/company-dossier-tool.js';
 import { OffshoreLeaksTools } from '../api/tools/offshore-leaks-tools.js';
 import { FinancialStatementsTool } from '../api/tools/financial-statements-tool.js';
+import { CyprusCompaniesTool } from '../api/tools/cyprus-companies-tool.js';
 import { AnalyzeDataTool } from '../api/tools/analyze-data-tool.js';
 import { LLMAdapter } from '../infrastructure/adapters/llm-adapter.js';
 import { DecisionLayerTools } from '../api/tools/decision-layer-tools.js';
@@ -206,6 +207,8 @@ export function createToolServices(
   toolRegistry.registerHandler(new OffshoreLeaksTools(coreServices.db));
   // Key figures of financial statements by ЄДРПОУ, year by year (financial_figures, migration 278).
   toolRegistry.registerHandler(new FinancialStatementsTool(coreServices.db));
+  // Cyprus DRCOR register (cy_companies / cy_officials, migration 288), LEXAI-2310.
+  toolRegistry.registerHandler(new CyprusCompaniesTool(coreServices.db));
   toolRegistry.registerHandler(new AnalyzeDataTool(coreServices.db));
   // Bespoke tools with non-parametric query patterns
   toolRegistry.registerHandler(new OpenDataTools(coreServices.db));
