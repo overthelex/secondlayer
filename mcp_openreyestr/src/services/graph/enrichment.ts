@@ -367,7 +367,7 @@ export const STEPS: Step[] = [
       await x.c.query(`INSERT INTO ${S}.edge_raw (${EDGE_COLS.join(', ')})
         WITH r AS (
           SELECT nk.key, cr.edrpou::text AS edrpou, cr.declaration_id, cr.declaration_year, cr.right_kind,
-                 CASE WHEN cr.share_percent BETWEEN 0 AND 100 THEN cr.share_percent END AS share_percent, cr.acquired_date, -- a share > 100 is junk (a 10-digit run on prod)
+                 CASE WHEN cr.share_percent BETWEEN 0 AND 100 THEN round(cr.share_percent, 4) END AS share_percent, cr.acquired_date, -- a share > 100 is junk; '99.9999999999' would read as a 10-digit run
                  CASE WHEN cr.owner_type = 'declarant' THEN 'declarant' ELSE lower(btrim(cr.owner_relation)) END AS owner, dl.y AS last_year
           FROM nazk_corporate_rights cr
           JOIN ${S}.name_key nk ON nk.raw = cr.owner_name AND nk.key IS NOT NULL
@@ -448,7 +448,7 @@ export const STEPS: Step[] = [
             WHERE share_percent >= ${SHAREHOLDER_MIN_PERCENT} AND share_percent <= 100 AND issuer_edrpou ~ '^[0-9]{8}$' AND left(issuer_edrpou, 1) = $1
           )
           SELECT issuer_edrpou, ok, owner, min(report_date)::text AS first, max(report_date)::text AS last,
-                 (array_agg(share_percent ORDER BY report_date DESC))[1] AS share, count(DISTINCT report_date) AS reports
+                 round((array_agg(share_percent ORDER BY report_date DESC))[1], 4) AS share, count(DISTINCT report_date) AS reports
           FROM s WHERE ok IS NOT NULL AND owner IS NOT NULL AND owner <> '' GROUP BY 1, 2, 3`, [String(digit)]);
         const rows: unknown[][] = [];
         for (const row of r.rows) {
