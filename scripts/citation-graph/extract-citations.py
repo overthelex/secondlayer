@@ -30,6 +30,9 @@ from typing import Optional
 import psycopg2
 from psycopg2.extras import execute_values
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from case_numbers import find_case_refs  # noqa: E402  (LEXAI-2314)
+
 # ── Database connection ──────────────────────────────────────
 
 DB_DSN = os.environ.get("DATABASE_URL", "postgresql://secondlayer:local_dev_password@localhost:5432/secondlayer_local")
@@ -129,11 +132,9 @@ PATTERNS = {
         r'Конституці[їі]\s+України',
         re.IGNORECASE | re.UNICODE
     ),
-    # Case number references: "справа № 200/1234/24"
-    "case_reference": re.compile(
-        r'(?:справ[аи]\s*)?№\s*(\d{1,4}/\d{1,10}/\d{2,4})',
-        re.IGNORECASE
-    ),
+    # Case number references («справа № 200/1234/24-ц») are NOT here: they live in
+    # case_numbers.py (suffix, right boundary, look-alike normalisation; LEXAI-2314)
+    # and are scanned over the WHOLE text, not the statute window below.
     # Law by number: "Закон України від 01.01.2020 № 123-IX"
     "law_by_number": re.compile(
         r'Закон(?:у|ом)?\s+України\s+'
@@ -319,6 +320,9 @@ MAX_TEXT_LEN = 10_000
 
 def extract_citations_from_text(doc_id: int, text: str) -> list[Citation]:
     citations = []
+    # The window bounds the statute patterns only (their cost grows with text length;
+    # case references are one cheap anchored pattern and 18% of them sit past 10,000 chars).
+    full_text = text
     if len(text) > _MAX_TEXT_LEN:
         text = text[:_MAX_TEXT_LEN]
 
@@ -352,8 +356,11 @@ def extract_citations_from_text(doc_id: int, text: str) -> list[Citation]:
         citations.append(Citation(
             doc_id, "transitional_provision", "Податковий кодекс України", point, m.group(0)[:200]))
 
-    for m in PATTERNS["case_reference"].finditer(text):
-        citations.append(Citation(doc_id, "case_reference", m.group(1), "", m.group(0)[:200]))
+    seen_cases = set()
+    for number, written in find_case_refs(full_text):
+        if number not in seen_cases:
+            seen_cases.add(number)
+            citations.append(Citation(doc_id, "case_reference", number, "", written[:200]))
 
     for m in PATTERNS["law_by_number"].finditer(text):
         law_num = m.group(2) or ""
