@@ -101,7 +101,7 @@ export const V2_TOOL_NAMES = new Set<string>([
   // UK — судові рішення Find Case Law. Ліцензія TNA (CAS-349914-B9P5B8); доступ лише
   // підтвердженим юристам і дослідникам — гейт у services/uk-judgment-access.ts.
   'uk_search_judgments',
-  // Court decisions — ЄДРСР (9)
+  // Court decisions — ЄДРСР
   'search_court_decisions',
   'get_court_decision',
   'get_case_documents_chain',
@@ -111,6 +111,9 @@ export const V2_TOOL_NAMES = new Set<string>([
   'count_cases_by_party',
   'check_precedent_status',
   'get_citation_graph',
+  // Дешеві точкові лукапи за doc_id: лише резолютивна частина та норми, на які посилається рішення.
+  'edrsr_get_decision_dispositive',
+  'get_decision_cited_norms',
   // Реєстри відкритих даних — local handler (ТМ/патенти, санкції, АМКУ, стенограми, фінзвітність)
   'search_registry',
   // Семантичний пошук практики АМКУ — доповнює keyword-пошук у search_registry

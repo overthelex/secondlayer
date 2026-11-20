@@ -101,6 +101,16 @@ describe('isToolInToolset', () => {
     expect(isToolInToolset('search_court_decisions')).toBe(true);
   });
 
+  it('excludes us_* from the ua complement and serves only us_* when MCP_TOOLSET=us', () => {
+    process.env.MCP_TOOLSET = 'ua';
+    expect(isToolInToolset('us_court_opinions')).toBe(false);
+    expect(isToolInToolset('us_sanctions_screening')).toBe(false);
+    expect(isToolInToolset('sanctions')).toBe(true);
+    process.env.MCP_TOOLSET = 'us';
+    expect(isToolInToolset('us_sec_filers')).toBe(true);
+    expect(isToolInToolset('search_court_decisions')).toBe(false);
+  });
+
   it('honours the good members of a list that also contains a typo', () => {
     // Dropping every tool because someone left a stray comma or misspelled one value
     // would be its own outage; only a value with NO recognisable member fails closed.

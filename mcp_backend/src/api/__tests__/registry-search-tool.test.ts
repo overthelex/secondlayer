@@ -540,6 +540,21 @@ describe('aggregate mode (LEXAI-1820)', () => {
         expect(res.isError).toBe(true);
         expect(calls).toHaveLength(0);
       });
+
+      it('MCP_TOOLSET=ua hides the us_* registries, whose tables are empty on legal.org.ua', async () => {
+        process.env.MCP_TOOLSET = 'ua';
+        db = makeDb(() => ({ rows: [] }));
+        tool = new RegistrySearchTool(db);
+        const registryEnum = tool.getToolDefinitions()[0].inputSchema.properties.registry.enum as string[];
+        expect(registryEnum.some((k) => k.startsWith('us_'))).toBe(false);
+        expect(registryEnum).toContain('sanctions');
+
+        const res: any = await tool.executeTool('search_registry', {
+          registry: 'us_sec_filers', filters: { name: 'Apple' },
+        });
+        expect(res.isError).toBe(true);
+        expect(calls).toHaveLength(0);
+      });
     });
 
     it('all four UK registries are in the enum', () => {

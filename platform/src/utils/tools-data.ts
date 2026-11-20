@@ -120,6 +120,22 @@ export const tools: Tool[] = [
     },
   },
   {
+    name: 'edrsr_get_decision_dispositive', category: 'Documents',
+    description: 'Лише резолютивна частина рішення (ВИРІШИВ / УХВАЛИВ / ПОСТАНОВИВ / ВИРОК): 2–8 КБ замість повного тексту',
+    cost: '$0.006',
+    params: [
+      { name: 'doc_id', type: 'string', required: true, description: 'ID документа в ЄДРСР' },
+    ],
+  },
+  {
+    name: 'get_decision_cited_norms', category: 'Documents',
+    description: 'Норми законодавства, на які посилається рішення (rada_id, номер статті, кількість згадок)',
+    cost: '$0.006',
+    params: [
+      { name: 'doc_id', type: 'string', required: true, description: 'ID документа в ЄДРСР' },
+    ],
+  },
+  {
     name: 'get_case_documents_chain', category: 'Documents',
     description: 'Всі документи справи через усі інстанції',
     cost: '$0.017',

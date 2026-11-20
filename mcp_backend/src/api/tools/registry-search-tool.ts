@@ -12,10 +12,10 @@ import { logger } from '../../utils/logger.js';
 import { isToolInToolset } from '../mcp-toolset.js';
 
 /**
- * Registries this deployment actually serves. The uk_* registries are named like the
- * uk_* tools on purpose, so the MCP_TOOLSET gate applies to them unchanged: on
- * legal.org.ua (MCP_TOOLSET=ua) the UK corpus lives on lawrider.uk and its tables here
- * are empty by design, so advertising them only produced "nothing found" (LEXAI-2190).
+ * Registries this deployment actually serves. The uk_* and us_* registries are named
+ * like jurisdiction tools on purpose, so the MCP_TOOLSET gate applies to them unchanged:
+ * on legal.org.ua (MCP_TOOLSET=ua) the UK corpus lives on lawrider.uk and the US tables
+ * were never loaded, so advertising them only produced "nothing found" (LEXAI-2190).
  * Read per call, like the gate itself, so tests can vary the env var.
  */
 export function availableRegistryKeys(): string[] {
