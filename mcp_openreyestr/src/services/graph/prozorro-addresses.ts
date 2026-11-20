@@ -195,6 +195,10 @@ export async function prozorroAddressEdges(c: PoolClient, edrConfirmed: string |
     SELECT r.*, e.edrpou IS NOT NULL AS has_edr, coalesce(e.edr_open, false) AS edr_open,
            coalesce(graph_stage.pz_loose(r.address_key) = ANY (e.loose), false) AS in_edr
     FROM ranked r LEFT JOIN edr e USING (edrpou)`);
+  // fresh tables have no statistics: without them the planner can pick a nested loop over e_raw that
+  // ran for half an hour on prod (20.11)
+  await c.query('ANALYZE graph_stage.pz_edge');
+  await c.query('ANALYZE graph_stage.e_raw');
   const pzRef = (p: string) => `jsonb_build_object('table', 'prozorro_contracts', 'first_seen', ${p}.first_seen, 'last_seen', ${p}.last_seen,
     'contracts', ${p}.contracts, 'contract_ids', ${p}.refs, 'value', ${p}.raw_md5)`;
   // the same building as the ЄДР: a confirmation of the ЄДР edge

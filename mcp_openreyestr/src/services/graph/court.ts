@@ -235,9 +235,11 @@ export async function buildCourtEdges(c: Pick<PoolClient, 'query'>, opts: CourtE
            min(p.case_key) AS case_key, min(p.justice_kind) AS justice_kind, max(p.loaded_on) AS loaded_on
     FROM graph.court_party p JOIN graph_stage.company co ON co.edrpou = p.edrpou
     GROUP BY p.doc_id, p.edrpou`);
+  await c.query('ANALYZE graph_stage.court_doc');
   counts.court_party_rows = Number((await c.query('SELECT count(*) AS n FROM graph_stage.court_doc')).rows[0].n);
   await c.query(`CREATE UNLOGGED TABLE graph_stage.court_ndoc AS
     SELECT doc_id, count(*) AS n FROM graph_stage.court_doc GROUP BY doc_id HAVING count(*) >= 2`);
+  await c.query('ANALYZE graph_stage.court_ndoc');
   counts.court_decisions_multi = Number((await c.query('SELECT count(*) AS n FROM graph_stage.court_ndoc')).rows[0].n);
   counts.court_decisions_mass = Number((await c.query('SELECT count(*) AS n FROM graph_stage.court_ndoc WHERE n > $1', [maxParties])).rows[0].n);
   counts.court_max_parties_per_decision = maxParties;
@@ -264,6 +266,7 @@ export async function buildCourtEdges(c: Pick<PoolClient, 'query'>, opts: CourtE
              'roles', jsonb_strip_nulls(jsonb_build_object(${roleCounts})),
              'justice_kinds', to_jsonb(array_agg(DISTINCT x.justice_kind) FILTER (WHERE x.justice_kind IS NOT NULL)))) AS attrs
     FROM x GROUP BY x.src, x.dst`);
+  await c.query('ANALYZE graph_stage.court_edge');
   const n = Number((await c.query('SELECT count(*) AS n FROM graph_stage.court_edge')).rows[0].n);
   counts.edges_co_party = n;
 
@@ -273,12 +276,16 @@ export async function buildCourtEdges(c: Pick<PoolClient, 'query'>, opts: CourtE
       SELECT src AS edrpou, (attrs->>'decisions')::int AS decisions FROM graph_stage.court_edge
       UNION ALL SELECT dst, (attrs->>'decisions')::int FROM graph_stage.court_edge) z
     GROUP BY edrpou`);
+  await c.query('ANALYZE graph_stage.court_deg');
   const obs = (await c.query(`SELECT percentile_disc($1::float8) WITHIN GROUP (ORDER BY counterparties) AS v FROM graph_stage.court_deg`,
     [COURT_HUB_POLICY.percentile])).rows[0].v;
   const hub = courtHubThreshold(obs === null ? null : Number(obs), opts.hubThreshold);
   counts.court_hub_threshold = hub.threshold;
   counts.court_hub_basis = hub.basis;
 
+  // graph_stage.node is not analysed yet at this point of the build; planned without statistics, this
+  // INSERT wrote ~300 GB of temp files and filled the disk on prod (20.11). With them it takes < 1 s.
+  await c.query('ANALYZE graph_stage.node');
   await c.query(`INSERT INTO graph_stage.edge (src, dst, kind, valid_from, valid_to, source, source_ref, attrs)
     SELECT s.id, d.id, 'co_party', e.valid_from, e.valid_to, 'edrsr', e.source_ref, e.attrs
     FROM graph_stage.court_edge e
