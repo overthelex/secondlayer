@@ -361,7 +361,8 @@ export const STEPS: Step[] = [
         UNION SELECT full_name FROM nazk_family_members WHERE lower(btrim(relation)) = ANY(${rel})`);
       // the latest declaration year of each declarant: a relation still declared then is current
       await x.c.query(`CREATE UNLOGGED TABLE ${S}.decl_last AS
-        SELECT declarant_id, max(declaration_year) AS y FROM nazk_declarations GROUP BY declarant_id`);
+        SELECT declarant_id, max(declaration_year) AS y FROM nazk_declarations
+        WHERE declarant_id IS NOT NULL GROUP BY declarant_id`); // some list rows have no declarant id (20.11)
       await x.c.query(`ALTER TABLE ${S}.decl_last ADD PRIMARY KEY (declarant_id)`);
       await x.c.query(`INSERT INTO ${S}.edge_raw (${EDGE_COLS.join(', ')})
         WITH r AS (
