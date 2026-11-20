@@ -9,7 +9,12 @@ export type {
   AddressParts, AddressKeys, NormalisedAddress, NormAddressOptions, ParseStatus, PremisesType,
   SettlementType, StreetRef, StreetRenamingLookup, StreetType,
 } from './address';
-export { buildStreetRenamingIndex, StreetRenamingIndex, StreetRenamingsCache, STREET_RENAMINGS_SQL } from './street-renamings';
-export type { StreetRenamingRow, BuildRenamingOptions, RenamingIndexStats, Queryable } from './street-renamings';
+export {
+  buildStreetRenamingIndex, StreetRenamingIndex, StreetRenamingsCache, STREET_RENAMINGS_SQL, STREET_RENAMINGS_SCOPED_SQL, scopedRowsOf,
+  renamingSettlementKey,
+} from './street-renamings';
+export type { StreetRenamingRow, BuildRenamingOptions, RenamingIndexStats, Queryable, StreetRenamingsCacheOptions } from './street-renamings';
+export { candidatePairs, RenamingAggregator, streetKeyOf } from './street-renaming-derive';
+export type { AddressObservation, RenamingCandidate, FilterOptions, FilterStats, ScopedRenaming } from './street-renaming-derive';
 // person names: the ЄДР history module already normalises them
 export { normUa, uaMatchKey, historyNameKey, countryIso } from '../edr-history/norm';
