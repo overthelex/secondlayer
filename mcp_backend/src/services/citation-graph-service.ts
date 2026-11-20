@@ -222,13 +222,18 @@ export class CitationGraphService {
     }
   }
 
-  /** Articles cited by a given decision, most popular first (noise-filtered). */
+  /**
+   * Articles cited by a given decision, most popular first (noise-filtered). The decision's
+   * rows are fetched first (MATERIALIZED): a misestimate once made the planner start from
+   * statute_article_stats instead, and get_court_decision timed out (migration 298).
+   */
   async getDecisionCitations(docId: string | number, limit = 200): Promise<ArticleCitation[]> {
     const rows = await this.q(
-      `SELECT c.law_number AS law, c.law_article AS article, c.citation_type AS ct
-         FROM decision_statute_citations c
+      `WITH c AS MATERIALIZED (SELECT * FROM decision_statute_citations WHERE doc_id = $1::bigint)
+       SELECT c.law_number AS law, c.law_article AS article, c.citation_type AS ct
+         FROM c
          JOIN statute_article_stats s USING (law_number, law_article)
-        WHERE c.doc_id = $1::bigint AND s.unique_decisions >= $3
+        WHERE s.unique_decisions >= $3
         ORDER BY s.total_citations DESC, c.law_number, c.law_article
         LIMIT $2`,
       [String(docId), limit, MIN_ARTICLE_DECISIONS],
@@ -239,11 +244,12 @@ export class CitationGraphService {
   /** What a decision cites, with corpus-wide popularity, for get_court_decision. */
   async getDecisionCitationSummary(docId: string | number, limit = 20): Promise<DecisionCitationSummary> {
     const rows = await this.q(
-      `SELECT c.law_number AS law, c.law_article AS article, c.citation_type AS ct,
+      `WITH c AS MATERIALIZED (SELECT * FROM decision_statute_citations WHERE doc_id = $1::bigint)
+       SELECT c.law_number AS law, c.law_article AS article, c.citation_type AS ct,
               s.total_citations AS pop, count(*) OVER () AS total
-         FROM decision_statute_citations c
+         FROM c
          JOIN statute_article_stats s USING (law_number, law_article)
-        WHERE c.doc_id = $1::bigint AND s.unique_decisions >= $3
+        WHERE s.unique_decisions >= $3
         ORDER BY s.total_citations DESC, c.law_number, c.law_article
         LIMIT $2`,
       [String(docId), limit, MIN_ARTICLE_DECISIONS],
