@@ -40,6 +40,14 @@
 # Exit: 0 — built and checked, or nothing to do; 1 — failure (mailed).
 #
 # Logs: /mnt/bulk_storage/opendata/graph-build/build-<date>.log (HDD), 60 days kept.
+#
+# Side inputs and the enrichment layer (EXTRAS=1, default): in the same container, before the
+# build, load-court-parties.js (graph.court_party from the backend edrsr_parties, LEXAI-2304) and
+# import-foreign-refs.js (graph.foreign_ref / foreign_officer from cy_* / icij_*, LEXAI-2321); after
+# a successful build, build-graph-enrichment.js (graph.node_flag / enrich_edge, LEXAI-2305). They
+# read the backend DB (credentials from SL_APP_CONTAINER, read-only use). A failure of any of them
+# only warns ("WARN extra step failed" in the build log): the build then uses the previous rows.
+# EXTRAS=0, or no SL_APP_CONTAINER, runs the build alone.
 
 set -euo pipefail
 
@@ -57,6 +65,8 @@ MAX_DROP_PCT="${MAX_DROP_PCT:-10}"
 MIN_FREE_GB="${MIN_FREE_GB:-60}"
 BUILD_ARGS="${BUILD_ARGS:-}"
 NOTIFY="${NOTIFY:-1}"
+EXTRAS="${EXTRAS:-1}"
+SL_APP_CONTAINER="${SL_APP_CONTAINER:-secondlayer-app-local}"
 MAIL_TO="${MAIL_TO:-vladimir@legal.org.ua}"
 MAIL_FROM="${MAIL_FROM:-vladimir@legal.org.ua}"
 SMTP_HOST="${SMTP_HOST:-smtp.azurecomm.net}"
@@ -271,7 +281,7 @@ mkdir -p "$WORK_DIR"
 find "$WORK_DIR" -maxdepth 1 -name 'build-*.log' -mtime +60 -delete 2>/dev/null || true
 STAMP=$(date +%Y-%m-%d-%H%M)
 LOG="build-${STAMP}.log"
-CMD="nice -n 19 node dist/scripts/build-graph.js ${BUILD_ARGS} > /work/${LOG} 2>&1"
+BUILD_CMD="nice -n 19 node dist/scripts/build-graph.js ${BUILD_ARGS}"
 
 ENV_FILE=$(mktemp)
 trap 'rm -f "$ENV_FILE"' EXIT
@@ -281,6 +291,27 @@ docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$APP_CONTAINER" \
 for k in POSTGRES_HOST POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
   grep -q "^$k=" "$ENV_FILE" || fail "$k is not set in $APP_CONTAINER"
 done
+
+# Backend DB for the extra steps: EDRSR_DATABASE_URL / SOURCE_DATABASE_URL and SL_POSTGRES_*.
+if [[ "$EXTRAS" == 1 ]]; then
+  SL_ENV=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$SL_APP_CONTAINER" 2>/dev/null || true)
+  SL_URL=$(grep -E '^DATABASE_URL=' <<< "$SL_ENV" | cut -d= -f2- || true)
+  if [[ -n "$SL_URL" ]]; then
+    { echo "EDRSR_DATABASE_URL=$SL_URL"; echo "SOURCE_DATABASE_URL=$SL_URL"
+      grep -E '^POSTGRES_(HOST|PORT|USER|PASSWORD|DB)=' <<< "$SL_ENV" | sed 's/^/SL_/'; } >> "$ENV_FILE"
+  else
+    log "WARN no DATABASE_URL in $SL_APP_CONTAINER: building without the extra steps"
+    EXTRAS=0
+  fi
+fi
+if [[ "$EXTRAS" == 1 ]]; then
+  CMD="x() { \"\$@\" || echo \"WARN extra step failed: \$*\"; };
+    { echo \"== court parties\"; x node dist/scripts/load-court-parties.js;
+      echo \"== foreign refs\"; x node dist/scripts/import-foreign-refs.js;
+      echo \"== build\"; ${BUILD_CMD} && { echo \"== enrichment\"; x nice -n 19 node dist/scripts/build-graph-enrichment.js; }; } > /work/${LOG} 2>&1"
+else
+  CMD="${BUILD_CMD} > /work/${LOG} 2>&1"
+fi
 
 RUN=(docker run -d --name "$JOB_CONTAINER"
   --network "$NETWORK"
