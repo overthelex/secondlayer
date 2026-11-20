@@ -350,6 +350,19 @@ export const tools: Tool[] = [
     ],
   },
   {
+    name: 'search_cyprus_companies', category: 'Due Diligence',
+    description: 'Реєстр компаній Кіпру (DRCOR): пошук за назвою, номером HE/AE чи посадовою особою; статус, офіс, посадові особи, дата знімка',
+    cost: '$0.011',
+    params: [
+      { name: 'query', type: 'string', required: false, description: 'Назва або номер HE/AE' },
+      { name: 'registration_number', type: 'string', required: false, description: 'Реєстраційний номер HE123456 / AE1234' },
+      { name: 'person_name', type: 'string', required: false, description: 'Ім’я посадової особи' },
+      { name: 'name_match', type: 'string', required: false, description: 'contains / exact / transliteration' },
+      { name: 'status', type: 'string', required: false, description: 'any / active / dissolved' },
+      { name: 'limit', type: 'number', required: false, description: 'До 25' },
+    ],
+  },
+  {
     name: 'openreyestr_company_as_of', category: 'Registry',
     description: 'Юрособа станом на дату за знімками ЄДР (2016, 2018, 2021, щотижня з 2026)',
     cost: '$0.044',

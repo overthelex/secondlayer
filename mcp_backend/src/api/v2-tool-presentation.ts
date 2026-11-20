@@ -112,6 +112,7 @@ export const V2_ANNOTATION_OVERRIDES: Record<string, ToolAnnotations> = {
   edrsr_get_decision_dispositive: { title: 'Резолютивна частина рішення', ...RO },
   get_decision_cited_norms: { title: 'Норми, цитовані рішенням', ...RO },
   search_offshore_leaks: { title: 'ICIJ Offshore Leaks: офшорні компанії та особи', ...RO },
+  search_cyprus_companies: { title: 'Реєстр компаній Кіпру (DRCOR)', ...RO },
   openreyestr_get_by_edrpou: { title: 'ЄДР: компанія за кодом ЄДРПОУ', ...RO },
   openreyestr_get_entity_details: { title: 'ЄДР: повні відомості про суб\'єкт', ...RO },
   openreyestr_search_entities: { title: 'ЄДР: пошук суб\'єктів господарювання', ...RO },

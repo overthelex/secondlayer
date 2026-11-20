@@ -126,6 +126,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'search_offshore_leaks',
   // Фінансова звітність за ЄДРПОУ: ключові показники Ф1/Ф2 (1-м, 1-мс) за роками.
   'get_financial_statements',
+  // Реєстр компаній Кіпру (DRCOR): назва, номер HE/AE, посадові особи, офіс.
+  'search_cyprus_companies',
   'openreyestr_get_by_edrpou',
   'openreyestr_get_entity_details',
   'openreyestr_search_entities',
