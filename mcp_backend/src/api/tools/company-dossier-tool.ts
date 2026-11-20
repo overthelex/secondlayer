@@ -13,6 +13,7 @@
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
 import { logger } from '../../utils/logger.js';
 import { latestFigures, LatestFigures } from './financial-statement-figures.js';
+import { INSPECTION_PLANS_SECTION } from './company-dossier-inspections.js';
 
 const SUBTOOL_TIMEOUT_MS = 40_000;
 const ROWS_PER_SECTION = 10;
@@ -139,6 +140,8 @@ export const SECTION_SPECS: SectionSpec[] = [
   { key: 'termination', title: 'Розпочате припинення', tool: 'openreyestr_search_termination_started',
     args: (c) => ({ query: c }),
     source: { name: 'ЄДР: відомості про припинення', freshness: 'termination_started' } },
+  // Державний нагляд
+  INSPECTION_PLANS_SECTION,
   // Податковий статус
   { key: 'single_tax', title: 'Платник єдиного податку', tool: 'openreyestr_search_single_tax_payers',
     args: (c) => ({ tin: c }),

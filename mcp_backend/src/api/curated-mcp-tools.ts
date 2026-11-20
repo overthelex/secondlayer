@@ -147,6 +147,8 @@ export const V2_TOOL_NAMES = new Set<string>([
   'openreyestr_search_esv_debt',
   'openreyestr_search_single_tax_payers',
   'openreyestr_search_termination_started',
+  // Плани планових перевірок державного нагляду (LEXAI-2315).
+  'openreyestr_search_inspection_plans',
   'openreyestr_search_arbitration_managers',
   'openreyestr_search_special_forms',
   'openreyestr_get_statistics',

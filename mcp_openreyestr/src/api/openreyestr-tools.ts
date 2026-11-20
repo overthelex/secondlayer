@@ -6,6 +6,7 @@ import { formatSingleTaxPayerRow, tinLookupCandidates } from '../utils/single-ta
 import { PLAUSIBLE_OPENING_DATE_SQL } from '../utils/enforcement';
 import { ARMA_OWNER_NOT_PUBLISHED, buildArmaFilters, deriveArmaStatusCategory } from '../services/arma-mapping';
 import { normalizeNazkRegion, nazkRegionCodesMatching } from '../utils/nazk-region';
+import { InspectionPlanParams, searchInspectionPlans } from './inspection-plans';
 import {
   companyAsOf, companyHistory, PartySearchParams, searchBeneficiariesHistory, searchFoundersHistory,
 } from '../services/edr-history/queries';
@@ -391,6 +392,8 @@ export const FRESHNESS_PROBES: Array<{ key: string; sql: string; basis: string; 
   { key: 'tax_debt', sql: 'SELECT max(report_date) AS v FROM tax_debt', basis: 'дата звіту ДПС',
     note: 'Джерело ДПС не оновлюється: зріз станом на 22.02.2022. Відсутність боргу тут не означає відсутності боргу сьогодні.' },
   { key: 'termination_started', sql: 'SELECT max(created_at) AS v FROM termination_started', basis: 'останній імпорт' },
+  { key: 'inspection_plans', sql: 'SELECT max(created_at) AS v FROM inspection_plans', basis: 'дата завантаження плану',
+    note: 'Річний план планових перевірок, завантажений один раз: зміни до плану після дати завантаження та позапланові перевірки не враховано.' },
   { key: 'rnbo_sanctions', sql: 'SELECT max(updated_at) AS v FROM rnbo_sanctions', basis: 'знімок реєстру РНБО' },
   { key: 'arma_assets', sql: 'SELECT max(updated_at) AS v FROM arma_assets', basis: 'останній імпорт',
     note: 'Власник арештованого майна у відкритих даних АРМА не публікується, тому пошук за ЄДРПОУ неможливий.' },
@@ -2055,6 +2058,11 @@ export class OpenReyestrTools {
       return [{ found: false, query, message: 'Записів про припинення не знайдено' }];
     }
     return result.rows.map(formatTerminationRow);
+  }
+
+  /** Annual plans of state inspections (LEXAI-2315); logic in inspection-plans.ts. */
+  async searchInspectionPlans(params: InspectionPlanParams): Promise<any> {
+    return searchInspectionPlans(this.pool, params);
   }
 
   /**

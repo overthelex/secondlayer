@@ -122,6 +122,7 @@ export const V2_ANNOTATION_OVERRIDES: Record<string, ToolAnnotations> = {
   openreyestr_search_esv_debt: { title: 'Борг зі сплати ЄСВ', ...RO },
   openreyestr_search_single_tax_payers: { title: 'Платники єдиного податку', ...RO },
   openreyestr_search_termination_started: { title: 'Припинення юридичних осіб', ...RO },
+  openreyestr_search_inspection_plans: { title: 'Плани перевірок державного нагляду', ...RO },
   openreyestr_search_arbitration_managers: { title: 'Арбітражні керуючі', ...RO },
   openreyestr_search_special_forms: { title: 'Спецбланки нотаріальних документів', ...RO },
   openreyestr_get_statistics: { title: 'ЄДР: статистика', ...RO },
