@@ -45,6 +45,14 @@ export const V2_DESCRIPTION_OVERRIDES: Record<string, string> = {
     'скільки повернуто, has_more — чи є ще; summary рахується по всій справі. sort=balanced (типово) повертає початок справи ' +
     'і найновіші документи; asc або desc разом з offset повертають решту. document_types звужує вибірку до певних форм рішень, ' +
     'наприклад ["Рішення", "Постанова"].',
+  edrsr_get_decision_dispositive:
+    'Резолютивна частина судового рішення за doc_id: текст після маркера ВИРІШИВ / УХВАЛИВ / ПОСТАНОВИВ / ВИРОК, зазвичай ' +
+    '2–8 КБ замість 50–500 КБ повного тексту. Повертає dispositive, знайдений marker і його позицію, довжину повного тексту ' +
+    'та посилання на рішення в реєстрі. Якщо маркера немає, повертає останні 4000 символів тексту з is_fallback=true.',
+  get_decision_cited_norms:
+    'Норми законодавства, на які посилається судове рішення, за графом цитувань рішень і статей: rada_id акта, базовий номер ' +
+    'статті та кількість згадок, плюс загальна кількість розв\'язаних посилань. total_resolved_links=0 означає, що для рішення ' +
+    'немає даних графа, а не що воно не цитує норм.',
   load_full_texts:
     'Повні тексти судових рішень за масивом doc_id. Тексти беруться з кешу або завантажуються з реєстру. Типово повертає лише ' +
     'статус завантаження; з return_texts=true повертає для кожного документа мотивувальну й резолютивну частини та застосовані ' +
@@ -91,6 +99,8 @@ export const V2_DESCRIPTION_OVERRIDES: Record<string, string> = {
  */
 export const V2_ANNOTATION_OVERRIDES: Record<string, ToolAnnotations> = {
   load_full_texts: { title: 'Повні тексти рішень', ...RO, openWorldHint: true },
+  edrsr_get_decision_dispositive: { title: 'Резолютивна частина рішення', ...RO },
+  get_decision_cited_norms: { title: 'Норми, цитовані рішенням', ...RO },
   openreyestr_get_by_edrpou: { title: 'ЄДР: компанія за кодом ЄДРПОУ', ...RO },
   openreyestr_get_entity_details: { title: 'ЄДР: повні відомості про суб\'єкт', ...RO },
   openreyestr_search_entities: { title: 'ЄДР: пошук суб\'єктів господарювання', ...RO },

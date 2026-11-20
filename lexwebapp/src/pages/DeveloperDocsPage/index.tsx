@@ -74,6 +74,8 @@ const toolGroups: ToolGroup[] = [
     title: 'Документи справ',
     tools: [
       { name: 'get_court_decision', description: 'Повний текст рішення з розбивкою на секції: ФАКТИ, МОТИВУВАННЯ, РІШЕННЯ', params: [{ name: 'doc_id' }, { name: 'case_number' }, { name: 'depth' }, { name: 'reasoning_budget' }, { name: 'include_citations' }], cost: '₴0.25 · до ₴0.38' },
+      { name: 'edrsr_get_decision_dispositive', description: 'Лише резолютивна частина: ВИРІШИВ / УХВАЛИВ / ПОСТАНОВИВ / ВИРОК, 2–8 КБ замість повного тексту', params: [{ name: 'doc_id', required: true }], cost: '₴0.25 · до ₴0.38' },
+      { name: 'get_decision_cited_norms', description: 'Норми законодавства, на які фактично посилається рішення (граф цитувань)', params: [{ name: 'doc_id', required: true }], cost: '₴0.25 · до ₴0.38' },
       { name: 'get_case_documents_chain', description: 'Усі документи справи через усі інстанції — перша, апеляція, касація', params: [{ name: 'case_number', required: true }, { name: 'include_full_text' }, { name: 'max_docs' }, { name: 'group_by_instance' }, { name: 'sort' }, { name: 'offset' }, { name: 'document_types' }], cost: '₴0.75 · до ₴1.12' },
       { name: 'load_full_texts', description: 'Пакетне завантаження повних текстів рішень за масивом doc_id', params: [{ name: 'doc_ids', required: true }, { name: 'max_docs' }, { name: 'batch_size' }, { name: 'return_texts' }, { name: 'snippet_chars' }], cost: '₴1.00 · до ₴1.50' },
     ],
@@ -179,7 +181,7 @@ const toolGroups: ToolGroup[] = [
 
 /**
  * Каталог вище — українська частина V2_TOOL_NAMES (mcp_backend/src/api/curated-mcp-tools.ts),
- * звірено 19.11.2026. Лічильники рахуються з нього, а не хардкодяться.
+ * звірено 20.11.2026. Лічильники рахуються з нього, а не хардкодяться.
  */
 const ALL_TOOLS = toolGroups.flatMap(g => g.tools);
 const TOOL_COUNTS = {
@@ -496,7 +498,7 @@ function ToolsSection() {
       </p>
       <p className="mt-2 text-[13px] text-claude-subtext leading-relaxed">
         Канонічне джерело &mdash; <Code>tools/list</Code>: повертає актуальні імена, описи та JSON-схеми
-        параметрів. Список нижче звірено з ним 19.11.2026. Вартість &mdash; див. розділ{' '}
+        параметрів. Список нижче звірено з ним 20.11.2026. Вартість &mdash; див. розділ{' '}
         <a href="#pricing" className="text-claude-accent hover:underline">Вартість</a>.
       </p>
 
