@@ -33,11 +33,11 @@ const WORDS = ['рнкп', 'рнкпо', 'рнокпо', 'рнопп', 'іпн',
   'дрфо', 'сері[яїи]', 'серия', 'сер', 'ser', 'no', 'n', '№'];
 const MARKERS = `(?:(?<![${L}])(?:(?:${STEMS.join('|')})[${L}]*|(?:${WORDS.join('|')})(?![${L}])`
   // 'серіяАА123456': the series glued to the word
-  + `|(?:сері[яїи]|серия)(?=[${L}]{2}[\\s№]*[0-9]{6,7}))\\.?${SEP})*`;
+  + `|(?:сері[яїи]|серия)(?=[${L}]{2}[\\s№]*[0-9]{6,8}))\\.?${SEP})*`;
 const LONG_DIGITS = '(?<![0-9])[0-9]{9,}(?![0-9])';
 const TEN_DIGITS = '(?<![0-9])[0-9]{10}(?![0-9])';
-/** a two-letter word (or two letters right after 'серія' / 'паспорт') with six digits, or seven (a mistyped series, seen on prod) */
-const PASSPORT = `(?:(?<![${L}])|(?<=(?:сері|сери|сер|паспорт)[${L}]*))[${L}]{2}[\\s№]*[0-9]{6,7}(?![0-9])`;
+/** a two-letter word (or two letters right after 'серія' / 'паспорт') with six to eight digits (seven and eight seen on prod; in a person's name any such token is a document number) */
+const PASSPORT = `(?:(?<![${L}])|(?<=(?:сері|сери|сер|паспорт)[${L}]*))[${L}]{2}[\\s№]*[0-9]{6,8}(?![0-9])`;
 /** an opening bracket or a dot right before the number or its marker ('(1234567890)', ' .1234567890'), not the dot of initials */
 const LEAD = '\\s*[(\\[]?\\s*\\.?';
 const TAIL = '[)\\]/.]*';
@@ -80,7 +80,7 @@ export const TEN_DIGITS_SQL = '(^|[^0-9])[0-9]{10}([^0-9]|$)';
  * Not for foreign entities, whose registration numbers look like series ('HE 123456', 'FN 123456 z'):
  * those are checked with PASSPORT_WORD_CHECK_SQL / DOB_CHECK_SQL only.
  */
-export const PASSPORT_CHECK_SQL = `(^|[^${L}])[${L}]{2}[ №]*[0-9]{6,7}([^0-9]|$)|(^|[^${L}])(${PASSPORT_WORD_SQL})`;
+export const PASSPORT_CHECK_SQL = `(^|[^${L}])[${L}]{2}[ №]*[0-9]{6,8}([^0-9]|$)|(^|[^${L}])(${PASSPORT_WORD_SQL})`;
 export const PASSPORT_WORD_CHECK_SQL = `(^|[^${L}])(${PASSPORT_WORD_SQL})`;
 /** A date of birth left in a person's label (any full date: a person's name has none) or written with 'р.н.' / 'д.н.' elsewhere. */
 export const DATE_CHECK_SQL = '(^|[^0-9])[0-3]?[0-9][./][01]?[0-9][./](19|20)[0-9]{2}([^0-9]|$)';
