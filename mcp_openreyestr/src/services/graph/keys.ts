@@ -10,12 +10,14 @@ import { md5 } from '../edr-history/entries';
 import { hasPersonalIdMarker, stripPersonalMarkers, stripPersonIds } from '../graph-norm/personal-ids';
 
 export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity' | 'organisation';
-export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour';
-/** cy_drcor: officials of a Cypriot company linked to a foreign entity (LEXAI-2321, graph/foreign-refs.ts) */
-export type EdgeSource = 'edr_hist' | 'edr_current' | 'cy_drcor';
+export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour' | 'co_party';
+/** edrsr: court decisions (graph.court_party, LEXAI-2304); prozorro: ProZorro supplier addresses (LEXAI-2317);
+ *  cy_drcor: officials of a Cypriot company linked to a foreign entity (LEXAI-2321, graph/foreign-refs.ts) */
+export type EdgeSource = 'edr_hist' | 'edr_current' | 'edrsr' | 'prozorro' | 'cy_drcor';
 
 export const NODE_KINDS: NodeKind[] = ['company', 'person_name', 'address', 'foreign_entity', 'organisation'];
-export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour'];
+export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour', 'co_party'];
+export const EDGE_SOURCES: EdgeSource[] = ['edr_hist', 'edr_current', 'edrsr', 'prozorro', 'cy_drcor'];
 
 /** Bump when normAddress changes in a way that changes keys: every address is re-keyed on the next build. */
 export const ADDRESS_KEY_VERSION = 1;

@@ -50,3 +50,13 @@ CREATE TABLE IF NOT EXISTS graph.foreign_officer (
 -- Edge source 'cy_drcor' is allowed by the builder's staging DDL (builder.ts stageDdl), from which
 -- every build recreates graph.edge; the constraint of a graph built before is left alone (it has
 -- no such edges), so this migration does not race other migrations that widen the same list.
+
+-- Edge source 'cy_drcor' (head edges from Cypriot officials). The builder recreates graph.edge from
+-- its staging DDL; this keeps a graph built before 034 consistent with the full source list.
+DO $$ BEGIN
+  IF to_regclass('graph.edge') IS NOT NULL THEN
+    ALTER TABLE graph.edge DROP CONSTRAINT IF EXISTS edge_source_check;
+    ALTER TABLE graph.edge ADD CONSTRAINT edge_source_check
+      CHECK (source IN ('edr_hist', 'edr_current', 'edrsr', 'prozorro', 'cy_drcor'));
+  END IF;
+END $$;
