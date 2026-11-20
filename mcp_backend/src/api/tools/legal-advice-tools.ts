@@ -22,7 +22,8 @@ import { SectionType } from '../../types/index.js';
 import { logger } from '../../utils/logger.js';
 import { CourtDecisionHTMLParser, extractSearchTermsWithAI } from '../../utils/html-parser.js';
 import { BaseToolHandler, ToolDefinition, ToolResult } from '../base-tool-handler.js';
-import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate, GRAND_CHAMBER_COURT_CODE } from '../tool-utils.js';
+import { countAllResults, buildSupremeCourtWhereFilter, mapProcedureCodeToJusticeKind, extractSnippets, formatCourtDate, GRAND_CHAMBER_COURT_CODE, edrsrPool, resolveCauseNumber } from '../tool-utils.js';
+import { withCitationSession, citedBy, cites, caseDocIds, docCaseNumber, COVERAGE_NOTE, MAX_CITATION_LIMIT } from '../case-citation-graph.js';
 
 /** Max cases to enrich with precedent status per search (cost/latency guard) */
 const MAX_SHEPARDIZATION_BATCH = 15;
@@ -197,16 +198,18 @@ export class LegalAdviceTools extends BaseToolHandler {
       {
         name: 'get_citation_graph',
         annotations: { title: 'Граф цитувань', readOnlyHint: true, idempotentHint: true },
-        description: `Граф цитувань судового рішення: на які НОРМИ/СТАТТІ законодавства воно посилається (decision→article).
-
-Повертає зв'язки рішення→стаття (CITES_ARTICLE), батьківський закон кожної статті (OF_LAW) та споріднені co-cited норми. НЕ будує граф рішення↔рішення.
-Приймає case_id — UUID/doc_id документа або номер справи (наприклад "756/1234/23"). Номер справи автоматично конвертується в doc_id. depth керує глибиною обходу.
-Використовуйте для аналізу правової основи рішення. Покриття часткове (переважно старіші рішення з завантаженого екстракту) — порожній граф означає брак даних графа, а не відсутність цитувань.`,
+        description: `Граф цитувань судового рішення. Три напрями (direction):
+• laws (типово) — на які норми/статті законодавства посилається рішення (decision→article): зв'язки CITES_ARTICLE, закон кожної статті (OF_LAW).
+• cited_by — які судові рішення цитують справу (за номером справи): спершу касаційні (Велика Палата, Верховний Суд), далі апеляційні й першої інстанції, новіші першими; з фрагментом тексту навколо посилання. total_citing_decisions — усі рішення, що цитують справу; рангуються 10 000 найновіших (scanned.truncated).
+• cites — на які інші справи посилається рішення (doc_id) або всі рішення справи (номер справи); для кожної процитованої справи — її рішення найвищої інстанції.
+Приймає case_id — doc_id ЄДРСР або номер справи (наприклад "756/1234/23"; для laws також UUID). limit — до ${MAX_CITATION_LIMIT} записів для cited_by/cites. Граф рішення↔справа охоплює рішення, ухвалені до травня 2026 р.`,
         inputSchema: {
           type: 'object',
           properties: {
-            case_id: { type: 'string', description: 'UUID/doc_id документа або номер справи (cause_num)' },
-            depth: { type: 'number', default: 2 },
+            case_id: { type: 'string', description: 'doc_id ЄДРСР або номер справи (cause_num); для direction=laws також UUID документа' },
+            direction: { type: 'string', enum: ['laws', 'cited_by', 'cites'], default: 'laws', description: 'laws — цитовані норми; cited_by — хто цитує справу; cites — кого цитує рішення/справа' },
+            limit: { type: 'number', default: 20, description: `Скільки рішень/справ повернути для cited_by і cites (1–${MAX_CITATION_LIMIT})` },
+            depth: { type: 'number', default: 2, description: 'Глибина обходу для direction=laws' },
           },
           required: ['case_id'],
         },
@@ -352,9 +355,117 @@ export class LegalAdviceTools extends BaseToolHandler {
     }
   }
 
+  /** direction=cited_by|cites: the decision↔case layer in case_citation_links (LEXAI-2314). */
+  private async caseCitationGraph(input: string, direction: 'cited_by' | 'cites', args: any): Promise<ToolResult> {
+    const pool = edrsrPool(this.ftsService, this.db);
+    if (!pool) {
+      return this.wrapResponse({ error: 'База даних графа цитувань недоступна.', provided_value: input, direction });
+    }
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input)) {
+      return this.wrapResponse({
+        error: `Для direction=${direction} потрібен doc_id ЄДРСР або номер справи, а не UUID.`,
+        provided_value: input,
+        direction,
+      });
+    }
+    const rawLimit = Number(args.limit);
+    const limit = Number.isFinite(rawLimit) && rawLimit >= 1 ? Math.min(Math.floor(rawLimit), MAX_CITATION_LIMIT) : 20;
+    const isDocId = /^\d+$/.test(input);
+
+    try {
+      return await withCitationSession(pool, async (q) => {
+        let caseNumber: string | null = null;
+        let requested: Record<string, any> = {};
+        if (isDocId) {
+          caseNumber = await docCaseNumber(q, input);
+          if (!caseNumber && direction === 'cited_by') {
+            return this.wrapResponse({ error: `Рішення з doc_id ${input} не знайдено в ЄДРСР.`, provided_value: input, direction });
+          }
+        } else {
+          const resolution = await resolveCauseNumber(input, { query: q });
+          if (resolution.ambiguous && direction === 'cites') {
+            return this.wrapResponse({
+              error: 'Номер справи без суфікса відповідає кільком різним справам. Уточніть номер повністю.',
+              provided_value: input,
+              candidates: resolution.matches.map((m) => m.cause_num),
+              direction,
+            });
+          }
+          caseNumber = resolution.resolved ?? input;
+          if (resolution.resolved && resolution.resolved !== input) {
+            requested = { requested_case_number: input };
+          }
+        }
+
+        if (direction === 'cited_by') {
+          const res = await citedBy(q, caseNumber!, { limit });
+          if (!res) {
+            return this.wrapResponse({
+              direction,
+              case_number: caseNumber,
+              ...requested,
+              total_citing_decisions: 0,
+              citing_decisions: [],
+              note: `Номер справи «${caseNumber}» має формат, який граф цитувань не розпізнає (враховуються номери виду 123/4567/18).`,
+            });
+          }
+          return this.wrapResponse({
+            direction,
+            ...(isDocId ? { doc_id: input } : {}),
+            ...requested,
+            ...res,
+            ...(res.same_number_cases
+              ? { same_number_note: 'Посилання в текстах рішень записано без процесуального суфікса, тож цитування цих справ з однаковим номером не розрізняються.' }
+              : {}),
+            ...(res.total_citing_decisions === 0
+              ? { note: 'У графі немає рішень, що цитують цю справу.' }
+              : {}),
+            ...(isDocId
+              ? { scope_note: `Цитування в рішеннях вказують номер справи, а не конкретний документ: показано цитування справи ${caseNumber}.` }
+              : {}),
+            coverage_note: COVERAGE_NOTE,
+          });
+        }
+
+        const docIds = isDocId ? [input] : await caseDocIds(q, caseNumber!);
+        if (docIds.length === 0) {
+          return this.wrapResponse({ error: `Справу «${caseNumber}» не знайдено в ЄДРСР.`, provided_value: input, direction });
+        }
+        const res = await cites(q, docIds, caseNumber, { limit });
+        return this.wrapResponse({
+          direction,
+          ...(isDocId ? { doc_id: input } : {}),
+          ...(caseNumber ? { case_number: caseNumber } : {}),
+          ...requested,
+          ...res,
+          ...(res.total_cited_cases === 0
+            ? { note: 'У графі немає посилань цього рішення (справи) на інші справи.' }
+            : {}),
+          coverage_note: COVERAGE_NOTE,
+        });
+      });
+    } catch (error: any) {
+      logger.error('[LegalAdviceTools] case citation graph failed', { input, direction, error: error?.message });
+      return this.wrapResponse({
+        error: 'Граф цитувань між справами тимчасово недоступний.',
+        detail: error?.message,
+        provided_value: input,
+        direction,
+      });
+    }
+  }
+
   private async getCitationGraph(args: any): Promise<ToolResult> {
-    const input = String(args.case_id).trim();
+    const input = String(args.case_id ?? args.case_number ?? args.doc_id ?? '').trim();
     const depth = args.depth || 2;
+    const direction = String(args.direction || 'laws');
+    if (direction === 'cited_by' || direction === 'cites') {
+      if (!input) return this.wrapResponse({ error: 'Вкажіть case_id: doc_id ЄДРСР або номер справи.', direction });
+      return this.caseCitationGraph(input, direction, args);
+    }
+    if (direction !== 'laws') {
+      return this.wrapResponse({ error: `Невідомий direction "${direction}": допустимі laws, cited_by, cites.`, provided_value: input });
+    }
 
     // CITATION_BACKEND=neo4j → serve the decision→article graph from Neo4j.
     if (this.citationGraphService?.isEnabled()) {

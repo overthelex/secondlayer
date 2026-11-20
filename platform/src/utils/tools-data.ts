@@ -64,10 +64,12 @@ export const tools: Tool[] = [
   },
 
   // ========== Analysis ==========
-  { name: 'get_citation_graph', category: 'Analysis', description: 'Граф цитувань між справами', cost: '$0.022',
+  { name: 'get_citation_graph', category: 'Analysis', description: 'Граф цитувань: статті законів у рішенні, рішення, що цитують справу, і справи, які цитує вона', cost: '$0.022',
     params: [
-      { name: 'case_id', type: 'string', required: true, description: 'ID справи' },
-      { name: 'depth', type: 'number', required: false, description: 'Глибина графу' },
+      { name: 'case_id', type: 'string', required: true, description: 'doc_id ЄДРСР або номер справи' },
+      { name: 'direction', type: 'string', required: false, description: 'laws (типово) | cited_by | cites' },
+      { name: 'limit', type: 'number', required: false, description: 'Скільки рішень/справ повернути (до 50)' },
+      { name: 'depth', type: 'number', required: false, description: 'Глибина графу для laws' },
     ],
   },
   { name: 'check_precedent_status', category: 'Analysis', description: 'Актуальність прецеденту: діючий, скасований, сумнівний', cost: '$0.033',
