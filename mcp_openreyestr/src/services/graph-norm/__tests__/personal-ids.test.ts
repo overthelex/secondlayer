@@ -2,7 +2,8 @@
  * Personal numbers in ЄДР names and texts (LEXAI-2322). Synthetic names and numbers only.
  */
 import { personKey } from '../../graph/keys';
-import { hasTenDigits, stripIdNumbers, stripPersonIds } from '../personal-ids';
+import { DATE_CHECK_SQL, hasTenDigits, NAME_ID_PROBE_SQL, PASSPORT_CHECK_SQL, stripIdNumbers, stripPersonIds, TEN_DIGITS_SQL } from '../personal-ids';
+import { uaMatchKey } from '../../edr-history/norm';
 
 const NAME = 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ';
 
@@ -73,5 +74,26 @@ describe('stripIdNumbers (free text)', () => {
     expect(hasTenDigits(stripPersonIds(`${NAME} 1234567890`))).toBe(false);
     expect(hasTenDigits('12345678')).toBe(false);
     expect(hasTenDigits('1234567890123456')).toBe(false);
+  });
+});
+
+describe('NAME_ID_PROBE_SQL covers every check', () => {
+  // a name the probe misses keeps its raw label and its raw key: whatever the checks find in either
+  // must be caught by the probe (shapes seen on prod, synthetic values)
+  const NAME = 'ТЕСТЕНКО ТЕСТ ТЕСТОВИЧ';
+  const samples = [
+    `${NAME} АА123456`, `${NAME} (АА 1234567)`, `${NAME} АА" 12345678`, `${NAME} (АА 1/23456789`,
+    `${NAME} АА-123456`, `${NAME} АА.123456`, `${NAME} 01.02.1980`, `${NAME} паспорт`, `${NAME}, 1234567890`,
+    `${NAME} АА 12/345678`,
+  ];
+  const probe = new RegExp(NAME_ID_PROBE_SQL);
+  it.each(samples)('%s', (s) => {
+    expect(probe.test(s)).toBe(true);
+    // and stripping leaves nothing the checks would find in the label or its key
+    const clean = stripPersonIds(s) || '';
+    for (const r of [new RegExp(PASSPORT_CHECK_SQL), new RegExp(DATE_CHECK_SQL), new RegExp(TEN_DIGITS_SQL)]) {
+      expect(r.test(clean)).toBe(false);
+      expect(r.test(uaMatchKey(clean) || '')).toBe(false);
+    }
   });
 });
