@@ -156,7 +156,7 @@ export class CourtDecisionTools extends BaseToolHandler {
             include_citations: {
               type: 'boolean',
               default: true,
-              description: 'Додати зведення цитованих статей з графа цитувань (Neo4j). Активне лише коли CITATION_BACKEND=neo4j; інакше ігнорується.',
+              description: 'Додати зведення цитованих статей з графа цитувань: скільки статей законів цитує рішення і найпопулярніші з них (за кількістю цитувань у всьому корпусі ЄДРСР).',
             },
           },
           required: [],
@@ -767,14 +767,14 @@ total_resolved_links=0 означає відсутність даних граф
       full_text_length: fullText.length,
     };
 
-    // Best-effort citation-graph enrichment (Neo4j). Gated by CITATION_BACKEND=neo4j;
-    // never blocks or breaks the primary decision response.
+    // Best-effort citation-graph enrichment (Postgres, LEXAI-2323); never blocks or
+    // breaks the primary decision response.
     if (args.include_citations !== false && this.citationGraphService?.isEnabled() && row.doc_id != null) {
       try {
         const summary = await this.citationGraphService.getDecisionCitationSummary(row.doc_id);
         if (summary.citedCount > 0) {
           payload.citation_graph = {
-            backend: 'neo4j',
+            backend: 'postgres',
             cited_count: summary.citedCount,
             top_cited_articles: summary.topCitedArticles.map((a) => ({
               law: a.law,
@@ -1234,17 +1234,16 @@ total_resolved_links=0 означає відсутність даних граф
         ' вибірку звужує document_types, напр. ["Рішення","Постанова"].';
     }
 
-    // Best-effort precedent enrichment from the decision↔case graph (Neo4j, LEXAI-1777).
+    // Best-effort precedent enrichment from the decision↔case graph (LEXAI-1777, LEXAI-2323).
     // The document chain itself stays in Postgres (above); the graph adds the
-    // precedent signal — how many decisions cite this case. Gated by
-    // CITATION_BACKEND=neo4j; non-fatal.
+    // precedent signal — how many decisions cite this case. Non-fatal.
     if (this.citationGraphService?.isEnabled()) {
       try {
         const stat = await this.citationGraphService.getCaseStats(caseVariations);
         if (stat && (stat.citingDecisions > 0 || stat.departedByDecision)) {
           const sampleCiting = await this.citationGraphService.getCaseCitedBy(stat.causeNum, 20);
           payload.citation_graph = {
-            backend: 'neo4j',
+            backend: 'postgres',
             cited_by_decisions: stat.citingDecisions,
             documents_in_case: stat.memberCount || undefined,
             latest_doc_id: stat.latestDocId || undefined,

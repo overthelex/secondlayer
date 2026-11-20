@@ -48,7 +48,7 @@ export class LegalAdviceTools extends BaseToolHandler {
 
   /**
    * Resolve any case identifier (UUID, numeric doc_id, case_number) to the EDRSR
-   * doc_id (bigint as string) used as the Decision key in the Neo4j citation graph.
+   * doc_id (bigint as string) used as the decision key in the citation graph.
    * Chain: UUID → documents.zakononline_id; case_number → edrsr_documents.doc_id; numeric → as-is.
    */
   private async resolveToEdrsrDocId(input: string): Promise<string | null> {
@@ -467,7 +467,7 @@ export class LegalAdviceTools extends BaseToolHandler {
       return this.wrapResponse({ error: `Невідомий direction "${direction}": допустимі laws, cited_by, cites.`, provided_value: input });
     }
 
-    // CITATION_BACKEND=neo4j → serve the decision→article graph from Neo4j.
+    // The decision→article graph: decision_statute_citations via CitationGraphService (LEXAI-2323).
     if (this.citationGraphService?.isEnabled()) {
       // A case number names many documents; ask the graph which member actually has
       // article edges before falling back to "newest by date" from edrsr_documents.
@@ -475,7 +475,7 @@ export class LegalAdviceTools extends BaseToolHandler {
       const isCaseNumber = !/^\d+$/.test(input) && !uuidRegex.test(input);
       const fromGraph = isCaseNumber
         ? await this.citationGraphService.resolveCaseDocId(input).catch((error: any) => {
-            logger.warn('[LegalAdviceTools] Neo4j case lookup failed; resolving via edrsr_documents', { input, error: error?.message });
+            logger.warn('[LegalAdviceTools] citation-graph case lookup failed; resolving via edrsr_documents', { input, error: error?.message });
             return null;
           })
         : null;
@@ -484,29 +484,29 @@ export class LegalAdviceTools extends BaseToolHandler {
         return this.wrapResponse({
           error: `Не вдалося конвертувати "${input}" у doc_id ЄДРСР для графа цитувань.`,
           provided_value: input,
-          backend: 'neo4j',
+          backend: 'postgres',
         });
       }
       try {
         const graph = await this.citationGraphService.getCitationGraph(docId, depth);
-        if (graph.edges.length > 0) return this.wrapResponse({ graph, backend: 'neo4j' });
-        // The Neo4j load does not cover every decision: ВП 90458880 came back as a lone
-        // node with no edges and no word why (LEXAI-2204). law_court_citations holds the
-        // same decision→article edges for the whole corpus; serve them from there.
+        if (graph.edges.length > 0) return this.wrapResponse({ graph, backend: 'postgres' });
+        // The graph leaves out articles cited by fewer than 5 decisions (noise); when that
+        // is all a decision cites, show its raw rows from law_court_citations rather than
+        // a lone node with no word why (LEXAI-2204).
         const pg = await this.citationGraphFromPostgres(docId);
         if (pg) return this.wrapResponse({ graph: pg, backend: 'postgres' });
         return this.wrapResponse({
           graph,
-          backend: 'neo4j',
-          note: `Для рішення ${docId} у графі цитувань немає посилань на норми: рішення не завантажене до графа або не містить розпізнаних посилань на статті.`,
+          backend: 'postgres',
+          note: `Для рішення ${docId} у графі цитувань немає посилань на норми: рішення не містить розпізнаних посилань на статті законів.`,
         });
       } catch (error: any) {
-        logger.error('[LegalAdviceTools] Neo4j citation graph failed', { input, docId, error: error?.message });
+        logger.error('[LegalAdviceTools] citation graph failed', { input, docId, error: error?.message });
         return this.wrapResponse({
-          error: 'Граф цитувань (Neo4j) тимчасово недоступний.',
+          error: 'Граф цитувань тимчасово недоступний.',
           detail: error?.message,
           provided_value: input,
-          backend: 'neo4j',
+          backend: 'postgres',
         });
       }
     }
@@ -547,7 +547,7 @@ export class LegalAdviceTools extends BaseToolHandler {
 
     const graph = await this.citationValidator.buildCitationGraph(resolvedId, args.depth || 2);
     if ((graph as any)?.edges?.length) return this.wrapResponse({ graph });
-    // legal.org.ua runs without Neo4j, so this path served ВП 90458880 as a lone node
+    // Without the citation-graph tables (CITATION_BACKEND=off) this path served ВП 90458880 as a lone node
     // with no edges and no word why: citation_links only holds decision→decision links
     // for the imported part of the corpus (LEXAI-2204). Fall back to the decision→article
     // edges in law_court_citations, and say so when those are empty too.

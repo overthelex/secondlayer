@@ -1,4 +1,5 @@
 import { BackendCoreServices } from './core-services.js';
+import { edrsrPool } from '../api/tool-utils.js';
 import { CostTracker } from '../services/cost-tracker.js';
 import { DocumentParser } from '../services/document-parser.js';
 import { DocumentAnalysisTools } from '../api/document-analysis-tools.js';
@@ -129,6 +130,8 @@ export function createToolServices(
   // the dedicated EDRSR database when EDRSR_DATABASE_URL is set. Hand the service over so
   // it reads the corpus from the same pool the corpus tools use.
   coreServices.mcpAPI.setEdsrFtsService(edsrFtsService);
+  // The citation graph (LEXAI-2323) reads the same corpus tables.
+  coreServices.citationGraphService.setDatabase(edrsrPool(edsrFtsService, coreServices.db));
 
   // Register all tool handlers with the central registry
   toolRegistry.registerHandler(coreServices.legislationTools);

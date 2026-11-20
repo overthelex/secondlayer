@@ -3,7 +3,7 @@ jest.mock('../../../utils/logger', () => ({
 }));
 import { LegalAdviceTools } from '../legal-advice-tools';
 
-// LEXAI-2204: ВП 90458880 came back from Neo4j as a lone node with no edges.
+// LEXAI-2204: ВП 90458880 came back from the graph as a lone node with no edges.
 function build(neoGraph: any, pgRows: any[]) {
   const graphService: any = {
     isEnabled: () => true,
@@ -20,7 +20,7 @@ const empty = { root: { docId: '90458880' }, nodes: [{ id: 'decision:90458880', 
 const body = (r: any) => JSON.parse(r.content[0].text);
 
 describe('get_citation_graph fallback (LEXAI-2204)', () => {
-  it('serves law_court_citations edges when Neo4j has none', async () => {
+  it('serves law_court_citations edges when the graph has none', async () => {
     const { tools, db } = build(empty, [
       { citation_type: 'codex_article', law_number: 'ГПК', law_article: '287' },
       { citation_type: 'law_article', law_number: 'ГПК', law_article: '300' },
@@ -35,13 +35,13 @@ describe('get_citation_graph fallback (LEXAI-2204)', () => {
   it('says why the graph is empty when Postgres has nothing either', async () => {
     const { tools } = build(empty, []);
     const out = body(await tools.executeTool('get_citation_graph', { case_id: '90458880' }));
-    expect(out.backend).toBe('neo4j');
+    expect(out.backend).toBe('postgres');
     expect(out.note).toContain('90458880');
   });
 });
 
-// legal.org.ua runs without Neo4j: the same lone node came from citation_links.
-describe('get_citation_graph fallback without Neo4j (LEXAI-2204)', () => {
+// Without the graph service the same lone node came from citation_links.
+describe('get_citation_graph fallback without the graph service (LEXAI-2204)', () => {
   const UUID = '70409de8-741e-420a-92d2-f6ab51d23539';
   function buildLegacy(lccRows: any[], inDocuments = true) {
     const validator: any = {

@@ -548,12 +548,8 @@ services:
       BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-eu.amazon.nova-micro-v1:0}
       BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-eu.amazon.nova-pro-v1:0}
       BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-eu.amazon.nova-pro-v1:0}
-      # Citation graph backend (CORE-56): neo4j = CitationGraphService (Neo4j on qdrant.lex).
+      # Citation graph: Postgres tables (LEXAI-2323); CITATION_BACKEND=off disables it.
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
-      NEO4J_URI: ${NEO4J_URI:-bolt://localhost:7687}
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       # Chat-latency tunables (CORE-32 region pinning / CORE-35 hedged streaming / CORE-36 parallel-seed).
       # Empty default = feature off (no behavior change); enable by setting the value in .env.prod.
       BEDROCK_QUICK_REGION: ${BEDROCK_QUICK_REGION:-}
@@ -763,12 +759,8 @@ services:
       BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-eu.amazon.nova-micro-v1:0}
       BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-eu.amazon.nova-pro-v1:0}
       BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-eu.amazon.nova-pro-v1:0}
-      # Citation graph backend (CORE-56): neo4j = CitationGraphService (Neo4j on qdrant.lex).
+      # Citation graph: Postgres tables (LEXAI-2323); CITATION_BACKEND=off disables it.
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
-      NEO4J_URI: ${NEO4J_URI:-bolt://localhost:7687}
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
       VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json
@@ -1000,12 +992,8 @@ services:
       BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-eu.amazon.nova-micro-v1:0}
       BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-eu.amazon.nova-pro-v1:0}
       BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-eu.amazon.nova-pro-v1:0}
-      # Citation graph backend (CORE-56): neo4j = CitationGraphService (Neo4j on qdrant.lex).
+      # Citation graph: Postgres tables (LEXAI-2323); CITATION_BACKEND=off disables it.
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
-      NEO4J_URI: ${NEO4J_URI:-bolt://localhost:7687}
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       # Chat-latency tunables (CORE-32 region pinning / CORE-35 hedged streaming / CORE-36 parallel-seed).
       # Empty default = feature off (no behavior change); enable by setting the value in .env.prod.
       BEDROCK_QUICK_REGION: ${BEDROCK_QUICK_REGION:-}
@@ -1288,12 +1276,8 @@ services:
       BEDROCK_FALLBACK_MODEL_QUICK: ${BEDROCK_FALLBACK_MODEL_QUICK:-eu.amazon.nova-micro-v1:0}
       BEDROCK_FALLBACK_MODEL_STANDARD: ${BEDROCK_FALLBACK_MODEL_STANDARD:-eu.amazon.nova-pro-v1:0}
       BEDROCK_FALLBACK_MODEL_DEEP: ${BEDROCK_FALLBACK_MODEL_DEEP:-eu.amazon.nova-pro-v1:0}
-      # Citation graph backend (CORE-56): neo4j = CitationGraphService (Neo4j on qdrant.lex).
+      # Citation graph: Postgres tables (LEXAI-2323); CITATION_BACKEND=off disables it.
       CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
-      NEO4J_URI: ${NEO4J_URI:-bolt://localhost:7687}
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       ZAKONONLINE_API_TOKEN: ${ZAKONONLINE_API_TOKEN:-}
       ZAKONONLINE_API_TOKEN2: ${ZAKONONLINE_API_TOKEN2:-}
       VISION_CREDENTIALS_PATH: /app/credentials/vision-credentials.json

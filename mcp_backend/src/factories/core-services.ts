@@ -57,7 +57,7 @@ export function createBackendCoreServices(): BackendCoreServices {
   const patternStore = new LegalPatternStore(db, embeddingService);
   const shepardizationService = new ShepardizationService(zoAdapter, db);
   const citationValidator = new CitationValidator(db, shepardizationService);
-  const citationGraphService = new CitationGraphService();
+  const citationGraphService = new CitationGraphService(db);
   const hallucinationGuard = new HallucinationGuard(db, shepardizationService);
   const legislationService = new LegislationService(db, embeddingService, undefined, llmAdapter);
   const legislationTools = new LegislationTools(legislationService, undefined, patternStore);

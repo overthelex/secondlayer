@@ -627,12 +627,6 @@ services:
       QDRANT_EDRSR_SKIP_INIT: ${QDRANT_EDRSR_SKIP_INIT:-true}
       QDRANT_EDRSR_MAX_CONCURRENCY: ${QDRANT_EDRSR_MAX_CONCURRENCY:-6}
       QDRANT_EDRSR_TIMEOUT_MS: ${QDRANT_EDRSR_TIMEOUT_MS:-20000}
-      # EDRSR citation graph — Brev neo4j-citation, reached over WG (same URI
-      # prod uses). Read-only queries from the citation-graph tools.
-      NEO4J_URI: ${NEO4J_URI:-}
-      NEO4J_USER: ${NEO4J_USER:-neo4j}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
-      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
     # host.docker.internal -> host gateway, so the container can reach the
     # edrsr-pg-relay socat listener bound on the host.
     extra_hosts:
