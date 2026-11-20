@@ -446,7 +446,7 @@ export const tools: Tool[] = [
   { name: 'search_public_spending', category: 'Open Data', description: 'Пошук державних витрат', cost: '$0.017' },
   {
     name: 'search_registry', category: 'Open Data',
-    description: 'Єдиний вхід у 38 реєстрів відкритих даних: санкції, адвокати, корупціонери, банки НБУ, ТМ, патенти, фінзвітність та ін.',
+    description: 'Єдиний вхід у 30 реєстрів відкритих даних: санкції, адвокати, особи, які вчинили корупційні правопорушення, банки НБУ, ТМ, патенти, фінзвітність та ін.',
     cost: '$0.011',
     params: [
       { name: 'registry', type: 'string', required: true, description: 'Назва реєстру' },

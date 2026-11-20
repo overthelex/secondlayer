@@ -409,6 +409,74 @@ describe('RegistrySearchTool', () => {
   });
 });
 
+// LEXAI-2312: the corruption register reads the table that is reloaded whole, so
+// records NAZK removes from the register stop appearing here.
+describe('corruption_register (LEXAI-2312)', () => {
+  let calls: QueryCall[];
+  const run = async (filters: Record<string, any>) => {
+    calls = [];
+    const db = {
+      query: jest.fn((sql: string, params?: any[]) => {
+        calls.push({ sql, params });
+        return Promise.resolve({ rows: [{ last_name: 'Коваленко', total: '1' }] });
+      }),
+    };
+    return new RegistrySearchTool(db).executeTool('search_registry', { registry: 'corruption_register', filters });
+  };
+
+  it('reads opendata_corruption_offenders, never the upserted opendata_corruption', async () => {
+    await run({ last_name: 'Коваленко' });
+    expect(calls).toHaveLength(2);
+    for (const c of calls) {
+      expect(c.sql).toContain('FROM opendata_corruption_offenders');
+      expect(c.sql).not.toMatch(/FROM opendata_corruption\s/);
+    }
+  });
+
+  it('full_name matches all words in any order across surname, name and patronymic', async () => {
+    await run({ full_name: 'Олександр Коваленко' });
+    expect(calls[0].sql).toContain(
+      "to_tsvector('simple', concat_ws(' ', last_name, first_name, patronymic)) @@ plainto_tsquery('simple', $1)",
+    );
+    expect(calls[0].params).toEqual(['Олександр Коваленко', 50]);
+  });
+
+  it('case number is exact, sentence date is an ISO text range, article matched by title in the jsonb', async () => {
+    await run({ court_case_number: '359/9747/26', date_from: '2025-01-01', date_to: '2025-12-31', codex_articles: 'неправомірної вигоди' });
+    const sql = calls[0].sql;
+    // Conditions follow catalog field order, not the order of the filters object.
+    expect(sql).toContain('codex_articles::text ILIKE $1');
+    expect(sql).toContain('court_case_number = $2');
+    expect(sql).toContain('sentence_date >= $3');
+    expect(sql).toContain('sentence_date <= $4');
+    expect(sql).not.toContain('::date');
+    expect(calls[0].params).toEqual(['%неправомірної вигоди%', '359/9747/26', '2025-01-01', '2025-12-31', 50]);
+  });
+
+  it('punishment_type and entity_type are case-insensitive exact, not substrings', async () => {
+    await run({ punishment_type: 'дисциплінарне стягнення', entity_type: 'фізична особа' });
+    expect(calls[0].sql).toContain('punishment_type ILIKE $1');
+    expect(calls[0].sql).toContain('entity_type ILIKE $2');
+    expect(calls[0].params).toEqual(['дисциплінарне стягнення', 'фізична особа', 50]);
+  });
+
+  it('flattens article titles, returns sentence number and punishment start, newest sentence first', async () => {
+    await run({ court_name: 'Шевченківський' });
+    const sql = calls[0].sql;
+    expect(sql).toContain("string_agg(a->>'codexArticleName', '; ')");
+    expect(sql).toContain("CASE WHEN jsonb_typeof(codex_articles) = 'array'");
+    expect(sql).toContain('sentence_number');
+    expect(sql).toContain('punishment_start');
+    expect(sql).toContain('ORDER BY sentence_date DESC NULLS LAST, id DESC');
+  });
+
+  it('description names no other tool', () => {
+    const def = REGISTRY_CATALOG.corruption_register;
+    const text = `${def.title} ${def.description} ${def.fields.map(f => f.description).join(' ')}`;
+    expect(text).not.toMatch(/\b[a-z]+_[a-z_]+\b/);
+  });
+});
+
 // LEXAI-1820: aggregate mode — GROUP BY a catalog field with optional distinct-count,
 // so the chat can answer "which identical marks are held by multiple owners" without
 // pulling 26K rows through the LLM context.
