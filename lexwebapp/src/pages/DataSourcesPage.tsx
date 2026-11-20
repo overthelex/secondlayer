@@ -376,16 +376,16 @@ const categories: Category[] = [
     sources: [
       {
         id: 'openreyestr',
-        name: 'Business Registry (22 registries via OpenReyestr)',
+        name: 'Business Registry (EDR via OpenReyestr + 30 registries via search_registry)',
         nameUa:
-          'Бізнес-реєстри (22 реєстри через OpenReyestr)',
+          'Бізнес-реєстри: ЄДР через OpenReyestr і 30 реєстрів через search_registry',
         description:
-          'Aggregated data from 22 Ukrainian state registries including the Unified State Register of legal entities (EDR), sanctions lists, trademarks, patents, court experts, VAT payers, and more.',
+          'Aggregated data from the Unified State Register of legal entities (EDR) and 30 open-data registries via search_registry: sanctions lists, the NAZK register of corruption offenders, lawyers and law firms, trademarks, patents, court experts, VAT payers, NBU banks, financial statements, ЄДЕССБ, AMCU decisions, and more.',
         sourceUrl: 'https://data.gov.ua',
         status: 'in_db',
-        recordCount: '16.7M+ legal entities + 22 registries',
+        recordCount: '16.7M+ legal entities + 30 registries',
         updateFrequency: 'Daily–Monthly (varies)',
-        note: 'public_organizations, missing_persons, securities_owners, wanted_persons, wanted_vehicles, court_experts, vat_payers, sanctions, trademarks, patents, corruption_register, lawyers, vrp_decisions, declaration_checks, wage_debtors, large_taxpayers, vehicle_registrations, lustration, state_aid, financial_statements, nbu_banks, case_distribution',
+        note: 'public_organizations, case_distribution, missing_persons, securities_owners, wanted_persons, wanted_vehicles, court_experts, vat_payers, sanctions, trademarks, patents, corruption_register (НАЗК, реєстр корупційних правопорушників), lawyers, law_firms, bankruptcy_announcements, judge_candidates, vrp_decisions, declaration_checks, wage_debtors, large_taxpayers, vehicle_registrations, lustration, state_aid, financial_statements, nbu_banks, construction_documents, nazk_war_sanctions, amcu_bid_rigging, amcu_decisions, rada_stenograms',
         sample: {
           fields: [
             'id',
@@ -608,7 +608,7 @@ const categories: Category[] = [
 const heroStats = [
   { label: 'Data Sources', value: '13', color: 'bg-blue-50 text-blue-700' },
   { label: 'Total Records', value: '70M+', color: 'bg-purple-50 text-purple-700' },
-  { label: 'Registries', value: '22', color: 'bg-green-50 text-green-700' },
+  { label: 'Registries', value: '30', color: 'bg-green-50 text-green-700' },
   { label: 'Daily Updates', value: 'Yes', color: 'bg-amber-50 text-amber-700' },
 ];
 
