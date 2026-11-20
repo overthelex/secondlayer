@@ -37,6 +37,8 @@ function graphPool(opts: { built?: boolean } = {}) {
     if (/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql)) return { rows: [] };
     if (sql.includes('.build')) return { rows: opts.built === false ? [] : [BUILD] };
     if (sql.includes('street_renamings')) return { rows: [] };
+    // enrichment layer (LEXAI-2305) absent in this mock: enrichmentFor() returns nothing
+    if (sql.includes('to_regclass')) return { rows: [{ f: null, e: null }] };
     if (sql.includes('WHERE kind = $1 AND key = $2')) return { rows: NODES.filter(n => n.kind === params[0] && n.key === params[1]) };
     if (sql.includes('WHERE id = ANY')) return { rows: NODES.filter(n => params[0].map(Number).includes(n.id)) };
     if (sql.includes('WHERE id = $1')) return { rows: NODES.filter(n => n.id === Number(params[0])) };
