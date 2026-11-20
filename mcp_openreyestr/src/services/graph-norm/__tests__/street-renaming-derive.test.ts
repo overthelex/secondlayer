@@ -88,7 +88,7 @@ const cand = (old: string, cur: string, building: string, settlementKey = KYIV, 
 };
 
 describe('RenamingAggregator.filter', () => {
-  it('keeps a pair seen at >= 3 companies in >= 2 buildings', () => {
+  it('keeps a pair seen at >= 2 companies in >= 2 buildings', () => {
     const a = new RenamingAggregator();
     a.add(cand('тестова', 'дослидна', '1'));
     a.add(cand('тестова', 'дослидна', '1', KYIV, '2017-06-02'));
@@ -103,11 +103,16 @@ describe('RenamingAggregator.filter', () => {
 
   it('drops a pair with too few companies or a single building (moves within one block)', () => {
     const a = new RenamingAggregator();
-    for (let i = 0; i < 2; i++) a.add(cand('тестова', 'дослидна', String(i)));
+    a.add(cand('одна', 'єдина', '1'));
     for (let i = 0; i < 5; i++) a.add(cand('стара', 'нова', '9'));
     expect(a.filter().rows).toEqual([]);
     expect(a.filter().stats.belowSupport).toBe(2);
-    expect(a.filter({ minCompanies: 2, minBuildings: 1 }).rows).toHaveLength(2);
+    expect(a.filter({ minCompanies: 1, minBuildings: 1 }).rows).toHaveLength(2);
+    // the 3/2 setting drops a pair that the 2/2 default keeps
+    const b = new RenamingAggregator();
+    for (let i = 0; i < 2; i++) b.add(cand('тестова', 'дослидна', String(i)));
+    expect(b.filter().rows).toHaveLength(1);
+    expect(b.filter({ minCompanies: 3 }).rows).toEqual([]);
   });
 
   it('drops an old name split between new names unless one has >= 80%', () => {

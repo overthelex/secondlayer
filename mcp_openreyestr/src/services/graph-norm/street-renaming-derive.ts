@@ -144,7 +144,7 @@ interface Edge {
 }
 
 export interface FilterOptions {
-  minCompanies?: number;  // default 3
+  minCompanies?: number;  // default 2 (2/2 spot check: 37 correct, 0 wrong, 3 unsure of 40 extra rows)
   minBuildings?: number;  // default 2
   /** share of the old name's companies the winning new name must have (default 0.8) */
   dominance?: number;
@@ -213,7 +213,7 @@ export class RenamingAggregator {
   }
 
   filter(opts: FilterOptions = {}): { rows: ScopedRenaming[]; stats: FilterStats } {
-    const minC = opts.minCompanies ?? 3;
+    const minC = opts.minCompanies ?? 2;
     const minB = opts.minBuildings ?? 2;
     const dom = opts.dominance ?? 0.8;
     const stats: FilterStats = { oldNames: this.edges.size, pairs: 0, belowSupport: 0, ambiguous: 0, reverse: 0, kept: 0, chained: 0 };

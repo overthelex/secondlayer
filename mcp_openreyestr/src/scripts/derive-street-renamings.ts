@@ -9,7 +9,7 @@
  * in street_renamings_scoped.
  *
  *   node dist/scripts/derive-street-renamings.js --dry-run --out /path/renamings.csv \
- *     [--candidates-out /path/candidates.csv] [--sample 2000] [--min-companies 3] \
+ *     [--candidates-out /path/candidates.csv] [--sample 2000] [--min-companies 2] \
  *     [--min-buildings 2] [--dominance 0.8] [--limit 50000] [--no-prozorro]
  *   node dist/scripts/derive-street-renamings.js            # writes the table
  *
