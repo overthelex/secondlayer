@@ -23,6 +23,11 @@ describe('stripPersonIds', () => {
     expect(stripPersonIds(`${NAME} 123456789`)).toBe(NAME);
     expect(stripPersonIds(`${NAME}, паспорт серії АА № 123456`)).toBe(NAME);
     expect(stripPersonIds(`${NAME} серіяАА123456`)).toBe(NAME);
+    // seven digits after a two-letter series, in brackets, glued to a dash or with a space (seen on prod, 20.11)
+    expect(stripPersonIds(`${NAME} (АА1234567)- ТЕСТОВО`)).toBe(`${NAME} - ТЕСТОВО`);
+    expect(stripPersonIds(`${NAME} (АА 1234567`)).toBe(NAME);
+    // eight digits after two letters is not a series (an ЄДРПОУ-like code stays)
+    expect(stripPersonIds(`${NAME} АА 12345678`)).toBe(`${NAME} АА 12345678`);
     expect(stripPersonIds(`ТЕСТЕНКО ТЕСТ/ ТЕСТ ТЕСТОВИЧ/1234567890/АА123456`)).toBe('ТЕСТЕНКО ТЕСТ/ ТЕСТ ТЕСТОВИЧ');
   });
 
