@@ -16,5 +16,9 @@ export {
 export type { StreetRenamingRow, BuildRenamingOptions, RenamingIndexStats, Queryable, StreetRenamingsCacheOptions } from './street-renamings';
 export { candidatePairs, RenamingAggregator, streetKeyOf } from './street-renaming-derive';
 export type { AddressObservation, RenamingCandidate, FilterOptions, FilterStats, ScopedRenaming } from './street-renaming-derive';
+export {
+  OsmSettlementIndex, OsmRenamingAggregator, osmPairs, readStreetName, settlementKind, dominantPostcode, FORMER_NAME_KEY,
+} from './osm-street-renamings';
+export type { OsmArea, OsmPlace, OsmStreet, OsmSettlement, OsmRenamingRow, OsmAggregateStats, OsmPair } from './osm-street-renamings';
 // person names: the ЄДР history module already normalises them
 export { normUa, uaMatchKey, historyNameKey, countryIso } from '../edr-history/norm';

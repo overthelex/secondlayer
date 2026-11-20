@@ -23,6 +23,7 @@
     "import:prozorro": "npm run build && node dist/scripts/import-prozorro.js",
     "import:street-renamings": "npm run build && node dist/scripts/import-street-renamings.js",
     "derive:street-renamings": "npm run build && node dist/scripts/derive-street-renamings.js",
+    "import:osm-street-renamings": "npm run build && node dist/scripts/import-osm-street-renamings.js",
     "build:graph": "npm run build && node dist/scripts/build-graph.js",
     "test": "jest --no-cache --verbose",
     "test:watch": "jest --watch --no-cache --verbose",
