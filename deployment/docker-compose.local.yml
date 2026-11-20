@@ -800,8 +800,17 @@ services:
       POSTGRES_DB: ${OPENREYESTR_POSTGRES_DB:-openreyestr_local}
     ports:
       - "127.0.0.1:5437:5432"
+    # The entrypoint starts as root: make the tablespace directory postgres-owned (uid 70 in
+    # alpine) before handing over to the stock entrypoint, so the host needs no manual mkdir/chown
+    # (docker creates a missing bind-mount source as root:root). Only the top directory is touched.
+    entrypoint: ["sh", "-c", "install -d -o postgres -g postgres -m 700 /mnt/bulk_ts && exec docker-entrypoint.sh \"$$@\"", "--"]
+    command: ["postgres"]
     volumes:
       - postgres_openreyestr_local_data:/var/lib/postgresql/data
+      # Tablespace `bulk` on the 20 TB spindle (ensure-bulk-tablespace.ts) for temp-file spill of the
+      # graph builds: one co_party INSERT spilled 240 GB into pgsql_tmp on the nvme (LEXAI-2320).
+      # Only the graph build sessions use it (services/graph/temp-tablespace.ts).
+      - /mnt/bulk_storage/pg_openreyestr_ts:/mnt/bulk_ts
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${OPENREYESTR_POSTGRES_USER:-openreyestr} -d ${OPENREYESTR_POSTGRES_DB:-openreyestr_local}"]
       interval: 5s

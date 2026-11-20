@@ -3,6 +3,7 @@ import { join } from 'path';
 import dotenv from 'dotenv';
 import { Database } from '../database/database';
 import { logger } from '../utils/logger';
+import { ensureBulkTablespace } from './ensure-bulk-tablespace';
 
 dotenv.config();
 
@@ -68,6 +69,9 @@ async function runMigrations() {
         }
       }
     }
+
+    // CREATE TABLESPACE cannot run in a transaction block, so not a .sql file (see the module)
+    await ensureBulkTablespace(db, logger);
 
     logger.info('All migrations completed!');
     await db.close();

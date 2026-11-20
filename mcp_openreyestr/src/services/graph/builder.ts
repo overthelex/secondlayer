@@ -48,6 +48,7 @@ import {
 } from './keys';
 import { prozorroAddressEdges, stageProzorroAddresses } from './prozorro-addresses';
 import { buildCourtEdges, CourtEdgeOptions } from './court';
+import { useTempTablespace } from './temp-tablespace';
 
 export interface BuildOptions {
   /** sample build: only the first N companies by code (from fromEdrpou) */
@@ -199,6 +200,8 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
     // no parallel workers: a database container's small /dev/shm cannot hold parallel hash tables,
     // and the build should not take CPU from live queries
     await c.query('SET max_parallel_workers_per_gather = 0');
+    // sort / hash spill of the build to the HDD tablespace, not the NVMe (temp-tablespace.ts)
+    await useTempTablespace(c, log);
     await c.query('SET max_parallel_maintenance_workers = 0');
     if (!opts.dryRun) {
       const lock = await one(`SELECT pg_try_advisory_lock(hashtext('graph_builder')) AS ok`);
@@ -702,6 +705,7 @@ export async function buildGraph(pool: Pool, opts: BuildOptions = {}): Promise<B
     await c.query('RESET statement_timeout').catch(() => undefined);
     await c.query('RESET work_mem').catch(() => undefined);
     await c.query('RESET max_parallel_workers_per_gather').catch(() => undefined);
+    await c.query('RESET temp_tablespaces').catch(() => undefined);
     if (locked) await c.query(`SELECT pg_advisory_unlock(hashtext('graph_builder'))`).catch(() => undefined);
     c.release();
   }

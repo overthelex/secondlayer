@@ -36,6 +36,7 @@ import { Pool, PoolClient } from 'pg';
 import { stripPersonIds, TEN_DIGITS_SQL } from '../graph-norm/personal-ids';
 import { foreignEntityKey, personKey } from './keys';
 import type { Queryable } from './neighbourhood';
+import { useTempTablespace } from './temp-tablespace';
 
 export type EnrichFlag = 'sanctions' | 'war_sanctions' | 'tax_debt' | 'esv_debt' | 'debtor_register'
   | 'enforcement' | 'termination' | 'fin_licence' | 'pep_declarant';
@@ -528,6 +529,8 @@ export async function buildEnrichment(pool: Pool, opts: EnrichmentOptions = {}):
     await c.query(`SET statement_timeout = ${lit(opts.statementTimeout || '3h')}`);
     await c.query(`SET work_mem = ${lit(opts.workMem || '256MB')}`);
     await c.query('SET max_parallel_workers_per_gather = 0');
+    // sort / hash spill of the build to the HDD tablespace, not the NVMe (temp-tablespace.ts)
+    await useTempTablespace(c, log);
     const lock = (await c.query(`SELECT pg_try_advisory_lock(hashtext('graph_enrichment')) AS ok`)).rows[0];
     if (!lock.ok) throw new Error('another graph enrichment build is running');
     locked = true;
@@ -628,6 +631,7 @@ export async function buildEnrichment(pool: Pool, opts: EnrichmentOptions = {}):
     await c.query('RESET statement_timeout').catch(() => undefined);
     await c.query('RESET work_mem').catch(() => undefined);
     await c.query('RESET max_parallel_workers_per_gather').catch(() => undefined);
+    await c.query('RESET temp_tablespaces').catch(() => undefined);
     if (locked) await c.query(`SELECT pg_advisory_unlock(hashtext('graph_enrichment'))`).catch(() => undefined);
     c.release();
   }
