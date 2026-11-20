@@ -50,6 +50,8 @@ export const TOOL_LABELS: Record<string, string> = {
   openreyestr_search_founders: 'Пошук за засновниками',
   openreyestr_company_as_of: 'ЄДР станом на дату',
   openreyestr_company_history: 'Історія змін у ЄДР',
+  openreyestr_find_connections: 'Пошук зв\'язків',
+  openreyestr_connection_path: 'Шлях зв\'язку',
   openreyestr_search_founders_history: 'Засновники, зокрема колишні',
   openreyestr_search_beneficiaries_history: 'Бенефіціари, зокрема колишні',
   openreyestr_get_by_edrpou: 'Пошук за ЄДРПОУ',

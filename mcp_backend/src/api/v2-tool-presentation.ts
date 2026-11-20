@@ -120,6 +120,8 @@ export const V2_ANNOTATION_OVERRIDES: Record<string, ToolAnnotations> = {
   openreyestr_search_founders: { title: 'ЄДР: зворотний пошук за засновниками', ...RO },
   openreyestr_company_as_of: { title: 'ЄДР у минулому: юрособа станом на дату', ...RO },
   openreyestr_company_history: { title: 'ЄДР: історія змін юрособи за знімками', ...RO },
+  openreyestr_find_connections: { title: 'ЄДР: пошук зв\'язків компанії, особи чи адреси', ...RO },
+  openreyestr_connection_path: { title: 'ЄДР: шлях зв\'язку між двома компаніями чи особами', ...RO },
   openreyestr_search_founders_history: { title: 'ЄДР: засновники, зокрема колишні (історія)', ...RO },
   openreyestr_search_beneficiaries_history: { title: 'ЄДР: бенефіціари, зокрема колишні (історія)', ...RO },
   openreyestr_search_debtors: { title: 'Єдиний реєстр боржників', ...RO },

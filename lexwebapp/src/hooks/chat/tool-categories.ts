@@ -101,6 +101,8 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
       { name: 'openreyestr_search_founders', label: 'Засновники' },
       { name: 'openreyestr_company_as_of', label: 'ЄДР на дату' },
       { name: 'openreyestr_company_history', label: 'Історія ЄДР' },
+      { name: 'openreyestr_find_connections', label: 'Пошук зв\'язків' },
+      { name: 'openreyestr_connection_path', label: 'Шлях зв\'язку' },
       { name: 'openreyestr_search_founders_history', label: 'Засновники (історія)' },
       { name: 'openreyestr_search_beneficiaries_history', label: 'Бенефіціари (історія)' },
       { name: 'openreyestr_get_by_edrpou', label: 'За ЄДРПОУ' },

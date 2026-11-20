@@ -10,6 +10,9 @@ import { InspectionPlanParams, searchInspectionPlans } from './inspection-plans'
 import {
   companyAsOf, companyHistory, PartySearchParams, searchBeneficiariesHistory, searchFoundersHistory,
 } from '../services/edr-history/queries';
+import {
+  connectionPath, ConnectionPathParams, findConnections, FindConnectionsParams,
+} from '../services/graph/connections';
 
 export interface RegistrySearchParams {
   query?: string;
@@ -863,6 +866,16 @@ export class OpenReyestrTools {
   /** History-aware search of ultimate beneficial owners (name in any script, country). */
   async searchBeneficiariesHistory(params: PartySearchParams): Promise<any> {
     return searchBeneficiariesHistory(this.pool, params);
+  }
+
+  /** «Пошук зв'язків» (LEXAI-2308): bounded neighbourhood of a company / person name / address in schema graph. */
+  async findConnections(params: FindConnectionsParams): Promise<any> {
+    return findConnections(this.pool, params);
+  }
+
+  /** Shortest connection paths between two starts in schema graph (bidirectional BFS). */
+  async connectionPath(params: ConnectionPathParams): Promise<any> {
+    return connectionPath(this.pool, params);
   }
 
   /**
