@@ -1,0 +1,8 @@
+# Weekly rebuild of the ЄДР relationship graph on legal_prod (cthulhu, user vovkes), LEXAI-2320.
+# Install (merge into the existing crontab):
+#   crontab -l | cat - ~/SecondLayer/deployment/cron/graph-crontab | crontab -
+# Script: deployment/cron/graph-weekly-rebuild.sh (waits up to 10 h for the Tuesday 03:30 ЄДР
+# sync to finish successfully, then builds in a one-off container and checks graph.build).
+
+# Tuesday 06:00 server time, after edrpou-crontab (Tuesday 03:30).
+0 6 * * 2 mkdir -p $HOME/logs && /home/vovkes/SecondLayer/deployment/cron/graph-weekly-rebuild.sh >> $HOME/logs/graph-weekly-rebuild.log 2>&1
