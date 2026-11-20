@@ -12,7 +12,10 @@
  * { global: true }, and then only for an old name that every row maps to the same current name
  * and that is nobody's current name, so 'вулиця Леніна' stays as written.
  *
- * StreetRenamingsCache loads the table once (TTL, default 24 h) for the runtime.
+ * StreetRenamingsCache loads the tables once (TTL, default 24 h) for the runtime: the
+ * settlement-scoped street_renamings_scoped (LEXAI-2309: derived from ЄДР address history, plus
+ * 'osm' / 'manual' rows) is on by default, the global OSM table only with { global: true }. An
+ * index from the cache passed to normAddress therefore applies scoped renamings only.
  */
 import { parseStreetName, STREET_SHORT, streetCoreKey, StreetRef, StreetRenamingLookup, StreetType } from './address';
 
@@ -38,6 +41,16 @@ export interface RenamingIndexStats {
   ambiguous: number;
 }
 
+/**
+ * The settlement part of a renaming key: a city's settlementKey as is; a village / смт key with
+ * its postcode cut to the first three digits ('UA-18|н|народичи|11400' -> '...|114'), since a
+ * village's postcode often changed with the reform (11400 -> 11401) and its streets did not.
+ */
+export function renamingSettlementKey(settlementKey: string): string {
+  const p = settlementKey.split('|');
+  return p.length === 4 && p[1] === 'н' ? `${p[0]}|н|${p[2]}|${p[3].slice(0, 3)}` : settlementKey;
+}
+
 const idOf = (r: StreetRef) => `${STREET_SHORT[r.type]}|${streetCoreKey(r.name)}`;
 
 function readName(s: string, stats: RenamingIndexStats): StreetRef | null {
@@ -58,7 +71,7 @@ export class StreetRenamingIndex implements StreetRenamingLookup {
   lookup(settlementKey: string | null, type: StreetType, core: string): StreetRef | null {
     const id = `${STREET_SHORT[type]}|${core}`;
     if (settlementKey) {
-      const s = this.scoped.get(`${settlementKey}#${id}`);
+      const s = this.scoped.get(`${renamingSettlementKey(settlementKey)}#${id}`);
       if (s) return s;
     }
     return this.global.get(id) ?? null;
@@ -85,7 +98,7 @@ export function buildStreetRenamingIndex(rows: Iterable<StreetRenamingRow>, opts
       if (!old) continue;
       const oldId = idOf(old);
       if (oldId === curId) continue; // a spelling change only: the keys already agree
-      const [map, key] = row.settlementKey ? [scoped, `${row.settlementKey}#${oldId}`] : [global, oldId];
+      const [map, key] = row.settlementKey ? [scoped, `${renamingSettlementKey(row.settlementKey)}#${oldId}`] : [global, oldId];
       let m = map.get(key);
       if (!m) map.set(key, (m = new Map()));
       m.set(curId, cur);
@@ -116,10 +129,26 @@ export interface Queryable {
 export const STREET_RENAMINGS_SQL =
   'SELECT COALESCE(current_name_uk, current_name) AS current_name, old_names FROM street_renamings';
 
+/** One row per (settlement, old street): a 'manual' row wins over 'edr_history', which wins over 'osm'. */
+export const STREET_RENAMINGS_SCOPED_SQL = `SELECT DISTINCT ON (settlement_key, old_street_key)
+    settlement_key, old_name_sample, current_name_sample
+  FROM street_renamings_scoped
+  ORDER BY settlement_key, old_street_key,
+    CASE source WHEN 'manual' THEN 0 WHEN 'edr_history' THEN 1 ELSE 2 END`;
+
 export interface StreetRenamingsCacheOptions extends BuildRenamingOptions {
   ttlMs?: number;             // default 24 h
-  /** settlement-scoped rows from another source, merged with the table */
+  /** load street_renamings_scoped (default true) */
+  scoped?: boolean;
+  /** settlement-scoped rows from another source, merged with the tables */
   extraRows?: () => Promise<StreetRenamingRow[]> | StreetRenamingRow[];
+}
+
+/** street_renamings_scoped rows -> index rows */
+export function scopedRowsOf(rows: any[]): StreetRenamingRow[] {
+  return rows
+    .filter((r) => r.settlement_key && r.old_name_sample && r.current_name_sample)
+    .map((r) => ({ currentName: String(r.current_name_sample), oldNames: [String(r.old_name_sample)], settlementKey: String(r.settlement_key) }));
 }
 
 /** One in-memory index per process, reloaded after the TTL; concurrent callers share one load. */
@@ -149,12 +178,22 @@ export class StreetRenamingsCache {
   }
 
   private async load(): Promise<StreetRenamingIndex> {
-    const res = await this.db.query(STREET_RENAMINGS_SQL);
-    const rows: StreetRenamingRow[] = res.rows.map((r) => ({
-      currentName: String(r.current_name ?? ''),
-      oldNames: Array.isArray(r.old_names) ? r.old_names.map(String) : [],
-      settlementKey: null,
-    }));
+    const rows: StreetRenamingRow[] = [];
+    if (this.opts.scoped !== false) {
+      try {
+        rows.push(...scopedRowsOf((await this.db.query(STREET_RENAMINGS_SCOPED_SQL)).rows));
+      } catch (e: any) {
+        if (e?.code !== '42P01') throw e; // migration 029 not applied yet: no scoped rows
+      }
+    }
+    if (this.opts.global) {
+      const res = await this.db.query(STREET_RENAMINGS_SQL);
+      rows.push(...res.rows.map((r) => ({
+        currentName: String(r.current_name ?? ''),
+        oldNames: Array.isArray(r.old_names) ? r.old_names.map(String) : [],
+        settlementKey: null,
+      })));
+    }
     if (this.opts.extraRows) rows.push(...(await this.opts.extraRows()));
     return buildStreetRenamingIndex(rows, { global: this.opts.global });
   }
