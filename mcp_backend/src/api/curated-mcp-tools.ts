@@ -135,6 +135,9 @@ export const V2_TOOL_NAMES = new Set<string>([
   'openreyestr_search_founders',
   'openreyestr_company_as_of',
   'openreyestr_company_history',
+  // «Пошук зв'язків» над графом ЄДР (LEXAI-2308).
+  'openreyestr_find_connections',
+  'openreyestr_connection_path',
   'openreyestr_search_founders_history',
   'openreyestr_search_beneficiaries_history',
   'openreyestr_search_debtors',

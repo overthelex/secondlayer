@@ -10,6 +10,7 @@ import * as path from 'path';
 import { Pool } from 'pg';
 import { buildGraph, checkPersonalIds } from '../builder';
 import { neighbourhood } from '../neighbourhood';
+import { connectionPath, findConnections } from '../connections';
 import {
   addressKeyRow, addressKeyVersion, CODE8_RE_SOURCE, isOrganisationName, isPlaceholderName, normName, ORG_FORM_RE_SOURCE,
   organisationKey, PATRONYMIC_RE_SOURCE, PLACEHOLDER_RE_SOURCE, personKey, WEAK_PLACEHOLDER_RE_SOURCE,
@@ -289,6 +290,34 @@ d('graph build + neighbourhood (real PostgreSQL)', () => {
     const rp = await neighbourhood(pool, `person:${IVANENKO}`, { depth: 1 });
     expect(keys(rp)).toEqual(expect.arrayContaining(['11111110', '22222220']));
     expect((await neighbourhood(pool, '99999990')).start).toBeNull();
+  });
+
+  it('find_connections / connection_path tools over the built graph (read-only transaction)', async () => {
+    const r = await findConnections(pool, { start: '11111110', depth: 1 });
+    expect(r.found).toBe(true);
+    expect(r.sources).toMatchObject({ current_dump: CUR, snapshots: expect.arrayContaining([S18, S21]) });
+    const ivan = r.graph.nodes.find((n: any) => n.type === 'person_name' && personKey(n.label) === personKey(IVANENKO));
+    expect(ivan).toMatchObject({ type: 'person_name', match_level: 'name_only', depth: 1 });
+    const fe = r.graph.edges.find((e: any) => e.from === ivan.id && e.type === 'founder');
+    expect(fe.snapshots).toEqual({ first_seen: S18, last_seen: S21, current_dump: CUR });
+    expect(r.warnings.join(' ')).toContain('name_only');
+
+    // A -> B (founder by code) -> C (reg_neighbour): two steps
+    const p = await connectionPath(pool, { from: '11111110', to: '22222233' });
+    expect(p.found).toBe(true);
+    expect(p.length).toBe(2);
+    expect(p.paths.some((x: any) => x.edge_types.join() === 'founder,reg_neighbour')).toBe(true);
+    // from a person name: a lead, flagged
+    const pp = await connectionPath(pool, { from: IVANENKO, to: '22222233' });
+    expect(pp.found).toBe(true);
+    expect(pp.query.from_type).toBe('person');
+    expect(pp.paths[0].has_person).toBe(true);
+    expect(pp.warnings[0]).toContain('різним людям');
+    // the shared address is a hub (threshold 1): A and B are not linked through it unless asked
+    const viaAddr = await connectionPath(pool, { from: '11111110', to: '22222220', kinds: ['registered_at'] });
+    expect(viaAddr.found).toBe(false);
+    expect(viaAddr.truncated.hubs_total).toBe(1);
+    expect((await connectionPath(pool, { from: '11111110', to: '22222220', kinds: ['registered_at'], include_hubs: true })).length).toBe(2);
   });
 
   it('a rebuild swaps in place and reuses the address keys', async () => {

@@ -8,6 +8,8 @@ const REGISTRY_TOOLS = [
   'openreyestr_search_founders',
   'openreyestr_company_as_of',
   'openreyestr_company_history',
+  'openreyestr_find_connections',
+  'openreyestr_connection_path',
   'openreyestr_search_founders_history',
   'openreyestr_search_beneficiaries_history',
   'openreyestr_get_by_edrpou',
@@ -127,12 +129,79 @@ function extractHistoryEvidence(toolName: string, parsed: any): EvidenceResult {
   return { decisions: [], citations, documents };
 }
 
+const CONNECTION_TOOLS = ['openreyestr_find_connections', 'openreyestr_connection_path'];
+
+/**
+ * «Пошук зв'язків» (graph of the ЄДР): one panel card per path from the start (or per company when
+ * there are no paths), with the edge dates; the person caveat and the data limits as the citation.
+ */
+function extractConnectionsEvidence(toolName: string, parsed: any): EvidenceResult {
+  const citations: Citation[] = [];
+  const documents: VaultDocument[] = [];
+  const nodes: any[] = Array.isArray(parsed.graph?.nodes) ? parsed.graph.nodes : [];
+  const edges: any[] = Array.isArray(parsed.graph?.edges) ? parsed.graph.edges : [];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const edgeById = new Map(edges.map((e) => [e.id, e]));
+  const edgeTypes = parsed.legend?.edge_types || {};
+  const dates = (e: any) => {
+    if (!e) return null;
+    const s = e.snapshots || {};
+    const from = e.valid_from || s.first_seen || 'до першого знімка';
+    const to = e.valid_to || (s.current_dump ? `чинний на ${s.current_dump}` : 'чинний');
+    return `${edgeTypes[e.type] || e.type}: ${from} – ${to}`;
+  };
+  const paths: any[] = Array.isArray(parsed.paths) ? parsed.paths : [];
+  for (const p of paths.slice(0, 50)) {
+    const target = byId.get(p.to);
+    documents.push({
+      id: `conn-${toolName}-${(p.nodes || []).join('-')}`,
+      title: target?.label || p.to,
+      type: 'other',
+      metadata: {
+        snippet: [
+          p.text,
+          `Кроків: ${p.length}`,
+          ...(p.edges || []).map((id: string) => dates(edgeById.get(id))).filter(Boolean),
+          p.has_person && 'Через особу за ПІБ — лише кандидат, потрібна друга ознака',
+        ].filter(Boolean).join(' • '),
+        edrpou: target?.type === 'company' ? target.key : undefined,
+        status: target?.attrs?.status,
+      },
+    });
+  }
+  if (!paths.length) {
+    for (const n of nodes.filter((x) => x.type === 'company' && x.depth > 0).slice(0, 50)) {
+      documents.push({
+        id: `conn-${toolName}-${n.id}`,
+        title: n.label || n.key,
+        type: 'other',
+        metadata: {
+          snippet: [`ЄДРПОУ: ${n.key}`, `Крок: ${n.depth}`, n.attrs?.status && `Стан: ${n.attrs.status}`].filter(Boolean).join(' • '),
+          edrpou: n.key,
+          status: n.attrs?.status,
+        },
+      });
+    }
+  }
+  const src = parsed.sources || {};
+  const snaps: string[] = Array.isArray(src.snapshots) ? src.snapshots : [];
+  const source = [
+    'Граф зв\'язків ЄДР',
+    snaps.length && `знімки ${snaps[0]} – ${snaps[snaps.length - 1]}`,
+    src.current_dump && `поточний дамп ${src.current_dump}`,
+  ].filter(Boolean).join(', ');
+  const text = [parsed.message, ...(parsed.warnings || []), ...(parsed.notes || []), parsed.error].filter(Boolean).join(' ');
+  if (text || parsed.data_limits) citations.push({ text: text || parsed.data_limits, source });
+  return { decisions: [], citations, documents };
+}
+
 export function extractRegistryEvidence(toolName: string, parsed: ToolResultData): EvidenceResult {
   const citations: Citation[] = [];
   const documents: VaultDocument[] = [];
   if (!REGISTRY_TOOLS.some((t) => toolName === t)) {
     return { decisions: [], citations, documents };
   }
+  if (CONNECTION_TOOLS.includes(toolName)) return extractConnectionsEvidence(toolName, parsed);
   if (toolName.startsWith('openreyestr_') && (toolName.endsWith('_history') || toolName === 'openreyestr_company_as_of')) {
     return extractHistoryEvidence(toolName, parsed);
   }
