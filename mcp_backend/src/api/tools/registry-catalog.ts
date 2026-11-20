@@ -331,8 +331,8 @@ export const REGISTRY_CATALOG: Record<string, RegistryDef> = {
   // Backed by opendata_corruption_offenders (LEXAI-2312), not opendata_corruption.
   // Both come from the same NAZK feed, but this one is reloaded as a whole (CKAN
   // DELETE+INSERT swap), so a record NAZK takes out of the register leaves it.
-  // opendata_corruption is upserted by record_id and never deletes: on prod
-  // 2026-11-20 it held all 31,302 current records (identical field by field) plus
+  // opendata_corruption (retired by migration 295) was upserted by record_id and never
+  // deleted: on prod 2026-11-20 it held all 31,302 current records (identical field by field) plus
   // 35,190 that NAZK no longer publishes (28,726 of them from the March import
   // with codex_articles mangled to ": ст."). Showing those as corruption offenders
   // would name people the register itself no longer lists.

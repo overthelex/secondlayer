@@ -55,7 +55,6 @@ UPDATE_FREQ_DAYS = {
     "opendata_missing_persons": 1,
     "opendata_wanted_persons": 1,
     "opendata_wanted_vehicles": 1,
-    "opendata_corruption": 1,
     "opendata_corruption_offenders": 1,
     "opendata_invalid_passports": 1,
     "opendata_invalid_passports_foreign": 1,
@@ -157,7 +156,6 @@ TABLE_NAMES_UK = {
     "opendata_wanted_persons": "МВС — Особи, які переховуються",
     "opendata_wanted_vehicles": "МВС — Транспорт у розшуку",
     # SecondLayer: НАЗК
-    "opendata_corruption": "НАЗК — Реєстр корупціонерів",
     "opendata_corruption_offenders": "НАЗК — Правопорушники",
     "opendata_declaration_checks": "НАЗК — Перевірки декларацій",
     # SecondLayer: документи

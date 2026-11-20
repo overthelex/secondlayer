@@ -125,7 +125,6 @@ PREVIEW_COLUMNS = {
     "opendata_wanted_vehicles": ["brand_model", "car_type", "color", "vehicle_number", "body_number", "chassis_number", "engine_number", "organ_unit", "insert_date"],
     "opendata_vehicle_registrations": ["brand", "model", "make_year", "color", "kind", "body", "purpose", "fuel", "oper_name", "d_reg"],
     # НАЗК
-    "opendata_corruption": ["last_name", "first_name", "patronymic", "offense_name", "codex_articles", "punishment_type", "punishment", "court_name", "sentence_date"],
     "opendata_corruption_offenders": ["last_name", "first_name", "patronymic", "punishment_type", "offense_name", "punishment", "court_case_number", "sentence_date"],
     # Санкції
     "opensanctions_entities": ["id", "schema", "name", "aliases", "birth_date", "countries", "sanctions", "datasets"],
