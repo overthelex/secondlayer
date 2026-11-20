@@ -366,7 +366,8 @@ export const STEPS: Step[] = [
       await x.c.query(`ALTER TABLE ${S}.decl_last ADD PRIMARY KEY (declarant_id)`);
       await x.c.query(`INSERT INTO ${S}.edge_raw (${EDGE_COLS.join(', ')})
         WITH r AS (
-          SELECT nk.key, cr.edrpou::text AS edrpou, cr.declaration_id, cr.declaration_year, cr.right_kind, cr.share_percent, cr.acquired_date,
+          SELECT nk.key, cr.edrpou::text AS edrpou, cr.declaration_id, cr.declaration_year, cr.right_kind,
+                 CASE WHEN cr.share_percent BETWEEN 0 AND 100 THEN cr.share_percent END AS share_percent, cr.acquired_date, -- a share > 100 is junk (a 10-digit run on prod)
                  CASE WHEN cr.owner_type = 'declarant' THEN 'declarant' ELSE lower(btrim(cr.owner_relation)) END AS owner, dl.y AS last_year
           FROM nazk_corporate_rights cr
           JOIN ${S}.name_key nk ON nk.raw = cr.owner_name AND nk.key IS NOT NULL
@@ -444,7 +445,7 @@ export const STEPS: Step[] = [
                    CASE WHEN owner_edrpou ~ '^[0-9]{8}$' AND owner_edrpou !~ '^0+$' THEN 'company' WHEN owner_type = 'individual' THEN 'person_name' END AS ok,
                    CASE WHEN owner_edrpou ~ '^[0-9]{8}$' AND owner_edrpou !~ '^0+$' THEN owner_edrpou ELSE owner_name END AS owner
             FROM opendata_securities_owners
-            WHERE share_percent >= ${SHAREHOLDER_MIN_PERCENT} AND issuer_edrpou ~ '^[0-9]{8}$' AND left(issuer_edrpou, 1) = $1
+            WHERE share_percent >= ${SHAREHOLDER_MIN_PERCENT} AND share_percent <= 100 AND issuer_edrpou ~ '^[0-9]{8}$' AND left(issuer_edrpou, 1) = $1
           )
           SELECT issuer_edrpou, ok, owner, min(report_date)::text AS first, max(report_date)::text AS last,
                  (array_agg(share_percent ORDER BY report_date DESC))[1] AS share, count(DISTINCT report_date) AS reports
