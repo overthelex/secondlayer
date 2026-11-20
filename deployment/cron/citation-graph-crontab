@@ -1,0 +1,7 @@
+# Nightly incremental update of the EDRSR citation graph on legal_prod (cthulhu, user vovkes), LEXAI-2323.
+# Install (merge into the existing crontab):
+#   crontab -l | cat - ~/SecondLayer/deployment/cron/citation-graph-crontab | crontab -
+# Script: deployment/cron/citation-graph-incremental.sh (runs scripts/citation-graph/incremental-update.py).
+
+# Every day at 06:30 server time, after the EDRSR fulltext harvest (CI cron 02:30 UTC).
+30 6 * * * mkdir -p $HOME/logs && /home/vovkes/SecondLayer/deployment/cron/citation-graph-incremental.sh >> $HOME/logs/citation-graph-incremental.log 2>&1

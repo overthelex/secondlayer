@@ -85,11 +85,13 @@ The instance-status layer is a one-off copy: the pipeline that produced it
 
 Adds every `edrsr_fulltext` decision above the watermark (`citation_graph_watermark`, first run
 starts from `max(case_citation_edges.from_case_id)`) to the case index, case edges/links/counts
-and the statute layer, in one transaction with the watermark. Nightly cron on cthulhu, after the
-harvest, from a directory holding `case_numbers.py extract-citations.py incremental-update.{py,sql}`:
+and the statute layer, in one transaction with the watermark. Scheduled nightly on cthulhu by
+`deployment/cron/citation-graph-crontab` (06:30, after the harvest) through
+`deployment/cron/citation-graph-incremental.sh` (password from the postgres container, flock,
+free-disk guard). Install:
 
-```cron
-30 4 * * *  cd ~/citgraph-pg && . ./env.sh && flock -n /tmp/citgraph-inc.lock python3 incremental-update.py >> incremental.log 2>&1
+```bash
+crontab -l | cat - ~/SecondLayer/deployment/cron/citation-graph-crontab | crontab -
 ```
 
 Test without writing: `python3 incremental-update.py --dry-run --since <doc_id> --max-docs 3000 --replay`

@@ -49,7 +49,7 @@ x-app-local-base: &app_local_base
     # The citation graph (get_citation_graph, check_precedent_status, the citation
     # summary in get_court_decision) is served from Postgres since LEXAI-2323 and is
     # on whenever its tables exist; only CITATION_BACKEND=off switches it off. The
-    # app no longer connects to neo4j-citation (kept below, unused, until retired).
+    # Neo4j store it replaced (neo4j-citation) was retired on 20.11.2026.
     CITATION_BACKEND: ${CITATION_BACKEND:-postgres}
 
     # Cache
@@ -362,40 +362,6 @@ services:
         limits:
           cpus: '8'
           memory: 16G
-
-  # Граф цитирования. С LEXAI-2323 (20.11.2026) приложение читает граф из Postgres
-  # и к этому контейнеру не подключается; он оставлен до решения о выводе из работы.
-  # Копия прод-снимка (183.7 млн узлов, 767.9 млн рёбер),
-  # версия закреплена: сырой стор Neo4j переносится между одинаковыми версиями.
-  # Данные на nvme — обход графа это случайный доступ, шпиндель не годится.
-  neo4j-citation:
-    image: neo4j:5.26.28-community
-    container_name: neo4j-citation-local
-    environment:
-      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-local_neo4j_pass}
-      NEO4J_server_default__listen__address: 0.0.0.0
-      NEO4J_server_memory_heap_initial__size: 8g
-      NEO4J_server_memory_heap_max__size: 8g
-      NEO4J_server_memory_pagecache_size: 12g
-      NEO4J_db_transaction_timeout: 30s
-    volumes:
-      - /home/vovkes/neo4j-citation/data:/data
-    ports:
-      - "127.0.0.1:7474:7474"
-      - "127.0.0.1:7687:7687"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:7474/ || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 20
-      start_period: 180s
-    restart: unless-stopped
-    networks:
-      - secondlayer-local
-    deploy:
-      resources:
-        limits:
-          memory: 26G
 
   # Туннель Cloudflare для боевого домена. Живёт ЗДЕСЬ, а не на проде:
   # существующий туннель local-legal терминируется на AWS-инстансе, и путь
