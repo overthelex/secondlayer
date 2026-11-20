@@ -1,0 +1,82 @@
+/**
+ * Build the ЄДР relationship graph (schema graph, migration 030; LEXAI-2303).
+ *
+ * Usage:
+ *   node dist/scripts/build-graph.js [--limit N [--from-edrpou CODE]] [--dry-run]
+ *        [--current yes|no|auto] [--current-date YYYY-MM-DD] [--rekey-addresses]
+ *        [--hub-company N] [--hub-person N] [--hub-address N] [--hub-foreign N]
+ *        [--reg-gap N] [--reg-per-day N] [--statement-timeout 3h] [--work-mem 256MB] [--keep-stage]
+ *
+ * A full rebuild stages everything in schema graph_stage and swaps it in with one transaction:
+ * graph.node / graph.edge stay queryable meanwhile. --limit N builds a sample of the first N
+ * companies by code (from --from-edrpou) and SWAPS IT IN as well: run it in a scratch database.
+ * --dry-run only counts the sources (read-only). Heavy queries: run off-peak, e.g. under
+ * `nice` and with a statement timeout (default 3h per statement).
+ *
+ * Environment: POSTGRES_HOST / POSTGRES_PORT / POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB.
+ */
+import dotenv from 'dotenv';
+dotenv.config();
+
+import { Pool } from 'pg';
+import { buildGraph, BuildOptions } from '../services/graph/builder';
+
+function parseArgs(argv: string[]): BuildOptions {
+  const o: BuildOptions = {};
+  const hub: Record<string, number> = {};
+  const int = (k: string, v: string) => {
+    if (!/^[1-9]\d*$/.test(v || '')) throw new Error(`${k} must be a positive integer, got ${v}`);
+    return Number(v);
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const [k, inline] = argv[i].split(/=(.*)/s, 2);
+    const val = () => (inline !== undefined ? inline : argv[++i]);
+    switch (k) {
+      case '--limit': o.limit = int(k, val()); break;
+      case '--from-edrpou': o.fromEdrpou = val(); break;
+      case '--dry-run': o.dryRun = true; break;
+      case '--current': {
+        const v = val();
+        if (v !== 'yes' && v !== 'no' && v !== 'auto') throw new Error('--current must be yes, no or auto');
+        o.includeCurrent = v; break;
+      }
+      case '--current-date': o.currentDate = val(); break;
+      case '--rekey-addresses': o.rekeyAddresses = true; break;
+      case '--hub-company': hub.company = int(k, val()); break;
+      case '--hub-person': hub.person_name = int(k, val()); break;
+      case '--hub-address': hub.address = int(k, val()); break;
+      case '--hub-foreign': hub.foreign_entity = int(k, val()); break;
+      case '--reg-gap': o.regNeighbourMaxGap = int(k, val()); break;
+      case '--reg-per-day': o.regNeighbourMaxPerDay = int(k, val()); break;
+      case '--statement-timeout': o.statementTimeout = val(); break;
+      case '--work-mem': o.workMem = val(); break;
+      case '--keep-stage': o.keepStage = true; break;
+      default: throw new Error(`unknown argument ${argv[i]}`);
+    }
+  }
+  if (Object.keys(hub).length) o.hubThresholds = hub;
+  return o;
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  const pool = new Pool({
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5435'),
+    user: process.env.POSTGRES_USER || 'openreyestr',
+    password: process.env.POSTGRES_PASSWORD,
+    database: process.env.POSTGRES_DB || 'openreyestr',
+    max: 2,
+  });
+  try {
+    const r = await buildGraph(pool, opts);
+    console.log(JSON.stringify(r, null, 2));
+  } finally {
+    await pool.end();
+  }
+}
+
+main().catch(err => {
+  console.error('build-graph failed:', err);
+  process.exit(1);
+});
