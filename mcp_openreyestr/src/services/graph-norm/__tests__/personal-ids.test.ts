@@ -26,8 +26,11 @@ describe('stripPersonIds', () => {
     // seven digits after a two-letter series, in brackets, glued to a dash or with a space (seen on prod, 20.11)
     expect(stripPersonIds(`${NAME} (АА1234567)- ТЕСТОВО`)).toBe(`${NAME} - ТЕСТОВО`);
     expect(stripPersonIds(`${NAME} (АА 1234567`)).toBe(NAME);
-    // eight digits after two letters is not a series (an ЄДРПОУ-like code stays)
-    expect(stripPersonIds(`${NAME} АА 12345678`)).toBe(`${NAME} АА 12345678`);
+    // eight digits after a two-letter word, with or without brackets (seen on prod, 20.11)
+    expect(stripPersonIds(`${NAME} (АА 01234567)`)).toBe(NAME);
+    expect(stripPersonIds(`${NAME} АА 12345678`)).toBe(NAME);
+    // nine digits after two letters stays a different token; an 8-digit code without letters stays
+    expect(stripPersonIds(`ТОВ «ТЕСТ» 12345678`)).toBe('ТОВ «ТЕСТ» 12345678');
     expect(stripPersonIds(`ТЕСТЕНКО ТЕСТ/ ТЕСТ ТЕСТОВИЧ/1234567890/АА123456`)).toBe('ТЕСТЕНКО ТЕСТ/ ТЕСТ ТЕСТОВИЧ');
   });
 
