@@ -7,25 +7,28 @@ import { normEdrpou } from '../graph-norm/edrpou';
 import { normAddress, NormAddressOptions } from '../graph-norm/address';
 import { normUa, uaMatchKey } from '../edr-history/norm';
 import { md5 } from '../edr-history/entries';
-import { stripPersonIds } from '../graph-norm/personal-ids';
+import { hasPersonalIdMarker, stripPersonalMarkers, stripPersonIds } from '../graph-norm/personal-ids';
 
 export type NodeKind = 'company' | 'person_name' | 'address' | 'foreign_entity' | 'organisation';
 export type EdgeKind = 'founder' | 'beneficiary' | 'head' | 'signer' | 'registered_at' | 'reg_neighbour' | 'co_party';
-/** edrsr: court decisions (graph.court_party, LEXAI-2304); prozorro: ProZorro supplier addresses (LEXAI-2317) */
-export type EdgeSource = 'edr_hist' | 'edr_current' | 'edrsr' | 'prozorro';
+/** edrsr: court decisions (graph.court_party, LEXAI-2304); prozorro: ProZorro supplier addresses (LEXAI-2317);
+ *  cy_drcor: officials of a Cypriot company linked to a foreign entity (LEXAI-2321, graph/foreign-refs.ts) */
+export type EdgeSource = 'edr_hist' | 'edr_current' | 'edrsr' | 'prozorro' | 'cy_drcor';
 
 export const NODE_KINDS: NodeKind[] = ['company', 'person_name', 'address', 'foreign_entity', 'organisation'];
 export const EDGE_KINDS: EdgeKind[] = ['founder', 'beneficiary', 'head', 'signer', 'registered_at', 'reg_neighbour', 'co_party'];
-export const EDGE_SOURCES: EdgeSource[] = ['edr_hist', 'edr_current', 'edrsr', 'prozorro'];
+export const EDGE_SOURCES: EdgeSource[] = ['edr_hist', 'edr_current', 'edrsr', 'prozorro', 'cy_drcor'];
 
 /** Bump when normAddress changes in a way that changes keys: every address is re-keyed on the next build. */
 export const ADDRESS_KEY_VERSION = 1;
 /**
  * Bump when personKey / organisationKey change keys. 2 (LEXAI-2322): personal numbers (РНОКПП,
  * passport series) are stripped from the name before the key, so 'ТЕСТЕНКО ... (1234567890)' and
- * 'ТЕСТЕНКО ...' are one node. Recorded in graph.build.counts.person_key_version.
+ * 'ТЕСТЕНКО ...' are one node. 3 (LEXAI-2321): dates of birth and passport words go too; foreign
+ * founder entries naming individuals key as persons, founders naming parties / public bodies as
+ * organisations. Recorded in graph.build.counts.person_key_version.
  */
-export const PERSON_KEY_VERSION = 2;
+export const PERSON_KEY_VERSION = 3;
 
 /**
  * Entries that name a group or a statement instead of a participant ('АКЦІОНЕРИ ЗГІДНО РЕЄСТРУ',
@@ -41,7 +44,9 @@ export const PLACEHOLDER_RE_SOURCE =
   + `|громадяни|мешканц${W}|жител${W}`
   // LEXAI-2319, from the high-degree person_name nodes of the first full build: unknown /
   // undetermined persons, communities and statements written as names
-  + `|неви[зч]начен${W}|невідом(а|ий|і|ого|их|о|е)|неможлив${W}|немає|нема|не (має|маю|вказан${W}|визначен${W}|відом${W}|можлив${W}|встановлен${W})`
+  + `|неви[зч]начен${W}|невідом(а|ий|і|ого|их|о|е)|неможлив${W}|немає|нема|не (має|маю|вказан${W}|визначен${W}|відом${W}|можлив${W}|встановлен${W}|передбачен${W})`
+  // LEXAI-2321: 'ВІДПОВІДНО ДО РІШЕННЯ' names a statement, not a founder
+  + `|відповідно`
   + `|відомост${W}|(територіальн|релігійн|церковн|сільськ|селищн|міськ)${W} громад(а|и|і|у|ою)`
   + `|громада (села|селища|міста|сіл|парафії)|церковн${W} десятк${W})( |$)`
   // whole-name placeholders: a country, a share, a number, a lone legal form or job title
@@ -106,28 +111,37 @@ export function foreignEntityKey(countryCode: string | null | undefined, name: s
 }
 
 export interface Endpoint { kind: NodeKind; key: string }
-export type SkipReason = 'placeholder' | 'no_key' | 'ua_org_without_code';
+export type SkipReason = 'placeholder' | 'no_key' | 'ua_org_without_code' | 'ua_body_without_code';
 
 /**
  * The node a founder entry points at: a Ukrainian organisation with a code -> company; a foreign
- * one -> foreign_entity; a person -> person_name. A Ukrainian organisation without a code is
- * returned as ua_org_without_code: the builder resolves it by a unique company name, or drops it.
+ * one -> foreign_entity (an individual among them -> person_name, foreignFounderFix); a person ->
+ * person_name. A Ukrainian organisation without a code is returned as ua_org_without_code: the
+ * builder resolves it by a unique company name, or drops it. A Ukrainian entry naming a party, a
+ * public body or an act (isFounderOrganisationName, whatever kind the parser gave it) is
+ * ua_body_without_code: the company of a unique name, else an organisation node (organisationKey).
  */
 export function founderEndpoint(f: { kind: string | null; name: string | null; code: string | null; country_code: string | null }): Endpoint | SkipReason {
   const foreign = !!f.country_code && f.country_code !== 'UA';
-  // a foreign organisation keeps its name and code (registration numbers); every other entry
-  // loses the personal numbers in its name (the builder's graph_stage.name_fix)
+  // LEXAI-2321: a foreign "organisation" that is an individual becomes a person; a company keeps
+  // its registration numbers (the builder's graph_stage.foreign_fix)
+  if (f.kind === 'organisation' && foreign) {
+    const fix = foreignFounderFix(f.name, f.code);
+    if (fix) f = { ...f, kind: fix.kind, name: fix.name, code: fix.dropCode ? null : f.code };
+  }
+  // every other entry loses the personal numbers in its name (the builder's graph_stage.name_fix)
   if (!(f.kind === 'organisation' && foreign)) f = { ...f, name: stripPersonIds(f.name) ?? null };
-  if (f.kind === 'organisation') {
-    if (!foreign) {
-      const c = companyKey(f.code);
-      if (c) return { kind: 'company', key: c };
-      return isPlaceholderName(f.name) ? 'placeholder' : 'ua_org_without_code';
-    }
+  if (f.kind === 'organisation' && foreign) {
     const k = foreignEntityKey(f.country_code, f.name, f.code);
     return k ? { kind: 'foreign_entity', key: k } : (isPlaceholderName(f.name) ? 'placeholder' : 'no_key');
   }
+  if (f.kind === 'organisation') {
+    const c = companyKey(f.code);
+    if (c) return { kind: 'company', key: c };
+    return isPlaceholderName(f.name) ? 'placeholder' : 'ua_org_without_code';
+  }
   if (isPlaceholderName(f.name)) return 'placeholder';
+  if (!foreign && isFounderOrganisationName(f.name)) return 'ua_body_without_code';
   const p = personKey(f.name);
   return p ? { kind: 'person_name', key: p } : 'no_key';
 }
@@ -193,6 +207,93 @@ export function headEndpoint(raw: string | null | undefined): Endpoint | SkipRea
   }
   const p = personKey(name);
   return p ? { kind: 'person_name', key: p } : 'no_key';
+}
+
+// ---------------------------------------------------------------- founders: bodies and foreign individuals (LEXAI-2321)
+
+/**
+ * Words naming a party, a public body, an association or an act, for founder entries the parser
+ * took for persons ('ПАРТІЯ ...', 'СЛУЖБА БЕЗПЕКИ ...', 'КАБІНЕТ МІНІСТРІВ ...', '... ОБЛАСНИЙ
+ * ЦЕНТР ЗАЙНЯТОСТІ', 'УКАЗ ПРЕЗИДЕНТА'). Whole words of normName, POSIX classes only (the same
+ * source runs as graph_stage.founder_org in builder.ts); a name with a patronymic stays a person
+ * ('ГРОМАДСЬКА ТЕСТА ТЕСТІВНА', 'МІСЬКО ТЕСТ ТЕСТОВИЧ'). Words that begin common surnames are
+ * spelled out (міська, not міськ*; суд, not суд*).
+ */
+export const BODY_RE_SOURCE =
+  `(^| )(парті(я|ї|ю|єю)|партия|партии|служб(а|и|у|ою)|міністерств${W}|міністрів|кабінет|управлінн(я|і|ям)|департамент${W}`
+  + `|рад(а|и|ою)|комітет${W}|виконком${W}|агентств${W}|інспекці(я|ї|ю|єю)|адміністраці(я|ї|ю|єю)|прокуратур(а|и|у|ою)`
+  + `|академі(я|ї|ю|єю)|університет${W}|інститут${W}|комісі(я|ї|ю|єю)|поліці(я|ї|ю|єю)|центр|центру|станці(я|ї|ю|єю)`
+  + `|лікарн(я|і|ю|ею)|палат(а|и|у|ою)|федераці(я|ї|ю|єю)|профспіл${W}|обєднанн(я|і|ям)|організаці(я|ї|ю|єю)|асамбле(я|ї)`
+  + `|форум|відділ|відділу|сесі(я|ї)|депутат(и|ів)|державн${W}|міська|міської|міський|міського|обласн(а|ий|ої|ого|і)`
+  + `|районн(а|ий|ої|ого|і)|указ|указу|указом|президент|президента|закон|закону|законом|постанов(а|и|ою)`
+  + `|розпорядженн(я|ям)|наказ|наказу|наказом|рішенн(я|ям)|кодекс|кодексу|суд|суду|судом)( |$)`;
+const BODY_RE = new RegExp(BODY_RE_SOURCE);
+
+/** A founder entry naming an organisation (a legal form or a body word, no patronymic) rather than a person. */
+export function isFounderOrganisationName(name: string | null | undefined): boolean {
+  const n = normName(name);
+  if (!n || PATRONYMIC_RE.test(n)) return false;
+  return ORG_FORM_RE.test(n) || BODY_RE.test(n);
+}
+
+/**
+ * Beneficial owners / qualifying holders written into the founder list with a foreign country:
+ * 'КІНЦЕВИЙ БЕНЕФІЦІАРНИЙ ВЛАСНИК (КОНТРОЛЕР) - ТЕСТЕР ТЕСТ', 'ВЛАСНИК ІСТОТНОЇ УЧАСТІ - ТОВ "X" -
+ * КІНЦЕВИЙ БЕНЕФІЦІАРНИЙ ВЛАСНИК (КОНТРОЛЕР) - ТЕСТЕР ТЕСТ', 'ІНШЕ - ...'. The participant is the
+ * part after the last dash.
+ */
+const BO_PREFIX_RE = new RegExp('^[\\s"«“\'.,-]*(?:(?:кінцев\\S*\\s+)?бенефіціарн\\S*\\s+власник|бенефициарн\\S*\\s+владел|вигодонабувач'
+  + '|власник\\S*\\s+істотн\\S*\\s+участ|інше\\s*[-–—])[^\\s"«»“”()-]*', 'i');
+/** a dash between words: ' - ', '- ', ' -', ')-', '"-' (not the hyphen of 'ТЕСТОВА-ТЕСТЕНКО') */
+const DASH_SEP_RE = /\s+[-–—]+\s*|\s*[-–—]+\s+|(?<=[)"»”])\s*[-–—]+\s*/;
+
+function boParticipant(name: string): string {
+  const parts = name.split(DASH_SEP_RE).map(p => p.trim()).filter(Boolean);
+  const last = parts.length > 1 ? parts[parts.length - 1] : name.replace(BO_PREFIX_RE, ' ');
+  const s = last.replace(/\([^)]*\)/g, ' ').replace(/^[\s.,:;–—-]+|[\s.,:;–—-]+$/g, '').replace(/\s+/g, ' ');
+  // a quote left over from the whole entry's quoting ('"КІНЦЕВИЙ ... - ТЕСТЕР ТЕСТ"')
+  return (s.match(/["«»“”]/g) || []).length % 2 ? s.replace(/^["«“]+|["»”]+$/g, '').trim() : s;
+}
+
+/** Foreign legal forms as the register spells them, Cyrillic or Latin ('ТЕСТ ГМБХ', 'ТЕСТ ЛІМІТЕД', 'TEST S.R.L.'). */
+const FOREIGN_FORM_RE = new RegExp(`(^| )(гмбх|лімітед|лимитед|лтд|інк|инк|корп|ллс|ллк|ллп|плс|сарл|срл|спа|аг|бв|нв|холдинг|холдінг`
+  + `|limited|ltd|llc|llp|inc|corp|plc|gmbh|ag|bv|nv|sa|sarl|srl|spa|s r l|s p a|kft|zrt|uab|sia|sro|s r o|holding|holdings|group`
+  + `|trading|investments?|енерджі|energy)( |$)`);
+
+export interface ForeignFounderFix {
+  /** 'person': an individual (person_name node); 'organisation': still a foreign entity */
+  kind: 'person' | 'organisation';
+  /** the name to key: without the beneficiary prefix, personal numbers, dates of birth, passport data */
+  name: string | null;
+  /** the code field is personal (passport data, a date of birth): never stored */
+  dropCode: boolean;
+}
+
+/**
+ * A founder entry the parser marked as a foreign organisation (kind 'organisation', country not
+ * UA), re-read (LEXAI-2321). An individual when the code or the name carries passport data or a
+ * date of birth, the name has a patronymic, or the entry names a beneficial owner / qualifying
+ * holder (the part after the last dash) — unless that name is a legal entity's. An individual's
+ * personal numbers are stripped (stripPersonIds) and the code dropped; a company keeps its
+ * registration numbers ('НЕ 123456', 'RU|code:1234567890') and loses only passport words and dates
+ * of birth. Null: the entry is a foreign entity as parsed.
+ */
+export function foreignFounderFix(name: string | null | undefined, code: string | null | undefined): ForeignFounderFix | null {
+  const raw = name || '';
+  const bo = BO_PREFIX_RE.test(raw);
+  const subject = bo ? boParticipant(raw) : raw;
+  const codeMark = hasPersonalIdMarker(code);
+  const nameMark = hasPersonalIdMarker(raw, 'name');
+  const plain = stripPersonalMarkers(subject);
+  const org = !!normName(plain) && (isOrganisationName(plain) || isFounderOrganisationName(plain)
+    || (!PATRONYMIC_RE.test(normName(plain)) && FOREIGN_FORM_RE.test(normName(plain))));
+  if ((bo || codeMark || nameMark || PATRONYMIC_RE.test(normName(subject))) && !org) {
+    const n = stripPersonIds(subject) || null;
+    return { kind: 'person', name: n && normName(n) ? n : null, dropCode: true };
+  }
+  if (!bo && !codeMark && !nameMark) return null;
+  const n = stripPersonalMarkers(subject) || null;
+  return { kind: 'organisation', name: n && normName(n) ? n : null, dropCode: codeMark };
 }
 
 // ---------------------------------------------------------------- addresses
